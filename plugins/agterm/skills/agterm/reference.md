@@ -81,6 +81,10 @@ The event kinds and payloads are:
   carries the recipient's `paneID`, the sender's address as `from` (absent for a sender outside
   agterm) and `messageID`; never the body. One event per delivered recipient. The human line reads
   `HH:MM:SS message NAME pane-id=ID from=SENDER id=MESSAGE-ID`, with `from=-` for an anonymous sender.
+- `opener.run`: an `open` rule ran on a ⌘-clicked file. Session `name`, the clicked `pane`, the `path` the
+  command received in `$AGT_PATH`, the rule's `selector` list as `keymap.conf` wrote it, and `host` when the
+  file was copied from another host. Emitted once the command started. The human line reads
+  `HH:MM:SS opener.run NAME PANE selector=SELECTORS path=PATH [host=HOST]`.
 
 Every event has `seq` (app-wide sequence), `ts` (Unix timestamp), `kind`, optional
 `window`/`workspace`/`session` ids, and `payload`. Human mode prints one compact line. `--json` emits
@@ -2144,6 +2148,8 @@ still shows its panel. An unknown name answers `no custom command named NAME`.
   `--repeat` shortcut kept a leader sequence) and `errorHud` are
   always booleans, `errorPosition` is the canonical position (default `center`), and `errorPane` is `left` or `right`,
   omitted for session-wide placement. The human listing shows `--repeat` and error options for opted-in commands.
+- `openers[]` — the `open` lines: `selectors` (the ones each line still owns after a later line took one),
+  `command` and `line`; omitted when there are none.
 - `diagnostics[]` — `line` + `message` per parse problem (`keymap.reload` returns only the count).
 - `menu[]` — the key equivalents the menu bar carries: `chord`, the owning `menu`, the item `title`, its
   `selector`, and `enabled: false` when the item is disabled. agterm's own items report `menuAction:`;
@@ -2172,7 +2178,7 @@ line can express — such an item is AppKit's own and never matches an action.
 ### keymap.conf format
 
 The file lives at `<config dir>/keymap.conf` (default `~/.config/agterm`; the dir is set in Settings ▸
-Key Mapping). Three verbs, line-based; blank lines and `#` comments ignored:
+Key Mapping). Four verbs, line-based; blank lines and `#` comments ignored:
 
 - `map <chord> [--repeat] <action>` — rebind a built-in menu action.
 - `command "<name>" [chord] [--repeat] [error options] <shell...>` — define a custom shell command, listed in the action palette
@@ -2193,6 +2199,25 @@ Key Mapping). Three verbs, line-based; blank lines and `#` comments ignored:
   agterm's own monitor, so it takes NO part in the collision rules below — it may share a chord with a
   menu item, but the global hotkey wins even when agterm is frontmost.
   `global-hotkey f5` takes F5 from every application and from agterm local map/command bindings.
+- `open <selectors> [error options] <shell...>` — run the user's own program instead of the built-in page when
+  a file is ⌘-clicked. Selectors are comma-separated, no spaces: `*.ext` (any case) or an exact file name; a
+  file name beats an extension, and a selector named again on a later line moves there with a diagnostic.
+  No chord, no `--repeat`, and no `{AGT_…}` token: the shell text runs verbatim under `/bin/sh -c` from
+  HOME, the file in `$AGT_PATH` and the clicked pane's context in the other `$AGT_*` variables.
+
+  ```text
+  open *.md,*.markdown --error-hud glow-page.sh "$AGT_PATH"
+  ```
+
+  A rule runs only for a normal link click on a path ghostty detected in the output (never an OSC 8
+  hyperlink, whose target the screen need not show, nor the browser or reveal intent), on a regular file that
+  opens as a picture, markdown, text or HTML page. In a session attached from another Mac or an agterm-server
+  host, the file is copied here first (one file, within its page's size limit, under `agterm/open` in the
+  cache folder, swept after an hour at launch and on the next copy) and the rule runs on the copy; an
+  over-limit file and an older origin follow the built-in page rules, and a click sent under a panel can only
+  take the copy. The path is untrusted output:
+  a renderer must not feed the file's HTML unescaped to `overlay open --html`, whose page drives agterm
+  through `data-agterm` tags; show the file itself with `--markdown` or `--text`.
 
 Custom commands keep banner-only failure reporting by default, subject to the notification setting.
 To add a ten-second failure panel, put `--error-hud` after the optional chord, before the shell body:

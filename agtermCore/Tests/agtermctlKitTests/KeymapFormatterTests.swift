@@ -16,7 +16,6 @@ struct KeymapFormatterTests {
         #expect(output.contains("    placed  ctrl+a>p  --error-hud --error-position top-right --error-pane left"))
     }
 
-
     @Test func formatsKeymapWithEveryActionAndTheLiveMenu() {
         let keymap = Keymap(builtinOverrides: [.closeSession: Chord(mods: [.command], key: "e")], commands: [])
         let payload = ControlKeymap.project(

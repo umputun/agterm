@@ -11,8 +11,15 @@ final class ControlServerRemoteOpenerTests: XCTestCase {
 
     private final class Clock { var now = Date(timeIntervalSince1970: 1_789_000_000) }
 
+    private struct Run {
+        let rule: String
+        let path: String
+        let surface: GhosttySurfaceView
+        let host: String
+    }
+
     private final class Launches {
-        var runs: [(rule: String, path: String, surface: GhosttySurfaceView, host: String)] = []
+        var runs: [Run] = []
         var refusal: String?
     }
 
@@ -216,7 +223,7 @@ final class ControlServerRemoteOpenerTests: XCTestCase {
         openers.rules = { parseKeymap("open *.md mdview").0.openers }
         openers.staging = OpenerStaging(root: staging, now: { Date() })
         openers.launch = { rule, file, surface, host in
-            launches.runs.append((rule.command.name, file.path, surface, host))
+            launches.runs.append(Run(rule: rule.command.name, path: file.path, surface: surface, host: host))
             return launches.refusal
         }
         let transport = FakePresentationTransport()

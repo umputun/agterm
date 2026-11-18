@@ -128,7 +128,8 @@ final class AppActionsFocusTests: XCTestCase {
             pair.actions.followSessionLink(id, from: origin, pane: pane)
         }
         opener.follow("agterm://session/\(id.uuidString)", from: .pane(clicker.id),
-                      pane: clicker.paneIdentity, cwd: NSTemporaryDirectory(), intent: intent, source: .detected)
+                      pane: clicker.paneIdentity, cwd: NSTemporaryDirectory(),
+                      gesture: LinkOpener.Gesture(intent: intent, source: .detected))
     }
 
     private func assertSessionLinkIsRefused(

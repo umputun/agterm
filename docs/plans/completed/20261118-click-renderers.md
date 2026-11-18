@@ -318,16 +318,16 @@
   (`keymap.list` openers, `opener.run`), `plugins/agterm/skills/agterm/SKILL.md` and its reference,
   `.claude/rules/keymap.md`, `.claude/rules/control-api.md`
 
-- [ ] user guide: the `open` line, selectors and precedence, what the command receives, that it runs with the
+- [x] user guide: the `open` line, selectors and precedence, what the command receives, that it runs with the
       clicked file as untrusted input, that OSC 8 links keep the built-in page, the remote snapshot and its
       limits (no sibling files, no live log follow), the `opener.run` event, and the raw-HTML / `data-agterm`
       warning for renderers that open `--html`
-- [ ] command reference and skill: `keymap.list` `openers`, the `opener.run` event, a trigger in SKILL.md's
+- [x] command reference and skill: `keymap.list` `openers`, the `opener.run` event, a trigger in SKILL.md's
       description for "custom renderer for clicked files"
-- [ ] rules files: the gating contract and the snapshot handshake, each owned once
-- [ ] verify every Overview requirement and Decision is implemented; run `swift test`, `make test-app`,
+- [x] rules files: the gating contract and the snapshot handshake, each owned once
+- [x] verify every Overview requirement and Decision is implemented; run `swift test`, `make test-app`,
       `make lint` once
-- [ ] move this plan to `docs/plans/completed/`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 - Manual check with a real remote Mac and an agterm-server Linux host: click a `.md` in each, confirm the

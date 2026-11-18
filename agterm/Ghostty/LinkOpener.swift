@@ -60,6 +60,11 @@ struct LinkOpener {
         weak var surface: GhosttySurfaceView?
     }
 
+    struct Gesture {
+        let intent: LinkPolicy.ClickIntent
+        let source: LinkPolicy.ClickSource
+    }
+
     /// follow carries out a clicked link; `cwd` is the clicking pane's directory, for a relative link, and `pane` its
     /// identity, which a remote pane's forwarded click names, and `remote` the row whose host runs the clicked program,
     /// whose loopback a web link then names. A link that only the filesystem can resolve is looked up
@@ -67,10 +72,11 @@ struct LinkOpener {
     /// has as typed. A reveal intent selects the file a local route names in Finder after that guarded routing, and
     /// leaves a web link to its web route. `surface` is the clicked pane, held weakly, whose context a user `open`
     /// rule runs with.
-    func follow(_ raw: String, from origin: LinkPolicy.ClickOrigin, pane: UUID?, cwd: String?, intent: LinkPolicy.ClickIntent,
-                source: LinkPolicy.ClickSource, remote: UUID? = nil, surface: GhosttySurfaceView? = nil) {
+    func follow(_ raw: String, from origin: LinkPolicy.ClickOrigin, pane: UUID?, cwd: String?, gesture: Gesture,
+                remote: UUID? = nil, surface: GhosttySurfaceView? = nil) {
+        let intent = gesture.intent
         let click = Click(origin: origin, pane: pane, mode: intent == .browser ? LinkOpenMode.browser : mode(),
-                          reveals: intent == .reveal, intent: intent, source: source, remote: remote, surface: surface)
+                          reveals: intent == .reveal, intent: intent, source: gesture.source, remote: remote, surface: surface)
         let candidates = LinkPolicy.locations(for: raw, origin: origin, cwd: cwd)
         guard !candidates.isEmpty else { return carryOut(LinkPolicy.route(for: raw, mode: click.mode, origin: origin), click) }
         let exists = exists

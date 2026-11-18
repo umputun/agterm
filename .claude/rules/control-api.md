@@ -815,10 +815,18 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   refusal there opens a HUD hiding after `remoteAttachErrorSeconds`, or plays the system alert when a HUD other than
   that refusal panel is already up (`openHud` would replace it), a cover or zoom would hide it, or a hidden page of this
   Mac's own holds the slot (only a hidden replica page is the origin's to replace); the click itself refuses on the
-  same terms before anything is sent. A mirrored HUD replaces that panel while it is still the
+  same terms before anything is sent, except a click booked for a snapshot (below). A mirrored HUD replaces that panel while it is still the
   one the refusal opened (`remoteLinkRefusalHuds`), since nothing would show it again. ⌘⌥ refuses before anything is
   sent. The click is a
   gesture with no control command: its page reads back as the replica page on the session node.
+- A forwarded click an `open` rule may take is booked: it carries `click` and the matching `openers`, only to an
+  origin listing `link.snapshot`. The origin offers `link.snapshot {click, token, name, size}` to that viewer
+  before its page check, else opens the page as before, and every refusal names the click. The token claims one
+  read of the offered name through `session.overlay.page.serve`, outside page ownership: no reservation, reoffer
+  or page loss. The viewer keeps the click-time rules under its presentation connection id, renewed on start
+  and `.failed`, so a reload or a new stream cannot change or answer the click; only the path that retires the
+  click from `RemoteOpeners`' book reports or launches. Under a HUD, cover or zoom a booked click goes
+  `snapshotOnly`, which forbids a page fallback, so the click cannot replace the panel.
 - A web link to an exact loopback host, clicked in a program running on another host (a remote pane, a scratch on
   its origin, an overlay running an origin job: `linkClickRemoteSession`), opens the local end of a forward to that
   host, never this Mac's loopback. `LinkOpener.loopback` asks `ControlServer.forwardLoopback`, and the browser or

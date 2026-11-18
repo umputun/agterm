@@ -655,8 +655,9 @@ extension GhosttySurfaceView: @preconcurrency NSTextInputClient {
     /// openLink acts on a clicked terminal link (`GHOSTTY_ACTION_OPEN_URL`); what happens to it is the host-free
     /// `LinkPolicy`'s decision.
     func openLink(_ raw: String, intent: LinkPolicy.ClickIntent, source: LinkPolicy.ClickSource) {
-        LinkOpener.shared.follow(raw, from: linkClickOrigin, pane: linkClickPane, cwd: linkClickCwd, intent: intent,
-                                 source: source, remote: linkClickRemoteSession, surface: self)
+        LinkOpener.shared.follow(raw, from: linkClickOrigin, pane: linkClickPane, cwd: linkClickCwd,
+                                 gesture: LinkOpener.Gesture(intent: intent, source: source), remote: linkClickRemoteSession,
+                                 surface: self)
     }
 
     /// applyLinkHover shows the link under a ⌘-held pointer, naming the session a session link would select.
