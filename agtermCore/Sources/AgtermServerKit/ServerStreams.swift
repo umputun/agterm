@@ -166,13 +166,13 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
 
     /// handOver gives a checked page to the Mac presenting `session`, or holds it for the next one.
     func handOver(_ overlay: HtmlOverlay, in session: Session, options: ControlSessionOverlayOpenOptions) -> RemotePageOpen {
-        let result = store.openRemotePage(session.id, overlay: overlay, options: options)
+        let result = store.openRemotePage(session.id, overlay: overlay, options: options, now: now())
         if result == .opened, overlay.source.kind != .url { schedulePageClaimExpiry(after: AppStore.pageClaimWindow) }
         return result
     }
 
     func claimRemotePage(token: String) -> (page: UUID, served: PageServeClaim)? {
-        store.claimRemotePage(token: token).map {
+        store.claimRemotePage(token: token, now: now()).map {
             ($0.overlay.id, PageServeClaim(source: $0.overlay.source, links: $0.overlay.markdownLinks, log: $0.overlay.textLog))
         }
     }
@@ -245,7 +245,8 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
     func schedulePageClaimExpiry(after seconds: TimeInterval) {
         Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: UInt64((seconds + 0.1) * 1_000_000_000))
-            self?.store.expireRemotePageClaims()
+            guard let self else { return }
+            store.expireRemotePageClaims(now: now())
         }
     }
 

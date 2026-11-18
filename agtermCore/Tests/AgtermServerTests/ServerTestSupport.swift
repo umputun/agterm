@@ -232,11 +232,12 @@ final class ServerHarness {
             MainActor.assumeIsolated { panes.end(ids) }
         }, headless: true, askRegistry: AskRegistry())
         CatalogRoot.seedWorkspace(in: store)
-        // a launch window on the real clock expires under a loaded run before the test claims the job
+        // a launch window or page claim window on the real clock expires under a loaded run before the test claims it
         let jobClock = Date()
         self.jobClock = jobClock
         actions = ServerActions(store: store, catalog: catalog, identity: AppIdentity(version: "1.2.3"), panes: panes,
                                 events: events, overlayJobs: OverlayJobs(now: { jobClock }))
+        actions.streams.now = { jobClock }
         actions.streams.presentationHelloDeadline = 60
         actions.recentClosed = recentClosed
         actions.processes = processes

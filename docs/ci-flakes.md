@@ -102,6 +102,24 @@ Each entry separates a demonstrated cause from one that is only consistent with 
   exposes that instant as `jobClock`. `offeredPagesAndJobsReadBackTheirWindows` now expects the deadline to equal
   `jobClock` plus the launch window, with no wall-clock bound.
 
+### `ServerStreamsTests.aPageWithdrawnFromAStallingViewerIsOwnedByTheViewerItIsOfferedTo`
+
+- **Symptom.** After `withdrawRemotePage` the waiting presenter never gets `.pageRequest` (`ServerStreamsTests.swift`
+  `offered != nil`) and never owns the slot; the test fails after about 200 s on its two 60 s waits.
+- **Runs.** Job 135162949010 (run 44406458047, macOS, PR #1051). Not reproduced locally in 20 isolated runs, under
+  `LIBDISPATCH_COOPERATIVE_POOL_STRICT=1`, or with the main actor blocked 25 or 95 s around the withdraw.
+- **Cause, inferred.** The markdown page was opened with a claim deadline of `Date()` plus
+  `AppStore.pageClaimWindow` (30 s), and claims and `ServerStreams.schedulePageClaimExpiry` used `Date()` too;
+  only re-offers read `streams.now`. Nobody claims the page in this test, so a start-of-run queue of more
+  than 30 s between the open and the withdraw lets the sweep remove it, and the withdraw then returns at its
+  first guard with nothing to re-offer. Suite tests with two awaits finished at about 82 s in that run. Blocking
+  the main actor cannot reproduce it, because the expiry Task needs the main actor too; the slot's state at the
+  withdraw was not logged, so expiry is consistent with the failure, not shown to cause it.
+- **Fix.** `ServerStreams` opens, claims and expires a page on its `now()`; the harness sets `streams.now` to
+  `jobClock`, as it does for overlay jobs. Both stalling-viewer tests connect the presenter before the stalling
+  leader opens its work, and the withdraw test requires an owner before withdrawing. Test:
+  `anUnclaimedPagesDeadlineFollowsTheServersClock`, red on the old clocks.
+
 ### `ServerLifecycleTests.aShellThatExitsClosesItsSession`
 
 - **Symptom.** `eventually { session == nil }` false after 8 s.
@@ -266,7 +284,8 @@ Each entry separates a demonstrated cause from one that is only consistent with 
   neighbours, with `page not claimable` and `end of stream`; the runs took 111 to 116 s.
   Cause unresolved. [Inference] A page claim expiring on the real clock (`AppStore.pageClaimWindow`,
   enforced by `ServerStreams.schedulePageClaimExpiry`) would produce these messages, and so would a defect the
-  branch fixed before the merge. The frozen job clock does not cover page claims.
+  branch fixed before the merge. That real-clock gap is closed: the harness's frozen clock now covers page
+  claims (see `aPageWithdrawnFromAStallingViewerIsOwnedByTheViewerItIsOfferedTo` above).
 - **`ServerLifecycleTests.aFishPaneLoadsTheShellIntegration`** (job 129484718181), at
   `ServerLifecycleTests.swift:191`: after 15 s the screen ends at the typed command with no output and no new
   prompt, so fish had not finished the command. One occurrence; cause unresolved. The test is unchanged since
