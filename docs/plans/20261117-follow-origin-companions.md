@@ -218,18 +218,18 @@
 - Create: `agtermCore/Sources/agtermCore/AppStore+FollowCompanions.swift`
 - Create: `agtermCore/Tests/agtermCoreTests/AppStoreFollowCompanionsTests.swift`
 
-- [ ] write failing tests for `companionsToFollow`: new ids in `attach` in origin order; remembered ids skipped; ids
+- [x] write failing tests for `companionsToFollow`: new ids in `attach` in origin order; remembered ids skipped; ids
       in `shown` returned in `markOnly`; a row not baselined returns nothing; a moved-in id counts as new; each local
       copy keeps its own remembered set
-- [ ] write failing tests for the mutators: `baselineCompanions` adds every listed id and sets the flag, an empty
+- [x] write failing tests for the mutators: `baselineCompanions` adds every listed id and sets the flag, an empty
       list included; a `markFollowed` before the first list keeps the row unbaselined and survives the baseline
-- [ ] write failing tests for persistence: both fields saved and restored unchanged, an empty baselined set kept
+- [x] write failing tests for persistence: both fields saved and restored unchanged, an empty baselined set kept
       apart from an unbaselined one, an older snapshot without the keys restores as empty and not baselined
-- [ ] add `followedCompanions`, `companionsBaselined`, `CompanionFollow`, `companionsToFollow`,
+- [x] add `followedCompanions`, `companionsBaselined`, `CompanionFollow`, `companionsToFollow`,
       `baselineCompanions` and `markFollowed`
-- [ ] save both fields on `AttachedSessionSnapshot` and restore them in `AppStore+AttachedRestore.swift` without
+- [x] save both fields on `AttachedSessionSnapshot` and restore them in `AppStore+AttachedRestore.swift` without
       reseeding
-- [ ] run the touched suites with `swift test --filter` - must pass before task 3
+- [x] run the touched suites with `swift test --filter` - must pass before task 3
 
 ### Task 3: Viewer attaches followed companions (app)
 

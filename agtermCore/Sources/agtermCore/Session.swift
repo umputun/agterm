@@ -55,6 +55,11 @@ public final class Session: Identifiable {
     /// transition, not `statusChangedAt`, so a hook re-asserting `blocked` over `blocked` stays muted.
     @ObservationIgnored public var autoFollowConsumed = false
 
+    /// followedCompanions are the origin companion ids an attached row has handled, attached or not, so none is attached
+    /// again by itself; companionsBaselined is whether the row took its first membership list. Both are saved.
+    @ObservationIgnored public internal(set) var followedCompanions: Set<String> = []
+    @ObservationIgnored public internal(set) var companionsBaselined = false
+
     /// The host this session is teleported from, nil for a local one. NOT persisted, and excluded from
     /// every snapshot: a persisted ssh command would reconnect on a `rerun` launch or come back as a
     /// plain shell under a marker that lies.

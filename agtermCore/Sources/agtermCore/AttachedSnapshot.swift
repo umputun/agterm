@@ -8,11 +8,17 @@ public struct AttachedSessionSnapshot: Codable, Equatable, Sendable {
     /// session carries the row's own state: ids, panes, view choices; never a command, a page source or the info line.
     public var session: SessionSnapshot
     public var origin: AttachedOriginSnapshot
+    /// followedCompanions and companionsBaselined are `Session`'s, nil for an empty set and an unbaselined row.
+    public var followedCompanions: [String]?
+    public var companionsBaselined: Bool?
 
-    public init(index: Int, session: SessionSnapshot, origin: AttachedOriginSnapshot) {
+    public init(index: Int, session: SessionSnapshot, origin: AttachedOriginSnapshot, followedCompanions: [String]? = nil,
+                companionsBaselined: Bool? = nil) {
         self.index = index
         self.session = session
         self.origin = origin
+        self.followedCompanions = followedCompanions
+        self.companionsBaselined = companionsBaselined
     }
 }
 
