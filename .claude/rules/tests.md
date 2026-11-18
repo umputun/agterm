@@ -32,5 +32,9 @@ A newly understood flake gets its entry there, and a rule here only when it show
 - A test stub writes sockets through `UnixSocket.write` and never replies to a request cut off before its
   newline. A raw `write` to a closed peer raises SIGPIPE, which can kill the whole Linux test process; the
   writer behind the one recorded SIGPIPE was never identified, and the stubs were the unguarded writes.
+- A fixture app bundle keeps one constant `CFBundleIdentifier`, never one per fixture or run. macOS stores a
+  Local Network rule per bundle ID, and `com.umputun.hosttest.<UUID>` IDs accumulated 3,979 rules on disk;
+  nehelper hit its UUID cache limit and rejected saves of the oversized privacy configuration.
+  `SessionHostClientTests` keeps unique IDs because it loads real launchd jobs and boots them out by label prefix.
 - Keep parameterized arguments short. This one is about diagnosis: `gh run view` stops at a 65 KB argument
   line and drops the failure that follows it.

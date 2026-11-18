@@ -1455,7 +1455,7 @@ private let sessionHostFixtureReady = Responsibility.system.isAvailable
             zmx = bundle.appendingPathComponent("Contents/MacOS/zmx")
             client = bundle.appendingPathComponent("Contents/MacOS/test-client")
             let socketDirectory = directory.appendingPathComponent("zmx").path
-            identity = .init(bundleID: "com.umputun.hosttest.\(UUID().uuidString)", bundlePath: bundle.path)
+            identity = .init(bundleID: "com.umputun.hosttest", bundlePath: bundle.path)
             environment = ["ZMX_DIR": socketDirectory, "ZMX_SESSION": "", "ZMX_SESSION_PREFIX": "", "ZMX_NO_DETACH_KEY": "1",
                            "SHELL": "/bin/sh", "HOME": directory.path, "PATH": "/usr/bin:/bin", "TERM": "xterm-256color"]
             try FileManager.default.createDirectory(at: executable.deletingLastPathComponent(), withIntermediateDirectories: true)
