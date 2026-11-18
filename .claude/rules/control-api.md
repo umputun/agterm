@@ -1770,7 +1770,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 ## Restore commands
 
 - `restore.capture` fills those same captured main/split slots on demand, from every open window's live
-  panes, saves immediately, and captures no hidden split. It is app-global. It reports the slots it
+  panes, saves immediately, and captures a hidden split only while it is zmx-wrapped and its backing surface
+  exists (a Live launch set to rerun next). It is app-global. It reports the slots it
   actually WROTE in `result.count` plus its own `result.text`; counting the slots afterwards instead would
   read a stale split capture as a fresh one. It runs only when `rerun` is configured for the next launch;
   configured `none` and `live` refuse and name that mode. This is the one place the API does not follow

@@ -301,19 +301,19 @@ final class ZmxClientTests: XCTestCase {
         XCTAssertEqual(invocations.map(\.arguments), [["list"]])
     }
 
-    func testLeaderRefreshCanOverrideOnlyItsInvocationTimeout() {
+    func testSessionRecordsCanOverrideOnlyItsInvocationTimeout() {
         var invocations: [ZmxClient.Invocation] = []
         let client = ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir", timeout: 3) {
             invocations.append($0)
             return ""
         }
 
-        XCTAssertEqual(client.sessionLeaderPIDs(timeout: 0.1), [:])
+        XCTAssertEqual(client.sessionRecords(timeout: 0.1), [])
         XCTAssertEqual(client.listSessions(), [])
         XCTAssertEqual(invocations.map(\.timeout), [0.1, 3])
     }
 
-    func testLeaderRefreshWallClockIsBoundedByTimeoutPlusTerminationGrace() throws {
+    func testSessionRecordsWallClockIsBoundedByTimeoutPlusTerminationGrace() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("agterm-zmx-timeout-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -328,7 +328,7 @@ final class ZmxClientTests: XCTestCase {
         let timeout: TimeInterval = 0.1
         let started = Date()
 
-        XCTAssertNil(client.sessionLeaderPIDs(timeout: timeout))
+        XCTAssertNil(client.sessionRecords(timeout: timeout))
 
         let elapsed = Date().timeIntervalSince(started)
         XCTAssertGreaterThanOrEqual(elapsed, timeout - 0.01)

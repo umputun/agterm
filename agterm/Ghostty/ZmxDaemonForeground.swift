@@ -14,16 +14,9 @@ struct ZmxDaemonForeground {
     // the kernel answers the peer pid from the listener before the daemon accepts, so a stopped daemon still
     // resolves; the connection stays open until the child is matched
     private static func lookup(socketPath: String) -> pid_t? {
-        guard var address = UnixSocket.address(for: socketPath) else { return nil }
-        let fd = Darwin.socket(AF_UNIX, UnixSocket.streamType, 0)
-        guard fd >= 0 else { return nil }
+        guard let fd = UnixSocket.connected(path: socketPath) else { return nil }
         defer { close(fd) }
-        let connected = withUnsafePointer(to: &address) {
-            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-                UnixSocket.connect(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size))
-            }
-        }
-        guard connected == 0, let daemon = peerPID(fd: fd) else { return nil }
+        guard let daemon = peerPID(fd: fd) else { return nil }
         return ZmxDaemonLeader.foreground(ofDaemon: daemon, children: children(of: daemon), row: row(of:))
     }
 

@@ -136,8 +136,8 @@ final class ZmxClient {
         }
     }
 
-    func sessionLeaderPIDs(timeout: TimeInterval? = nil) -> [String: pid_t]? {
-        sessionRecords(timeout: timeout).map(ZmxLeaderMap.leaders(in:))
+    func sessionLeaderPIDs() -> [String: pid_t]? {
+        sessionRecords().map(ZmxLeaderMap.leaders(in:))
     }
 
     /// The parsed listing, unreadable rows included, so a caller can tell an absent daemon from one zmx

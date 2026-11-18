@@ -580,7 +580,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// out of the persisted field: persisting it while the pending copy stays armed lets a later show consume
     /// and replay it, and a crash before the next capture then replays the persisted copy a second time.
     static func captureForegroundCommands(
-        sessions: [Session], zmxForeground suppliedZmxForeground: ZmxDaemonForeground? = nil,
+        sessions: [Session], zmxForeground: ZmxDaemonForeground? = nil,
         preserveUnconsumedPending: Bool = false,
         timeRemaining suppliedTimeRemaining: (() -> Bool)? = nil,
         commandReader: ForegroundCommandReader = { view, shell, zmxForeground in
@@ -595,10 +595,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let clock = ContinuousClock()
         let deadline = clock.now.advanced(by: exitCaptureBudget)
         let timeRemaining = suppliedTimeRemaining ?? { clock.now < deadline }
-        let hasWrappedPane = sessions.contains { session in
-            session.surface?.backedByZmx == true || session.splitSurface?.backedByZmx == true
-        }
-        let zmxForeground = hasWrappedPane ? suppliedZmxForeground : nil
         var captured = 0
         // `loadStore` moves the persisted argv into the pending slot and rewrites the file with nil, so this
         // is the only thing that refills it: at exit, writing nil over a slot NO factory consumed destroys
