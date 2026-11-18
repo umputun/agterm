@@ -90,6 +90,8 @@ struct agtermApp: App {
     }
 
     init() {
+        // before NSApplicationMain restores: windows opt out, so state left by an unclean exit restores none and no launch window opens
+        UserDefaults.standard.register(defaults: ["ApplePersistenceIgnoreState": true])
         #if DEBUG
         // in the environment, ahead of every reader of the variable and of every child that inherits it
         if let adopted = DebugStateDirectory.adopted(environment: ProcessInfo.processInfo.environment,
