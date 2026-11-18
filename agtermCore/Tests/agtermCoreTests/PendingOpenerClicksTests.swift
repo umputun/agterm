@@ -100,6 +100,31 @@ struct PendingOpenerClicksTests {
         #expect(book.isCurrent(click, connection: connection))
     }
 
+    @Test func anOfferOverItsPagesCapIsNotAccepted() throws {
+        let book = book()
+        let click = try #require(record("/srv/notes.md", in: book, rules: rules("open *.md view")))
+        let big = PresentationLinkSnapshot(click: click, token: "tok", name: "notes.md", size: MarkdownPage.maxBytes + 1)
+
+        #expect(book.accept(big, connection: connection, session: session) == nil)
+        #expect(book.accept(snapshot(click, name: "notes.md"), connection: connection, session: session) != nil)
+    }
+
+    @Test func aTransferPastTheReadDeadlineIsOverdueAndAPendingClickNever() throws {
+        let book = book()
+        let pending = try #require(record("/srv/a.md", in: book, rules: rules("open *.md view")))
+        let inFlight = try #require(record("/srv/b.md", in: book, rules: rules("open *.md view")))
+        #expect(book.accept(snapshot(inFlight, name: "b.md"), connection: connection, session: session) != nil)
+
+        clock.now = clock.now.addingTimeInterval(PendingOpenerClicks.readDeadline)
+        #expect(book.overdue().isEmpty)
+        clock.now = clock.now.addingTimeInterval(1)
+
+        book.expire()
+        #expect(book.overdue().map(\.click) == [inFlight])
+        #expect(book.contains(inFlight))
+        #expect(!book.contains(pending))
+    }
+
     @Test func aRefusalOrTheSpawnRetiresTheClick() throws {
         let book = book()
         let refused = try #require(record("/srv/a.md", in: book, rules: rules("open *.md view")))

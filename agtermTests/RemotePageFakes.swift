@@ -294,3 +294,35 @@ final class FakeForwardLauncher: RemoteForwardLauncher {
         return fd
     }
 }
+
+@MainActor
+final class FakePresentationTransport: RemotePresentationTransport {
+    final class Link: RemotePresentationLink {
+        var sent: [PresentationFrame.Body] = []
+        func send(_ line: Data) {
+            if let frame = try? PresentationCodec.decode(line.dropLast()) { sent.append(frame.body) }
+        }
+        func stop() {}
+    }
+
+    var links: [Link] = []
+    var deliver: [(Data) -> Void] = []
+    private var rev = 0
+
+    func open(_: [String], onLine: @escaping @MainActor (Data) -> Void,
+              onClose _: @escaping @MainActor (String) -> Void) -> RemotePresentationLink {
+        deliver.append(onLine)
+        let link = Link()
+        links.append(link)
+        return link
+    }
+
+    func feed(_ body: PresentationFrame.Body) throws {
+        rev += 1
+        deliver.last?(Data(try PresentationCodec.encode(PresentationFrame(gen: 3, rev: rev, body: body)).dropLast()))
+    }
+
+    var clicks: [PresentationLinkClick] {
+        links.last?.sent.compactMap { if case .linkClick(let click) = $0 { click } else { nil } } ?? []
+    }
+}

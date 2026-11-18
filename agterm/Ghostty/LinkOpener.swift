@@ -31,8 +31,9 @@ struct LinkOpener {
     var sessionName: (UUID, LinkPolicy.ClickOrigin, UUID?) -> String? = { _, _, _ in nil }
     /// exists answers for one candidate `LinkPolicy.locations` offered; it runs off the main actor.
     var exists: @Sendable (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
-    /// forward hands a path clicked in a remote pane to the Mac it names a file on; nil when sent, else why not.
-    var forward: (RemoteLinkClick) -> RemoteLinkRefusal? = { _ in .originTooOld }
+    /// forward hands a path clicked in a remote pane to the Mac it names a file on, with the clicked pane when the click
+    /// may run an `open` rule there; nil when sent, else why not.
+    var forward: (RemoteLinkClick, GhosttySurfaceView?) -> RemoteLinkRefusal? = { _, _ in .originTooOld }
     /// refuse reports a remote click that was not carried out.
     var refuse: (UUID, RemoteLinkRefusal) -> Void = { _, _ in NSSound.beep() }
     /// loopback reaches a loopback URL on row `UUID`'s host through a forward from this Mac and reports the local URL
@@ -118,7 +119,8 @@ struct LinkOpener {
         case .reveal(let url): reveal(url)
         case .forwardRemote(let raw, let session):
             if click.reveals { return refuse(session, .revealIntent) }
-            if let refusal = forward(RemoteLinkClick(raw: raw, session: session, pane: click.pane, mode: click.mode)) {
+            let ruleSurface = click.source == .detected && click.intent == .normal ? click.surface : nil
+            if let refusal = forward(RemoteLinkClick(raw: raw, session: session, pane: click.pane, mode: click.mode), ruleSurface) {
                 refuse(session, refusal)
             }
         case .ignore: return

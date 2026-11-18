@@ -17,9 +17,10 @@ extension ServerStreamsTests {
         return path
     }
 
-    private func snapshotClick(_ raw: String, on session: Session, click: UUID?, openers: [String]?, from viewer: Viewer) throws {
+    private func snapshotClick(_ raw: String, on session: Session, click: UUID?, openers: [String]?, only: Bool? = nil,
+                               from viewer: Viewer) throws {
         try viewer.send(.linkClick(PresentationLinkClick(raw: raw, pane: session.paneIdentity, mode: .overlay, click: click,
-                                                         openers: openers)))
+                                                         openers: openers, snapshotOnly: only)))
     }
 
     private func answer(from viewer: Viewer) async -> PresentationFrame.Body? {
@@ -130,6 +131,30 @@ extension ServerStreamsTests {
         guard case .linkRefused(let refusal)? = await answer(from: viewer) else { Issue.record("no refusal"); return }
         #expect(refusal.click == click)
         #expect(streams.snapshotBook.isIdle)
+    }
+
+    @Test func aSnapshotOnlyClickIsOfferedItsFileOrRefusedAsHiddenAndNeverOpensAPage() async throws {
+        let session = try snapshotSession()
+        let viewer = try await presenter(for: session)
+        defer { viewer.disconnect() }
+        _ = try snapshotFile("notes.md")
+        _ = try snapshotFile("big.md", String(repeating: "x", count: MarkdownPage.maxBytes + 1))
+        let matched = UUID()
+        let unmatched = UUID()
+        let overCap = UUID()
+
+        try snapshotClick("./notes.md", on: session, click: matched, openers: ["*.md"], only: true, from: viewer)
+        guard case .linkSnapshot(let snapshot)? = await answer(from: viewer) else { Issue.record("no snapshot"); return }
+        #expect(snapshot.click == matched)
+
+        try snapshotClick("./notes.md", on: session, click: unmatched, openers: ["*.go"], only: true, from: viewer)
+        guard case .linkRefused(let refusal)? = await answer(from: viewer) else { Issue.record("no refusal"); return }
+        #expect(refusal == PresentationLinkRefusal(reason: .hidden, click: unmatched))
+
+        try snapshotClick("./big.md", on: session, click: overCap, openers: ["*.md"], only: true, from: viewer)
+        guard case .linkRefused(let big)? = await answer(from: viewer) else { Issue.record("no refusal"); return }
+        #expect(big == PresentationLinkRefusal(reason: .hidden, click: overCap))
+        #expect(session.remoteOverlays.slot(nil)?.page == nil)
     }
 
     @Test func aRefusalNamesTheClickItAnswers() async throws {

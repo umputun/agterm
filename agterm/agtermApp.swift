@@ -201,6 +201,13 @@ struct agtermApp: App {
         LinkOpener.shared.runOpener = { [weak customCommandRunner] rule, file, surface in
             customCommandRunner?.runOpener(rule, path: file.path, surface: surface)
         }
+        controlServer.remoteOpeners.rules = { settingsModel.keymap.openers }
+        controlServer.remoteOpeners.launch = { [weak customCommandRunner] rule, file, surface, host in
+            guard let customCommandRunner else { return "no command runner" }
+            return customCommandRunner.runOpener(rule, path: file.path, surface: surface, host: host)
+        }
+        let openerStaging = controlServer.remoteOpeners.staging
+        Task.detached(priority: .utility) { openerStaging.sweep() }
         // hooks.conf scripts: fed by the library's post-append observer, applied from the settings model.
         let hookController = HookController(library: library, settings: settingsModel,
                                             socketProvider: { controlServer.resolvedSocketPath })

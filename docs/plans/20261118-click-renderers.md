@@ -281,25 +281,35 @@
   `agterm/Control/RemotePageChannel.swift`, the app-launch path that sweeps `OpenerStaging`
 - Modify tests: hosted forwarded-click and remote presentation tests, page channel tests
 
-- [ ] failing hosted tests: Mac origin match and no-match, an older origin, two outstanding clicks resolved
+- [x] failing hosted tests: Mac origin match and no-match, an older origin, two outstanding clicks resolved
       independently, a consumer paused after `.end` still launching, a disconnect after a valid offer and before
       the last chunk launching nothing and leaving no copy, a short read and an overlong read reporting
       `snapshotFailed`, the read deadline on an injected clock, `opener.run` carrying the staged path and host,
       a post-spawn failure reporting through the command path
-- [ ] viewer: `LinkOpener` decides remote eligibility before building `RemoteLinkClick`, from the click's
+- [x] viewer: `LinkOpener` decides remote eligibility before building `RemoteLinkClick`, from the click's
       `ClickSource` and `ClickIntent` (never from `LinkOpenMode`, where `.browser` cannot tell the explicit ⌘⇧
       intent from the Browser setting); only a `.detected` source with normal intent, an origin listing
       `link.snapshot` and a rule matching a candidate name record a pending click and send click id and
       selectors; everything else sends today's frame
-- [ ] hosted tests for that gate against a capable origin: a matching OSC 8 target and an explicit browser-intent
+- [x] hosted tests for that gate against a capable origin: a matching OSC 8 target and an explicit browser-intent
       click send today's frame with no snapshot request; a normal `.detected` click with the Browser link mode
       configured still qualifies
-- [ ] Mac origin: offer a snapshot on a match within the cap, open the page otherwise, click id on refusals;
+- [x] Mac origin: offer a snapshot on a match within the cap, open the page otherwise, click id on refusals;
       adopt snapshot claims through `ControlServer.swift`'s adopt branch
-- [ ] viewer: validate name and size, pick the rule, claim through `session.overlay.page.serve`, read with the cap
+- [x] viewer: validate name and size, pick the rule, claim through `session.overlay.page.serve`, read with the cap
       and deadline, drain through `.end`, close, write through `OpenerStaging`, recheck the pending identity,
       launch on the copy; sweep staging at app launch
-- [ ] run the touched hosted suites
+- [x] run the touched hosted suites
+- ➕ a click a rule takes goes out even where the viewer would hide a page (HUD, cover, zoom), flagged
+      `snapshotOnly`; both origins answer it with an offer or a `.hidden` refusal and never a page, so a fallback
+      cannot close the viewer's HUD. A click no rule takes keeps today's `.hidden` refusal.
+- ➕ new files: `agterm/Control/RemoteOpeners.swift` (pending book, weak surfaces, transfers; `finish` is the single
+      retirement), `ControlServer+RemoteOpener.swift`, `agtermTests/ControlServerRemoteOpenerTests.swift`, `agtermTests/RemoteOpenersTests.swift`; the viewer
+      transport fake moved to `RemotePageFakes.swift`; `ServerStreams+Snapshot.swift` folded into
+      `PresentationHub.snapshotSelectors`/`offerSnapshot`, shared by both origins with `SnapshotCandidate.find`.
+- ⚠️ tests written right after the code. The paused-consumer case is covered by a chunked round trip whose fake origin
+      writes every chunk and `.end` before the main actor drains them; the post-spawn failure path is the shared
+      `CustomCommandRunner.runOpener`, pinned by Task 3's missing-renderer test.
 
 ### Task 6: docs, skill, rules, and final gates
 

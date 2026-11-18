@@ -299,9 +299,9 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
 extension ServerStreams {
     /// receiveLinkClick opens the page a path clicked on viewer `sender` names, on that viewer, the way a Mac origin
     /// does: the path resolves against the pane's directory here, and only page routes open. A click asking for a
-    /// snapshot whose file one of its selectors takes is answered with a claim on that file instead. Every other click
-    /// is answered with one refusal to that viewer, naming the click when it carried an id; a click whose viewer left
-    /// meanwhile is dropped.
+    /// snapshot whose file one of its selectors takes is answered with a claim on that file instead, and one that
+    /// forbids a page gets nothing else. Every other click is answered with one refusal to that viewer, naming the
+    /// click when it carried an id; a click whose viewer left meanwhile is dropped.
     func receiveLinkClick(_ click: PresentationLinkClick, forSession id: UUID, from sender: Int) {
         let clickID = click.click
         guard let target = store.forwardedClickPane(id, pane: click.pane) else {
@@ -311,15 +311,16 @@ extension ServerStreams {
         let candidates = LinkPolicy.locations(for: click.raw, origin: origin, cwd: target.cwd)
         let check = checkPage
         let liveText = presentationHub.supports(PresentationHub.pageTextKind, owner: sender)
-        let selectors = snapshotSelectors(click, from: sender)
+        let selectors = presentationHub.snapshotSelectors(click, from: sender)
+        let pageless = click.snapshotOnly == true
         Task { @MainActor [weak self] in
             let (route, present, snapshot, opening) = await Task.detached(priority: .userInitiated) {
                 let exists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
                 let route = LinkPolicy.resolvedRoute(for: click.raw, candidates: candidates, mode: click.mode, origin: origin,
                                                      exists: exists)
                 let present = route.localFile.map { exists($0.path(percentEncoded: false)) } ?? false
-                let snapshot = present ? Self.snapshotCandidate(route, selectors: selectors) : nil
-                let opening = present && snapshot == nil
+                let snapshot = present ? SnapshotCandidate.find(route, selectors: selectors) : nil
+                let opening = present && snapshot == nil && !pageless
                     ? Self.clickedPage(route, logs: liveText, from: sender).map { ($0.source, check($0.source, $0.options)) } : nil
                 return (route, present, snapshot, opening)
             }.value
@@ -333,8 +334,9 @@ extension ServerStreams {
                 break
             }
             if let snapshot, let clickID, store.session(withID: id) != nil {
-                return offerSnapshot(snapshot, click: clickID, to: sender)
+                return presentationHub.offerSnapshot(snapshot, click: clickID, book: snapshotBook, to: sender)
             }
+            if pageless { return refuseLinkClick(.hidden, to: sender, click: clickID) }
             guard let (source, checked) = opening else { return refuseLinkClick(.notAPage, to: sender, click: clickID) }
             guard case .success(let options) = checked, let session = store.session(withID: id), !session.hudActive,
                   !session.overlayHidden(nil),

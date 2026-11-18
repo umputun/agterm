@@ -8,6 +8,8 @@ import Foundation
 public final class PendingOpenerClicks {
     /// window bounds how long a click waits for its snapshot, the origin's own claim window.
     public static let window = AppStore.pageClaimWindow
+    /// readDeadline bounds an accepted snapshot's transfer, the largest page's file over a slow link included.
+    public static let readDeadline: TimeInterval = 120
 
     public struct Entry: Equatable, Sendable {
         public let click: UUID
@@ -17,7 +19,8 @@ public final class PendingOpenerClicks {
         public let candidates: [String]
         public let rules: [FileOpener]
         let created: Date
-        public fileprivate(set) var inFlight = false
+        fileprivate var accepted: Date?
+        public var inFlight: Bool { accepted != nil }
     }
 
     private var entries: [UUID: Entry] = [:]
@@ -28,6 +31,9 @@ public final class PendingOpenerClicks {
     }
 
     public var isEmpty: Bool { entries.isEmpty }
+
+    /// contains says whether `click` is still booked, for state a caller keeps beside the book.
+    public func contains(_ click: UUID) -> Bool { entries[click] != nil }
 
     /// record books a click on `raw` when one of `rules` takes a name it may resolve to, and returns its id; nil when
     /// none could, which sends the click as before.
@@ -53,13 +59,15 @@ public final class PendingOpenerClicks {
     }
 
     /// accept takes the one snapshot a booked click may get: from its own connection and session, within the window,
-    /// for one of its candidate names, and only once. It returns the entry, now in flight, and the rule the name picks.
+    /// for one of its candidate names within its page's cap, and only once. It returns the entry, now in flight, and
+    /// the rule the name picks.
     public func accept(_ snapshot: PresentationLinkSnapshot, connection: UUID,
-                                session: UUID) -> (entry: Entry, rule: FileOpener)? {
+                       session: UUID) -> (entry: Entry, rule: FileOpener)? {
         expire()
-        guard var entry = entries[snapshot.click], !entry.inFlight, entry.connection == connection, entry.session == session,
-              entry.candidates.contains(snapshot.name), let rule = entry.rules.opener(forFile: snapshot.name) else { return nil }
-        entry.inFlight = true
+        guard snapshot.isAcceptable, var entry = entries[snapshot.click], !entry.inFlight, entry.connection == connection,
+              entry.session == session, entry.candidates.contains(snapshot.name),
+              let rule = entry.rules.opener(forFile: snapshot.name) else { return nil }
+        entry.accepted = now()
         entries[snapshot.click] = entry
         return (entry, rule)
     }
@@ -86,5 +94,11 @@ public final class PendingOpenerClicks {
     public func expire() {
         let cutoff = now().addingTimeInterval(-Self.window)
         entries = entries.filter { $0.value.inFlight || $0.value.created >= cutoff }
+    }
+
+    /// overdue lists the in-flight clicks whose transfer outlived `readDeadline`; the caller retires and fails them.
+    public func overdue() -> [Entry] {
+        let cutoff = now().addingTimeInterval(-Self.readDeadline)
+        return entries.values.filter { $0.accepted.map { $0 < cutoff } ?? false }
     }
 }

@@ -9,6 +9,8 @@ struct PresentationLinkTests {
     @Test(arguments: [
         PresentationFrame(gen: 1, rev: 1, body: .linkClick(PresentationLinkClick(
             raw: "src/a.md:3", pane: pane, mode: .overlay, click: click, openers: ["*.md", "Makefile"]))),
+        PresentationFrame(gen: 1, rev: 4, body: .linkClick(PresentationLinkClick(
+            raw: "a.md", pane: pane, mode: .overlay, click: click, openers: ["*.md"], snapshotOnly: true))),
         PresentationFrame(gen: 1, rev: 2, body: .linkRefused(PresentationLinkRefusal(reason: .notFound, click: click))),
         PresentationFrame(gen: 1, rev: 3, body: .linkSnapshot(PresentationLinkSnapshot(
             click: click, token: "tok", name: "a.md", size: 42))),
@@ -56,6 +58,27 @@ struct PresentationLinkTests {
 
         #expect(String(decoding: line, as: UTF8.self).contains(#""kind":"link.snapshot""#))
         #expect(PresentationHub.supportedKinds.contains(PresentationHub.linkSnapshotKind))
+    }
+
+    @Test func aClicksSelectorsDropMalformedOnesAndNeedAClickID() {
+        let long = String(repeating: "a", count: 256) + ".md"
+        let click = PresentationLinkClick(raw: "a.md", pane: Self.pane, mode: .overlay, click: Self.click,
+                                          openers: ["*.md", "a/b", "*.[md]", long, "Makefile"])
+
+        #expect(click.selectors.map(\.text) == ["*.md", "Makefile"])
+        #expect(PresentationLinkClick(raw: "a.md", pane: Self.pane, mode: .overlay, openers: ["*.md"]).selectors.isEmpty)
+        let many = PresentationLinkClick(raw: "a.md", pane: Self.pane, mode: .overlay, click: Self.click,
+                                         openers: (0..<40).map { "f\($0).md" })
+        #expect(many.selectors.count == PresentationLinkClick.maxSelectors)
+    }
+
+    @Test(arguments: [
+        ("notes.md", 10, true), ("notes.md", MarkdownPage.maxBytes, true), ("notes.md", MarkdownPage.maxBytes + 1, false),
+        ("shot.png", ImagePage.maxBytes, true), ("a.zip", 1, false), ("..", 1, false), ("a/b.md", 1, false),
+        ("", 1, false), ("notes.md", -1, false),
+    ])
+    func anOfferIsAcceptableOnlyForAPlainNameWithinItsPagesCap(name: String, size: Int, acceptable: Bool) {
+        #expect(PresentationLinkSnapshot(click: Self.click, token: "t", name: name, size: size).isAcceptable == acceptable)
     }
 
     @Test func snapshotFailedIsWordedForTheViewer() {

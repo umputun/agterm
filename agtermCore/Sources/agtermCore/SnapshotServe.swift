@@ -1,5 +1,39 @@
 import Foundation
 
+/// SnapshotCandidate is a clicked file an `open` selector took, checked and measured on the origin.
+public struct SnapshotCandidate: Sendable, Equatable {
+    public let file: String
+    public let name: String
+    public let size: Int
+
+    /// find is the file a resolved route names when a selector takes its name and it is a regular file within the cap
+    /// of the page it would open as; nil sends the click on to its page. It reads nothing but the descriptor, so an
+    /// origin runs it off the main actor and before its page check.
+    public static func find(_ route: LinkPolicy.Route, selectors: [OpenerSelector]) -> SnapshotCandidate? {
+        guard !selectors.isEmpty, let file = LinkPolicy.openerFile(for: route, source: .detected, intent: .normal) else { return nil }
+        let name = file.lastPathComponent
+        let path = file.path(percentEncoded: false)
+        guard selectors.contains(where: { $0.matches(name) }), let cap = LinkPolicy.previewBytes(forFileName: name),
+              case .success(let size) = BoundedFile.size(path: path, maxBytes: cap) else { return nil }
+        return SnapshotCandidate(file: path, name: name, size: size)
+    }
+}
+
+extension PresentationHub {
+    /// snapshotSelectors are the selectors a click asks a snapshot for, empty unless its viewer listed `link.snapshot`:
+    /// a viewer that cannot take a snapshot would lose the click to one.
+    public func snapshotSelectors(_ click: PresentationLinkClick, from sender: Int) -> [OpenerSelector] {
+        supports(Self.linkSnapshotKind, owner: sender) ? click.selectors : []
+    }
+
+    /// offerSnapshot answers click `click` from viewer `sender` with a one-time claim on `candidate` from `book`.
+    public func offerSnapshot(_ candidate: SnapshotCandidate, click: UUID, book: SnapshotOfferBook, to sender: Int) {
+        let token = book.offer(file: candidate.file, name: candidate.name, size: candidate.size)
+        send(.linkSnapshot(PresentationLinkSnapshot(click: click, token: token, name: candidate.name, size: candidate.size)),
+             toOwner: sender)
+    }
+}
+
 /// SnapshotOfferBook holds the files this host offered for viewers' `open` rules. A claim travels through
 /// `session.overlay.page.serve` but never takes part in page ownership: no reservation, reoffer or page loss.
 @MainActor

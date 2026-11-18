@@ -530,7 +530,7 @@ final class CustomCommandRunner {
     /// runs as written: the context, terminal-derived values included, reaches it only as `$AGT_*` environment,
     /// with `$AGT_PATH` the file, and it starts in HOME. Returns why it did not start, nil once it has.
     @discardableResult
-    func runOpener(_ opener: FileOpener, path: String, surface: GhosttySurfaceView) -> String? {
+    func runOpener(_ opener: FileOpener, path: String, surface: GhosttySurfaceView, host: String? = nil) -> String? {
         guard let (session, store, pane) = clickedPane(surface) else {
             logger.notice("open rule \"\(opener.command.name, privacy: .public)\": the clicked pane is gone; nothing run")
             return "the clicked pane is gone"
@@ -542,7 +542,7 @@ final class CustomCommandRunner {
                              cwd: NSHomeDirectory(), sessionID: context.sessionID)
         if refusal == nil {
             store.emitOpenerRun(session: session, pane: pane.rawValue, path: path,
-                                selector: opener.command.name)
+                                selector: opener.command.name, host: host)
         }
         return refusal
     }

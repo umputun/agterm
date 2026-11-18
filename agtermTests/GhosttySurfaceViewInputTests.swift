@@ -214,6 +214,22 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         while !done(), Date() < deadline { RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01)) }
     }
 
+    func testOnlyADetectedNormalClickInARemotePaneOffersItsPaneForAnOpenRule() {
+        let session = Session(initialCwd: NSTemporaryDirectory(), remoteHost: "buildbox")
+        let pane = bareSurface()
+        pane.session = session
+        let forwarded = recordForwards(answer: nil)
+        LinkOpener.shared.mode = { .browser }
+
+        pane.openLink("/srv/notes.md", intent: .normal, source: .detected)
+        pane.openLink("/srv/printed.md", intent: .normal, source: .osc8)
+        pane.openLink("/srv/browser.md", intent: .browser, source: .detected)
+        spin { forwarded.clicks.count == 3 }
+
+        XCTAssertEqual(forwarded.clicks.map(\.raw), ["/srv/notes.md", "/srv/printed.md", "/srv/browser.md"])
+        XCTAssertEqual(forwarded.surfaces.map { $0 === pane }, [true, false, false])
+    }
+
     func testAPlainClickOnADetectedPreviewFileRunsTheMatchingRuleInsteadOfThePage() {
         let session = Session(initialCwd: NSTemporaryDirectory())
         let pane = bareSurface()
@@ -503,13 +519,15 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
 
     private final class Forwarded {
         var clicks: [RemoteLinkClick] = []
+        var surfaces: [GhosttySurfaceView?] = []
         var refusals: [(UUID, RemoteLinkRefusal)] = []
     }
 
     private func recordForwards(answer: RemoteLinkRefusal?) -> Forwarded {
         let forwarded = Forwarded()
-        LinkOpener.shared.forward = { click in
+        LinkOpener.shared.forward = { click, surface in
             forwarded.clicks.append(click)
+            forwarded.surfaces.append(surface)
             return answer
         }
         LinkOpener.shared.refuse = { forwarded.refusals.append(($0, $1)) }

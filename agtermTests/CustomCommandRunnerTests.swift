@@ -785,6 +785,19 @@ final class CustomCommandRunnerTests: XCTestCase {
         XCTAssertNil(event.payload.host)
     }
 
+    func testAnOpenRuleOnACopyFromAnotherHostNamesThatHostOnItsEvent() throws {
+        let fix = try failureFixture(HudRecorder())
+        let pane = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), command: "/bin/cat")
+        pane.session = fix.session
+        fix.session.surface = pane
+
+        XCTAssertNil(fix.runner.runOpener(openerRule(":"), path: "/tmp/copy/notes.md", surface: pane, host: "buildbox"))
+
+        let event = try XCTUnwrap(openerEvents().last)
+        XCTAssertEqual(event.payload.path, "/tmp/copy/notes.md")
+        XCTAssertEqual(event.payload.host, "buildbox")
+    }
+
     func testAScratchClickRunsWithTheScratchContext() throws {
         let fix = try failureFixture(HudRecorder())
         let scratch = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), command: "/bin/cat")
