@@ -139,6 +139,30 @@ public struct PresentationMail: Codable, Equatable, Sendable {
     }
 }
 
+/// PresentationCompanions is a session's companion membership in the origin's sidebar order, so a viewer can attach a
+/// member it has not handled yet. Only rows the origin owns are members: one it shows from another host is not its own.
+public struct PresentationCompanions: Codable, Equatable, Sendable {
+    public struct Member: Codable, Equatable, Sendable {
+        public enum Kind: String, Codable, Sendable {
+            case terminal, page
+        }
+
+        public var id: UUID
+        public var kind: Kind
+
+        public init(id: UUID, kind: Kind) {
+            self.id = id
+            self.kind = kind
+        }
+    }
+
+    public var members: [Member]
+
+    public init(members: [Member]) {
+        self.members = members
+    }
+}
+
 /// PresentationSound is a status sound the origin hands its presenter to play instead of playing it itself.
 /// A nil `name` is the presenter's own Settings blocked sound, so each Mac's choice applies where it plays.
 public struct PresentationSound: Codable, Equatable, Sendable {
@@ -700,9 +724,14 @@ public struct PresentationSnapshot: Codable, Equatable, Sendable {
     public var info: PresentationInfo?
     /// mail is nil from an origin that predates mail counts.
     public var mail: PresentationMail?
+    /// companions is nil from an origin that predates the membership, for a row it shows from another host, and for
+    /// a parent in its undo grace. An empty list means no companions the origin owns, though it may still show a
+    /// companion from another host.
+    public var companions: PresentationCompanions?
 
     public init(status: PresentationStatus?, hud: PresentationHud?, context: String? = nil, layout: PresentationLayout? = nil,
-                respawns: PresentationRespawns? = nil, info: PresentationInfo? = nil, mail: PresentationMail? = nil) {
+                respawns: PresentationRespawns? = nil, info: PresentationInfo? = nil, mail: PresentationMail? = nil,
+                companions: PresentationCompanions? = nil) {
         self.status = status
         self.hud = hud
         self.context = context
@@ -710,6 +739,7 @@ public struct PresentationSnapshot: Codable, Equatable, Sendable {
         self.respawns = respawns
         self.info = info
         self.mail = mail
+        self.companions = companions
     }
 }
 
@@ -787,6 +817,8 @@ public struct PresentationFrame: Equatable, Sendable {
         case message(PresentationMessage)
         /// mail replaces the session's mail counts; sent only when they changed for that viewer.
         case mail(PresentationMail)
+        /// companions replaces the session's companion membership; sent only to a viewer listing the kind, when it changed.
+        case companions(PresentationCompanions)
         case sound(PresentationSound)
         /// A viewer asking to be the session's sole presenter. Sent only after the origin's hello offered it.
         case presenterAcquire
@@ -858,6 +890,7 @@ public struct PresentationFrame: Equatable, Sendable {
             case .notify: return "notify"
             case .message: return "message"
             case .mail: return "mail"
+            case .companions: return "companions"
             case .sound: return "sound"
             case .presenterAcquire: return "presenter.acquire"
             case .presenterGranted: return "presenter.granted"

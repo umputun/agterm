@@ -421,6 +421,32 @@ struct PresentationFramesTests {
         #expect(snapshot.mail == nil)
     }
 
+    @Test @MainActor func aCompanionsFrameAndSnapshotCarryTheMembersInOrderWithTheirKinds() throws {
+        let terminal = UUID()
+        let page = UUID()
+        let companions = PresentationCompanions(members: [PresentationCompanions.Member(id: page, kind: .page),
+                                                          PresentationCompanions.Member(id: terminal, kind: .terminal)])
+        let line = try PresentationCodec.encode(PresentationFrame(gen: 1, rev: 2, body: .companions(companions)))
+        let snapshot = PresentationSnapshot(status: nil, hud: nil, companions: PresentationCompanions(members: []))
+        let snapshotLine = try PresentationCodec.encode(PresentationFrame(gen: 1, rev: 1, body: .snapshot(snapshot)))
+
+        let text = String(decoding: line, as: UTF8.self)
+        #expect(text.contains(#""kind":"companions""#))
+        #expect(text.contains(#"{"id":"\#(page.uuidString)","kind":"page"}"#))
+        #expect(try PresentationCodec.decode(line.dropLast()).body == .companions(companions))
+        #expect(try PresentationCodec.decode(snapshotLine.dropLast()).body == .snapshot(snapshot))
+        #expect(PresentationHub.supportedKinds.contains(PresentationHub.companionsKind))
+    }
+
+    @Test func aSnapshotFromAnOriginWithoutCompanionsDecodesWithNone() throws {
+        let line = Data(#"{"kind":"snapshot","gen":1,"rev":1,"snapshot":{"context":"PR #517"}}"#.utf8)
+
+        let frame = try PresentationCodec.decode(line)
+
+        guard case .snapshot(let snapshot) = frame.body else { Issue.record("not a snapshot"); return }
+        #expect(snapshot.companions == nil)
+    }
+
     @Test func anUnknownKindDecodesToUnknownAndKeepsItsOrdering() throws {
         let line = Data(#"{"kind":"future.kind","gen":3,"rev":12,"job":"abc"}"#.utf8)
 

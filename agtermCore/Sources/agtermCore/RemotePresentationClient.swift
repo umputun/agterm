@@ -337,7 +337,7 @@ public final class RemotePresentationClient {
             }
         case .ack: effects.acked()
         case .presenterAcquire, .leadReport, .linkClick, .statusClear, .statusSeen, .askResolve, .askRejected, .pickResolve, .pickRejected, .overlayRejected,
-             .overlayClosed, .unknown,
+             .overlayClosed, .companions, .unknown,
              .pageRejected, .pageClosed, .pageState, .pageResult:
             break
         }

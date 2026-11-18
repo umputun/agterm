@@ -195,19 +195,19 @@
 - Create: `agtermCore/Sources/agtermCore/AppStore+CompanionMembership.swift` (membership projection and flush)
 - Create: `agtermCore/Tests/agtermCoreTests/AppStoreCompanionMembershipTests.swift`
 
-- [ ] write failing tests: codec round-trip of the `companions` body and the optional snapshot field; an older
+- [x] write failing tests: codec round-trip of the `companions` body and the optional snapshot field; an older
       decoder ignores both; hub sends `companions` only to a subscriber listing the kind, live and from held replay;
       dedupe of an unchanged list
-- [ ] write failing tests: the snapshot lists a parent's companions in order with kinds; add, page add, convert,
+- [x] write failing tests: the snapshot lists a parent's companions in order with kinds; add, page add, convert,
       move (both parents), same-parent reorder, close, soft close and undo of a soft close each publish the
       resulting list one main-queue turn later; finalizing a soft close publishes nothing more (the list is
       unchanged); a batch undo publishes only the final grouping; a session with no companions lists `[]`; the same
       on a headless store, which is what agterm-server runs
-- [ ] add `PresentationCompanions`, the body case, the snapshot field and `companionsKind`
-- [ ] add kind-filtered `publishCompanions` in the hub and the filter in held replay
-- [ ] add the flush: `scheduleTreeChanged` schedules one main-queue turn, once per burst, that reads each subscribed
+- [x] add `PresentationCompanions`, the body case, the snapshot field and `companionsKind`
+- [x] add kind-filtered `publishCompanions` in the hub and the filter in held replay
+- [x] add the flush: `scheduleTreeChanged` schedules one main-queue turn, once per burst, that reads each subscribed
       session's completed membership and publishes what differs; no mutation site is edited
-- [ ] run the touched suites with `swift test --filter` - must pass before task 2
+- [x] run the touched suites with `swift test --filter` - must pass before task 2
 
 ### Task 2: Viewer follow state, seeding and reconcile rule (host-free)
 

@@ -581,6 +581,65 @@ struct PresentationHubTests {
         #expect(sink.bodies == [.hello(Self.hello), .snapshot(Self.mailSnapshot(1)), .mail(Self.mail(1))])
     }
 
+    static let companionsHello = PresentationHello(version: 1, kinds: ["status", PresentationHub.companionsKind], mode: .mirror)
+
+    static func companions(_ ids: [UUID]) -> PresentationCompanions {
+        PresentationCompanions(members: ids.map { PresentationCompanions.Member(id: $0, kind: .terminal) })
+    }
+
+    static func companionsSnapshot(_ ids: [UUID]) -> PresentationSnapshot {
+        PresentationSnapshot(status: nil, hud: nil, companions: companions(ids))
+    }
+
+    @Test func companionsGoOnlyToAViewerListingTheKind() throws {
+        let hub = makeHub()
+        let following = Sink()
+        let older = Sink()
+        try hub.subscribe(session: Self.session, hello: Self.companionsHello, sink: following) { Self.companionsSnapshot([]) }
+        try hub.subscribe(session: Self.session, hello: Self.hello, sink: older) { Self.companionsSnapshot([]) }
+        let child = UUID()
+
+        hub.publishCompanions(Self.companions([child]), session: Self.session)
+
+        #expect(following.bodies.last == .companions(Self.companions([child])))
+        #expect(older.bodies.count == 2)
+    }
+
+    @Test func companionsPublishedWhileTheSnapshotIsTakenLandOnlyForAViewerListingTheKind() throws {
+        let hub = makeHub()
+        let following = Sink()
+        let older = Sink()
+        let child = UUID()
+        try hub.subscribe(session: Self.session, hello: Self.companionsHello, sink: following) {
+            hub.publishCompanions(Self.companions([child]), session: Self.session)
+            return Self.companionsSnapshot([])
+        }
+        try hub.subscribe(session: Self.session, hello: Self.hello, sink: older) {
+            hub.publishCompanions(Self.companions([child]), session: Self.session)
+            return Self.companionsSnapshot([])
+        }
+
+        #expect(following.bodies.dropFirst() == [.snapshot(Self.companionsSnapshot([])), .companions(Self.companions([child]))])
+        #expect(older.bodies.count == 2)
+    }
+
+    @Test func aCompanionListAViewerAlreadyHasSendsNothing() throws {
+        let hub = makeHub()
+        let sink = Sink()
+        let child = UUID()
+        try hub.subscribe(session: Self.session, hello: Self.companionsHello, sink: sink) {
+            hub.publishCompanions(Self.companions([child]), session: Self.session)
+            return Self.companionsSnapshot([child])
+        }
+        hub.publishCompanions(Self.companions([child]), session: Self.session)
+        #expect(sink.bodies.count == 2)
+
+        hub.publishCompanions(Self.companions([]), session: Self.session)
+        hub.publishCompanions(Self.companions([]), session: Self.session)
+
+        #expect(sink.bodies.dropFirst(2) == [.companions(Self.companions([]))])
+    }
+
     @Test func subscribedSessionsListsEverySessionWithAViewer() throws {
         let hub = makeHub()
         let other = UUID()

@@ -17,6 +17,7 @@ extension AppStore {
 
     func scheduleTreeChanged() {
         emitControlEvent(.treeChanged)
+        scheduleCompanionsFlush()
     }
 
     func emitSessionCreated(_ session: Session, workspace: UUID) {

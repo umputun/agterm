@@ -182,6 +182,7 @@ public final class AppStore {
     /// Where this store publishes a session's presentation state for attached viewers. One hub serves every
     /// window, since a viewer subscribes by session id alone.
     @ObservationIgnored public var presentationHub: PresentationHub?
+    @ObservationIgnored var companionsFlushDue = false
     /// The remote overlay jobs this Mac handed to presenters, shared with the server like the hub.
     @ObservationIgnored public var overlayJobs: OverlayJobs?
     /// Told when an attached session's row is shown or leaves, undo and restoration included.
