@@ -785,7 +785,7 @@ The action palette over a split session. Attach Remote is greyed out: listed, bu
           <!-- REMOTE SERVER -->
           <section id="remote-sessions" class="doc-v2" style="scroll-margin-top: 88px; padding-top: 56px">
 <h2>Remote sessions</h2>
-<p>Open a session that runs on another Mac in this sidebar, as a row marked remote, splits and companions included. Its programs keep running over there; this Mac shows them at its own window size. For sessions on a Linux host, see <a href="#remote-server">Remote server</a>, which shows them in a remote window instead; a remote window can also show a whole window of another Mac (<a href="#remote-window-mac">A window of another Mac</a>).</p>
+<p>Open a session that runs on another Mac in this sidebar, as a row marked remote, splits and companions included. Its programs keep running over there; this Mac shows them at its own window size. A session on a Linux host running agterm-server attaches here the same way, or the whole host opens in a remote window (<a href="#remote-server">Remote server</a>); a remote window can also show a whole window of another Mac (<a href="#remote-window-mac">A window of another Mac</a>).</p>
 <h3 id="remote-sessions-setup">Set up the other Mac</h3>
 <ul>
 <li>agterm runs in <strong>Live sessions</strong> mode there (<a href="#restore-live">Restore</a>), which keeps a live program behind each pane. A page session needs no live program.</li>
@@ -823,7 +823,8 @@ s=$(agtermctl zmx tree studio.local --json \
 <ul>
 <li>Only a session whose every pane still has a live program is listed. The choice is checked again at attach time, so a session that ended in between fails instead of handing back a fresh shell wearing its name.</li>
 <li><code>--companions</code> attaches each companion under the session. If one cannot be attached, the rest stay and the command fails naming what is missing.</li>
-<li>A terminal companion attached on its own joins its parent's group when exactly one row in the window is attached from that parent. Companions created over there later are not followed.</li>
+<li>A terminal companion attached on its own joins its parent's group when exactly one row in the window is attached from that parent.</li>
+<li>A companion created over there later, or moved under the session, appears under its row here by itself, without changing the selection or taking the lead of its panes. One this Mac already shows stays where it is, and one you close here is not brought back. With two rows attached from the same session, a new companion gets one row, under either of them. A companion that could not be attached when it appeared, because it had ended or its program was not running yet, shows up once it runs again at the session's next companion change or reconnect, not at the restart; <code>agtermctl zmx attach</code> brings it sooner. A host on an older release sends no companion list, so nothing follows; <code>followsCompanions</code> in <code>tree</code> says whether a row follows.</li>
 <li>A page session is listed too: attaching it opens that Mac's page as a top-level row here. A page companion attaches only under the row attached from its parent, so the picker leaves it out.</li>
 </ul>
 <h3 id="remote-sessions-new">Start a session on another host</h3>

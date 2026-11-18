@@ -464,7 +464,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   server page row is forwarded as `session.close`. A server page row has a presentation stream as a terminal row does,
   opened by `catalogRowAdded` and by `attachRemotePage` for a headless origin, so its GUI asks and picks reach the Mac;
   `openPresentation` admits it with no daemon, and `Session.openAsk` takes only a GUI ask on a page session. A page
-  attached from another Mac has no stream: that Mac shows the page's asks in its own window.
+  root attached from another Mac opens only a membership observer (`RemotePresentationClient(observer:)`, Remote
+  sessions): that Mac shows the page's asks in its own window.
 - `session.companion.duplicate` is its own wire command for the same older-app reason.
   `ControlServer.duplicateCompanion` plans every pane through `ForegroundProcess.replayObservation` and host-free
   `DuplicateReplay` from one fresh leader listing before creating anything; `AppStore.duplicateAsCompanion` then
@@ -493,7 +494,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   detached rows by `companionIndex` while a control `index` passes through in the server's terms; a server refusing `--parent` or the command is a final too-old answer for this
   operation only. A row attached from another host is checked here, moved on its origin appended, then placed here
   at the slot (`AttachedFollowUp.moveUnder`); a move under its own parent stays a local reorder. Another Mac attached
-  to that origin keeps its old grouping until it reattaches, the presentation stream carrying no grouping.
+  to that origin attaches the moved row under the new parent's row only when it shows it nowhere yet; a row it
+  already shows keeps its old grouping until it reattaches, the stream carrying membership, never grouping.
   Read back `parent` and the session order.
 - `PageSessionRefusal` is the one pre-dispatch guard, run by `ControlServer.pageCompanionRefusal`, a remote window's
   route and agterm-server's `pageRowRefusal`, covering the socket and a page's bridge.
@@ -2220,6 +2222,23 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   stopped client shows "SESSION on HOST ended", as does a held exit with no such stream. There is no settle clock,
   so a slow link waits for its own 30 s stale check rather than painting early. Read back `attachEnded` on the
   surface node. A saved attached row with `ended=true` is not restored.
+- A top-level attached row follows its origin's companions (`ControlServer+FollowCompanions`). The origin publishes the
+  `companions` kind, the whole ordered membership in the snapshot and again on every change, from
+  `scheduleCompanionsFlush` one main-queue turn after a tree change, so soft close, undo and reorder need no hook at
+  their mutation sites; the hub sends each viewer only a list that differs from its last. The viewer keeps the
+  handled origin ids on the row (`Session.followedCompanions`, persisted, baselined from the attach-time `zmx tree`),
+  and marks an id handled in every copy bound to the same origin session whenever any path attaches it
+  (`WindowLibrary.markOriginCompanionsHandled`): open rows, rows a pending close holds, and rows saved in closed
+  windows, while each copy keeps its own baseline. A list
+  attaches each unhandled id under that row, one pass per row in membership order, unless this Mac already shows it
+  anywhere, which only marks it. Outcomes are final (a policy refusal), retried on `RemoteRetryBackoff` while the
+  stream is up (no answer, a failed ssh exit), or parked until the next list (not attachable now). Any report
+  but `connected` drops the list until the next snapshot, and a create in flight holds the origin
+  (`holdCompanionFollow`) so its own New Companion is not attached twice; a failed create marks the child its error
+  names, leaving that attach to the user. A Mac page root, which has no full
+  stream, opens a membership observer: hello `companions` plus `ended` as a mirror, never the presenter role or a
+  lead, answering only pings; its state never reaches the row, so the page channel keeps the row's lifetime and
+  notice, and it counts in the origin's `presenters`. Read back `followsCompanions` on the row.
 - `zmx.tree` advertises `presentation`, the protocol version. A viewer never launches the bridge against an
   origin that omits it and reports `unsupported`; nothing is retried and no warning is raised.
 - Read-back is `presentation {state, mode, error}` on the viewer's session node, `presenters {viewers, mirrors,

@@ -71,9 +71,9 @@ extension ControlServer {
         case .unanswered(let reason):
             library.store(forSession: row.id)?.setRemoteConnection(.failed(reason), forSession: row.id)
             return true
-        case .refused(let reason):
+        case .refused(let reason), .tooOld(let reason), .interrupted(let reason):
             failure = reason
-        case .page(let page):
+        case .page(let page, _):
             let origin = RemoteBinding.Origin(host: host, endpoint: tree.endpoint, sessionName: sessionName)
             let source = RemotePageOrigin(session: saved.remoteSessionID, binding: origin, presentation: PagePresentation(tree))
             let filled = placeRemotePage(page, from: source, at: .existing(row.id), select: false)

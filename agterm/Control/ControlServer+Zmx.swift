@@ -212,6 +212,8 @@ extension ControlServer {
         var select = true
         /// index is the row's place in the workspace; nil appends it.
         var index: Int?
+        /// claimLead is the user asking for the session here; a row the origin's membership brought in takes no lead.
+        var claimLead = true
     }
 
     /// attach creates the local row for `remote`, one session of `tree`, and binds its panes. Everything that can
@@ -228,8 +230,7 @@ extension ControlServer {
         let right = byRole[.right]
         let primary: String
         let split: String?
-        // attaching is the user asking for the session HERE, so every pane claims the lead at once
-        let leads = (left: ZmxLeadAttachment(claim: true), right: ZmxLeadAttachment(claim: true))
+        let leads = (left: ZmxLeadAttachment(claim: placement.claimLead), right: ZmxLeadAttachment(claim: placement.claimLead))
         do {
             primary = try RemoteSession.attachPaneCommand(host: host, endpoint: tree.endpoint, daemon: left,
                                                           session: remote.name, pane: .left, lead: leads.left)
@@ -269,7 +270,9 @@ extension ControlServer {
                                        presentationVersion: tree.presentation, origin: origin,
                                        originHeadless: tree.headless == true),
                          forSession: created.id)
-        // the row's created event fired inside `addSession`, before the binding existed
+        if let members = remote.companions { store.baselineCompanions(members.map(\.id), forSession: created.id) }
+        if let parent = remote.parent { library.markOriginCompanionsHandled([remote.id], parent: parent, host: host, endpoint: tree.endpoint) }
+        // the row's created event fired inside `addSession`, before the binding existed; seeded first, so no list beats it
         startRemotePresentation(for: created)
         // a FIXED target, never `focusActiveSession`: it follows `splitFocused`, which the new split's deck
         // re-render can clear from under it through `onFocusChange`.

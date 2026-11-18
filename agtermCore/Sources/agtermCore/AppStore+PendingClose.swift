@@ -117,7 +117,7 @@ extension AppStore {
     /// discardSession closes one row and ends its panes without writing a Recent Closed entry: a creation that
     /// failed to start, or a close a crash interrupted, whose entry written at close time keeps its id and grouping.
     public func discardSession(_ sessionID: UUID, alreadyFinalized: UUID? = nil) {
-        closeSessionRow(sessionID, alreadyFinalized: alreadyFinalized)
+        _ = closeSession(sessionID, alreadyFinalized: alreadyFinalized, recordsRecent: false, recordsRemote: false)
     }
 
     /// The live object of a session hidden by an undoable close, nil for a visible or finalized one.

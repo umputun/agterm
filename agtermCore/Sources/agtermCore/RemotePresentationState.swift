@@ -111,6 +111,8 @@ public struct RemotePresentationState: Equatable, Sendable {
     /// originEnded is set once the origin said it removed the session for good. Unlike `Session.ended`, which a
     /// catalog or headless row keeps, the row itself is on its way out.
     public internal(set) var originEnded = false
+    /// followsCompanions is the `tree` read-back of the app holding the origin's companion list for this row.
+    public internal(set) var followsCompanions = false
     var heldPanes: Set<UUID> = []
     /// Whether the glyph on the row is the bridge's. A flag and not a comparison of values: a pane swap
     /// rewrites the indicator without changing who set it, and a local write of the very same value does

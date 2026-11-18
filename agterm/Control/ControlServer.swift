@@ -110,9 +110,9 @@ final class ControlServer {
     /// originLiveActive is whether this launch runs Live sessions, which serving a window needs; hosted tests set it.
     var originLiveActive: () -> Bool = { GhosttyApp.shared.launchRestoreMode == .live }
 
-    /// This Mac as a VIEWER: one client per attached session. `ControlServer+RemotePresentation` owns the
-    /// logic. The transport is injectable so a hosted test needs no ssh.
+    /// This Mac as a VIEWER: one client per attached session. `ControlServer+RemotePresentation` owns the logic. The transport is injectable so a hosted test needs no ssh.
     var remoteClients: [UUID: RemotePresentationClient] = [:]
+    var companionFollow = CompanionFollowState()
     /// restoredOriginChecks is each host whose restored rows are being checked, with its failures in a row.
     var restoredOriginChecks: [String: Int] = [:]
     var remoteTransport: RemotePresentationTransport = RemotePresentationProcess()

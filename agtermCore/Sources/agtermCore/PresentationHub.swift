@@ -44,6 +44,8 @@ public final class PresentationHub {
         var held: [PresentationFrame.Body]? = []
         /// mail is the counts this viewer last accepted, from its snapshot or a mail frame.
         var mail: PresentationMail?
+        /// companions is the membership this viewer last accepted, from its snapshot or a companions frame.
+        var companions: PresentationCompanions?
         /// leads are the origin panes this viewer last reported leading; leadsAt orders its report among all viewers'.
         var leads: Set<UUID> = []
         var leadsAt = 0
@@ -81,8 +83,10 @@ public final class PresentationHub {
                                         overlayPointsKind, pageContentKind, pageDocumentKind, pageLinksKind, statusShapesKind,
                                         statusCheckmarkKind, linkClickKind, pendingSnapshotKind, jobTokenKind, pageForwardKind,
                                         pageTextKind, pageFilesKind, pageExpandKind, statusClearKind, restartRespawnKind, presenterVacantKind,
-                                        leadReportKind, offerIdentityKind, endedKind]
+                                        leadReportKind, offerIdentityKind, endedKind, companionsKind]
                                         + pageKinds + pickKinds
+    /// companionsKind is a viewer's capability of following the session's companion membership.
+    public static let companionsKind = "companions"
     /// endedKind is a viewer's capability of taking `ended`, the origin's word that the session is gone for good.
     public static let endedKind = "ended"
     /// pageKinds are the presentation kinds a presenter must speak to be handed a page.
@@ -203,7 +207,7 @@ public final class PresentationHub {
         subscriber.kinds = Set(kinds)
         // presenter is offered only to a viewer that asked for it, so a slice-1 viewer stays a mirror
         let answer = PresentationHello(version: version, kinds: kinds, mode: hello.mode)
-        for body in [.hello(answer), .snapshot(state)] + held {
+        for body in [.hello(answer), .snapshot(state)] + held where takes(body, subscriber) {
             guard send(body, to: id) else { break }
         }
         return id
@@ -296,6 +300,24 @@ public final class PresentationHub {
             }
             if subscriber.mail != mail { send(.mail(mail), to: id) }
         }
+    }
+
+    /// publishCompanions sends `session`'s companion membership to each viewer listing the kind whose last accepted
+    /// membership differs.
+    public func publishCompanions(_ companions: PresentationCompanions, session: UUID) {
+        for (id, subscriber) in subscribers where subscriber.session == session {
+            if subscriber.held != nil {
+                subscriber.held?.append(.companions(companions))
+                continue
+            }
+            if takes(.companions(companions), subscriber) { send(.companions(companions), to: id) }
+        }
+    }
+
+    // a held companions frame is judged at replay, once the hello settled the kinds and the snapshot the last list
+    private func takes(_ body: PresentationFrame.Body, _ subscriber: Subscriber) -> Bool {
+        guard case .companions(let companions) = body else { return true }
+        return subscriber.kinds.contains(Self.companionsKind) && subscriber.companions != companions
     }
 
     /// subscribedSessions are the sessions at least one viewer follows.
@@ -429,8 +451,11 @@ public final class PresentationHub {
         }
         subscriber.revision += 1
         switch body {
-        case .snapshot(let snapshot): subscriber.mail = snapshot.mail
+        case .snapshot(let snapshot):
+            subscriber.mail = snapshot.mail
+            subscriber.companions = snapshot.companions
         case .mail(let mail): subscriber.mail = mail
+        case .companions(let companions): subscriber.companions = companions
         default: break
         }
         return true

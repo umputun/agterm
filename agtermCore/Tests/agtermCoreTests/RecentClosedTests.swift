@@ -71,6 +71,26 @@ final class RecentClosedTests {
     }
 
     @MainActor
+    @Test func aDiscardedAttachedRowLeavesNoRemoteEntryWhileAClosedOneDoes() throws {
+        let (store, recentClosed, _) = makeStoreWithRecentClosed()
+        let ws = store.addWorkspace(name: "work")
+        let endpoint = ControlZmxEndpoint(executable: "/srv/zmx", socketDirectory: "/run/zmx")
+        var rows: [Session] = []
+        for _ in 0..<2 {
+            let row = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a", remoteHost: "buildbox"))
+            store.bindRemote(RemoteBinding(remoteSessionID: UUID().uuidString, daemonsByLocalPane: [:], presentationVersion: 1,
+                                           origin: .init(host: "buildbox", endpoint: endpoint, sessionName: "page")),
+                             forSession: row.id)
+            rows.append(row)
+        }
+
+        store.discardSession(rows[0].id)
+        #expect(recentClosed.loadRemote().isEmpty)
+        store.closeSession(rows[1].id)
+        #expect(recentClosed.loadRemote().count == 1)
+    }
+
+    @MainActor
     @Test func closingAWorkspaceRecordsOnlyItsLocalSessionsAndCountsThem() {
         let (store, recentClosed, _) = makeStoreWithRecentClosed()
         store.addWorkspace(name: "keep")

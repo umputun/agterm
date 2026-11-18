@@ -799,6 +799,52 @@ struct AppStoreTreeProjectionTests {
         #expect(store.controlTree().workspaces[0].sessions[0].presenters == ControlPresentersNode(mirrors: 2, viewers: 2))
     }
 
+    @Test func aRowReportsFollowingItsOriginsCompanionsOnlyWhileItHoldsTheirList() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let row = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp", remoteHost: "buildbox", remoteSessionID: "o1"))
+        store.bindRemote(RemoteBinding(remoteSessionID: "o1", daemonsByLocalPane: [:], presentationVersion: 1), forSession: row.id)
+        let node = { store.controlTree().workspaces[0].sessions[0] }
+        #expect(node().followsCompanions == nil)
+
+        store.setFollowsCompanions(true, forSession: row.id)
+        #expect(node().followsCompanions == true)
+        #expect(String(decoding: try JSONEncoder().encode(store.controlTree()), as: UTF8.self).contains(#""followsCompanions":true"#))
+
+        store.setFollowsCompanions(false, forSession: row.id)
+        #expect(node().followsCompanions == nil)
+        store.setFollowsCompanions(true, forSession: row.id)
+        store.bindRemote(RemoteBinding(remoteSessionID: "o1", daemonsByLocalPane: [:], presentationVersion: 1), forSession: row.id)
+        #expect(node().followsCompanions == nil)
+    }
+
+    @Test func aCompanionRowNeverReportsFollowingEvenWhenMovedUnderAParentWithItsListHeld() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let parent = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        let row = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp", remoteHost: "buildbox", remoteSessionID: "o1"))
+        store.bindRemote(RemoteBinding(remoteSessionID: "o1", daemonsByLocalPane: [:], presentationVersion: 1), forSession: row.id)
+        store.setFollowsCompanions(true, forSession: row.id)
+        let node = { store.controlTree().workspaces[0].sessions.first { $0.id == row.id.uuidString }?.followsCompanions }
+        #expect(node() == true)
+
+        store.nest(row.id, under: parent.id)
+
+        #expect(node() == nil)
+    }
+
+    @Test func aMembershipObserverCountsAsAMirroringViewer() throws {
+        let store = makeStore()
+        let hub = PresentationHub(staleTimeout: 30)
+        store.presentationHub = hub
+        let session = try #require(store.addSession(toWorkspace: store.addWorkspace(name: "work").id, cwd: "/tmp"))
+
+        try hub.subscribe(session: session.id, hello: PresentationHello(version: 1, kinds: RemotePresentationClient.observerKinds, mode: .mirror),
+                          sink: NullSink()) { store.presentationSnapshot(forSession: session.id) }
+
+        #expect(store.controlTree().workspaces[0].sessions[0].presenters == ControlPresentersNode(mirrors: 1, viewers: 1))
+    }
+
     @Test func anOriginSurfaceIsRemoteExactlyWhenItsNextWorkGoesToAViewer() throws {
         let store = makeStore()
         let hub = PresentationHub(staleTimeout: 30)

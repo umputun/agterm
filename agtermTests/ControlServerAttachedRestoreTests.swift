@@ -7,6 +7,7 @@ final class ControlServerAttachedRestoreTests: XCTestCase {
     private var stateDir: URL!
     private var library: WindowLibrary!
     private var settings: SettingsModel!
+    private var transport: StreamTransport!
     private let originSession = "0E2B7C1A-5D4F-4E3B-9A61-7C2D8F0B1A23"
     private let pageID = "5A1E7C2B-3D4F-4E5A-8B6C-7D8E9F0A1B2C"
     private let endpoint = ControlZmxEndpoint(executable: "/Applications/agterm.app/zmx", socketDirectory: "/tmp/agterm-zmx-abc")
@@ -21,6 +22,7 @@ final class ControlServerAttachedRestoreTests: XCTestCase {
 
     override func tearDown() async throws {
         settings = nil
+        transport = nil
         library = nil
         try? FileManager.default.removeItem(at: stateDir)
         stateDir = nil
@@ -202,10 +204,24 @@ final class ControlServerAttachedRestoreTests: XCTestCase {
         XCTAssertNil(store.session(withID: row.id), "its channel ending there closes the row here")
     }
 
+    func testARestoredMacPageRootFollowsItsMembershipThroughAnObserver() async throws {
+        let (server, _, row) = try makeServer(ScriptedRunner([tree(sessions: session(originSession, panes: "")), pageAttach]), page: true)
+        server.pageLauncher = FakePageLauncher()
+
+        await server.checkRestoredOrigin("buildbox")
+
+        XCTAssertNotNil(row.htmlOverlay)
+        XCTAssertNil(row.remotePresentation?.binding.presentationVersion)
+        XCTAssertEqual(transport.hellos.map(\.kinds), [RemotePresentationClient.observerKinds])
+    }
+
     private func makeServer(_ runner: ScriptedRunner, page: Bool = false) throws -> (ControlServer, AppStore, Session) {
         let server = ControlServer(library: library, actions: AppActions(library: library), settingsModel: settings,
                                    identity: AppIdentity(version: "9.9.9", commit: "testsha"), remoteRunner: runner,
                                    socketPath: stateDir.appendingPathComponent("control-\(UUID().uuidString).sock").path)
+        transport = StreamTransport()
+        server.remoteTransport = transport
+        addTeardownBlock { @MainActor in server.stopRemotePresentations() }
         let store = try XCTUnwrap(library.activeStore)
         let workspace = try XCTUnwrap(store.currentWorkspaceID)
         let row = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: NSHomeDirectory(), remoteHost: "buildbox",
