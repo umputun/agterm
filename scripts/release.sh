@@ -232,7 +232,7 @@ fi
 
 # ── Sparkle appcast ───────────────────────────────────────────────────────────
 # the signature must cover the post-staple DMG bytes
-SPARKLE_SIG="$("$SPARKLE_BIN/sign_update" --account agterm "$DMG")"
+SPARKLE_SIG="$("$SPARKLE_BIN/sign_update" --account agterm "$DMG")" || { echo "sign_update failed: $SPARKLE_SIG" >&2; exit 1; }
 ED_SIG="$(sed -nE 's/.*sparkle:edSignature="([^"]+)".*/\1/p' <<<"$SPARKLE_SIG")"
 "$SPARKLE_BIN/sign_update" --account agterm --verify "$DMG" "$ED_SIG"
 NOTES_MD="$(changelog_section)"

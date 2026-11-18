@@ -50,7 +50,7 @@ final class ControlServerLiveResetTests: XCTestCase {
                             remoteRunner: (any RemoteCommandRunner)? = nil,
                             responseWriter: @escaping ControlServer.ResponseWriter = ControlServer.writeResponse) -> ControlServer {
         let client = ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir", runner: runner)
-        let resolver = ZmxForegroundResolver(leaderProvider: { _ in [:] }, leaderProbe: { .foreground($0) })
+        let resolver = ZmxForegroundResolver(leaderProvider: { [:] }, leaderProbe: { .foreground($0) })
         let server = ControlServer(library: library, actions: AppActions(library: library), settingsModel: settingsModel,
                                    identity: AppIdentity(version: "test", commit: "test"), zmxForegroundResolver: resolver,
                                    zmxClient: client, zmxOutdatedBefore: outdatedBefore, liveAttributionProbe: probe,

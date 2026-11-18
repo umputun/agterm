@@ -174,12 +174,14 @@ from the server's catalog),
 `remoteSessionID` (the origin's id for the session an attached row shows, companions and page rows included,
 the id `zmx attach` takes; on a remote window's row it equals the row's `id`; omitted for a local session),
 `presentation` (on an attached session only: `state` is `connecting`, `connected`, `unsupported` for an
-origin too old to stream, or `failed` with the reason in `error`, and `mode` is `presenter` when this
+origin too old to stream and for a page row from another Mac, which reads `followsCompanions` instead, or `failed` with the reason in `error`, and `mode` is `presenter` when this
 row's stream holds the presenter role (see Remote sessions) or `mirror` when it does not; it says whether the stream is up,
 never whether the panes' ssh connections are),
 `presenters` (on an origin session: `viewers`, how many streams show it, one per attached row and not per
-Mac; `mirrors`, those without the presenter role; and `presenter: true` when one holds it; omitted when none
-does; an older origin omits `viewers`),
+Mac, a page root attached from another Mac included; `mirrors`, those without the presenter role; and
+`presenter: true` when one holds it; omitted when none does; an older origin omits `viewers`),
+`followsCompanions` (on an attached top-level row: true while it holds its origin's companion list and attaches
+new companions under itself; omitted for an origin too old to send one and while the stream is down),
 `remoteOverlays` (on an origin session: the overlay slots a presenting Mac holds, each `{pane?,
 sizePercent?, pageID?}`, `pageID` for a page, while the session itself stays uncovered here; omitted when
 none is held),
@@ -550,6 +552,19 @@ buys nothing. A caller with no tree uses `version`.
   A page companion shows an HTML page instead of a terminal and never starts a shell; it is created with
   `session overlay open --html FILE --companion` or `--url URL --companion` (see that entry). A top-level page
   session (`--page`) can be a parent too.
+- `session new --remote HOST [--origin-window W] [--workspace-name NAME] [--cwd DIR] [--command CMD] [--window W]` -
+  create a session on HOST (an ssh destination running agterm in Live sessions mode, or agterm-server) and attach it
+  here at the end of the window's current workspace, selected; prints the new row's id. On HOST it goes into the
+  workspace named `--workspace-name`, default the current workspace's name, the first when several share it,
+  created when missing, and selects
+  nothing there. `--origin-window` names a Mac's window by id or unique prefix, needed when it has several open;
+  agterm-server refuses it. `--cwd` and `--command` are HOST's. A host that does not answer or does not report Live
+  sessions or agterm-server is refused before anything is created. The create is sent once: a session created but
+  not attached is named in the error for `zmx attach HOST ID`, and a lost reply is reported as an unknown outcome. Refuses `--parent`,
+  `--workspace`, `--create-workspace`, `--after`, `--before`, `--wait`, `--name`, `--no-select`, `--tint` and
+  `--op-id`; refused in a remote window. Too old an app: `the running app is too old for remote sessions`. GUI twin:
+  File ▸ New Remote Session…, a palette row, keyless `new_remote_session`. Read back `remoteHost` and
+  `remoteSessionID`. Wire command `session.remote.new`.
 - `session collapse [--target] [--window W]` - fold a parent's companions in the sidebar tree; returns the
   session id. Persisted. A session without companions errors `session has no companions`. Read back from the
   tree session node's `collapsed` flag. Wire command `session.collapse`. `sidebar expand|collapse` and
@@ -2258,7 +2273,7 @@ Built-in action names for `map` include: `new_window`, `new_workspace`, `new_ses
 `open_directory`, `rename_session`, `duplicate_session`, `new_companion`, `duplicate_companion`, `convert_companion`, `close_session`, `reopen_recent`, `undo_close`, `clear_status`, `increase_font_size`,
 `decrease_font_size`, `reset_font_size`, `toggle_split`, `toggle_horizontal_split`, `toggle_scratch`, `toggle_sidebar`,
 `focus_workspace`, `toggle_workspace_filter`, `edit_flagged_sessions`, `edit_focused_workspaces`, `quick_terminal`,
-`session_palette`, `command_palette`, `custom_command_palette`, `dashboard`, and the navigation actions (`previous_session`, `next_session`,
+`session_palette`, `command_palette`, `custom_command_palette`, `dashboard`, `attach_remote`, `new_remote_session`, and the navigation actions (`previous_session`, `next_session`,
 `first_session`, `last_session`, `previous_attention_session`, `next_attention_session`,
 `previous_window`, `next_window`, `focus_left_pane`, `focus_right_pane`, `select_theme`). Editing the keymap from a terminal: open
 `keymap.conf` in `$EDITOR`, then `agtermctl keymap reload`.
@@ -2550,7 +2565,7 @@ reply's `id` is the parent here and `remoteGroup` carries `membershipKnown` plus
 per member, `id` recording that the row was created, not that it still exists. Any member unavailable or failing makes the command fail with the attached rows kept and the
 error naming the parent and what is missing; `membershipKnown: false` means the origin does not report
 `companions`, so one it did not list cannot be named. An app too old for the command creates nothing.
-Companions created on the origin later are not followed.
+A top-level attached row then follows its origin session: a companion created or moved under it there later attaches under the row without changing the selection or the origin's lead, unless this Mac already shows it, and one closed here is never attached again by itself. With two rows attached from one origin session a new companion gets one row, under either. A listed companion that is not attachable yet (ended, its daemon not up) waits for the next membership change or reconnect, so one restarted on the origin is picked up then, not at the restart. A page root attached from another Mac follows through a membership-only stream. An origin that predates the `companions` kind follows nothing; `followsCompanions` in `tree` reads it back.
 
 File ▸ Attach Remote… is the same flow in the GUI and has no command of its own: it offers the machines in
 `<config dir>/remotes.conf` (one `destination [label]` per line, `#` comments), asks which in the picker
@@ -2560,8 +2575,7 @@ companions when it is a top-level session. It is the
 `zmx tree`, `pick` and `zmx attach --companions` instead.
 
 A program in an attached session runs on the origin and talks to the origin's agterm, so what it asks
-agterm to draw would show there only. Every terminal attach therefore also opens a presentation stream (a page row
-uses its page channel instead and mirrors nothing), and this
+agterm to draw would show there only. Every terminal attach therefore also opens a presentation stream (a page row from another Mac uses its page channel instead and mirrors nothing, following only its companions when it is top-level; one from agterm-server gets the full stream), and this
 Mac mirrors the origin session's status, its `session context`, its `session info` line, its `notify` notifications, its HUD and
 the layout of panes already attached.
 Nothing has to be set up beyond the `agtermctl` PATH precondition above. What to expect:

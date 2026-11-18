@@ -335,6 +335,18 @@ struct AppStoreReplicaPageTests {
         #expect(changes.ids == [try #require(session.htmlOverlay?.id)])
     }
 
+    @Test func aRevealOfTheHiddenReplicaIsReported() throws {
+        let (store, session) = try attached()
+        #expect(store.presentReplicaPage(page(), forSession: session.id) == nil)
+        store.setOverlaysHidden(session.id, pane: nil, hidden: true)
+        let changes = Changes()
+        store.onReplicaPageChanged = { changes.ids.append($0) }
+
+        #expect(store.revealSessionOverlay(session.id))
+
+        #expect(changes.ids == [try #require(session.htmlOverlay?.id)])
+    }
+
     @Test func aLocalPaneOpenerOverTheReplicaLeavesItsReportedStateAlone() throws {
         let (store, session) = try attached()
         #expect(store.presentReplicaPage(page(), forSession: session.id) == nil)

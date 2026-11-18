@@ -28,7 +28,7 @@ final class ControlServerZmxTests: XCTestCase {
             if failedList { throw ZmxClient.CommandError.timedOut }
             return names.map { "name=\($0)\tpid=200\tclients=0" }.joined(separator: "\n")
         })
-        let resolver = ZmxForegroundResolver(leaderProvider: { _ in foregroundLists += 1; return [:] }, leaderProbe: { .foreground($0) })
+        let resolver = ZmxForegroundResolver(leaderProvider: { foregroundLists += 1; return [:] }, leaderProbe: { .foreground($0) })
         let probe = LiveAttributionProbe(responsible: { pid in
             lookups[pid, default: 0] += 1
             return .live(pid == 100 ? 100 : root)
@@ -118,7 +118,7 @@ final class ControlServerZmxTests: XCTestCase {
         session.surface = GhosttySurfaceView(workingDirectory: "/tmp", backedByZmx: true)
         let row = "name=\(ZmxSupport.daemonName(for: session.paneIdentity))\tpid=200\tclients=1"
         let client = ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir", runner: { _ in row })
-        let resolver = ZmxForegroundResolver(leaderProvider: { _ in [:] }, leaderProbe: { .foreground($0) })
+        let resolver = ZmxForegroundResolver(leaderProvider: { [:] }, leaderProbe: { .foreground($0) })
         func node(current: String?) throws -> ControlSessionNode {
             let probe = LiveAttributionProbe(responsible: { $0 == 200 ? .live(101) : .live($0) },
                                              hosts: { _ in .init(pids: ["current": 100, "earlier": 101], current: current) },

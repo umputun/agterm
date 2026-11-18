@@ -26,6 +26,47 @@ struct SessionCompanionsCommandsTests {
         #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["session", "new", "--parent", "p1"] + extra) }
     }
 
+    @Test func sessionNewWithRemoteSendsTheRemoteCommand() throws {
+        var args = ControlArgs(cwd: "/srv", workspaceName: "dev", host: "mac", command: "top", window: "win")
+        args.originWindow = "6f1c"
+
+        let actual = try request(["session", "new", "--remote", "mac", "--origin-window", "6f1c", "--workspace-name", "dev",
+                                  "--cwd", "/srv", "--command", "top", "--window", "win"])
+
+        #expect(actual == ControlRequest(cmd: .sessionRemoteNew, args: args))
+        #expect(try request(["session", "new", "--remote", "srv"]) == ControlRequest(cmd: .sessionRemoteNew, args: ControlArgs(host: "srv")))
+    }
+
+    @Test(arguments: [["--parent", "p1"], ["--workspace", "w"], ["--workspace-name", "w", "--create-workspace"], ["--after", "a"],
+                      ["--before", "b"], ["--command", "top", "--wait"], ["--name", "n"], ["--no-select"], ["--tint", "red"],
+                      ["--op-id", "op-1", "--epoch", "e1"]])
+    func sessionNewWithRemoteRefusesWhatTheRowCannotCarry(extra: [String]) {
+        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["session", "new", "--remote", "mac"] + extra) }
+    }
+
+    @Test func originWindowNeedsRemote() {
+        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["session", "new", "--origin-window", "6f1c"]) }
+    }
+
+    @Test func theOriginArgvParsesAsAPlainSessionNewOnTheOrigin() throws {
+        let create = RemoteSessionCreate(host: "mac", cwd: "-srv", command: "-x make run")
+
+        let mac = try request(create.arguments(origin: .mac(window: "6f1c"), workspaceName: "-ops"))
+        let server = try request(create.arguments(origin: .server, workspaceName: "dev"))
+
+        #expect(mac == ControlRequest(cmd: .sessionNew, args: ControlArgs(
+            cwd: "-srv", workspaceName: "-ops", createWorkspace: true, noSelect: true, command: "-x make run", window: "6f1c")))
+        #expect(server.cmd == .sessionNew)
+        #expect(server.args?.window == nil)
+    }
+
+    @Test func anAppThatDoesNotKnowTheRemoteCommandReadsAsTooOld() {
+        let unknown = ControlResponse(ok: false, error: "invalid request: unknown cmd session.remote.new")
+        let send = companionSend({ _ in SocketReply(response: unknown, raw: Data()) }, json: false,
+                                 tooOld: "the running app is too old for remote sessions")
+        #expect(throws: ExitCode.self) { try send(ControlRequest(cmd: .sessionRemoteNew, args: ControlArgs(host: "mac"))) }
+    }
+
     @Test func sessionDuplicateWithCompanionSendsTheDuplicateCompanionCommand() throws {
         let expected = ControlRequest(cmd: .sessionCompanionDuplicate, target: "p1", args: ControlArgs(window: "win"))
         #expect(try request(["session", "duplicate", "--companion", "--target", "p1", "--window", "win"]) == expected)

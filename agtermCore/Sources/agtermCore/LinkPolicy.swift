@@ -420,7 +420,7 @@ public enum LinkPolicy {
     private static let sessionLinkPrefix = "agterm://session/"
 
     /// sessionLink accepts only the raw session authority and a hyphenated UUID, without URL normalization.
-    static func sessionLink(_ raw: String) -> UUID? {
+    public static func sessionLink(_ raw: String) -> UUID? {
         guard raw.count == sessionLinkPrefix.count + 36, raw.prefix(sessionLinkPrefix.count).lowercased() == sessionLinkPrefix else { return nil } // 36: a hyphenated UUID
         return UUID(uuidString: String(raw.dropFirst(sessionLinkPrefix.count)))
     }

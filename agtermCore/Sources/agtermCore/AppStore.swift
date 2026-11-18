@@ -179,9 +179,9 @@ public final class AppStore {
     /// The settled selected-pane identity per session that `pane.focused` diffs against.
     @ObservationIgnored var paneFocusBaseline: [UUID: UUID] = [:]
     @ObservationIgnored let paneFocusDebouncer = Debouncer()
-    /// Where this store publishes a session's presentation state for attached viewers. One hub serves every
-    /// window, since a viewer subscribes by session id alone.
+    /// Where this store publishes a session's presentation state for attached viewers. One hub serves every window, since a viewer subscribes by session id alone.
     @ObservationIgnored public var presentationHub: PresentationHub?
+    @ObservationIgnored var companionsFlushDue = false
     /// The remote overlay jobs this Mac handed to presenters, shared with the server like the hub.
     @ObservationIgnored public var overlayJobs: OverlayJobs?
     /// Told when an attached session's row is shown or leaves, undo and restoration included.
@@ -470,7 +470,7 @@ public final class AppStore {
                                           parent: session.parentID?.uuidString,
                                           collapsed: !session.isExpanded && parents.contains(session.id) ? true : nil,
                                           content: session.content == .page ? "page" : nil, info: session.effectiveInfo,
-                                          remoteSessionID: session.remoteSessionID)
+                                          remoteSessionID: session.remoteSessionID, followsCompanions: session.parentID == nil && session.remotePresentation?.followsCompanions == true ? true : nil)
             }
             return ControlWorkspaceNode(id: workspace.id.uuidString, name: workspace.name,
                                         active: workspace.id == activeWorkspaceID,
@@ -667,7 +667,7 @@ public final class AppStore {
         _ = closeSession(sessionID, alreadyFinalized: alreadyFinalized, recordsRecent: false)
     }
 
-    private func closeSession(_ sessionID: UUID, alreadyFinalized: UUID?, recordsRecent: Bool, companions: [SessionSnapshot] = []) -> UUID? {
+    func closeSession(_ sessionID: UUID, alreadyFinalized: UUID?, recordsRecent: Bool, recordsRemote: Bool = true, companions: [SessionSnapshot] = []) -> UUID? {
         guard let location = location(ofSession: sessionID) else { return nil }
         let wasActive = selectedSessionID == sessionID
         let workspace = workspaces[location.workspaceIndex]
@@ -676,7 +676,7 @@ public final class AppStore {
         workspaces[location.workspaceIndex].sessions.remove(at: location.sessionIndex)
         emitSessionClosed(removed, workspace: workspace.id)
         dropLaunchPanes([removed])
-        let recent = recordClosedSession(removed, workspace: workspace, at: location, local: recordsRecent, companions: companions)
+        let recent = recordsRemote ? recordClosedSession(removed, workspace: workspace, at: location, local: recordsRecent, companions: companions) : nil
         finalizePaneIdentities([removed], alreadyFinalized: alreadyFinalized)
         removed.surface?.teardown()
         removed.splitSurface?.teardown()

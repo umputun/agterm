@@ -70,6 +70,10 @@ paths:
 - File ▸ Open Remote Window… uses the same host list and picker, then a second pick of the Mac's open windows
   when the host is a Mac with several (`AppActions+RemoteAttach`, `RemoteOriginWindow`); one window or an
   agterm-server host asks nothing. `window remote open --origin-window` is its control twin.
+- File ▸ New Remote Session… (`new_remote_session`, keyless) follows Attach Remote… with a palette row and shares its
+  enablement plus `localOnly`. `AppActions.newRemoteSession` captures the destination before `pickRemote`, asks a
+  Mac with several windows which one, then calls `RemoteAttaching.createRemoteSession`, the creator
+  `session.remote.new` runs, with failures in the Attach Remote HUD.
 
 - New Companion (`new_companion`, keyless) sits beside Duplicate Session in the row menu and the Session
   menu, with a palette row. On a remote row it asks the origin through `RemoteAttaching.createRemoteCompanion`,

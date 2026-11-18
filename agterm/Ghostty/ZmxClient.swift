@@ -5,11 +5,7 @@ import os
 
 @MainActor
 final class ZmxClient {
-    // zmx list probes daemons one at a time, so its cost grows with the daemon count and their load;
-    // timeout plus kill grace stays below the exit budget.
-    nonisolated static let captureInvocationTimeout: TimeInterval = 0.4
     nonisolated static let terminationGrace = ProcessOutputCapture.terminationGrace
-    nonisolated static let captureWallClockLimit = captureInvocationTimeout + terminationGrace
 
     struct Invocation {
         let executablePath: String
@@ -140,8 +136,8 @@ final class ZmxClient {
         }
     }
 
-    func sessionLeaderPIDs(timeout: TimeInterval? = nil) -> [String: pid_t]? {
-        sessionRecords(timeout: timeout).map(ZmxLeaderMap.leaders(in:))
+    func sessionLeaderPIDs() -> [String: pid_t]? {
+        sessionRecords().map(ZmxLeaderMap.leaders(in:))
     }
 
     /// The parsed listing, unreadable rows included, so a caller can tell an absent daemon from one zmx

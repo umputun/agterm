@@ -302,6 +302,47 @@ struct AppStoreOverlayVisibilityTests {
         #expect(session.hiddenOverlayNames.isEmpty)
     }
 
+    @Test func revealingTheSessionOverlayShowsOnlyThatSlot() throws {
+        let fixture = try makeFixture()
+        let session = fixture.session
+        openCover(fixture, page: false)
+        openOnPane(fixture, .left, page: true)
+        #expect(fixture.store.setOverlaysHidden(session.id, pane: nil, hidden: true) == nil)
+        let before = fixture.events.treeChanges
+
+        #expect(fixture.store.revealSessionOverlay(session.id))
+
+        #expect(session.coverOverlayVisible)
+        #expect(session.hiddenOverlayNames == ["left"])
+        #expect(fixture.events.treeChanges == before + 1)
+    }
+
+    @Test(arguments: [false, true])
+    func aRevealUnderAShownPaneHolderChangesNothing(handHidden: Bool) throws {
+        let fixture = try makeFixture()
+        let session = fixture.session
+        openCover(fixture, page: false)
+        if handHidden { #expect(fixture.store.setOverlaysHidden(session.id, pane: nil, hidden: true) == nil) }
+        openOnPane(fixture, .left, page: true)
+        let before = fixture.events.treeChanges
+
+        #expect(!fixture.store.revealSessionOverlay(session.id))
+
+        #expect(session.overlayHidden(nil) == handHidden)
+        #expect(!session.coverOverlayVisible)
+        #expect(fixture.events.treeChanges == before)
+    }
+
+    @Test func aRevealWithNothingHiddenChangesNothing() throws {
+        let fixture = try makeFixture()
+        openCover(fixture, page: false)
+        let before = fixture.events.treeChanges
+
+        #expect(!fixture.store.revealSessionOverlay(fixture.session.id))
+        #expect(!fixture.store.revealSessionOverlay(UUID()))
+        #expect(fixture.events.treeChanges == before)
+    }
+
     @Test func refusesAnUnknownSessionAndAnEmptyScope() throws {
         let fixture = try makeFixture()
 

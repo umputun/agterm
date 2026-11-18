@@ -35,6 +35,8 @@ public enum Command: String, Codable, Sendable, CaseIterable {
     case sessionRestore = "session.restore"
     case sessionCollapse = "session.collapse"
     case sessionCompanionNew = "session.companion.new"
+    /// sessionRemoteNew creates a session on another host and attaches it here; its own command so an older app refuses it.
+    case sessionRemoteNew = "session.remote.new"
     case sessionCompanionPage = "session.companion.page"
     /// sessionPage creates a top-level page session; its own command so an older app refuses it.
     case sessionPage = "session.page"

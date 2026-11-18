@@ -18,7 +18,7 @@ when_to_use: >
   split the pane, print a link that jumps to a session, close the overlay, hide the overlay for a moment, show a message over the session, show a question dialog, agtermctl ask,
   ask the user to type a value or a message, let the user pick one or several items from a list,
   show an image inline, show this markdown file rendered, show this source file or log at a line, show me the diff of a file or the changes as links, tail or follow this log file, search the log or text page in the overlay, wrap long lines in the text or log page, show a JSONL file or expand its records, show this HTML page or artifact, make an HTML page or explainer for this and show
-  it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, search the scrollback, flag every session in a workspace, tint a session or workspace row a color, show status or activity under a session in the sidebar, make a companion session, keep a related program next to a session, duplicate this session with its programs as a companion, make this session a companion, move a companion under another session, open a sub-session under this one, fold a session's companions, show a page as a companion of this session, open a page as its own session row in the sidebar, run my custom command, send a message to the other pane or another agent, read my messages, wait for a message, tell me when the selected session changes, wait until that worker session finishes, bring back the session I just closed, attach a session from another Mac, attach a remote session with all its companions, open a remote window for my Linux server, run sessions on a Linux host with agterm-server, watch events or wait for a session on the agterm-server host, install agterm-server on a Linux host, detach or reattach a remote session, copy this to the clipboard, paste a screenshot into Claude Code in a remote session, was agterm upgraded under the running app, check for an agterm update, upgrade agterm without losing sessions, what recipes are there,
+  it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, search the scrollback, flag every session in a workspace, tint a session or workspace row a color, show status or activity under a session in the sidebar, make a companion session, keep a related program next to a session, duplicate this session with its programs as a companion, make this session a companion, move a companion under another session, open a sub-session under this one, fold a session's companions, show a page as a companion of this session, open a page as its own session row in the sidebar, run my custom command, send a message to the other pane or another agent, read my messages, wait for a message, tell me when the selected session changes, wait until that worker session finishes, bring back the session I just closed, attach a session from another Mac, attach a remote session with all its companions, start a new session on another Mac or server, open a remote window for my Linux server, run sessions on a Linux host with agterm-server, watch events or wait for a session on the agterm-server host, install agterm-server on a Linux host, detach or reattach a remote session, copy this to the clipboard, paste a screenshot into Claude Code in a remote session, was agterm upgraded under the running app, check for an agterm update, upgrade agterm without losing sessions, what recipes are there,
   the keymap editor will not open.
 allowed-tools: Bash(agtermctl *)
 ---
@@ -283,9 +283,10 @@ build or login, which `zmx reset` moves to the current one; omitted otherwise),
 session; an attached row is saved and attached again at relaunch, while a remote window rebuilds its rows),
 `remoteSessionID` (the origin's id for the session an attached row shows, the id `zmx attach` takes; on a remote window's row it equals the row's `id`; omitted for a local session),
 `presentation` (attached session only: the mirroring stream's `state` - `connecting`, `connected`,
-`unsupported`, or `failed` with `error` - not the ssh connection's - plus `mode`, `presenter` while its stream holds that role, else `mirror`),
+`unsupported` (also a page row from another Mac, which reads `followsCompanions`), or `failed` with `error` - not the ssh connection's - plus `mode`, `presenter` while its stream holds that role, else `mirror`),
 `presenters` (origin session: `viewers`, the attached streams showing it, `mirrors`, those without the
-presenter role, and `presenter: true` when one holds it) and `remoteOverlays` (origin session: overlay slots a presenting Mac holds, a page's
+presenter role, and `presenter: true` when one holds it), `followsCompanions` (an attached top-level row that
+attaches its origin's new companions under itself) and `remoteOverlays` (origin session: overlay slots a presenting Mac holds, a page's
 `pageID` included; HTML pages follow the same placement, see reference.md Remote sessions),
 `hasSplit` (whether a second pane exists at all, shown or hidden; omitted when there is none — read this
 rather than `split`, which is false for a split hidden with ⌘D even though its pane is still alive),
@@ -783,9 +784,10 @@ chosen open local window's current workspace (default: frontmost after discovery
 keeps the frontmost window unchanged; an invalid or closed target fails. Takes the ID from that
 listing, not the name, and resolves the remote again first, so a session that has gone fails instead of
 handing back a fresh shell wearing its name. Closing it here ends only this side's connection. An open row is
-saved and attached again at the next launch; one whose session is gone from the origin closes. Add `--companions` to attach the group; see
-[details](reference.md#restore). An attached page row shows the origin's page over its page channel and mirrors
-nothing; an attached terminal row mirrors the origin session's status, context, `notify`
+saved and attached again at the next launch; one whose session is gone from the origin closes. Add `--companions` to attach the group; companions created or moved
+under the session on the origin later attach under a top-level row by themselves; see
+[details](reference.md#restore). An attached page row from another Mac shows the origin's page over its page channel and mirrors
+nothing beyond following its companions; one from agterm-server and an attached terminal row mirrors the origin session's status, context, `notify`
 notifications, HUD and the layout of attached panes over a stream that reconnects by itself
 ([details](reference.md#restore)); read
 `presentation.state` in `tree`, and expect mirrored status, context and HUD to clear while it is down. An
@@ -798,6 +800,9 @@ pane's `remote` in `tree` says where its next one goes. The overlay's program st
 ([details](reference.md#restore)). Both run ssh non-interactively, so key-based auth must already work, and
 the far side needs `agtermctl` installed by the cask or the Help action: a machine merely running agterm
 has no CLI an ssh command can find. Every zmx command needs a running agterm.
+`session new --remote HOST` creates a new session on another Mac in Live sessions mode or an agterm-server
+host and attaches it into the window's current workspace (File ▸ New Remote Session…); see reference.md under
+`session new --remote`.
 
 **clipboard** — `clipboard set [TEXT]` — copy text to the clipboard of every terminal showing the pane
 the command runs in; the text is the argument, or stdin when omitted (`git diff | agtermctl clipboard set`).
@@ -948,6 +953,11 @@ revealing an attention pane; in a session attached from another Mac, the id is t
 one row here showing it, never attaching anything or acting there.
 Unknown or closed sessions, a destination window with zoom, dashboard or a pending picker, other `agterm://`
 forms, ⌘⌥-clicks and links in a HUD, quick terminal or program overlay do nothing.
+
+The scheme is registered with macOS, so any other app can open the link too, for example a notification
+tool's click-through URL or `open "agterm://session/$AGTERM_SESSION_ID"`. It selects the session and raises
+its window, starting agterm first when needed. The id must name exactly one open row in that agterm; an
+origin id from an attached session is not translated.
 
 ## Displaying an image inline
 

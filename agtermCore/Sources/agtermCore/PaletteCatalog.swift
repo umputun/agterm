@@ -144,7 +144,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
     case toggleSidebar, toggleFlag, focusWorkspace
     case find, quickTerminal, dashboard, toggleFullscreen
     case increaseFontSize, decreaseFontSize, resetFontSize, selectTheme
-    case attachRemote, openRemoteWindow, detachedSessions
+    case attachRemote, openRemoteWindow, detachedSessions, newRemoteSession
     case editKeymap, reloadKeymap, editHooks, reloadHooks, editGhosttyConfig, reloadConfig
     case deleteWorkspace, toggleFlaggedView, clearFlagged, editFlaggedSessions, clearFocus, editFocusedWorkspaces
     case addWorkspaceToFocus, toggleWorkspaceFilter
@@ -186,7 +186,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .previousWindow, .nextWindow:
             // same rule one level up: a single open window has nowhere to step to
             return context.canStepWindows
-        case .attachRemote:
+        case .attachRemote, .newRemoteSession:
             return context.hasRemotes && context.hasCurrentWorkspace
         case .openRemoteWindow:
             return context.hasRemotes
@@ -204,7 +204,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
     ]
 
     /// localOnly make a shell or a row on this Mac, which a remote window shows only from its server.
-    private static let localOnly: Set<PaletteCommand> = [.openDirectory, .attachRemote, .reopenRecent]
+    private static let localOnly: Set<PaletteCommand> = [.openDirectory, .attachRemote, .reopenRecent, .newRemoteSession]
 
     // terminal zoom stays: it exits a zoom of another session's terminal, and entering one over a page finds none
     private static let terminalOnly: Set<PaletteCommand> = [
@@ -322,6 +322,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .attachRemote: return "Attach Remote…"
         case .openRemoteWindow: return "Open Remote Window…"
         case .detachedSessions: return "Detached Sessions…"
+        case .newRemoteSession: return "New Remote Session…"
         case .editKeymap: return "Edit Keymap"
         case .reloadKeymap: return "Reload Keymap"
         case .editHooks: return "Edit Hooks"
@@ -395,6 +396,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .attachRemote: return .attachRemote
         case .openRemoteWindow: return .openRemoteWindow
         case .detachedSessions: return .detachedSessions
+        case .newRemoteSession: return .newRemoteSession
         case .editFlaggedSessions: return .editFlaggedSessions
         case .editFocusedWorkspaces: return .editFocusedWorkspaces
         case .editKeymap, .reloadKeymap, .editHooks, .reloadHooks, .editGhosttyConfig, .reloadConfig,

@@ -416,7 +416,7 @@ final class ControlServerRestartTests: XCTestCase {
 
     private func makeServer(client: ZmxClient, leader: pid_t, daemon: String, foreground: pid_t? = nil) -> ControlServer {
         let resolver = ZmxForegroundResolver(
-            leaderProvider: { _ in [daemon: leader] },
+            leaderProvider: { [daemon: leader] },
             leaderProbe: { _ in foreground.map { .foreground($0) } ?? .noForeground })
         return ControlServer(
             library: library, actions: AppActions(library: library), settingsModel: settingsModel,

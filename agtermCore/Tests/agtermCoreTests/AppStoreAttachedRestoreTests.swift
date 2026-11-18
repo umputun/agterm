@@ -190,6 +190,48 @@ struct AppStoreAttachedRestoreTests {
         #expect(store.session(withID: local.id) != nil)
     }
 
+    @Test func aRelaunchKeepsTheFollowedCompanionsAndTellsAnEmptyBaselineFromNone() throws {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let followed = try addAttachedRow(to: store, workspace: work.id)
+        let empty = try addAttachedRow(to: store, workspace: work.id, origin: "o2")
+        let unbaselined = try addAttachedRow(to: store, workspace: work.id, origin: "o3")
+        let child = UUID()
+        store.baselineCompanions([child.uuidString], forSession: followed.id)
+        store.baselineCompanions([], forSession: empty.id)
+
+        let restored = relaunched(store)
+
+        let back = try #require(restored.session(withID: followed.id))
+        #expect(back.companionsBaselined)
+        #expect(back.followedCompanions == [child.uuidString])
+        #expect(try #require(restored.session(withID: empty.id)).companionsBaselined)
+        #expect(try #require(restored.session(withID: empty.id)).followedCompanions.isEmpty)
+        #expect(try #require(restored.session(withID: unbaselined.id)).companionsBaselined == false)
+    }
+
+    @Test func aRowSavedWithoutTheFollowKeysRestoresEmptyAndNotBaselined() throws {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let row = try addAttachedRow(to: store, workspace: work.id)
+        store.baselineCompanions([UUID().uuidString], forSession: row.id)
+        var snapshot = store.snapshot()
+        var object = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(snapshot.workspaces[0])) as? [String: Any])
+        var attached = try #require(object["attached"] as? [[String: Any]])
+        #expect(attached[0]["followedCompanions"] != nil)
+        attached[0]["followedCompanions"] = nil
+        attached[0]["companionsBaselined"] = nil
+        object["attached"] = attached
+        snapshot.workspaces[0] = try JSONDecoder().decode(WorkspaceSnapshot.self, from: JSONSerialization.data(withJSONObject: object))
+
+        let restored = makeStore()
+        restored.restore(from: snapshot, launchRestore: true)
+
+        let back = try #require(restored.session(withID: row.id))
+        #expect(back.followedCompanions.isEmpty)
+        #expect(!back.companionsBaselined)
+    }
+
     @Test func aBuildThatPredatesAttachedRowsReadsOnlyTheLocalSessions() throws {
         let store = makeStore()
         let work = store.addWorkspace(name: "work")

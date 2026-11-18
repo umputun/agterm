@@ -348,6 +348,7 @@ struct SocketClientTests {
             attach_remote               cmd+shift+r
             open_remote_window          -
             detached_sessions           -
+            new_remote_session          -
             edit_flagged_sessions       -
             edit_focused_workspaces     -
 
@@ -1267,20 +1268,21 @@ struct SocketClientTests {
         #expect(try JSONDecoder().decode(ControlPresentersNode.self, from: older).viewedBy == 2)
     }
 
-    @Test func formatTreeShowsThePresenterOnBothSides() {
+    @Test func formatTreeShowsThePresenterOnBothSidesAndAFollowingRow() {
         let viewer = ControlSessionNode(id: "s1", name: "build", cwd: "/tmp", active: true, split: false,
                                         backedByZmx: nil,
                                         presentation: ControlPresentationNode(state: "connected", mode: "presenter"))
         let origin = ControlSessionNode(id: "s2", name: "api", cwd: "/tmp", active: false, split: false,
                                         backedByZmx: nil,
-                                        presenters: ControlPresentersNode(mirrors: 0, presenter: true))
+                                        presenters: ControlPresentersNode(mirrors: 0, presenter: true), followsCompanions: true)
         let tree = ControlTree(workspaces: [ControlWorkspaceNode(id: "w", name: "work", active: true,
                                                                  sessions: [viewer, origin])])
 
         let out = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(tree: tree)))
 
         #expect(out.contains("presentation: connected, presenter"))
-        #expect(out.contains("viewed by: 1"))
+        #expect(out.contains("viewed by: 1  follows companions"))
+        #expect(out.components(separatedBy: "follows companions").count == 2)
     }
 
     @Test func formatResponseTree() {

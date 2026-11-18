@@ -170,6 +170,21 @@ extension AppActions {
         raiseAndSelect(windowID: target.windowID, sessionID: target.sessionID) { _ in focusActiveSession() }
     }
 
+    /// openSessionLink selects a session link another app opened, by this instance's row id. Returns false while
+    /// the row or its window is still loading, so the delegate retries; a refused link is settled.
+    func openSessionLink(_ id: UUID) -> Bool {
+        let owners = library.openIDs().filter { library.store(for: $0)?.session(withID: id) != nil }
+        guard owners.count < 2 else { return true }
+        guard let windowID = owners.first, WindowRegistry.shared.isRegistered(windowID) else { return false }
+        guard canSelectAttention(windowID: windowID, sessionID: id) else { return true }
+        NSApp.activate()
+        // raiseAndSelect skips the raise for the active window, which an outside click can find minimized
+        guard WindowRegistry.shared.raise(windowID) else { return false }
+        takeFrontmost(windowID)
+        raiseAndSelect(windowID: windowID, sessionID: id) { _ in focusActiveSession() }
+        return true
+    }
+
     private func raiseAndSelect(windowID: WindowInfo.ID, sessionID: UUID, focus: (AgentIndicator?) -> Void) {
         guard canSelectAttention(windowID: windowID, sessionID: sessionID),
               let target = library.store(for: windowID) else { return }

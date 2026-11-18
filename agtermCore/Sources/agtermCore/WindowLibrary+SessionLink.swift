@@ -16,6 +16,27 @@ extension Session {
     }
 }
 
+extension WindowLibrary {
+    /// shownOriginSessions are the origin session ids of `host`'s zmx at `endpoint` that an open row anywhere here
+    /// shows, as canonical UUID strings.
+    public func shownOriginSessions(host: String, endpoint: ControlZmxEndpoint) -> Set<String> {
+        Set(originRows(host: host, endpoint: endpoint).compactMap { $0.remotePresentation.map { Self.originID($0.binding.remoteSessionID) } })
+    }
+
+    /// rowsShowingOrigin are the open rows here showing origin session `id` of `host`'s zmx at `endpoint`, matched on
+    /// the id in either case.
+    public func rowsShowingOrigin(_ id: String, host: String, endpoint: ControlZmxEndpoint) -> [Session] {
+        let wanted = Self.originID(id)
+        return originRows(host: host, endpoint: endpoint).filter { $0.remotePresentation.map { Self.originID($0.binding.remoteSessionID) } == wanted }
+    }
+
+    private func originRows(host: String, endpoint: ControlZmxEndpoint) -> [Session] {
+        allOpenSessions().filter { $0.remoteHost == host && $0.remotePresentation?.binding.origin?.endpoint == endpoint }
+    }
+
+    static func originID(_ id: String) -> String { UUID(uuidString: id)?.uuidString ?? id }
+}
+
 /// SessionLinkTarget is the open window and live row a clicked session link selects.
 public struct SessionLinkTarget: Equatable, Sendable {
     public let windowID: UUID

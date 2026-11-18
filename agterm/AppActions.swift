@@ -165,7 +165,8 @@ final class AppActions {
     /// Opens a new session at `directory` in the last-active window — the target of `open -a agterm /path`,
     /// the OS "open terminal here" integration. Mirrors `newSession()` but seeds the cwd from `directory`.
     /// NOT `uiActionsEnabled` gated: an external OS command, like a socket command, must land through a modal
-    /// zoom/dashboard. Returns whether one was created, so the delegate's drain retries until a store resolves.
+    /// zoom/dashboard. Returns true once the folder is settled, created or refused by a remote window; false keeps
+    /// it queued, so the delegate's drain retries until a store resolves.
     func openSession(atDirectory directory: String) -> Bool {
         if store?.remoteActions != nil {
             NotificationManager.shared.notifyCommandFailure(name: "Open Directory", detail: "a remote window shows only its server's sessions")
@@ -415,7 +416,7 @@ final class AppActions {
         if store.openOverlay(id, command: ConfigPaths.editorCommand(forPath: path), sizePercent: 95) {
             keymapEditOverlaySession = id
         } else {
-            beepIfHiddenOverlayRefused(id)
+            answerHiddenOverlayRefusal(id)
         }
     }
 
@@ -438,7 +439,7 @@ final class AppActions {
         if store.openOverlay(id, command: ConfigPaths.editorCommand(forPath: settingsModel.hooksPath), sizePercent: 95) {
             hooksEditOverlaySession = id
         } else {
-            beepIfHiddenOverlayRefused(id)
+            answerHiddenOverlayRefusal(id)
         }
     }
 
@@ -468,7 +469,7 @@ final class AppActions {
             ghosttyEditOverlaySession = id
             ghosttyEditOverlaySnapshot = try? String(contentsOfFile: path, encoding: .utf8)
         } else {
-            beepIfHiddenOverlayRefused(id)
+            answerHiddenOverlayRefusal(id)
         }
     }
 

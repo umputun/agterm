@@ -1341,6 +1341,14 @@ struct KeymapTests {
         #expect(keymap.equivalent(for: .attachRemote) == Chord(mods: [.control, .shift], key: "y"))
     }
 
+    @Test func newRemoteSessionShipsKeylessAndCanBeMapped() {
+        #expect(parseKeymap("").keymap.equivalent(for: .newRemoteSession) == nil)
+
+        let (keymap, diagnostics) = parseKeymap("map ctrl+shift+n new_remote_session")
+        #expect(diagnostics.isEmpty)
+        #expect(keymap.equivalent(for: .newRemoteSession) == Chord(mods: [.control, .shift], key: "n"))
+    }
+
     @Test func existingCmdShiftRBuiltinBindingIsNotBrokenByAttachRemoteDefault() {
         let (keymap, diagnostics) = parseKeymap("map cmd+shift+r toggle_workspace_filter")
         #expect(diagnostics.isEmpty)

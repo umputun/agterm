@@ -6,7 +6,11 @@ extension AppStore {
     /// rows; nil when it has none.
     func attachedSnapshots(of workspace: Workspace) -> [AttachedSessionSnapshot]? {
         let rows = workspace.sessions.enumerated().compactMap { index, session -> AttachedSessionSnapshot? in
-            session.attachedOrigin.map { AttachedSessionSnapshot(index: index, session: attachedSessionSnapshot(session), origin: $0) }
+            session.attachedOrigin.map {
+                AttachedSessionSnapshot(index: index, session: attachedSessionSnapshot(session), origin: $0,
+                                        followedCompanions: session.followedCompanions.isEmpty ? nil : session.followedCompanions.sorted(),
+                                        companionsBaselined: session.companionsBaselined ? true : nil)
+            }
         }
         return rows.isEmpty ? nil : rows
     }
@@ -53,8 +57,11 @@ extension AppStore {
                                                   right: hasSplit ? snapshot.paneBackgrounds?.right : nil)
         session.remotePresentation = RemotePresentationState(binding: binding)
         session.awaitsOriginCheck = true
+        session.followedCompanions = Set(saved.followedCompanions ?? [])
+        session.companionsBaselined = saved.companionsBaselined == true
         guard !page else {
-            // a Mac's page row has no stream, so its row says it waits for the page until the origin hands it over
+            // a Mac's page row has no full stream (a root only observes membership), so its row says it waits for the
+            // page until the origin hands it over
             session.remotePresentation?.connection = .connecting
             return session
         }
