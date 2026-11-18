@@ -1,0 +1,973 @@
+diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
+--- zmx-orig/src/loop.zig
++++ zmx/src/loop.zig
+@@ -15,9 +15,30 @@
+ const daemonize = @import("daemonize.zig");
+ const builtin = @import("builtin");
+ 
++/// How long a client whose session ended may spend writing its last output and the terminal reset, from
++/// the moment the daemon hangs up, closes or resets the connection.
++const CLOSE_BUDGET_MS: i64 = 2000;
++/// The end of that deadline the output leaves to the reset, on a stdout that is a terminal.
++const RESET_SHARE_MS: i64 = 200;
++
++fn resetShare(stdout_fd: i32) i64 {
++    return if (std.c.isatty(stdout_fd) == 1) RESET_SHARE_MS else 0;
++}
++
+ /// clientLoop sends ipc commands to its corresponding daemon.  It uses poll() as its non-blocking
+ /// mechanism. It will send stdin to the daemon and receive stdout from the daemon.
+-pub fn clientLoop(client_sock_fd: i32, env_str: []const u8) !ClientResult {
++pub fn clientLoop(client_sock_fd: i32, env_str: []const u8, session_path: []const u8) !ClientResult {
++    return clientLoopOn(client_sock_fd, env_str, session_path, lib_posix.STDIN_FILENO, lib_posix.STDOUT_FILENO);
++}
++
++/// A daemon whose session ended unlinks its socket before it closes its clients, so a hangup with the socket
++/// still in place is a detach or a crash, after which the client returns as upstream does.
++fn sessionGone(session_path: []const u8) bool {
++    const path = lib_posix.toPosixPath(session_path) catch return false;
++    return std.c.access(&path, 0) != 0;
++}
++
++fn clientLoopOn(client_sock_fd: i32, env_str: []const u8, session_path: []const u8, stdin_fd: i32, stdout_fd: i32) !ClientResult {
+     std.log.info("client loop fd={d}", .{client_sock_fd});
+     const gpa: std.mem.Allocator = blk: {
+         if (builtin.mode == .Debug) {
+@@ -55,7 +76,7 @@
+     }
+ 
+     // Send init message with terminal size (buffered)
+-    const size = ipc.getTerminalSize(lib_posix.STDOUT_FILENO);
++    const size = ipc.getTerminalSize(stdout_fd);
+     try ipc.appendSizeMessage(gpa, &sock_write_buf, .Init, size);
+ 
+     var poll_fds = try std.ArrayList(lib_posix.pollfd).initCapacity(gpa, 4);
+@@ -67,54 +88,78 @@
+     var stdout_buf = try std.ArrayList(u8).initCapacity(gpa, 4096);
+     defer stdout_buf.deinit(gpa);
+ 
+-    const stdin_fd = lib_posix.STDIN_FILENO;
+-
+     // Make stdin non-blocking. O_NONBLOCK is set on the open file description,
+     // which is shared with the parent shell; restore on exit to avoid
+     // corrupting the parent's stdin.
++    const reset_share = resetShare(stdout_fd);
+     const stdin_orig_flags = try lib_posix.fcntl(stdin_fd, lib_posix.F.GETFL, 0);
+     _ = try lib_posix.fcntl(stdin_fd, lib_posix.F.SETFL, stdin_orig_flags | lib_posix.O_NONBLOCK);
+     defer _ = lib_posix.fcntl(stdin_fd, lib_posix.F.SETFL, stdin_orig_flags) catch {};
+ 
+     const detach_key_disabled = util.isDetachKeyDisabled();
+ 
++    // set when the session ends: from then on the loop only reads the socket to EOF and writes stdout,
++    // until both are done or the deadline passes
++    var close_deadline: ?i64 = null;
++    var sock_eof = false;
++
+     while (true) {
++        const stdout_behind = stdout_buf.items.len > 0;
++        if (close_deadline) |deadline| {
++            if (sock_eof and !stdout_behind) {
++                return ClientResult{ .kind = .detach, .session_name = null, .close_deadline_ms = deadline };
++            }
++            if (role.nowMs() >= deadline - reset_share) {
++                std.log.info("session output cut at the close deadline unwritten={d} eof={}", .{ stdout_buf.items.len, sock_eof });
++                return ClientResult{ .kind = .detach, .session_name = null, .close_deadline_ms = deadline };
++            }
++        }
++        const closing = close_deadline != null;
++
+         poll_fds.clearRetainingCapacity();
+ 
+         try poll_fds.append(gpa, .{
+-            .fd = stdin_fd,
++            .fd = if (closing) -1 else stdin_fd,
+             .events = lib_posix.POLL.IN,
+             .revents = 0,
+         });
+ 
+         // Poll socket for read, and also for write if we have pending data
+         var sock_events: i16 = lib_posix.POLL.IN;
+-        if (sock_write_buf.items.len > 0) {
++        if (!closing and sock_write_buf.items.len > 0) {
+             sock_events |= lib_posix.POLL.OUT;
+         }
++        // after the hangup the socket is read only while stdout keeps up, so the rest waits in the daemon;
++        // poll reports a hangup whatever the events, so it is left out meanwhile
++        const poll_sock = !closing or (!sock_eof and !stdout_behind);
+         try poll_fds.append(gpa, .{
+-            .fd = client_sock_fd,
++            .fd = if (poll_sock) client_sock_fd else -1,
+             .events = sock_events,
+             .revents = 0,
+         });
+ 
+-        try poll_fds.append(gpa, .{ .fd = signal.sig_pipe[0], .events = lib_posix.POLL.IN, .revents = 0 });
++        try poll_fds.append(gpa, .{ .fd = if (closing) -1 else signal.sig_pipe[0], .events = lib_posix.POLL.IN, .revents = 0 });
+ 
+         if (stdout_buf.items.len > 0) {
+             try poll_fds.append(gpa, .{
+-                .fd = lib_posix.STDOUT_FILENO,
++                .fd = stdout_fd,
+                 .events = lib_posix.POLL.OUT,
+                 .revents = 0,
+             });
+         }
+ 
+-        const poll_timeout: i32 = if (relay) |*r| r.pollTimeout(role.nowMs()) else -1;
+-        _ = try lib_posix.poll(poll_fds.items, poll_timeout);
++        var poll_timeout: i32 = if (relay) |*r| r.pollTimeout(role.nowMs()) else -1;
++        if (close_deadline) |deadline| {
++            const left: i32 = @intCast(std.math.clamp(deadline - reset_share - role.nowMs(), 0, CLOSE_BUDGET_MS));
++            if (poll_timeout < 0 or left < poll_timeout) poll_timeout = left;
++        }
++        // after the hangup a signal ends the poll, so its timeout is recomputed from the deadline
++        _ = if (closing) try lib_posix.pollOrInterrupted(poll_fds.items, poll_timeout) else try lib_posix.poll(poll_fds.items, poll_timeout);
+         if (relay) |*r| try r.expire(gpa, &stdout_buf, role.nowMs());
+ 
+         if (poll_fds.items[2].revents & lib_posix.POLL.IN != 0) {
+             signal.drainSignalPipe();
+-            const next_size = ipc.getTerminalSize(lib_posix.STDOUT_FILENO);
++            const next_size = ipc.getTerminalSize(stdout_fd);
+             try ipc.appendSizeMessage(gpa, &sock_write_buf, .Resize, next_size);
+         }
+ 
+@@ -146,18 +191,20 @@
+ 
+         // Handle socket read (incoming Output messages from daemon)
+         if (poll_fds.items[1].revents & lib_posix.POLL.IN != 0) {
+-            const n = read_buf.read(client_sock_fd) catch |err| {
++            const n: usize = read_buf.read(client_sock_fd) catch |err| blk: {
+                 if (err == error.WouldBlock) continue;
+                 if (err == error.ConnectionResetByPeer or err == error.BrokenPipe) {
+-                    return ClientResult{ .kind = .detach, .session_name = null };
++                    if (close_deadline == null and !sessionGone(session_path)) return ClientResult{ .kind = .detach, .session_name = null };
++                    break :blk 0;
+                 }
+                 std.log.err("daemon read err={s}", .{@errorName(err)});
+                 return err;
+             };
+             if (n == 0) {
+                 std.log.info("server closed connection", .{});
+-                // Server closed connection
+-                return ClientResult{ .kind = .detach, .session_name = null };
++                if (close_deadline == null and !sessionGone(session_path)) return ClientResult{ .kind = .detach, .session_name = null };
++                sock_eof = true;
++                if (close_deadline == null) close_deadline = role.nowMs() + CLOSE_BUDGET_MS;
+             }
+ 
+             while (read_buf.next()) |msg| {
+@@ -178,7 +225,7 @@
+                     .Resize => {
+                         // daemon is asking for the client's window size usually in response
+                         // to this client being set as leader.
+-                        const next_size = ipc.getTerminalSize(lib_posix.STDOUT_FILENO);
++                        const next_size = ipc.getTerminalSize(stdout_fd);
+                         try ipc.appendSizeMessage(gpa, &sock_write_buf, .Resize, next_size);
+                     },
+                     .Switch => {
+@@ -202,11 +249,15 @@
+         // Handle socket write (flush buffered messages to daemon)
+         if (poll_fds.items[1].revents & lib_posix.POLL.OUT != 0) {
+             if (sock_write_buf.items.len > 0) {
+-                const n = lib_posix.write(client_sock_fd, sock_write_buf.items) catch |err| blk: {
++                const n: usize = lib_posix.write(client_sock_fd, sock_write_buf.items) catch |err| blk: {
+                     if (err == error.WouldBlock) break :blk 0;
+                     if (err == error.ConnectionResetByPeer or err == error.BrokenPipe) {
+                         std.log.info("connection reset or broken pipe", .{});
+-                        return ClientResult{ .kind = .detach, .session_name = null };
++                        if (close_deadline == null and !sessionGone(session_path)) return ClientResult{ .kind = .detach, .session_name = null };
++                        // the daemon is gone; what it sent before that is still read to EOF
++                        sock_write_buf.clearRetainingCapacity();
++                        if (close_deadline == null) close_deadline = role.nowMs() + CLOSE_BUDGET_MS;
++                        break :blk 0;
+                     }
+                     return err;
+                 };
+@@ -217,7 +268,7 @@
+         }
+ 
+         if (stdout_buf.items.len > 0) {
+-            const n = lib_posix.write(lib_posix.STDOUT_FILENO, stdout_buf.items) catch |err| blk: {
++            const n = lib_posix.write(stdout_fd, stdout_buf.items) catch |err| blk: {
+                 if (err == error.WouldBlock) break :blk 0;
+                 return err;
+             };
+@@ -227,10 +278,97 @@
+         }
+ 
+         if (poll_fds.items[1].revents & (lib_posix.POLL.HUP | lib_posix.POLL.ERR | lib_posix.POLL.NVAL) != 0) {
+-            std.log.info("poll hup|err|nval", .{});
+-            return ClientResult{ .kind = .detach, .session_name = null };
++            if (close_deadline == null) {
++                std.log.info("poll hup|err|nval", .{});
++                if (!sessionGone(session_path)) return ClientResult{ .kind = .detach, .session_name = null };
++                close_deadline = role.nowMs() + CLOSE_BUDGET_MS;
++            }
++        }
++    }
++}
++
++fn ttyOutputQueued(fd: i32) usize {
++    var queued: c_int = 0;
++    if (cross.c.ioctl(fd, cross.c.TIOCOUTQ, &queued) != 0) return 0;
++    return @intCast(@max(queued, 0));
++}
++
++fn takenBy(fd: i32, deadline_ms: i64, comptime queued: fn (i32) usize) bool {
++    while (true) : (sleepMs(5)) {
++        if (queued(fd) == 0) return true;
++        if (role.nowMs() >= deadline_ms) return false;
++    }
++}
++
++fn sleepMs(ms: u64) void {
++    const ts = std.c.timespec{ .sec = 0, .nsec = @intCast(ms * std.time.ns_per_ms) };
++    _ = std.c.nanosleep(&ts, null);
++}
++
++/// How an attach client leaves its terminal `t`: after a detach (no deadline) as upstream does. After a
++/// session end the terminal gets until the reset's share of the deadline to take the output and the reset
++/// the rest; what it has not taken by then is flushed, since TCSAFLUSH and, on macOS, the exit's close of
++/// the tty wait for it. `t` restores termios with TCSAFLUSH when the output was taken.
++pub fn leaveTerminal(t: anytype, deadline_ms: ?i64) void {
++    const d = deadline_ms orelse {
++        t.restoreTermios(true);
++        t.writeReset(null);
++        return;
++    };
++    const taken = t.outputTakenBy(d - resetShare(t.out_fd));
++    if (!taken) t.flushOutput();
++    t.restoreTermios(taken);
++    t.writeReset(d);
++    if (!t.outputTakenBy(d)) t.flushOutput();
++}
++
++/// The attach client's own terminal, for leaveTerminal; `in_fd` is null when stdin is no terminal.
++pub const Tty = struct {
++    out_fd: i32,
++    in_fd: ?i32,
++    orig: *const cross.c.termios,
++    reset: []const u8,
++
++    /// Waits until the terminal has taken what was written to it, or the deadline passes, and says which.
++    /// A stdout that is no terminal counts as taken.
++    pub fn outputTakenBy(self: Tty, deadline_ms: i64) bool {
++        return takenBy(self.out_fd, deadline_ms, ttyOutputQueued);
++    }
++    pub fn flushOutput(self: Tty) void {
++        _ = cross.c.tcflush(self.out_fd, cross.c.TCOFLUSH);
++    }
++    pub fn restoreTermios(self: Tty, flushing: bool) void {
++        const fd = self.in_fd orelse return;
++        if (flushing) {
++            _ = cross.c.tcsetattr(fd, cross.c.TCSAFLUSH, self.orig);
++        } else {
++            _ = cross.c.tcflush(fd, cross.c.TCIFLUSH);
++            _ = cross.c.tcsetattr(fd, cross.c.TCSANOW, self.orig);
+         }
+     }
++    pub fn writeReset(self: Tty, deadline_ms: ?i64) void {
++        if (deadline_ms) |d| writeBy(self.out_fd, self.reset, d) else _ = lib_posix.write(self.out_fd, self.reset) catch {};
++    }
++};
++
++/// Writes `bytes` to `fd`, nonblocking, giving up at `deadline_ms`: the terminal reset a client whose
++/// session ended writes after the session's last output, under that output's deadline.
++pub fn writeBy(fd: i32, bytes: []const u8, deadline_ms: i64) void {
++    const flags = lib_posix.fcntl(fd, lib_posix.F.GETFL, 0) catch return;
++    _ = lib_posix.fcntl(fd, lib_posix.F.SETFL, flags | lib_posix.O_NONBLOCK) catch return;
++    defer _ = lib_posix.fcntl(fd, lib_posix.F.SETFL, flags) catch {};
++    var rest = bytes;
++    while (rest.len > 0) {
++        const n = lib_posix.write(fd, rest) catch |err| {
++            if (err != error.WouldBlock) return;
++            const left = deadline_ms - role.nowMs();
++            if (left <= 0) return;
++            var pfd = [_]lib_posix.pollfd{.{ .fd = fd, .events = lib_posix.POLL.OUT, .revents = 0 }};
++            _ = lib_posix.pollOrInterrupted(&pfd, @intCast(@min(left, CLOSE_BUDGET_MS))) catch return;
++            continue;
++        };
++        rest = rest[n..];
++    }
+ }
+ 
+ fn initTerminal(gpa: std.mem.Allocator, io: std.Io, size: ipc.Resize, cfg: *const Cfg) !ghostty_vt.Terminal {
+@@ -242,6 +380,10 @@
+     });
+ }
+ 
++/// How long a daemon whose shell exited may spend delivering the output its clients have not read yet,
++/// one deadline shared by all of them. A kill or SIGTERM ends it at once.
++const EXIT_DRAIN_MS: i64 = 2000;
++
+ /// dameonLoop is what the daemon runs to send and receive ipc commands from its corresponding
+ /// clients.  It uses poll() as its non-blocking mechanism.
+ fn daemonLoop(daemon: *Daemon, gpa: std.mem.Allocator, io: std.Io, server_sock_fd: lib_posix.socket_t, pty_fd: i32) !void {
+@@ -266,7 +408,20 @@
+ 
+     var had_terminal_client = daemon.hasTerminalClient();
+ 
++    // set when the shell exits: the loop then only delivers what clients have not read, until none is left
++    // or the deadline passes, and still serves them, so a kill ends it at once
++    var drain_deadline: ?i64 = null;
++
+     daemon_loop: while (daemon.running) {
++        if (drain_deadline) |deadline| {
++            if (!daemon.hasUnsentOutput()) break :daemon_loop;
++            if (role.nowMs() >= deadline) {
++                std.log.info("exit drain deadline passed with output unsent", .{});
++                break :daemon_loop;
++            }
++        }
++        const draining = drain_deadline != null;
++
+         // If the program asked for focus reports (DECSET 1004), send focus-out
+         // when the last attached client leaves and focus-in when one returns,
+         // as a terminal would when its window loses/gains focus.
+@@ -288,8 +443,9 @@
+         if (daemon.pty_write_buf.items.len > 0) {
+             pty_events |= lib_posix.POLL.OUT;
+         }
++        // the PTY of an exited shell reports a hangup on every poll
+         try poll_fds.append(gpa, .{
+-            .fd = pty_fd,
++            .fd = if (draining) -1 else pty_fd,
+             .events = pty_events,
+             .revents = 0,
+         });
+@@ -308,7 +464,11 @@
+             });
+         }
+ 
+-        _ = try lib_posix.poll(poll_fds.items, -1);
++        const poll_timeout: i32 = if (drain_deadline) |deadline|
++            @intCast(std.math.clamp(deadline - role.nowMs(), 0, EXIT_DRAIN_MS))
++        else
++            -1;
++        _ = try lib_posix.poll(poll_fds.items, poll_timeout);
+ 
+         if (poll_fds.items[2].revents & lib_posix.POLL.IN != 0) {
+             signal.drainSignalPipe();
+@@ -364,11 +524,9 @@
+                 if (n == 0) {
+                     // EOF: Shell exited
+                     std.log.info("shell exited pty_fd={d}", .{pty_fd});
+-                    // Let the rest of this poll iteration complete so client
+-                    // write buffers are flushed via the normal POLLOUT path.
+-                    // On the next iteration, daemon.running will be false.
++                    // what clients have not read yet is delivered, bounded, before shutdown frees it
+                     daemon.child_exited = true;
+-                    daemon.running = false;
++                    drain_deadline = role.nowMs() + EXIT_DRAIN_MS;
+                 } else {
+                     // Feed PTY output to terminal emulator for state tracking
+                     vt_stream.nextSlice(buf[0..n]);
+@@ -461,6 +619,11 @@
+                 }
+ 
+                 while (client.read_buf.next()) |msg| {
++                    // the shell is gone: no new attach, input or command, only a detach, a kill or Info
++                    if (draining) switch (msg.header.tag) {
++                        .Detach, .DetachAll, .Kill, .Info => {},
++                        else => continue,
++                    };
+                     switch (msg.header.tag) {
+                         .Input => try daemon.handleInput(gpa, client, msg.payload),
+                         .Send => daemon.handleSend(gpa, msg.payload),
+@@ -534,6 +697,9 @@
+     },
+     session_name: ?[]const u8,
+     cwd: ?[]const u8 = null,
++    /// set when the session ended: the deadline its last output was written under, which the terminal
++    /// reset after the loop shares
++    close_deadline_ms: ?i64 = null,
+ };
+ 
+ /// Client represents each terminal that has connected to a session.
+@@ -668,6 +834,14 @@
+         return false;
+     }
+ 
++    /// True while any client has output queued that it has not been sent.
++    fn hasUnsentOutput(self: *const Daemon) bool {
++        for (self.clients.items) |c| {
++            if (c.write_buf.items.len > 0) return true;
++        }
++        return false;
++    }
++
+     pub fn closeClient(self: *Daemon, gpa: std.mem.Allocator, client: *Client, i: usize, shutdown_on_last: bool) bool {
+         const fd = client.socket_fd;
+         // leader is disconnected, remove ref and let another client claim leader on input
+@@ -1971,3 +2145,467 @@
+     const pay3 = client_req.write_buf.items[@sizeOf(ipc.Header)..];
+     try std.testing.expectEqualStrings("DISPLAY=:99\n", pay3);
+ }
++
++extern "c" fn grantpt(fd: c_int) c_int;
++extern "c" fn unlockpt(fd: c_int) c_int;
++extern "c" fn ptsname(fd: c_int) ?[*:0]const u8;
++
++/// A raw PTY of the given size, so what is written to one side reaches the other byte for byte.
++fn testPty(rows: u16, cols: u16) ![2]i32 {
++    const master = try lib_posix.open("/dev/ptmx", .{ .ACCMODE = .RDWR, .NOCTTY = true }, 0);
++    errdefer lib_posix.close(master);
++    if (grantpt(master) != 0 or unlockpt(master) != 0) return error.PtyUnavailable;
++    const name = ptsname(master) orelse return error.PtyUnavailable;
++    const slave = try lib_posix.open(std.mem.span(name), .{ .ACCMODE = .RDWR, .NOCTTY = true }, 0);
++    errdefer lib_posix.close(slave);
++    var tio: cross.c.termios = undefined;
++    if (cross.c.tcgetattr(slave, &tio) != 0) return error.PtyUnavailable;
++    cross.c.cfmakeraw(&tio);
++    if (cross.c.tcsetattr(slave, cross.c.TCSANOW, &tio) != 0) return error.PtyUnavailable;
++    var ws = std.mem.zeroes(cross.c.struct_winsize);
++    ws.ws_row = rows;
++    ws.ws_col = cols;
++    if (cross.c.ioctl(master, cross.c.TIOCSWINSZ, &ws) != 0) return error.PtyUnavailable;
++    return .{ master, slave };
++}
++
++/// A real daemonLoop on a thread, attached over its socket by the test, which can hand that socket to a
++/// real client loop whose terminal is a PTY the test reads, or not.
++const EndingSession = struct {
++    const start_mark = "DRAIN-START-MARK\n";
++    const final_mark = "DRAIN-FINAL-MARK\n";
++    const term_cols = 101;
++
++    alloc: std.mem.Allocator,
++    tmp: std.testing.TmpDir,
++    cfg: Cfg,
++    daemon: Daemon,
++    server_fd: i32,
++    /// [0] the daemon's master, [1] the shell's side
++    shell_pty: [2]i32,
++    /// [0] what the terminal reads, [1] the client's stdin and stdout
++    term_pty: [2]i32,
++    sock: i32,
++    daemon_thread: std.Thread,
++    client_thread: ?std.Thread = null,
++    daemon_done_ms: std.atomic.Value(i64) = .init(0),
++    client_done_ms: std.atomic.Value(i64) = .init(0),
++    client_result: anyerror!ClientResult = error.NotRun,
++    exit_ms: i64 = 0,
++
++    fn start(self: *EndingSession, alloc: std.mem.Allocator) !void {
++        signal.ignoreSigpipe(); // as main does: the client writes to a daemon that may be gone
++        self.* = .{
++            .alloc = alloc,
++            .tmp = std.testing.tmpDir(.{}),
++            .cfg = .{ .socket_dir = "", .log_dir = "" },
++            .daemon = undefined,
++            .server_fd = undefined,
++            .shell_pty = try testPty(24, 80),
++            .term_pty = try testPty(33, term_cols),
++            .sock = -1,
++            .daemon_thread = undefined,
++        };
++        const path = try std.fmt.allocPrint(alloc, ".zig-cache/tmp/{s}/s", .{self.tmp.sub_path});
++        self.daemon = Daemon.init(std.testing.io, &self.cfg, "drain-test", path);
++        self.server_fd = try socket.createSocket(path);
++        const flags = try lib_posix.fcntl(self.shell_pty[0], lib_posix.F.GETFL, 0);
++        _ = try lib_posix.fcntl(self.shell_pty[0], lib_posix.F.SETFL, flags | lib_posix.O_NONBLOCK);
++        // the session socket is a pair whose sizes the test sets, so no host default decides what the
++        // daemon keeps; the daemon's end is a client as an accept would make it
++        var pair: [2]i32 = undefined;
++        if (std.c.socketpair(lib_posix.AF.UNIX, lib_posix.SOCK.STREAM, 0, &pair) != 0) return error.NoSocketPair;
++        for (pair) |fd| setBuffers(fd);
++        _ = try lib_posix.fcntl(pair[0], lib_posix.F.SETFL, lib_posix.O_NONBLOCK);
++        try self.daemon.clients.append(alloc, try testClient(alloc, pair[0], false));
++        self.sock = pair[1];
++        self.daemon_thread = try std.Thread.spawn(.{}, runDaemon, .{self});
++        errdefer self.kill();
++
++        const size = ipc.Resize{ .rows = 33, .cols = term_cols };
++        try ipc.send(self.sock, .Init, std.mem.asBytes(&size));
++        // the daemon sizes its PTY from its leader's Init
++        const deadline = role.nowMs() + 10_000;
++        while (true) : (sleepMs(5)) {
++            var ws: cross.c.struct_winsize = undefined;
++            if (cross.c.ioctl(self.shell_pty[1], cross.c.TIOCGWINSZ, &ws) == 0 and ws.ws_col == term_cols) break;
++            if (role.nowMs() > deadline) return error.NeverAttached;
++        }
++    }
++
++    fn setBuffers(fd: i32) void {
++        const size: c_int = 8192;
++        for ([_]u32{ std.c.SO.SNDBUF, std.c.SO.RCVBUF }) |opt| {
++            _ = std.c.setsockopt(fd, std.c.SOL.SOCKET, opt, std.mem.asBytes(&size), @sizeOf(c_int));
++        }
++    }
++
++    fn runDaemon(self: *EndingSession) void {
++        var threaded: std.Io.Threaded = .init_single_threaded;
++        defer threaded.deinit();
++        daemonLoop(&self.daemon, self.alloc, threaded.io(), self.server_fd, self.shell_pty[0]) catch |err| {
++            std.debug.panic("daemonLoop failed: {s}", .{@errorName(err)});
++        };
++        // as run's teardown does: the socket goes before the clients, which tells them the session ended
++        const path = lib_posix.toPosixPath(self.daemon.socket_path) catch unreachable;
++        lib_posix.unlink(&path);
++        self.daemon.shutdown(self.alloc);
++        self.daemon_done_ms.store(role.nowMs(), .release);
++    }
++
++    /// Hands the session socket to a client loop; the terminal reads nothing until the test does.
++    fn attachClient(self: *EndingSession) !void {
++        self.client_thread = try std.Thread.spawn(.{}, runClient, .{self});
++    }
++
++    fn runClient(self: *EndingSession) void {
++        self.client_result = clientLoopOn(self.sock, "", self.daemon.socket_path, self.term_pty[1], self.term_pty[1]);
++        self.client_done_ms.store(role.nowMs(), .release);
++    }
++
++    /// The shell prints the start mark, `payload` and the final mark, and exits.
++    fn shellPrintsAndExits(self: *EndingSession, payload: []const u8) !void {
++        for ([_][]const u8{ start_mark, payload, final_mark }) |part| {
++            var rest = part;
++            while (rest.len > 0) rest = rest[try lib_posix.write(self.shell_pty[1], rest)..];
++        }
++        lib_posix.close(self.shell_pty[1]);
++        self.shell_pty[1] = -1;
++        // a Debug daemon parses slowly; it answers a Type until it has read the shell's exit, an Info always
++        const probe = try socket.sessionConnect(self.daemon.socket_path);
++        defer lib_posix.close(probe);
++        var replies = try ipc.SocketBuffer.init(self.alloc);
++        defer replies.deinit();
++        const deadline = role.nowMs() + 20_000;
++        while (true) : (sleepMs(10)) {
++            try ipc.send(probe, .Type, "");
++            try ipc.send(probe, .Info, "");
++            var typed = false;
++            info: while (true) {
++                if (try replies.read(probe) == 0) return error.DaemonGone;
++                while (replies.next()) |msg| switch (msg.header.tag) {
++                    .Type => typed = true,
++                    .Info => break :info,
++                    else => {},
++                };
++            }
++            if (!typed) break;
++            if (role.nowMs() > deadline) return error.NeverDrained;
++        }
++        self.exit_ms = role.nowMs();
++    }
++
++    /// Fills the client's terminal, so the client can write nothing until the test reads; returns how much.
++    fn fillTerminal(self: *EndingSession) !usize {
++        const fd = self.term_pty[1];
++        const flags = try lib_posix.fcntl(fd, lib_posix.F.GETFL, 0);
++        _ = try lib_posix.fcntl(fd, lib_posix.F.SETFL, flags | lib_posix.O_NONBLOCK);
++        defer _ = lib_posix.fcntl(fd, lib_posix.F.SETFL, flags) catch {};
++        var n: usize = 0;
++        while (true) n += lib_posix.write(fd, "x") catch break;
++        return n;
++    }
++
++    fn queued(fd: i32) usize {
++        var n: c_int = 0;
++        if (cross.c.ioctl(fd, cross.c.FIONREAD, &n) != 0) return 0;
++        return @intCast(n);
++    }
++
++    fn done(flag: *const std.atomic.Value(i64)) bool {
++        return flag.load(.acquire) != 0;
++    }
++
++    fn waitFor(self: *EndingSession, flag: *const std.atomic.Value(i64)) void {
++        const deadline = role.nowMs() + 20_000;
++        while (!done(flag)) : (sleepMs(5)) {
++            if (role.nowMs() > deadline) std.debug.panic("an ending session's loop did not finish in 20 s", .{});
++        }
++        _ = self;
++    }
++
++    fn kill(self: *EndingSession) void {
++        if (!done(&self.daemon_done_ms)) {
++            if (socket.sessionConnect(self.daemon.socket_path)) |fd| {
++                ipc.send(fd, .Kill, "") catch {};
++                lib_posix.close(fd);
++            } else |_| {}
++        }
++        self.daemon_thread.join();
++        if (self.client_thread) |t| t.join();
++        self.client_thread = null;
++    }
++
++    fn deinit(self: *EndingSession) void {
++        self.kill();
++        if (!done(&self.client_done_ms) and self.sock >= 0) lib_posix.close(self.sock);
++        for (self.shell_pty ++ self.term_pty) |fd| {
++            if (fd >= 0) lib_posix.close(fd);
++        }
++        lib_posix.close(self.server_fd);
++        self.daemon.deinit(self.alloc);
++        self.tmp.cleanup();
++    }
++};
++
++fn tookAbout(what: []const u8, took: i64, budget: i64, slack: i64) !void {
++    if (took >= budget - 500 and took <= budget + slack) return;
++    std.debug.print("{s} took {d} ms on a {d} ms deadline\n", .{ what, took, budget });
++    return error.TestUnexpectedResult;
++}
++
++fn testPayload(alloc: std.mem.Allocator) ![]u8 {
++    // more than the session socket holds
++    const payload = try alloc.alloc(u8, 48 * 1024);
++    for (payload, 0..) |*b, i| b.* = if (i % 100 == 99) '\n' else 'a' + @as(u8, @intCast(i % 26));
++    return payload;
++}
++
++// regression: the daemon freed unsent output at the shell's exit, and the client dropped unwritten output at the hangup
++test "a session's last output reaches a terminal that resumes, through the daemon and the client" {
++    const alloc = std.testing.allocator;
++    var s: EndingSession = undefined;
++    try s.start(alloc);
++    defer s.deinit();
++    const payload = try testPayload(alloc);
++    defer alloc.free(payload);
++    const filled = try s.fillTerminal();
++
++    try s.shellPrintsAndExits(payload);
++    try std.testing.expect(!EndingSession.done(&s.daemon_done_ms) and EndingSession.queued(s.sock) > 0);
++    try s.attachClient();
++    s.waitFor(&s.daemon_done_ms);
++    try std.testing.expect(!EndingSession.done(&s.client_done_ms));
++
++    var got: std.ArrayList(u8) = .empty;
++    defer got.deinit(alloc);
++    var buf: [65536]u8 = undefined;
++    const limit = role.nowMs() + 20_000;
++    while (true) {
++        var pfd = [_]lib_posix.pollfd{.{ .fd = s.term_pty[0], .events = lib_posix.POLL.IN, .revents = 0 }};
++        _ = try lib_posix.poll(&pfd, 100);
++        if (pfd[0].revents & lib_posix.POLL.IN != 0) {
++            try got.appendSlice(alloc, buf[0..try lib_posix.read(s.term_pty[0], &buf)]);
++        } else if (EndingSession.done(&s.client_done_ms)) break;
++        if (role.nowMs() > limit) return error.ReaderTimedOut;
++    }
++    const expected = try std.mem.concat(alloc, u8, &.{ EndingSession.start_mark, payload, EndingSession.final_mark });
++    defer alloc.free(expected);
++    try std.testing.expect(std.mem.endsWith(u8, got.items, EndingSession.final_mark));
++    try std.testing.expectEqual(filled + expected.len, got.items.len);
++    try std.testing.expect(std.mem.endsWith(u8, got.items, expected));
++}
++
++test "an ending session whose terminal never reads again ends the daemon and then the client on their deadlines" {
++    const alloc = std.testing.allocator;
++    var s: EndingSession = undefined;
++    try s.start(alloc);
++    defer s.deinit();
++    const payload = try testPayload(alloc);
++    defer alloc.free(payload);
++    _ = try s.fillTerminal();
++
++    try s.shellPrintsAndExits(payload);
++    s.waitFor(&s.daemon_done_ms);
++    const daemon_took = s.daemon_done_ms.load(.acquire) - s.exit_ms;
++    try tookAbout("daemon", daemon_took, EXIT_DRAIN_MS, 3000);
++    const attached = role.nowMs();
++    try s.attachClient();
++    s.waitFor(&s.client_done_ms);
++    const client_took = s.client_done_ms.load(.acquire) - attached;
++    try tookAbout("client", client_took, CLOSE_BUDGET_MS, 3000);
++    const close_deadline = (try s.client_result).close_deadline_ms orelse return error.NoCloseDeadline;
++    // the output stops short of the deadline, which leaves the reset its share
++    try std.testing.expect(close_deadline - s.client_done_ms.load(.acquire) >= RESET_SHARE_MS / 2);
++
++    // the reset shares the deadline: a full terminal holds it no longer
++    _ = try s.fillTerminal();
++    writeBy(s.term_pty[1], "\x1bc", close_deadline);
++    try std.testing.expect(role.nowMs() <= close_deadline + 100);
++    const began = role.nowMs();
++    writeBy(s.term_pty[1], "\x1bc", began + 200);
++    try std.testing.expect(role.nowMs() - began >= 190);
++}
++
++test "a draining session takes no attach, input or command, and a kill ends it at once" {
++    const alloc = std.testing.allocator;
++    var s: EndingSession = undefined;
++    try s.start(alloc);
++    defer s.deinit();
++    const payload = try testPayload(alloc);
++    defer alloc.free(payload);
++
++    try s.shellPrintsAndExits(payload);
++    try std.testing.expect(!EndingSession.done(&s.daemon_done_ms));
++    const late = try socket.sessionConnect(s.daemon.socket_path);
++    defer lib_posix.close(late);
++    const size = ipc.Resize{ .rows = 24, .cols = 80 };
++    try ipc.send(late, .Init, std.mem.asBytes(&size));
++    try ipc.send(late, .Type, "echo late\r");
++    try ipc.send(late, .Run, "echo late");
++    var pfd = [_]lib_posix.pollfd{.{ .fd = late, .events = lib_posix.POLL.IN, .revents = 0 }};
++    try std.testing.expectEqual(@as(usize, 0), try lib_posix.poll(&pfd, 300));
++
++    try ipc.send(late, .Kill, "");
++    const sent = role.nowMs();
++    s.waitFor(&s.daemon_done_ms);
++    try std.testing.expect(s.daemon_done_ms.load(.acquire) - sent < EXIT_DRAIN_MS / 2);
++}
++
++test "a detach returns at the hangup as before, dropping what the client holds" {
++    const alloc = std.testing.allocator;
++    var s: EndingSession = undefined;
++    try s.start(alloc);
++    defer s.deinit();
++    const payload = try testPayload(alloc);
++    defer alloc.free(payload);
++    _ = try s.fillTerminal();
++    try s.attachClient();
++    var rest: []const u8 = payload;
++    while (rest.len > 0) rest = rest[try lib_posix.write(s.shell_pty[1], rest)..];
++    sleepMs(100);
++
++    const probe = try socket.sessionConnect(s.daemon.socket_path);
++    defer lib_posix.close(probe);
++    try ipc.send(probe, .DetachAll, "");
++    const sent = role.nowMs();
++    s.waitFor(&s.client_done_ms);
++    try std.testing.expect(s.client_done_ms.load(.acquire) - sent < CLOSE_BUDGET_MS / 4);
++    try std.testing.expectEqual(@as(?i64, null), (try s.client_result).close_deadline_ms);
++}
++
++/// A terminal for leaveTerminal that records what is done to it.
++const TerminalLog = struct {
++    out_fd: i32,
++    takes: bool,
++    calls: [8]Call = undefined,
++    n: usize = 0,
++
++    const Call = union(enum) { taken_by: i64, flush, restore_flushing: bool, reset: ?i64 };
++
++    fn add(self: *TerminalLog, call: Call) void {
++        self.calls[self.n] = call;
++        self.n += 1;
++    }
++    pub fn outputTakenBy(self: *TerminalLog, deadline_ms: i64) bool {
++        self.add(.{ .taken_by = deadline_ms });
++        return self.takes;
++    }
++    pub fn flushOutput(self: *TerminalLog) void {
++        self.add(.flush);
++    }
++    pub fn restoreTermios(self: *TerminalLog, flushing: bool) void {
++        self.add(.{ .restore_flushing = flushing });
++    }
++    pub fn writeReset(self: *TerminalLog, deadline_ms: ?i64) void {
++        self.add(.{ .reset = deadline_ms });
++    }
++};
++
++test "leaving a terminal: a detach as upstream, a session end within the deadline and the reset's share" {
++    const pty = try testPty(24, 80);
++    defer for (pty) |fd| lib_posix.close(fd);
++    const pipe = try lib_posix.pipe2(.{});
++    defer for (pipe) |fd| lib_posix.close(fd);
++    const d: i64 = 10_000;
++    const C = TerminalLog.Call;
++
++    var detach: TerminalLog = .{ .out_fd = pty[1], .takes = true };
++    leaveTerminal(&detach, null);
++    try std.testing.expectEqualDeep(&[_]C{ .{ .restore_flushing = true }, .{ .reset = null } }, detach.calls[0..detach.n]);
++
++    var taken: TerminalLog = .{ .out_fd = pty[1], .takes = true };
++    leaveTerminal(&taken, d);
++    try std.testing.expectEqualDeep(&[_]C{ .{ .taken_by = d - RESET_SHARE_MS }, .{ .restore_flushing = true }, .{ .reset = d }, .{ .taken_by = d } }, taken.calls[0..taken.n]);
++
++    var unread: TerminalLog = .{ .out_fd = pty[1], .takes = false };
++    leaveTerminal(&unread, d);
++    try std.testing.expectEqualDeep(&[_]C{ .{ .taken_by = d - RESET_SHARE_MS }, .flush, .{ .restore_flushing = false }, .{ .reset = d }, .{ .taken_by = d }, .flush }, unread.calls[0..unread.n]);
++
++    // a stdout that is no terminal needs no share for a reset
++    var file: TerminalLog = .{ .out_fd = pipe[1], .takes = true };
++    leaveTerminal(&file, d);
++    try std.testing.expectEqual(C{ .taken_by = d }, file.calls[0]);
++}
++
++fn signalFor(thread: std.c.pthread_t, ms: i64) void {
++    const end = role.nowMs() + ms;
++    while (role.nowMs() < end) : (sleepMs(20)) _ = std.c.pthread_kill(thread, .WINCH);
++}
++
++test "signals do not stretch a write bounded by a deadline" {
++    const pty = try testPty(24, 80);
++    defer for (pty) |fd| lib_posix.close(fd);
++    const flags = try lib_posix.fcntl(pty[1], lib_posix.F.GETFL, 0);
++    _ = try lib_posix.fcntl(pty[1], lib_posix.F.SETFL, flags | lib_posix.O_NONBLOCK);
++    while (true) _ = lib_posix.write(pty[1], "x") catch break;
++    _ = try lib_posix.fcntl(pty[1], lib_posix.F.SETFL, flags);
++    try signal.openSignalPipe();
++    signal.installWakeHandler(@intFromEnum(lib_posix.SIG.WINCH));
++
++    const signaller = try std.Thread.spawn(.{}, signalFor, .{ std.c.pthread_self(), 1500 });
++    defer signaller.join();
++    const began = role.nowMs();
++    writeBy(pty[1], "x", began + 200);
++    try std.testing.expect(role.nowMs() - began < 600);
++}
++
++fn alwaysTaken(_: i32) usize {
++    return 0;
++}
++
++fn neverTaken(_: i32) usize {
++    return 1;
++}
++
++test "the output queue wait returns at once when it is empty and gives up at its deadline" {
++    var began = role.nowMs();
++    try std.testing.expect(takenBy(-1, began + 1000, alwaysTaken));
++    try std.testing.expect(role.nowMs() - began < 100);
++    began = role.nowMs();
++    try std.testing.expect(!takenBy(-1, began + 100, neverTaken));
++    try std.testing.expect(role.nowMs() - began >= 100);
++}
++
++test "a pty nobody reads holds its output queue until the deadline, and a flush empties it" {
++    if (builtin.os.tag == .linux) {
++        std.debug.print("skipped: a Linux pty reports an empty output queue whether it is read or not\n", .{});
++        return error.SkipZigTest;
++    }
++    const pty = try testPty(24, 80);
++    defer for (pty) |fd| lib_posix.close(fd);
++    const flags = try lib_posix.fcntl(pty[1], lib_posix.F.GETFL, 0);
++    _ = try lib_posix.fcntl(pty[1], lib_posix.F.SETFL, flags | lib_posix.O_NONBLOCK);
++    while (true) _ = lib_posix.write(pty[1], "x") catch break;
++
++    const began = role.nowMs();
++    try std.testing.expect(!takenBy(pty[1], began + 200, ttyOutputQueued));
++    try std.testing.expect(role.nowMs() - began <= 1200);
++    // the client then drops the queue, so its exit does not wait on the tty either
++    try std.testing.expectEqual(@as(c_int, 0), cross.c.tcflush(pty[1], cross.c.TCOFLUSH));
++    try std.testing.expect(takenBy(pty[1], role.nowMs(), ttyOutputQueued));
++    // and a session end leaves nothing queued, the reset included
++    while (true) _ = lib_posix.write(pty[1], "x") catch break;
++    leaveTerminal(Tty{ .out_fd = pty[1], .in_fd = null, .orig = undefined, .reset = "\x1bc" }, role.nowMs() + 400);
++    try std.testing.expect(takenBy(pty[1], role.nowMs(), ttyOutputQueued));
++}
++
++fn readFor(fd: i32, ms: i64, out: *[256]u8, len: *usize) void {
++    const end = role.nowMs() + ms;
++    while (role.nowMs() < end) {
++        var pfd = [_]lib_posix.pollfd{.{ .fd = fd, .events = lib_posix.POLL.IN, .revents = 0 }};
++        if ((lib_posix.poll(&pfd, 20) catch 0) == 0) continue;
++        len.* += lib_posix.read(fd, out[len.*..]) catch return;
++    }
++}
++
++test "a session end's reset reaches a pty that is read" {
++    const pty = try testPty(24, 80);
++    defer for (pty) |fd| lib_posix.close(fd);
++    var got: [256]u8 = undefined;
++    var len: usize = 0;
++    const reader = try std.Thread.spawn(.{}, readFor, .{ pty[0], 1000, &got, &len });
++    leaveTerminal(Tty{ .out_fd = pty[1], .in_fd = null, .orig = undefined, .reset = "\x1bc" }, role.nowMs() + 500);
++    reader.join();
++    try std.testing.expectEqualStrings("\x1bc", got[0..len]);
++}
+diff -ruN zmx-orig/src/main.zig zmx/src/main.zig
+--- zmx-orig/src/main.zig
++++ zmx/src/main.zig
+@@ -1629,7 +1629,11 @@
+     }
+ }
+ 
++/// The close deadline of a session that ended inside a switched-to attach, which the attach it switched from shares.
++var ended_deadline: ?i64 = null;
++
+ fn attach(gpa: std.mem.Allocator, io: std.Io, daemon: *Daemon, env_str: []const u8, labels: ?[]const u8) !void {
++    ended_deadline = null;
+     const sesh = socket.getSeshNameFromEnv();
+     if (sesh.len > 0) {
+         return switchSesh(gpa, io, daemon, sesh);
+@@ -1672,13 +1676,21 @@
+     const managed_exit_seq = "\x1b[0m\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1004l\x1b[?2004l" ++
+         "\x1b[?2031l\x1b[?2048l\x1b]110\x1b\\\x1b]111\x1b\\\x1b]112\x1b\\";
+     const exit_seq = if (role.nonceFromEnv() != null) managed_exit_seq else restore_seq;
++    // set when the session ended, so a terminal that stopped reading holds the reset no longer than
++    // the session's last output
++    var close_deadline: ?i64 = null;
+ 
+     defer {
+-        if (stdin_is_tty) {
+-            _ = cross.c.tcsetattr(lib_posix.STDIN_FILENO, cross.c.TCSAFLUSH, &orig_termios);
+-        }
+-        // Reset terminal modes on detach
+-        _ = lib_posix.write(lib_posix.STDOUT_FILENO, exit_seq) catch {};
++        // the frame a session switch returns through shares the switched-to session's deadline
++        const deadline = close_deadline orelse ended_deadline;
++        ended_deadline = deadline;
++        // Restore the terminal and reset its modes
++        loop.leaveTerminal(loop.Tty{
++            .out_fd = lib_posix.STDOUT_FILENO,
++            .in_fd = if (stdin_is_tty) lib_posix.STDIN_FILENO else null,
++            .orig = &orig_termios,
++            .reset = exit_seq,
++        }, deadline);
+     }
+ 
+     if (stdin_is_tty) {
+@@ -1704,7 +1716,8 @@
+     const clear_seq = "\x1b[2J\x1b[H";
+     _ = try lib_posix.write(lib_posix.STDOUT_FILENO, clear_seq);
+ 
+-    const looper = try loop.clientLoop(client_sock, env_str);
++    const looper = try loop.clientLoop(client_sock, env_str, daemon.socket_path);
++    close_deadline = looper.close_deadline_ms;
+     switch (looper.kind) {
+         .detach => return,
+         .switch_session => {
+diff -ruN zmx-orig/src/posix.zig zmx/src/posix.zig
+--- zmx-orig/src/posix.zig
++++ zmx/src/posix.zig
+@@ -1248,6 +1248,21 @@
+     SystemResources,
+ } || UnexpectedError;
+ 
++/// As poll, but a signal ends the wait with 0 instead of restarting it with the same timeout, for a caller that
++/// recomputes the timeout from a deadline.
++pub fn pollOrInterrupted(fds: []pollfd, timeout: i32) PollError!usize {
++    const fds_count = cast(nfds_t, fds.len) orelse return error.SystemResources;
++    const rc = system.poll(fds.ptr, fds_count, timeout);
++    return switch (errno(rc)) {
++        .SUCCESS => @intCast(rc),
++        .FAULT => unreachable,
++        .INTR => 0,
++        .INVAL => unreachable,
++        .NOMEM => error.SystemResources,
++        else => |err| unexpectedErrno(err),
++    };
++}
++
+ pub fn poll(fds: []pollfd, timeout: i32) PollError!usize {
+     while (true) {
+         const fds_count = cast(nfds_t, fds.len) orelse return error.SystemResources;
+diff -ruN zmx-orig/src/signal.zig zmx/src/signal.zig
+--- zmx-orig/src/signal.zig
++++ zmx/src/signal.zig
+@@ -1,9 +1,9 @@
+ const std = @import("std");
+ const lib_posix = @import("posix.zig");
+ 
+-/// Self-pipe woken by signal handlers. std.posix.poll loops on .INTR internally
+-/// (PollError has no Interrupted member), so a signal that lands during poll()
+-/// never surfaces; the handler writes a byte here and poll() wakes on POLLIN.
++/// Self-pipe woken by signal handlers. lib_posix.poll loops on .INTR internally,
++/// so a signal that lands during it never surfaces (only pollOrInterrupted returns
++/// on one); the handler writes a byte here and poll() wakes on POLLIN.
+ pub var sig_pipe: [2]lib_posix.fd_t = .{ -1, -1 };
+ 
+ pub fn wakeSignalPipe(_: lib_posix.SIG, _: *const lib_posix.siginfo_t, _: ?*anyopaque) callconv(.c) void {
+@@ -12,8 +12,8 @@
+     std.c._errno().* = saved;
+ }
+ 
+-// std.posix.poll retries EINTR internally, so SA_RESTART is moot -- neither
+-// setting wakes the loop. The handler writes to sig_pipe instead; poll()
++// lib_posix.poll retries EINTR internally, so SA_RESTART is moot -- neither
++// setting wakes a loop on it. The handler writes to sig_pipe instead; poll()
+ // wakes on its read end.
+ pub fn installWakeHandler(sig: u6) void {
+     const act: lib_posix.Sigaction = .{
