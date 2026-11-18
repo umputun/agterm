@@ -123,28 +123,21 @@ struct ConfigPathsTests {
         let examples = ConfigPaths.starterKeymapConf().split(separator: "\n").compactMap { line -> String? in
             let text = line.drop { $0 == "#" || $0.isWhitespace }
             let verb = text.prefix { !$0.isWhitespace }
-            // `<` skips the two verb-syntax lines, which state a grammar rather than an example.
-            guard verb == "map" || verb == "command" || verb == "global-hotkey",
+            guard verb == "map" || verb == "command" || verb == "global-hotkey" || verb == "open",
                   !text.contains("<") else { return nil }
             return String(text)
         }
-        // an example silently dropped from the guard must fail here: three `map`, three `command`, four
-        // `global-hotkey`.
-        #expect(examples.count == 10)
+        #expect(examples.count == 12)
         var bound = 0
         for example in examples {
             let (keymap, diagnostics) = parseKeymap(example)
             #expect(diagnostics.isEmpty, "starter example '\(example)' is skipped: \(diagnostics.map(\.message))")
-            // an unparseable command chord is absorbed as shell text without a diagnostic, so count the
-            // shortcuts that survived rather than the commands that parsed.
+            // an unparseable command chord is absorbed as shell text without a diagnostic.
             bound += keymap.builtinOverrides.count + keymap.commands.filter { !$0.shortcut.isEmpty }.count
                 + keymap.builtinSequences.values.reduce(0) { $0 + $1.count }
-                + (keymap.globalHotkey == nil ? 0 : 1)
+                + (keymap.globalHotkey == nil ? 0 : 1) + keymap.openers.count
         }
-        // all three `map` examples and the two chorded `command` ones; `Deploy` is palette-only by design.
-        // the alternatives example counts twice, its menu chord and its monitor-bound half. Then the four
-        // `global-hotkey` examples, each of which must yield a chord rather than a diagnostic.
-        #expect(bound == 10)
+        #expect(bound == 12)
     }
 
     @Test func ghosttyConfigPathIsGhosttyConfInDir() {

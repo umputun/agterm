@@ -221,4 +221,13 @@ import Testing
         let json = String(decoding: encoded, as: UTF8.self)
         #expect(!json.contains("keymap"))
     }
+
+    @Test func carriesOpenRulesAndOmitsTheKeyWithoutThem() throws {
+        let (keymap, _) = parseKeymap("open *.md,README mdview \"$AGT_PATH\"\n")
+        let payload = ControlKeymap.project(keymap: keymap, diagnostics: [], path: "/tmp/keymap.conf")
+        #expect(payload.openers == [ControlKeymapOpener(selectors: ["*.md", "README"], command: #"mdview "$AGT_PATH""#, line: 1)])
+        let none = ControlKeymap.project(keymap: Keymap(builtinOverrides: [:], commands: []), diagnostics: [], path: "/tmp/k")
+        let json = String(decoding: try JSONEncoder().encode(none), as: UTF8.self)
+        #expect(!json.contains("openers"))
+    }
 }

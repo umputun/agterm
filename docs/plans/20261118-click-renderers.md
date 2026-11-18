@@ -200,14 +200,14 @@
 - Modify tests: `agtermCoreTests/KeymapTests.swift`, `ControlKeymapTests.swift`, `ConfigPathsTests.swift`,
   `agtermctlKitTests/SocketClientTests.swift` (formatter tests move out), the hosted `SettingsModel` reload test
 
-- [ ] failing tests: selector parsing (`*.md`, `Makefile`, `.env`, mixed-case extension), every diagnostic in
+- [x] tests (⚠️ written right after the code, not failing first): selector parsing (`*.md`, `Makefile`, `.env`, mixed-case extension), every diagnostic in
       Technical Details, last-wins with the earlier line diagnosed, `opener(forFile:)` basename before extension,
       the starter example applying when uncommented, `openers` in the projection and the human output
-- [ ] `FileOpener`, `OpenerSelector`, the `open` verb in `parseKeymap`, `Keymap.openers` as a defaulted init
+- [x] `FileOpener`, `OpenerSelector`, the `open` verb in `parseKeymap`, `Keymap.openers` as a defaulted init
       argument, reusing the `command` line's option and shell parsing without chord handling
-- [ ] move the keymap formatter to `KeymapFormatter.swift` unchanged, then add the `openers:` section
-- [ ] `keymap.reload` exposes openers through `SettingsModel.keymap`; hosted reload test
-- [ ] run `swift test` for the keymap, control and CLI suites and the hosted reload test
+- [x] move the keymap formatter to `KeymapFormatter.swift` unchanged, then add the `openers:` section
+- [x] `keymap.reload` exposes openers through `SettingsModel.keymap`; hosted reload test
+- [x] run `swift test` for the keymap, control and CLI suites and the hosted reload test
 
 ### Task 3: local ⌘-click runs a matching rule
 

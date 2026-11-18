@@ -20,18 +20,22 @@ public struct Keymap: Equatable, Sendable {
     /// frontmost. One chord only — no alternatives, no leader sequence, since neither is expressible to
     /// `RegisterEventHotKey`.
     public let globalHotkey: Chord?
+    /// The `open` rules in file order, each selector owned by exactly one; `opener(forFile:)` picks among them.
+    public let openers: [FileOpener]
 
     public init(builtinOverrides: [BuiltinAction: Chord], commands: [CustomCommand],
                 builtinSequences: [BuiltinAction: [Keybind]] = [:],
                 builtinUnbound: Set<BuiltinAction> = [],
                 builtinRepeating: Set<BuiltinAction> = [],
-                globalHotkey: Chord? = nil) {
+                globalHotkey: Chord? = nil,
+                openers: [FileOpener] = []) {
         self.builtinOverrides = builtinOverrides
         self.commands = commands
         self.builtinSequences = builtinSequences
         self.builtinUnbound = builtinUnbound
         self.builtinRepeating = builtinRepeating
         self.globalHotkey = globalHotkey
+        self.openers = openers
     }
 
     /// The active menu chord for a built-in: the user override, else the shipped `defaultChord` — `nil` for
@@ -101,8 +105,8 @@ public struct KeymapStore: Sendable {
 /// diagnostic and is skipped, so one malformed line never discards the rest of the file.
 ///
 /// Line-based and kitty-flavored. Blank and `#`-comment lines are ignored (`stripComment` owns the inline
-/// rule); the first whitespace token is the verb, `map` or `command`, each owning its own grammar in
-/// `parseMapLine` / `parseCommandLine`. Anything else is skipped with a diagnostic.
+/// rule); the first whitespace token is the verb, `map`, `command`, `global-hotkey` or `open`, each owning its own
+/// grammar (`open` in `FileOpener.swift`). Anything else is skipped with a diagnostic.
 ///
 /// Four passes then run over the whole file: `resolveMapLines` folds the `map` lines last-wins to one per
 /// action, `resolveBuiltinOverrides` settles built-in-versus-built-in menu chord collisions, `validateBindings`
@@ -118,6 +122,7 @@ public func parseKeymap(_ text: String) -> (keymap: Keymap, diagnostics: [Keymap
     // last-wins like `map`, but with no cross-line resolution to run afterwards: an OS-registered chord
     // collides with nothing agterm owns.
     var globalHotkey: Chord?
+    var openLines: [FileOpener] = []
 
     // normalize line endings: a CRLF leaves a trailing `\r` that .whitespaces won't strip (so
     // `toggle_split\r` reads as an unknown action) and a lone-CR file would collapse into one line.
@@ -138,6 +143,8 @@ public func parseKeymap(_ text: String) -> (keymap: Keymap, diagnostics: [Keymap
             parseCommandLine(rest, line: lineNumber, commandLines: &commandLines, diagnostics: &diagnostics)
         case "global-hotkey":
             parseGlobalHotkeyLine(rest, line: lineNumber, hotkey: &globalHotkey, diagnostics: &diagnostics)
+        case "open":
+            parseOpenLine(rest, line: lineNumber, openers: &openLines, diagnostics: &diagnostics)
         default:
             diagnostics.append(KeymapDiagnostic(line: lineNumber, message: "unknown verb '\(verb)'"))
         }
@@ -208,6 +215,7 @@ public func parseKeymap(_ text: String) -> (keymap: Keymap, diagnostics: [Keymap
                                      diagnostics: &diagnostics)
 
     let sequences = survivingAlternatives(survivors)
+    let openers = resolveOpeners(openLines, diagnostics: &diagnostics)
     return (Keymap(builtinOverrides: builtinOverrides,
                    commands: applySurvivingShortcuts(to: commandLines, survivors: survivors),
                    builtinSequences: sequences,
@@ -217,7 +225,8 @@ public func parseKeymap(_ text: String) -> (keymap: Keymap, diagnostics: [Keymap
                    builtinRepeating: Set(sequences.filter { action, keybinds in
                        resolved.alternatives[action]?.repeats == true && keybinds.contains { $0.count > 1 }
                    }.keys),
-                   globalHotkey: globalHotkey),
+                   globalHotkey: globalHotkey,
+                   openers: openers),
             diagnostics)
 }
 
@@ -781,7 +790,8 @@ private func parseCommandLine(_ rest: String, line: Int, commandLines: inout [Pa
             message: "command '\(name)' shortcut '\(firstToken)' has an invalid alternative; \(DropScope.wholeBinding.commandSkipped)"))
     }
 
-    guard let command = parseCommandOptions(shellLine, name: name, line: line, diagnostics: &diagnostics) else { return }
+    guard let command = parseCommandOptions(shellLine, name: name, subject: "command '\(name)'", line: line,
+                                            diagnostics: &diagnostics) else { return }
 
     // the name is the identity a run count is stored under, so a second definition cannot share it.
     guard !commandLines.contains(where: { $0.command.name == name }) else {
@@ -793,13 +803,15 @@ private func parseCommandLine(_ rest: String, line: Int, commandLines: inout [Pa
     commandLines.append(ParsedCommandLine(command: command, alternatives: kept))
 }
 
-private func parseCommandOptions(_ body: String, name: String, line: Int,
-                                 diagnostics: inout [KeymapDiagnostic]) -> CustomCommand? {
+/// parseCommandOptions reads the failure-panel options and the shell text of a `command` or `open` line; `subject`
+/// opens each diagnostic.
+func parseCommandOptions(_ body: String, name: String, subject: String, line: Int,
+                         diagnostics: inout [KeymapDiagnostic]) -> CustomCommand? {
     var rest = body[...]
     var command = CustomCommand(name: name, command: "", shortcut: "")
     var seen: Set<String> = []
     func reject(_ reason: String) -> CustomCommand? {
-        diagnostics.append(KeymapDiagnostic(line: line, message: "command '\(name)' \(reason)"))
+        diagnostics.append(KeymapDiagnostic(line: line, message: "\(subject) \(reason)"))
         return nil
     }
     func takeToken() -> String {

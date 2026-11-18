@@ -3,6 +3,7 @@ paths:
   - "agtermCore/Sources/agtermCore/Keybind.swift"
   - "agtermCore/Sources/agtermCore/KeybindMatcher.swift"
   - "agtermCore/Sources/agtermCore/Keymap.swift"
+  - "agtermCore/Sources/agtermCore/FileOpener.swift"
   - "agtermCore/Sources/agtermCore/BuiltinAction.swift"
   - "agtermCore/Sources/agtermCore/CustomCommand.swift"
   - "agtermCore/Sources/agtermCore/ConfigPaths.swift"
@@ -43,6 +44,11 @@ paths:
   Empty shell text is invalid. Both verbs split on spaces/tabs. Blank lines and comments are skipped;
   inline `#` starts a comment only after whitespace and outside double quotes. Each bad line yields
   `KeymapDiagnostic{line,message}` without stopping later lines. `{AGT_X}` text remains verbatim.
+- `open <selectors> [failure options] <shell...>` is the fourth verb (`FileOpener.swift`): `*.ext` and exact
+  basenames, comma-separated, last-wins per selector with the earlier line diagnosed; a basename beats an
+  extension in `Keymap.opener(forFile:)`. It shares `parseCommandOptions` with `command`, refuses `--repeat`, a
+  chord and any `{AGT_` token, because its shell text runs verbatim with context in the environment only.
+  `keymap.list` carries it as `openers`, omitted when none.
 - `|` is the top separator tier: it splits a chord token into alternatives, `>` splits a sequence into
   chords, `+` splits a chord into modifiers and a base key. Both verbs take it, inside the single token
   with no spaces around it — `parseCommandLine` hands everything after that token to the shell.
