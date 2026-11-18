@@ -1228,7 +1228,7 @@ The keymap editor.
           <!-- KEYMAP -->
           <section id="keymap" class="doc-v2" style="scroll-margin-top: 88px; padding-top: 56px">
 <h2>Custom commands &amp; keys</h2>
-<p><code>~/.config/agterm/keymap.conf</code> rebinds built-in shortcuts and defines your own shell commands, bound to keys and listed in the custom-commands palette (⌃⇧O). The file is optional: a commented starter is written on first launch, and <strong>Settings ▸ Key Mapping</strong> can point to another folder. It uses kitty-style syntax with three verbs; blank lines and <code>#</code> comments are ignored.</p>
+<p><code>~/.config/agterm/keymap.conf</code> rebinds built-in shortcuts and defines your own shell commands, bound to keys and listed in the custom-commands palette (⌃⇧O). The file is optional: a commented starter is written on first launch, and <strong>Settings ▸ Key Mapping</strong> can point to another folder. It uses kitty-style syntax with four verbs; blank lines and <code>#</code> comments are ignored.</p>
 <pre><code># rebind a built-in to a chord (modifiers joined by +)
 map cmd+shift+l   toggle_split
 map ctrl+shift+k  command_palette
@@ -1239,7 +1239,9 @@ command &quot;Open in Zed&quot;  cmd+shift+e  open -a Zed {AGT_SESSION_PWD}
 command &quot;Lazygit&quot;      ctrl+a&gt;g     agtermctl session overlay open &#39;zsh -lc lazygit&#39; --socket {AGT_SOCKET}
 command &quot;Deploy&quot;               ./deploy.sh
 # one system-wide chord that summons the quick terminal from any app
-global-hotkey ctrl+opt+space</code></pre>
+global-hotkey ctrl+opt+space
+# your own viewer for ⌘-clicked files
+open *.md  glow-page.sh &quot;$AGT_PATH&quot;</code></pre>
 <p><strong>Editing.</strong> File ▸ Edit Keymap… (also in the action palette) opens the file in a 95% overlay running <code>$VISUAL</code> or <code>$EDITOR</code> (vi if neither is set) and reloads it when the editor quits. Apply edits made elsewhere with File ▸ Reload Keymap or <code>agtermctl keymap reload</code>. A bad line never discards the rest: it shows in the diagnostics list in Settings ▸ Key Mapping while the good lines apply.</p>
 <h3 id="keymap-chords">Chords</h3>
 <ul>
@@ -1382,6 +1384,19 @@ edit_flagged_sessions   edit_focused_workspaces</code></pre>
 <li>A missing or invalid value, a repeated flag, an unknown <code>--error-*</code> option or an empty command body skips the line with a diagnostic.</li>
 <li>The first ordinary word starts the command, so in <code>--error-hud ./script --error-pane right</code> the last two words go to the script. Use <code>--</code> to end the flags before a command whose first word looks like a flag. A chord is never read after the flags.</li>
 </ul>
+<h3 id="keymap-open">Your own viewer for clicked files</h3>
+<p>An <code>open</code> line runs your own program instead of agterm's page when you ⌘-click a file whose name it lists:</p>
+<pre><code>open *.md,*.markdown --error-hud glow-page.sh &quot;$AGT_PATH&quot;
+open Makefile,*.mk code &quot;$AGT_PATH&quot;</code></pre>
+<ul>
+<li>Selectors are comma-separated. <code>*.ext</code> takes that extension in any case; any other word takes that exact file name. A file name wins over an extension, and when two lines name the same selector the later one wins and the earlier is reported as a diagnostic.</li>
+<li>The command runs like a custom command, detached under <code>/bin/sh -c</code> on the app's PATH, and starts in your home folder. The clicked file is in <code>$AGT_PATH</code>, and the other <code>$AGT_*</code> variables describe the pane you clicked in. <code>{AGT_…}</code> tokens are refused on this line, since the path comes from terminal output: pass it quoted, as <code>&quot;$AGT_PATH&quot;</code>.</li>
+<li>The failure-panel flags work as on a <code>command</code> line. A chord and <code>--repeat</code> are refused.</li>
+<li>A rule runs on an ordinary link click on a path agterm found in the output (⌘-click, or ⌘⇧-click in a program that <a href="#links">captures the mouse</a>), and only for a regular file that opens as a picture, markdown, text or HTML page. A link a program printed as an OSC 8 hyperlink keeps the built-in page, because its target need not be what the screen shows. Sending a link to the browser or revealing it in Finder keeps its meaning, and a file no rule names opens as before.</li>
+<li>Treat the file as untrusted input: any program running in the terminal can print a path. A renderer that shows its result with <code>agtermctl session overlay open --html</code> gives that page the control API through <code>data-agterm</code> tags, even with its scripts off, so never put the file's own HTML into it unescaped. Show the file itself with <code>--markdown</code> or <code>--text</code>, which run nothing.</li>
+<li>Each run is reported as an <code>opener.run</code> event with the file, the rule's selectors and, for a copied file, the host it came from.</li>
+</ul>
+<p><strong>Files on another host.</strong> In a session attached from another Mac or served by agterm-server, the clicked file is on that host. agterm copies it to <code>agterm/open</code> in your cache folder, readable only by you, and runs the rule on the copy; copies older than an hour are removed at launch and on the next copy. Only that one file is copied: files next to it are not, and a log is copied once, not followed. A file larger than its page's limit is not copied and follows the built-in page rules. When a panel is up over the session and the path can still be clicked, the rule runs on a copy and the panel stays; such a click never opens a page. A host whose agterm predates rules opens its page as it always did. A failed copy is reported like any refused remote click.</p>
 <h3 id="keymap-check">Check what is bound</h3>
 <p><code>agtermctl keymap list</code> prints every built-in with the chords it resolved to (the menu shortcut first, then the alternatives, joined with <code>|</code>), the custom commands, each diagnostic in full, and the shortcuts the menu bar actually carries. If a binding does not fire, compare the last two: an action whose chord no menu item holds is usually a menu problem, not a keymap one. Only menu shortcuts appear in that last list: alternatives never do, nor do <code>undo_close</code> (⌘Z) and <code>toggle_fullscreen</code> (⌃⌘F), which agterm handles itself.</p>
 <p><code>increase_font_size</code>'s default is listed as <code>cmd++</code>, which the file cannot parse: write that chord as <code>cmd+shift+=</code> in <code>keymap.conf</code>.</p>
@@ -1451,6 +1466,10 @@ agtermctl notify &quot;needs input&quot; --target &quot;$AGT_SESSION_ID&quot; --
 <tr>
 <td><code>remote.opened</code>, <code>remote.closed</code></td>
 <td>a row attached from another Mac with <code>zmx attach</code> appears in or leaves the tree; carries its ssh destination as <code>host</code> and the origin's session id as <code>remoteSessionID</code>. It describes the row, not the connection, so undo fires <code>remote.opened</code> again</td>
+</tr>
+<tr>
+<td><code>opener.run</code></td>
+<td>an <code>open</code> rule ran on a clicked file; carries <code>path</code>, the rule's <code>selector</code> list and the clicked <code>pane</code>, plus <code>host</code> for a file copied from another host</td>
 </tr>
 <tr>
 <td><code>tree.changed</code></td>
@@ -2105,7 +2124,7 @@ Claude Code (left) asks codex (right) to check its reading; the reply arrives in
 </tr>
 </tbody>
 </table>
-<p>Markdown, text, log and diff pages wear the terminal's theme and open at the link-open size, 95% when links open in the browser.</p>
+<p>Markdown, text, log and diff pages wear the terminal's theme and open at the link-open size, 95% when links open in the browser. An <a href="#keymap-open"><code>open</code> rule</a> in <code>keymap.conf</code> opens a file type with your own program instead.</p>
 <ul>
 <li><code>./main.go:42:7</code>, as compilers and test runners print it, opens the file at that line. A relative path is looked up in the pane's own directory.</li>
 <li>A <code>.</code>, <code>?</code>, <code>!</code> or <code>;</code> ending a sentence after a path is dropped when only the file without it exists.</li>

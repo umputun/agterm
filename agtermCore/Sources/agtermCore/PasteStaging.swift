@@ -95,8 +95,8 @@ public struct PasteStaging: Sendable {
     }
 
     private func stage(_ fill: (inout Batch) throws -> Void) throws -> [String] {
-        try prepareRoot()
-        prune()
+        try Self.prepareRoot(root)
+        Self.prune(root, before: now().addingTimeInterval(-Self.retention))
         let folder = root.path + "/" + UUID().uuidString
         try Self.makeDirectory(folder)
         var batch = Batch(folder: folder)
@@ -112,7 +112,7 @@ public struct PasteStaging: Sendable {
 
     // an existing root is accepted only as a real 0700 directory owned by this user, so a planted symlink or a
     // shared folder is never written into
-    private func prepareRoot() throws {
+    static func prepareRoot(_ root: URL) throws {
         let path = root.path
         do {
             try FileManager.default.createDirectory(at: root.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -120,14 +120,18 @@ public struct PasteStaging: Sendable {
             throw Failure.system("cannot create \(root.deletingLastPathComponent().path): \(error.localizedDescription)")
         }
         if mkdir(path, 0o700) != 0, errno != EEXIST { throw Failure.system("cannot create \(path): \(Self.errorText())") }
-        var info = stat()
-        guard lstat(path, &info) == 0, info.st_mode & S_IFMT == S_IFDIR, info.st_uid == geteuid(), info.st_mode & 0o777 == 0o700 else {
-            throw Failure.unsafeRoot(path)
-        }
+        guard isPrivateDirectory(path) else { throw Failure.unsafeRoot(path) }
     }
 
-    private func prune() {
-        let cutoff = now().addingTimeInterval(-Self.retention)
+    /// isPrivateDirectory says whether `path` itself, not a symlink to it, is a 0700 directory owned by this user.
+    static func isPrivateDirectory(_ path: String) -> Bool {
+        var info = stat()
+        return lstat(path, &info) == 0 && info.st_mode & S_IFMT == S_IFDIR && info.st_uid == geteuid()
+            && info.st_mode & 0o777 == 0o700
+    }
+
+    /// prune removes the UUID-named folders under `root` last modified before `cutoff`.
+    static func prune(_ root: URL, before cutoff: Date) {
         let names = (try? FileManager.default.contentsOfDirectory(atPath: root.path)) ?? []
         for name in names where UUID(uuidString: name) != nil {
             let path = root.path + "/" + name

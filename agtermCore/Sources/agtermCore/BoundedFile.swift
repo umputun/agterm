@@ -45,11 +45,22 @@ public enum BoundedFile {
         withDescriptor(path: path, maxBytes: maxBytes) { _, _ in .success(()) }
     }
 
+    /// size judges `path` as `check` does and returns its length.
+    public static func size(path: String, maxBytes: Int) -> Result<Int, Failure> {
+        withDescriptor(path: path, maxBytes: maxBytes) { _, info in .success(Int(info.st_size)) }
+    }
+
     /// read returns the whole regular file at `path`, through the one descriptor it checked.
     public static func read(path: String, maxBytes: Int) -> Result<Data, Failure> {
         withDescriptor(path: path, maxBytes: maxBytes) { fd, info in
             readFully(fd, offset: 0, count: Int(info.st_size)).map(Result.success) ?? .failure(.unreadable)
         }
+    }
+
+    /// readPrefix returns the first `count` bytes of the regular file at `path`, whatever its length now; nil when it
+    /// holds fewer.
+    public static func readPrefix(path: String, count: Int) -> Result<Data?, Failure> {
+        withDescriptor(path: path, maxBytes: nil) { fd, _ in .success(readFully(fd, offset: 0, count: count)) }
     }
 
     /// readTail returns the last `maxBytes` of the regular file at `path` plus the byte before them, which tells

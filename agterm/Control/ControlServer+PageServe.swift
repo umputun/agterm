@@ -14,6 +14,8 @@ extension ControlServer: PageServeHost {
 
     private var openStores: [AppStore] { library.openIDs().compactMap { library.store(for: $0) } }
 
+    var snapshotOffers: SnapshotOfferBook? { snapshotBook }
+
     func claimPageServe(_ token: String) -> ControlResponse { claimPageStream(token) }
 
     func claimRemotePage(token: String) -> (page: UUID, served: PageServeClaim)? {

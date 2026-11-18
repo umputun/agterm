@@ -186,7 +186,7 @@ struct agtermApp: App {
         _globalHotkey = State(initialValue: GlobalHotkey(settings: settingsModel))
         // built last: needs the keymap (settings), the action hub for built-in monitor binds, and the control
         // server's bound socket path for `{AGT_SOCKET}`.
-        _customCommandRunner = State(initialValue: CustomCommandRunner(
+        let customCommandRunner = CustomCommandRunner(
             library: library, settings: settingsModel, actions: actions,
             usage: CustomCommandUsageStore(directory: stateDirectory),
             socketProvider: { controlServer.resolvedSocketPath },
@@ -195,7 +195,19 @@ struct agtermApp: App {
                     guard let controlServer else { return "control server is gone" }
                     let response = controlServer.openCommandFailureHud(sessionID, spec: spec, pane: pane)
                     return response.ok ? nil : response.error ?? "refused without a reason"
-                })))
+                }))
+        _customCommandRunner = State(initialValue: customCommandRunner)
+        LinkOpener.shared.opener = { settingsModel.keymap.opener(forFile: $0) }
+        LinkOpener.shared.runOpener = { [weak customCommandRunner] rule, file, surface in
+            customCommandRunner?.runOpener(rule, path: file.path, surface: surface)
+        }
+        controlServer.remoteOpeners.rules = { settingsModel.keymap.openers }
+        controlServer.remoteOpeners.launch = { [weak customCommandRunner] rule, file, surface, host in
+            guard let customCommandRunner else { return "no command runner" }
+            return customCommandRunner.runOpener(rule, path: file.path, surface: surface, host: host)
+        }
+        let openerStaging = controlServer.remoteOpeners.staging
+        Task.detached(priority: .utility) { openerStaging.sweep() }
         // hooks.conf scripts: fed by the library's post-append observer, applied from the settings model.
         let hookController = HookController(library: library, settings: settingsModel,
                                             socketProvider: { controlServer.resolvedSocketPath })

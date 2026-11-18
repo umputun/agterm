@@ -90,7 +90,7 @@ public enum ConfigPaths {
         # reload`) to apply. Blank lines and lines starting with `#` are ignored. A line that is
         # rejected or skipped is reported in Settings ▸ Key Mapping and by `agtermctl keymap list`.
         #
-        # Three verbs:
+        # Four verbs:
         #
         #   map <chord> [--repeat] <action>
         #       Rebind a built-in action. Chords use kitty syntax: mods joined by `+`, e.g.
@@ -145,6 +145,21 @@ public enum ConfigPaths {
         #           global-hotkey ctrl+opt+space
         #           global-hotkey f5  # takes F5 machine-wide, including from local map/command bindings
         #           global-hotkey ctrl+`            # same chord as the in-app quick_terminal binding
+        #
+        #   open <selectors> [--error-hud ...] <shell...>
+        #       Run your own command when you ⌘-click a file agterm would show in its own viewer (an
+        #       image, markdown, HTML or text file), in place of that viewer. Selectors are a
+        #       comma-separated list of `*.ext` (any case) and exact file names (`Makefile`); a file
+        #       name beats an extension, and a selector repeated on a later line moves to that line.
+        #       The command gets the file as "$AGT_PATH" plus the clicked pane's $AGT_* variables and
+        #       runs from your home folder; in a session attached from another Mac it gets a private
+        #       copy of the file. Its text runs exactly as written, with no {AGT_X} expansion, so quote
+        #       "$AGT_PATH". Only a path or file:// link the terminal detected runs it: a hyperlink a
+        #       program printed (OSC 8), ⌘⇧ and ⌘⌥ keep their usual behavior. The failure options are
+        #       the command line's. Examples:
+        #
+        #           open *.md,*.markdown  /usr/local/bin/mdview "$AGT_PATH"
+        #           open *.png,*.jpg  --error-hud  qlmanage -p "$AGT_PATH"
         #
         # Built-in actions (raw name → shipped default chord):
         #

@@ -6,8 +6,8 @@ description: >
   read exit status; show HTML pages, URLs or dev servers in an overlay with saved logins or as a
   page row;
   post a HUD/caption/notification/sidebar activity line; message panes; show a picker, question or input dialog; show images/markdown/code/JSONL; type
-  into or restart a pane by id, copy selection, set clipboard, paste files and images, search scrollback; manage windows, font size and
-  theme; reload or edit the keymap, event hooks and agterm-scoped ghostty config; run a custom command; read
+  into or restart a pane by id, copy selection, set clipboard, paste files/images, search scrollback; manage windows, font size,
+  theme; reload or edit the keymap, event hooks and agterm-scoped ghostty config; run a custom command or file renderer; read
   a closed window's session screen; subscribe to status, notify, lifecycle, selection,
   pane, tree and launch events; wait on agent status.
   Covers window/workspace/session addressing, session links, AGTERM_* variables,
@@ -15,7 +15,7 @@ description: >
   problems, filing a bug or feature request.
 when_to_use: >
   Trigger on: agterm, agtermctl, AGTERM_SESSION_ID, and, from inside a session, plain requests such as
-  split the pane, print a link that jumps to a session, close the overlay, hide the overlay for a moment, show a message over the session, show a question dialog, agtermctl ask,
+  split the pane, print a link that jumps to a session, use my own renderer or viewer for clicked files, close the overlay, hide the overlay for a moment, show a message over the session, show a question dialog, agtermctl ask,
   ask the user to type a value or a message, let the user pick one or several items from a list,
   show an image inline, show this markdown file rendered, show this source file or log at a line, show me the diff of a file or the changes as links, tail or follow this log file, search the log or text page in the overlay, wrap long lines in the text or log page, show a JSONL file or expand its records, show this HTML page or artifact, make an HTML page or explainer for this and show
   it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, search the scrollback, flag every session in a workspace, tint a session or workspace row a color, show status or activity under a session in the sidebar, make a companion session, keep a related program next to a session, duplicate this session with its programs as a companion, make this session a companion, move a companion under another session, open a sub-session under this one, fold a session's companions, show a page as a companion of this session, open a page as its own session row in the sidebar, run my custom command, send a message to the other pane or another agent, read my messages, wait for a message, tell me when the selected session changes, wait until that worker session finishes, bring back the session I just closed, attach a session from another Mac, attach a remote session with all its companions, start a new session on another Mac or server, open a remote window for my Linux server, run sessions on a Linux host with agterm-server, watch events or wait for a session on the agterm-server host, install agterm-server on a Linux host, detach or reattach a remote session, copy this to the clipboard, paste a screenshot into Claude Code in a remote session, was agterm upgraded under the running app, check for an agterm update, upgrade agterm without losing sessions, what recipes are there,
@@ -315,7 +315,8 @@ given. Use `--json` for one bare event object per line; filter with repeatable o
 selection moved; carries the session that lost it as `previous`), `tree.changed`, `pane.split`,
 `pane.scratch`, `pane.focused` (a session's selection moved between its two split panes; carries the
 pane and its `paneID`), `remote.opened`, `remote.closed`, `app.launched` (once per app run, when hooks and
-the socket are ready) and `message` (mail queued for a pane; carries `paneID`, `from` and `messageID`, never the body); resume with paired `--run RUN --after SEQ`; and set
+the socket are ready), `message` (mail queued for a pane; carries `paneID`, `from` and `messageID`, never the body) and
+`opener.run` (an `open` rule ran on a clicked file; carries `path`, `selector`, `pane`, and `host` for a copied file); resume with paired `--run RUN --after SEQ`; and set
 page size with `--limit 1...1000`. The app retains 4,096 events for one process run. Cursor run changes,
 expiry, and ahead-of-tail errors are fatal and are never silently rebaselined. Once the stream holds a
 cursor, a refused connection is retried with that cursor for about 30 s before the stream exits.
@@ -726,6 +727,9 @@ the batch in one step. Mail is in memory only and is dropped when the pane close
 Custom commands opt into a failure panel with `command "Build" [chord] --error-hud ./build.sh`, placed
 with `--error-position POS` and `--error-pane left|right`; see
 [keymap.conf format](reference.md#keymapconf-format) for the parsing rules and defaults.
+An `open *.md,Makefile <shell...>` line runs the user's own program, with the file in `$AGT_PATH`, when such a
+file is ⌘-clicked, a remote session's file copied here first; the same section owns its gate and limits, and
+each run emits `opener.run`.
 
 **hooks** — `hooks reload` — re-read `hooks.conf` (prints the parse-diagnostic count); `hooks list` — every `on <kind> <shell...>` line with its running pid and elapsed seconds, pending and dropped counts, last failure, and a retired marker for a removed line whose script still runs. A hook gets the event JSON on stdin plus `AGT_EVENT_KIND`, `AGT_EVENT_STATUS`, `AGT_EVENT_HOST`, `AGT_SESSION_ID`, `AGT_WORKSPACE_ID`, `AGT_WINDOW_ID` and `AGT_SOCKET`; one process per line at a time with a 256-deep queue behind it. Both commands are app-global and refuse a target or `--window`.
 

@@ -750,6 +750,114 @@ final class CustomCommandRunnerTests: XCTestCase {
         }
     }
 
+    private func openerRule(_ shell: String, errorHud: Bool = false) -> FileOpener {
+        FileOpener(selectors: [.extension("md")],
+                   command: CustomCommand(name: "*.md", command: shell, shortcut: "", errorHud: errorHud), line: 1)
+    }
+
+    private func openerEvents() -> [ControlEvent] {
+        guard let run = library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 1)).result?.events?.run else { return [] }
+        let read = ControlEventReadOptions(cursor: ControlEventCursor(run: run, after: 0), kinds: [.openerRun], limit: 1000)
+        return library.readEvents(read).result?.events?.items ?? []
+    }
+
+    func testAnOpenRuleRunsItsTextVerbatimFromHomeWithTheClickedPaneInItsEnvironment() throws {
+        let fix = try failureFixture(HudRecorder())
+        let primary = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), command: "/bin/cat")
+        let split = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), command: "/bin/cat")
+        primary.session = fix.session
+        split.session = fix.session
+        fix.session.surface = primary
+        fix.session.splitSurface = split
+        let out = stateDir.appendingPathComponent("opener-\(UUID().uuidString).txt")
+        let rule = openerRule(#"printf '%s|%s|%s|%s|{AGT_SESSION_NAME}' "$AGT_PATH" "$AGT_PANE" "$AGT_SESSION_ID" "$PWD" > "# + out.path)
+
+        XCTAssertNil(fix.runner.runOpener(rule, path: "/tmp/a b.md", surface: split))
+        wait { FileManager.default.fileExists(atPath: out.path) && ((try? String(contentsOf: out, encoding: .utf8)) ?? "").hasSuffix("}") }
+
+        let written = try String(contentsOf: out, encoding: .utf8)
+        XCTAssertEqual(written, "/tmp/a b.md|right|\(fix.session.id.uuidString)|\(NSHomeDirectory())|{AGT_SESSION_NAME}")
+        let event = try XCTUnwrap(openerEvents().last)
+        XCTAssertEqual(event.session, fix.session.id.uuidString)
+        XCTAssertEqual(event.payload.path, "/tmp/a b.md")
+        XCTAssertEqual(event.payload.selector, "*.md")
+        XCTAssertEqual(event.payload.pane, "right")
+        XCTAssertNil(event.payload.host)
+    }
+
+    func testAnOpenRuleOnACopyFromAnotherHostNamesThatHostOnItsEvent() throws {
+        let fix = try failureFixture(HudRecorder())
+        let pane = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), command: "/bin/cat")
+        pane.session = fix.session
+        fix.session.surface = pane
+
+        XCTAssertNil(fix.runner.runOpener(openerRule(":"), path: "/tmp/copy/notes.md", surface: pane, host: "buildbox"))
+
+        let event = try XCTUnwrap(openerEvents().last)
+        XCTAssertEqual(event.payload.path, "/tmp/copy/notes.md")
+        XCTAssertEqual(event.payload.host, "buildbox")
+    }
+
+    func testAScratchClickRunsWithTheScratchContext() throws {
+        let fix = try failureFixture(HudRecorder())
+        let scratch = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), command: "/bin/cat")
+        scratch.focusSession = fix.session
+        fix.session.scratchSurface = scratch
+        let out = stateDir.appendingPathComponent("opener-scratch-\(UUID().uuidString).txt")
+
+        XCTAssertNil(fix.runner.runOpener(openerRule(#"printf '%s' "$AGT_PANE" > "# + out.path), path: "/tmp/a.md",
+                                          surface: scratch))
+        wait { ((try? String(contentsOf: out, encoding: .utf8)) ?? "") == "scratch" }
+
+        XCTAssertEqual(try String(contentsOf: out, encoding: .utf8), "scratch")
+    }
+
+    func testAMissingRendererReportsThroughTheCommandFailurePath() throws {
+        let recorder = HudRecorder()
+        let fix = try failureFixture(recorder)
+        let pane = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), command: "/bin/cat")
+        pane.session = fix.session
+        fix.session.surface = pane
+
+        XCTAssertNil(fix.runner.runOpener(openerRule("/nonexistent/agterm-renderer \"$AGT_PATH\"", errorHud: true),
+                                          path: "/tmp/a.md", surface: pane))
+        wait { !recorder.posts.isEmpty }
+
+        XCTAssertEqual(recorder.posts.map(\.message), ["*.md: exit 127"])
+        XCTAssertEqual(recorder.posts.first?.session, fix.session.id.uuidString)
+    }
+
+    func testARuleForAClickedPaneNoSessionHoldsRunsNothing() throws {
+        let fix = try failureFixture(HudRecorder())
+        let quick = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), command: "/bin/cat")
+        let out = stateDir.appendingPathComponent("opener-none-\(UUID().uuidString).txt")
+
+        XCTAssertEqual(fix.runner.runOpener(openerRule(": > " + out.path), path: "/tmp/a.md", surface: quick),
+                       "the clicked pane is gone")
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: out.path))
+        XCTAssertTrue(openerEvents().isEmpty)
+    }
+
+    // a closed split's view keeps its weak session pointer, which once launched it with the primary's context
+    func testAClickFromAClosedSplitStillRetainedRunsNothing() throws {
+        let fix = try failureFixture(HudRecorder())
+        let primary = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), command: "/bin/cat")
+        let closed = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), command: "/bin/cat")
+        primary.session = fix.session
+        closed.session = fix.session
+        fix.session.surface = primary
+        let out = stateDir.appendingPathComponent("opener-closed-\(UUID().uuidString).txt")
+
+        XCTAssertEqual(fix.runner.runOpener(openerRule(": > " + out.path), path: "/tmp/a.md", surface: closed),
+                       "the clicked pane is gone")
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: out.path))
+        XCTAssertTrue(openerEvents().isEmpty)
+    }
+
     func testAFailedCommandPostsThePanelWithItsLastStderrLine() throws {
         let recorder = HudRecorder()
         let fix = try failureFixture(recorder)

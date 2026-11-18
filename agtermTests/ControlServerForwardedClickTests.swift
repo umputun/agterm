@@ -25,6 +25,12 @@ final class ControlServerForwardedClickTests: XCTestCase {
         var refusals: [RemoteLinkRefusal] {
             bodies.compactMap { if case .linkRefused(let refusal) = $0 { refusal.reason } else { nil } }
         }
+        var answers: [PresentationLinkRefusal] {
+            bodies.compactMap { if case .linkRefused(let refusal) = $0 { refusal } else { nil } }
+        }
+        var snapshots: [PresentationLinkSnapshot] {
+            bodies.compactMap { if case .linkSnapshot(let snapshot) = $0 { snapshot } else { nil } }
+        }
     }
 
     override func setUp() async throws {
@@ -327,13 +333,86 @@ final class ControlServerForwardedClickTests: XCTestCase {
 
     private var subscriber: PresentationHub.SubscriberID?
 
-    private func present(_ session: Session, liveText: Bool = false) throws -> Presenter {
+    func testAClickASelectorTakesIsOfferedItsFileOnceInsteadOfAPage() async throws {
+        let (_, session) = try addSession()
+        let presenter = try present(session, snapshots: true)
+        _ = try write("notes.md", "# notes\n")
+        let id = UUID()
+
+        clickForSnapshot("./notes.md", in: session, click: id, openers: ["*.md"])
+        try await waitUntil { !presenter.snapshots.isEmpty }
+
+        let snapshot = try XCTUnwrap(presenter.snapshots.first)
+        XCTAssertEqual(snapshot.click, id)
+        XCTAssertEqual(snapshot.name, "notes.md")
+        XCTAssertEqual(snapshot.size, 8)
+        XCTAssertTrue(presenter.requests.isEmpty)
+        XCTAssertNil(session.htmlOverlay)
+        XCTAssertTrue(server.claimPageServe(snapshot.token).ok)
+        XCTAssertFalse(server.claimPageServe(snapshot.token).ok)
+    }
+
+    func testAnOfferNobodyClaimsExpiresOnTheServersClock() async throws {
+        let (_, session) = try addSession()
+        let presenter = try present(session, snapshots: true)
+        _ = try write("notes.md", "# notes\n")
+        let start = Date()
+        server.hudClock = { start }
+
+        clickForSnapshot("./notes.md", in: session, click: UUID(), openers: ["*.md"])
+        try await waitUntil { !presenter.snapshots.isEmpty }
+        server.hudClock = { start.addingTimeInterval(AppStore.pageClaimWindow + 1) }
+
+        XCTAssertFalse(server.claimPageServe(try XCTUnwrap(presenter.snapshots.first).token).ok)
+    }
+
+    func testAClickNoSelectorTakesOrFromAViewerWithoutSnapshotsOpensThePage() async throws {
+        let (_, session) = try addSession()
+        _ = try write("notes.md", "# notes\n")
+        let older = try present(session)
+        clickForSnapshot("./notes.md", in: session, click: UUID(), openers: ["*.md"])
+        try await waitUntil { older.requests.count == 1 }
+        XCTAssertTrue(older.snapshots.isEmpty)
+
+        let (_, other) = try addSession()
+        let presenter = try present(other, snapshots: true)
+        clickForSnapshot("./notes.md", in: other, click: UUID(), openers: ["*.go"])
+        try await waitUntil { presenter.requests.count == 1 }
+        XCTAssertTrue(presenter.snapshots.isEmpty)
+    }
+
+    func testASnapshotOnlyClickIsRefusedAsHiddenWhenNothingMatchesAndEveryRefusalNamesItsClick() async throws {
+        let (_, session) = try addSession()
+        let presenter = try present(session, snapshots: true)
+        _ = try write("notes.md", "# notes\n")
+        let (unmatched, missing) = (UUID(), UUID())
+
+        clickForSnapshot("./notes.md", in: session, click: unmatched, openers: ["*.go"], only: true)
+        try await waitUntil { presenter.answers.count == 1 }
+        clickForSnapshot("./gone.md", in: session, click: missing, openers: ["*.md"], only: true)
+        try await waitUntil { presenter.answers.count == 2 }
+
+        XCTAssertEqual(presenter.answers, [PresentationLinkRefusal(reason: .hidden, click: unmatched),
+                                           PresentationLinkRefusal(reason: .notFound, click: missing)])
+        XCTAssertTrue(presenter.requests.isEmpty)
+        XCTAssertNil(session.htmlOverlay)
+    }
+
+    private func clickForSnapshot(_ raw: String, in session: Session, click: UUID, openers: [String], only: Bool? = nil) {
+        session.currentCwd = stateDir.path
+        let holder = server.presentationHub.presenter(of: session.id) ?? -1
+        server.receiveForwardedClick(PresentationLinkClick(raw: raw, pane: session.paneIdentity, mode: .overlay, click: click,
+                                                           openers: openers, snapshotOnly: only),
+                                     forSession: session.id, from: holder)
+    }
+
+    private func present(_ session: Session, liveText: Bool = false, snapshots: Bool = false) throws -> Presenter {
         for pane in [session.paneIdentity] + [session.splitPaneIdentity].compactMap({ $0 }) { lead(.follower, pane: pane) }
         server.attachPresentationHub()
         let sink = Presenter()
         let kinds = PresentationHub.pageKinds + [PresentationHub.pageContentKind, PresentationHub.pageDocumentKind,
                                                  PresentationHub.linkClickKind, PresentationHub.pageLinksKind]
-            + (liveText ? [PresentationHub.pageTextKind] : [])
+            + (liveText ? [PresentationHub.pageTextKind] : []) + (snapshots ? [PresentationHub.linkSnapshotKind] : [])
         let id = try server.presentationHub.subscribe(
             session: session.id, hello: PresentationHello(version: 1, kinds: kinds, mode: .presenter), sink: sink
         ) { PresentationSnapshot(status: nil, hud: nil) }

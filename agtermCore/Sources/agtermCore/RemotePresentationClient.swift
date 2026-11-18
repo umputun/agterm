@@ -48,6 +48,11 @@ public struct RemotePresentationEffects {
     public var respawns: @MainActor (PresentationRespawns, Bool) -> Void
     /// linkRefused reports the origin refused a click this Mac forwarded.
     public var linkRefused: @MainActor (RemoteLinkRefusal) -> Void
+    /// linkClickRefused names the forwarded click a refusal answers, when that click carried an id; `linkRefused` still
+    /// reports the refusal itself.
+    public var linkClickRefused: @MainActor (UUID) -> Void
+    /// linkSnapshot reports the origin offering a forwarded click's file for an `open` rule here.
+    public var linkSnapshot: @MainActor (PresentationLinkSnapshot) -> Void
     /// message reports mail queued on the origin for one of the session's panes, to every viewer alike.
     public var message: @MainActor (PresentationMessage) -> Void
     /// mail replaces the origin's unacked counts per origin pane; nil from a snapshot of an origin that sends none.
@@ -85,6 +90,8 @@ public struct RemotePresentationEffects {
                 pageCommand: @escaping @MainActor (PresentationPageCommand) -> Void = { _ in },
                 respawns: @escaping @MainActor (PresentationRespawns, Bool) -> Void = { _, _ in },
                 linkRefused: @escaping @MainActor (RemoteLinkRefusal) -> Void = { _ in },
+                linkClickRefused: @escaping @MainActor (UUID) -> Void = { _ in },
+                linkSnapshot: @escaping @MainActor (PresentationLinkSnapshot) -> Void = { _ in },
                 message: @escaping @MainActor (PresentationMessage) -> Void = { _ in },
                 mail: @escaping @MainActor (PresentationMail?) -> Void = { _ in },
                 companions: @escaping @MainActor (PresentationCompanions?) -> Void = { _ in },
@@ -114,6 +121,8 @@ public struct RemotePresentationEffects {
         self.pageCommand = pageCommand
         self.respawns = respawns
         self.linkRefused = linkRefused
+        self.linkClickRefused = linkClickRefused
+        self.linkSnapshot = linkSnapshot
         self.message = message
         self.mail = mail
         self.companions = companions
@@ -338,7 +347,10 @@ public final class RemotePresentationClient {
         case .pageClose(let change): effects.pageClose(change)
         case .pageCommand(let command): effects.pageCommand(command)
         case .respawn(let respawns): effects.respawns(respawns, false)
-        case .linkRefused(let refusal): effects.linkRefused(refusal.reason)
+        case .linkRefused(let refusal):
+            refusal.click.map(effects.linkClickRefused)
+            effects.linkRefused(refusal.reason)
+        case .linkSnapshot(let snapshot): effects.linkSnapshot(snapshot)
         case .ended: finish()
         case .pendingChunk(let chunk): pendingBatch.add(chunk)
         case .pendingCommit:

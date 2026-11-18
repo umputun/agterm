@@ -140,8 +140,9 @@ final class GhosttyCallbacks: @unchecked Sendable {
             let openURL = action.action.open_url
             guard let view = surfaceView(from: target), let ptr = openURL.url else { return true }
             let link = String(decoding: UnsafeRawBufferPointer(start: ptr, count: Int(openURL.len)), as: UTF8.self)
-            let intent = view.releaseIntent.withLock { $0 }
-            DispatchQueue.main.async { view.openLink(link, intent: intent) }
+            let released = view.releaseIntent.withLock { $0 }
+            let source = LinkPolicy.ClickSource(openURL.kind, released: released != nil)
+            DispatchQueue.main.async { view.openLink(link, intent: released ?? .normal, source: source) }
             return true
         case GHOSTTY_ACTION_MOUSE_OVER_LINK:
             // libghostty applies `link-previews` before sending, and an empty url clears. Length-delimited
@@ -483,5 +484,17 @@ extension NSPasteboard.PasteboardType {
             return
         }
         self.init(utType.identifier)
+    }
+}
+
+extension LinkPolicy.ClickSource {
+    /// init names what produced an open-url action. At the pinned libghostty a clicked detected link is `UNKNOWN` and
+    /// an OSC 8 hyperlink `OSC8`; `TEXT` and `HTML` come from `write_screen_file:open`, which no click produces.
+    init(_ kind: ghostty_action_open_url_kind_e, released: Bool) {
+        switch kind {
+        case GHOSTTY_ACTION_OPEN_URL_KIND_UNKNOWN where released: self = .detected
+        case GHOSTTY_ACTION_OPEN_URL_KIND_OSC8: self = .osc8
+        default: self = .other
+        }
     }
 }

@@ -1434,4 +1434,73 @@ struct KeymapTests {
         #expect(loaded.diagnostics[0].line == 0)
         #expect(loaded.diagnostics[0].message.contains("could not read keymap.conf"))
     }
+
+    @Test(arguments: [
+        ("open *.md view", OpenerSelector.extension("md")), ("open *.MD view", .extension("md")),
+        ("open Makefile view", .basename("Makefile")), ("open .env view", .basename(".env")),
+    ])
+    func openLineParsesItsSelector(line: String, selector: OpenerSelector) throws {
+        let (keymap, diagnostics) = parseKeymap(line)
+        #expect(diagnostics.isEmpty)
+        #expect(try #require(keymap.openers.first).selectors == [selector])
+    }
+
+    @Test(arguments: [
+        ("open", "open needs selectors and a shell line"),
+        ("open *.md", "open '*.md' has no shell line"),
+        ("open *.tar.gz view", "open selector '*.tar.gz' is neither *.ext nor a file name; line skipped"),
+        ("open md* view", "open selector 'md*' is neither *.ext nor a file name; line skipped"),
+        ("open docs/a.md view", "open selector 'docs/a.md' is neither *.ext nor a file name; line skipped"),
+        ("open *.md, view", "open '*.md,' has an empty selector; line skipped"),
+        ("open *.md --repeat view", "open '*.md' takes no --repeat; line skipped"),
+        ("open *.md cmd+e view", "open '*.md' takes no shortcut; line skipped"),
+        ("open *.md --error-hud cmd+e view", "open '*.md' takes no shortcut; line skipped"),
+        ("open *.md --error-pane left view", "open '*.md' requires --error-hud for error placement options"),
+        ("open *.md --error-bogus view", "open '*.md' has unknown option '--error-bogus'"),
+        ("open *.md view {AGT_SESSION_PWD}",
+         "open '*.md' shell text is run as written, so {AGT_...} is not expanded; use \"$AGT_PATH\" and $AGT_*; line skipped"),
+    ])
+    func badOpenLineIsDiagnosedAndSkipped(line: String, message: String) {
+        let (keymap, diagnostics) = parseKeymap(line)
+        #expect(keymap.openers.isEmpty)
+        #expect(diagnostics == [KeymapDiagnostic(line: 1, message: message)])
+    }
+
+    @Test(arguments: [#"open *.md view "${AGT_PATH}""#, "open *.md view ${AGT_PANE} $AGT_PATH"])
+    func aShellExpansionOfAnAgtVariableIsKept(line: String) throws {
+        let (keymap, diagnostics) = parseKeymap(line)
+        #expect(diagnostics.isEmpty)
+        #expect(try #require(keymap.openers.first).command.command == String(line.dropFirst("open *.md ".count)))
+    }
+
+    @Test func aLaterOpenLineTakesARepeatedSelectorAndTheEarlierLineIsDiagnosed() throws {
+        let (keymap, diagnostics) = parseKeymap("open *.md,*.txt first\nopen *.md second\nopen *.txt third\n")
+        #expect(keymap.openers.map(\.line) == [2, 3])
+        #expect(try #require(keymap.opener(forFile: "a.md")).command.command == "second")
+        #expect(try #require(keymap.opener(forFile: "a.txt")).command.command == "third")
+        #expect(diagnostics == [
+            KeymapDiagnostic(line: 1, message: "open selector '*.md' is taken by line 2; selector dropped"),
+            KeymapDiagnostic(line: 1, message: "open selector '*.txt' is taken by line 3; selector dropped"),
+        ])
+    }
+
+    @Test func openerMatchesABasenameBeforeAnExtension() throws {
+        let (keymap, _) = parseKeymap("open README.md exact\nopen *.md byext\n")
+        #expect(try #require(keymap.opener(forFile: "README.md")).command.command == "exact")
+        #expect(try #require(keymap.opener(forFile: "readme.md")).command.command == "byext")
+        #expect(try #require(keymap.opener(forFile: "NOTES.MD")).command.command == "byext")
+        #expect(keymap.opener(forFile: "Makefile") == nil)
+        #expect(keymap.opener(forFile: "a.txt") == nil)
+    }
+
+    @Test func openLineCarriesFailureOptionsAndKeepsItsShellTextVerbatim() throws {
+        let (keymap, diagnostics) = parseKeymap(#"open *.md --error-hud --error-position top-right view "$AGT_PATH" # note"#)
+        #expect(diagnostics.isEmpty)
+        let opener = try #require(keymap.openers.first)
+        #expect(opener.command.name == "*.md")
+        #expect(opener.command.command == #"view "$AGT_PATH""#)
+        #expect(opener.command.errorHud)
+        #expect(opener.command.errorPosition == .topRight)
+        #expect(keymap.commands.isEmpty)
+    }
 }

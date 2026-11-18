@@ -124,6 +124,12 @@ final class ControlServer {
     /// remoteLinkRefusalHuds are the slot generations of the refusal panels a forwarded click opened, which a mirrored
     /// HUD may replace; `ControlServer+RemoteLinkClick` owns them.
     var remoteLinkRefusalHuds: [UUID: Int] = [:]
+    /// remoteOpeners are the `open` rules this Mac runs on files another host offers, by the stream each click was
+    /// made on (`remoteConnectionIDs`); `ControlServer+RemoteOpener` owns them.
+    lazy var remoteOpeners = RemoteOpeners()
+    var remoteConnectionIDs: [UUID: UUID] = [:]
+    /// snapshotBook holds the files this Mac offered for viewers' `open` rules.
+    lazy var snapshotBook = SnapshotOfferBook(clock: { [unowned self] in hudClock() })
     /// pageLauncher and forwardLauncher start a page's channel helper and port forward; injectable so a hosted test needs no ssh.
     var pageLauncher: RemotePageLauncher = RemotePageProcess()
     /// catalogPageClaims are the remote page rows a claim runs for; `ControlServer+CatalogPage` owns them.
@@ -401,6 +407,7 @@ final class ControlServer {
         shutdownPresentationStreams()
         shutdownCatalogStreams()
         pageAttachments.shutdown()
+        snapshotBook.shutdown()
         stopRemoteCatalogs()
         stopRemotePresentations()
         guard let loop = listener else { return }

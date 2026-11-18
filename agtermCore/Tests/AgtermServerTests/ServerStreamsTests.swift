@@ -765,9 +765,9 @@ struct ServerStreamsTests {
     @Test(arguments: [false, true])
     func closingWorkWhoseViewerStallsEndsItAndOffersItToNobody(page: Bool) async throws {
         let session = try newSession()
-        let (sink, job) = try stallingLeader(of: session, page: page)
         let holder = try await presenter(for: session)
         defer { holder.disconnect() }
+        let (sink, job) = try stallingLeader(of: session, page: page)
 
         sink.stalls = true
         #expect(harness.actions.closeSessionOverlay(session.id.uuidString, window: nil, pane: nil).ok)
@@ -779,16 +779,38 @@ struct ServerStreamsTests {
 
     @Test func aPageWithdrawnFromAStallingViewerIsOwnedByTheViewerItIsOfferedTo() async throws {
         let session = try newSession()
-        let (sink, job) = try stallingLeader(of: session, page: true)
         let holder = try await presenter(for: session)
         defer { holder.disconnect() }
+        let (sink, job) = try stallingLeader(of: session, page: true)
+        try #require(session.remoteOverlays.slot(nil)?.owner != nil)
 
         sink.stalls = true
         harness.store.withdrawRemotePage(try #require(UUID(uuidString: job)))
 
         let offered = await offPool { holder.first { if case .pageRequest = $0 { true } else { false } } }
-        #expect(offered != nil)
+        #expect(offered != nil, "\(holder.missed ?? "no miss recorded")")
         #expect(await eventually { session.remoteOverlays.slot(nil)?.owner == holder.gen })
+    }
+
+    @Test func anUnclaimedPagesDeadlineFollowsTheServersClock() async throws {
+        let path = harness.scratch.root + "/page.md"
+        try Data("# hi".utf8).write(to: URL(fileURLWithPath: path))
+        let (older, newer) = (try newSession(), try newSession())
+        let (first, second) = (try await presenter(for: older), try await presenter(for: newer))
+        defer { first.disconnect(); second.disconnect() }
+        let start = Date().addingTimeInterval(-3600)
+        streams.now = { start }
+        #expect(openOverlay(on: older, page: .markdown(path: path)).ok)
+        streams.now = { start.addingTimeInterval(AppStore.pageClaimWindow / 2) }
+        #expect(openOverlay(on: newer, page: .markdown(path: path)).ok)
+        try #require(older.remoteOverlays.slot(nil)?.owner == first.gen)
+        try #require(newer.remoteOverlays.slot(nil)?.owner == second.gen)
+        streams.now = { start.addingTimeInterval(AppStore.pageClaimWindow + 1) }
+
+        streams.schedulePageClaimExpiry(after: 0)
+
+        #expect(await eventually { older.remoteOverlays.slot(nil) == nil })
+        #expect(newer.remoteOverlays.slot(nil)?.page != nil)
     }
 
     @Test func aProgramOverlayLaunchesWithTheServersIdentityAndTerminfo() async throws {

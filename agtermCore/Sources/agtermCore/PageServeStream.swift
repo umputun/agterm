@@ -43,6 +43,9 @@ public protocol PageServeHost: AnyObject, SendableMetatype {
     func finishPageMove(_ move: PageMove)
     /// pageCandidateFailed drops the offer `token` names, false when it names none.
     func pageCandidateFailed(_ page: UUID, token: String) -> Bool
+    /// snapshotOffers are the files this host offered for viewers' `open` rules, claimed through the same command;
+    /// nil for a host that offers none.
+    var snapshotOffers: SnapshotOfferBook? { get }
 }
 
 /// PendingPageClaim is a page channel claim answered ok, waiting for its connection.
@@ -69,6 +72,7 @@ extension PageServeHost {
     public func finishPageMove(_ move: PageMove) {}
     public func pageCandidateFailed(_ page: UUID, token: String) -> Bool { false }
     public func reofferLostPage(_ page: UUID) -> Bool { false }
+    public var snapshotOffers: SnapshotOfferBook? { nil }
 }
 
 /// PageServeAdmission counts one kind of request a page channel has taken in and not finished. It never
@@ -452,6 +456,7 @@ extension PageServeHost {
     /// connection is then adopted as that page's channel.
     public func claimPageStream(_ token: String) -> ControlResponse {
         if let attachment = claimPageAttachment(token) { return attachment }
+        if let snapshot = snapshotOffers?.claim(token) { return ControlResponse(ok: true, result: ControlResult(id: snapshot.uuidString)) }
         guard let claim = claimRemotePage(token: token) else { return ControlResponse(ok: false, error: "page not claimable") }
         pendingPageClaims[token] = PendingPageClaim(page: claim.page, served: claim.served)
         return ControlResponse(ok: true, result: ControlResult(id: claim.page.uuidString))
@@ -461,6 +466,7 @@ extension PageServeHost {
     /// the page was re-offered past gets no channel.
     public func adoptPageServeStream(descriptor: Int32, page: UUID, token: String) {
         if adoptPageAttachment(descriptor: descriptor, claim: page) { return }
+        if snapshotOffers?.adopt(descriptor: descriptor, claim: page) == true { return }
         let claim = pendingPageClaims.removeValue(forKey: token)
         let candidate = claim?.page == page && isPageCandidateClaim(page, token: token)
         let live = candidate || (claim?.page == page && remotePagePlace(page) != nil && isCurrentPageClaim(page, token: token))
@@ -484,6 +490,7 @@ extension PageServeHost {
     public func pageClaimUnanswered(_ page: UUID, token: String) {
         // an attachment that never connected leaves the page and its other viewers alone
         if dropPageAttachmentClaim(page) { return }
+        if snapshotOffers?.drop(claim: page) == true { return }
         pendingPageClaims[token] = nil
         if pageCandidateFailed(page, token: token) { return }
         guard isCurrentPageClaim(page, token: token) else { return }

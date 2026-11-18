@@ -45,6 +45,18 @@ final class GhosttyCallbacksTests: XCTestCase {
         XCTAssertEqual(GhosttyCallbacks.clipboardText(for: GHOSTTY_CLIPBOARD_PRIMARY), "system clipboard")
     }
 
+    func testOnlyAReleasedUnknownKindIsADetectedLinkClick() {
+        let cases: [(ghostty_action_open_url_kind_e, Bool, LinkPolicy.ClickSource)] = [
+            (GHOSTTY_ACTION_OPEN_URL_KIND_UNKNOWN, true, .detected), (GHOSTTY_ACTION_OPEN_URL_KIND_UNKNOWN, false, .other),
+            (GHOSTTY_ACTION_OPEN_URL_KIND_OSC8, true, .osc8), (GHOSTTY_ACTION_OPEN_URL_KIND_OSC8, false, .osc8),
+            (GHOSTTY_ACTION_OPEN_URL_KIND_TEXT, true, .other), (GHOSTTY_ACTION_OPEN_URL_KIND_HTML, true, .other),
+            (ghostty_action_open_url_kind_e(rawValue: 99), true, .other),
+        ]
+        for (kind, released, want) in cases {
+            XCTAssertEqual(LinkPolicy.ClickSource(kind, released: released), want, "kind \(kind.rawValue) released \(released)")
+        }
+    }
+
     func testSelectionPasteboardIsNamedForThisBundle() {
         XCTAssertNotEqual(selection.name, NSPasteboard.general.name)
         XCTAssertEqual(selection.name.rawValue, (Bundle.main.bundleIdentifier ?? "") + ".selection")
