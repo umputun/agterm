@@ -196,6 +196,128 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         XCTAssertEqual(refused.revealed, [url])
     }
 
+    private final class OpenerRuns {
+        var runs: [(FileOpener, URL, GhosttySurfaceView)] = []
+    }
+
+    private func recordOpeners(regular: Bool? = true) -> OpenerRuns {
+        let runs = OpenerRuns()
+        let (keymap, _) = parseKeymap(#"open *.md,*.png,*.go,*.html mdview "$AGT_PATH""#)
+        LinkOpener.shared.opener = { keymap.opener(forFile: $0) }
+        if let regular { LinkOpener.shared.isRegularFile = { _ in regular } }
+        LinkOpener.shared.runOpener = { runs.runs.append(($0, $1, $2)) }
+        return runs
+    }
+
+    private func spin(until done: () -> Bool) {
+        let deadline = Date(timeIntervalSinceNow: 5)
+        while !done(), Date() < deadline { RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01)) }
+    }
+
+    func testAPlainClickOnADetectedPreviewFileRunsTheMatchingRuleInsteadOfThePage() {
+        let session = Session(initialCwd: NSTemporaryDirectory())
+        let pane = bareSurface()
+        pane.session = session
+        let followed = recordLinks(mode: .overlay, overlayOpens: true)
+        let runs = recordOpeners()
+
+        pane.openLink("/tmp/notes.md", intent: .normal, source: .detected)
+        spin { !runs.runs.isEmpty }
+
+        XCTAssertEqual(runs.runs.map(\.1), [URL(fileURLWithPath: "/tmp/notes.md", isDirectory: false)])
+        XCTAssertTrue(runs.runs.first?.2 === pane)
+        XCTAssertEqual(runs.runs.first?.0.command.name, "*.md,*.png,*.go,*.html")
+        XCTAssertTrue(followed.markdowns.isEmpty)
+    }
+
+    func testAFileThatIsNotRegularOpensTheBuiltInPageAndRunsNothing() {
+        let session = Session(initialCwd: NSTemporaryDirectory())
+        let pane = bareSurface()
+        pane.session = session
+        let followed = recordLinks(mode: .overlay, overlayOpens: true)
+        let runs = recordOpeners(regular: false)
+
+        pane.openLink("/tmp/notes.md", intent: .normal, source: .detected)
+        spin { !followed.markdowns.isEmpty }
+
+        XCTAssertEqual(followed.markdowns.map(\.0), [URL(fileURLWithPath: "/tmp/notes.md", isDirectory: false)])
+        XCTAssertTrue(runs.runs.isEmpty)
+    }
+
+    func testARealDirectoryOrFifoNamedLikeARuleFileOpensTheBuiltInPage() throws {
+        let folder = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("opener-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let directory = folder.appendingPathComponent("dir.md", isDirectory: false)
+        let fifo = folder.appendingPathComponent("pipe.md", isDirectory: false)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        XCTAssertEqual(mkfifo(fifo.path, 0o600), 0)
+        let session = Session(initialCwd: NSTemporaryDirectory())
+        let pane = bareSurface()
+        pane.session = session
+        let followed = recordLinks(mode: .overlay, overlayOpens: true)
+        let runs = recordOpeners(regular: nil)
+
+        pane.openLink(directory.path, intent: .normal, source: .detected)
+        pane.openLink(fifo.path, intent: .normal, source: .detected)
+        spin { followed.markdowns.count == 2 }
+
+        XCTAssertEqual(Set(followed.markdowns.map(\.0.path)), [directory.path, fifo.path])
+        XCTAssertTrue(runs.runs.isEmpty)
+    }
+
+    func testAnOSC8OrChordedClickNeverRunsARule() {
+        let session = Session(initialCwd: NSTemporaryDirectory())
+        let pane = bareSurface()
+        pane.session = session
+        let followed = recordLinks(mode: .overlay, overlayOpens: true)
+        let runs = recordOpeners()
+        let file = URL(fileURLWithPath: "/tmp/notes.md", isDirectory: false)
+
+        pane.openLink("/tmp/notes.md", intent: .normal, source: .osc8)
+        pane.openLink("/tmp/notes.md", intent: .normal, source: .other)
+        pane.openLink("/tmp/notes.md", intent: .reveal, source: .detected)
+        pane.openLink("/tmp/notes.md", intent: .browser, source: .detected)
+        spin { followed.markdowns.count == 3 && followed.revealed.count == 1 }
+
+        XCTAssertEqual(followed.markdowns.map(\.0), [file, file, file])
+        XCTAssertEqual(followed.revealed, [file])
+        XCTAssertTrue(runs.runs.isEmpty)
+    }
+
+    func testAQuickTerminalOrHudClickOnAMatchingFileRevealsItAndRunsNothing() {
+        let quick = bareSurface()
+        let hud = bareSurface()
+        hud.focusSession = Session(initialCwd: NSTemporaryDirectory())
+        hud.hudBodyFile = "/tmp/agterm-test-hud-body-missing"
+        defer { hud.hudBodyFile = nil }
+        let followed = recordLinks(mode: .overlay, overlayOpens: true)
+        let runs = recordOpeners()
+        let file = URL(fileURLWithPath: "/tmp/notes.md", isDirectory: false)
+
+        quick.openLink("/tmp/notes.md", intent: .normal, source: .detected)
+        hud.openLink("/tmp/notes.md", intent: .normal, source: .detected)
+        spin { followed.revealed.count == 2 }
+
+        XCTAssertEqual(followed.revealed, [file, file])
+        XCTAssertTrue(runs.runs.isEmpty)
+        XCTAssertTrue(followed.markdowns.isEmpty)
+    }
+
+    func testAFileNoRuleTakesKeepsItsBuiltInPage() {
+        let session = Session(initialCwd: NSTemporaryDirectory())
+        let pane = bareSurface()
+        pane.session = session
+        let followed = recordLinks(mode: .overlay, overlayOpens: true)
+        let runs = recordOpeners()
+
+        pane.openLink("/tmp/notes.txt", intent: .normal, source: .detected)
+        spin { !followed.texts.isEmpty }
+
+        XCTAssertEqual(followed.texts.map(\.url), [URL(fileURLWithPath: "/tmp/notes.txt", isDirectory: false)])
+        XCTAssertTrue(runs.runs.isEmpty)
+    }
+
     func testAPaneMarkdownPathRendersAtItsModeSizeAndRevealsWhenItCannot() {
         let session = Session(initialCwd: NSTemporaryDirectory())
         let pane = bareSurface()
@@ -634,6 +756,36 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         fixture.wait { !chord.opened.isEmpty }
         XCTAssertEqual(chord.opened, [url], fixture.geometry)
         XCTAssertTrue(chord.overlaid.isEmpty)
+    }
+
+    // pins libghostty's click kinds: a GHOSTTY_REV that relabels a detected link or an OSC 8 one fails here.
+    func testARealCommandClickOnADetectedPathRunsTheRuleAndAnOSC8LinkDoesNot() throws {
+        let name = "agterm-opener-pin-\(UUID().uuidString.prefix(8)).md"
+        let temp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(name)
+        let absolute = URL(fileURLWithPath: "/tmp").appendingPathComponent(name)
+        for file in [temp, absolute] { XCTAssertTrue(FileManager.default.createFile(atPath: file.path, contents: Data("x".utf8))) }
+        defer { for file in [temp, absolute] { try? FileManager.default.removeItem(at: file) } }
+        for text in [absolute.path, "file://\(absolute.path)", "example ./\(name)"] {
+            let fixture = try LinkClickFixture(printing: text)
+            defer { fixture.close() }
+            let followed = recordLinks(mode: .overlay, overlayOpens: true)
+            let runs = recordOpeners()
+            LinkOpener.shared.exists = { FileManager.default.fileExists(atPath: $0) }
+            fixture.move(flags: .command)
+            fixture.click(flags: .command)
+            fixture.wait { !runs.runs.isEmpty || !followed.markdowns.isEmpty }
+            XCTAssertEqual(runs.runs.count, 1, "\(text): \(fixture.geometry)")
+            XCTAssertTrue(followed.markdowns.isEmpty, text)
+        }
+        let fixture = try LinkClickFixture(printing: #"\033]8;;file://"# + absolute.path + #"\033\\example osc8 link\033]8;;\033\\"#)
+        defer { fixture.close() }
+        let followed = recordLinks(mode: .overlay, overlayOpens: true)
+        let runs = recordOpeners()
+        fixture.move(flags: .command)
+        fixture.click(flags: .command)
+        fixture.wait { !followed.markdowns.isEmpty }
+        XCTAssertEqual(followed.markdowns.map(\.0.path), [absolute.path], fixture.geometry)
+        XCTAssertTrue(runs.runs.isEmpty)
     }
 
     func testCommandShiftClickOnAnOSC8LinkOpensItsTargetInTheBrowser() throws {

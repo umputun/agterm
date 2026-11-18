@@ -116,6 +116,10 @@ enum EventFormatter {
         case .message:
             return "\(time) \(event.kind.rawValue) \(name) pane-id=\(event.payload.paneID ?? "-")"
                 + " from=\(event.payload.from ?? "-") id=\(event.payload.messageID ?? "-")"
+        case .openerRun:
+            return "\(time) \(event.kind.rawValue) \(name) \(event.payload.pane ?? "-")"
+                + " selector=\(event.payload.selector ?? "-") path=\(event.payload.path ?? "-")"
+                + (event.payload.host.map { " host=\($0)" } ?? "")
         }
     }
 }

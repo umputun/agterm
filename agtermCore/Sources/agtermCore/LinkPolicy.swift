@@ -386,6 +386,17 @@ public enum LinkPolicy {
         case detected, osc8, other
     }
 
+    /// openerFile is the file a user `open` rule may take for a click: a detected link clicked with the plain chord
+    /// whose route opens a built-in page. nil leaves the click to its route.
+    public static func openerFile(for route: Route, source: ClickSource, intent: ClickIntent) -> URL? {
+        guard source == .detected, intent == .normal else { return nil }
+        switch route {
+        case .image(let url, _), .markdown(let url, _, _), .document(let url, _, _): return url
+        case .text(let link): return link.url
+        case .browser, .overlay, .reveal, .forwardRemote, .selectSession, .ignore: return nil
+        }
+    }
+
     /// clickIntent reads a link click's chord. ⌘⇧ asks for the browser over an overlay setting, except under
     /// mouse capture, where ⌘⇧ is the only link click and so follows the setting. ⌘⌥ reveals a local path in
     /// Finder from any origin; under capture, where Shift is the bypass, ⌘⌥⇧ does.

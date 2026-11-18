@@ -79,8 +79,8 @@
   selector for the same file; a selector repeated on a later line wins, and the earlier line is diagnosed, as
   `map` is last-wins.
 - **Which clicks**: only a detected link clicked during a real mouse release (`ClickSource.detected`: ghostty's
-  `UNKNOWN` kind while `releaseIntent` holds a value). Task 1 measured a plain path, a plain `file://` and a relative
-  name as `UNKNOWN` and OSC 8 as `OSC8`; at the pin `TEXT`/`HTML` come only from `write_screen_file:open`, never a
+  `UNKNOWN` kind while `releaseIntent` holds a value). Task 1 measured a plain path, a plain `file://` and a `./` relative
+  path as `UNKNOWN` and OSC 8 as `OSC8`; at the pin `TEXT`/`HTML` come only from `write_screen_file:open`, never a
   click. `osc8`, `other` (TEXT, HTML, an unknown future kind, `UNKNOWN` outside a release) keep the built-in route;
   Eugene approved this gate in place of the planned `TEXT` one. Reveal (⌘⌥) and browser (⌘⇧) intents are decided first and
   never run a rule. Rules apply exactly where a click opens a built-in preview today: a pane, a split, a scratch
@@ -173,7 +173,8 @@
 - Modify tests: `agtermTests/GhosttySurfaceViewInputTests.swift`
 
 - [x] measure the kinds real clicks carry (temporary probe in the callback, removed): printed `/tmp/x.md`,
-      `file:///tmp/x.md` and a relative name arrive as `UNKNOWN` (0), the relative one already absolute; an OSC 8
+      `file:///tmp/x.md` and `./x.md` arrive as `UNKNOWN` (0), the relative one already absolute (a bare
+      name with no `/` is not detected as a link at all); an OSC 8
       link to `file:///tmp/x.md` as `OSC8` (3). Ghostty `src/Surface.zig` at the pin: `processLinks` sends
       `.unknown` for a detected link and `.osc8` for a hyperlink; `TEXT`/`HTML` only from `write_screen_file:open`.
       Brought to Eugene; he approved the released-`UNKNOWN` gate
@@ -219,24 +220,24 @@
   `agtermctlKitTests/EventCommandsTests.swift`, `agtermTests/CustomCommandRunnerTests.swift`,
   `agtermTests/GhosttySurfaceViewInputTests.swift`
 
-- [ ] failing host-free tests for `openerFile`: `.detected` source with each preview route returns the file;
+- [x] host-free tests (⚠️ written after the code) for `openerFile`: `.detected` source with each preview route returns the file;
       `osc8`, `other`, reveal and browser intents, `.reveal` and web routes return nil; event round trip and
       human formatting
-- [ ] failing hosted tests: env and cwd the process sees (a script writing them to a temp file), a click on an
+- [x] failing hosted tests: env and cwd the process sees (a script writing them to a temp file), a click on an
       unfocused split names that split's pane values, a scratch click gets the scratch context, a quick-terminal
       click on a matching file reveals it and launches nothing, a `{AGT_SESSION_NAME}` in the shell text stays literal, a missing renderer (exit 127) posts the
       notification and with `--error-hud` the panel and opens nothing, no launch for a directory or FIFO, an
       OSC 8 link to a matching file opens the built-in page
-- [ ] real-click pinning tests on `LinkClickFixture` (moved from Task 1, they need a rule's effect to observe the
-      source): a ⌘-click on a printed absolute path, a printed relative name and a printed `file://` link runs the
+- [x] real-click pinning tests on `LinkClickFixture` (moved from Task 1, they need a rule's effect to observe the
+      source): a ⌘-click on a printed absolute path, a printed `./` relative path and a printed `file://` link runs the
       matching rule, an OSC 8 link to the same file opens the built-in page; they stay in the suite so a
       `GHOSTTY_REV` bump that relabels either kind fails them
-- [ ] `LinkOpener` captures the clicked pane before the async lookup; in `carryOut`, before the preview arms,
+- [x] `LinkOpener` captures the clicked pane before the async lookup; in `carryOut`, before the preview arms,
       `openerFile` plus a matching rule from `SettingsModel.keymap`, the regular-file check off the main actor,
       then the runner
-- [ ] runner entry `runOpener(_:path:pane:)` sharing the process setup, PATH widening and failure reporting with
+- [x] runner entry `runOpener(_:path:pane:)` sharing the process setup, PATH widening and failure reporting with
       `spawn`, running the shell text verbatim with context as environment only, cwd `$HOME`; emit `opener.run`
-- [ ] run the touched suites
+- [x] run the touched suites
 
 ### Task 4: snapshot wire format, book, staging and server origin (host-free)
 

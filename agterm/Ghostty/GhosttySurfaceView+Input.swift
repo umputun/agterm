@@ -656,7 +656,7 @@ extension GhosttySurfaceView: @preconcurrency NSTextInputClient {
     /// `LinkPolicy`'s decision.
     func openLink(_ raw: String, intent: LinkPolicy.ClickIntent, source: LinkPolicy.ClickSource) {
         LinkOpener.shared.follow(raw, from: linkClickOrigin, pane: linkClickPane, cwd: linkClickCwd, intent: intent,
-                                 source: source, remote: linkClickRemoteSession)
+                                 source: source, remote: linkClickRemoteSession, surface: self)
     }
 
     /// applyLinkHover shows the link under a ⌘-held pointer, naming the session a session link would select.

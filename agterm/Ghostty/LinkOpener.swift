@@ -38,14 +38,25 @@ struct LinkOpener {
     /// loopback reaches a loopback URL on row `UUID`'s host through a forward from this Mac and reports the local URL
     /// once the forward answers, nil when it cannot; a row that goes away first gets no report.
     var loopback: (ForwardedPage, UUID, @escaping @MainActor (URL?) -> Void) -> Void = { _, _, done in done(nil) }
+    /// opener names the user `open` rule for a clicked file's basename, nil when none takes it.
+    var opener: (String) -> FileOpener? = { _ in nil }
+    /// isRegularFile says, off the main actor, whether a path is a regular file a rule may receive.
+    var isRegularFile: @Sendable (String) -> Bool = {
+        if case .success = BoundedFile.check(path: $0, maxBytes: .max) { return true }
+        return false
+    }
+    /// runOpener launches a rule on a clicked file with the clicked pane's context.
+    var runOpener: (FileOpener, URL, GhosttySurfaceView) -> Void = { _, _, _ in }
 
     private struct Click {
         let origin: LinkPolicy.ClickOrigin
         let pane: UUID?
         let mode: LinkOpenMode
         let reveals: Bool
+        let intent: LinkPolicy.ClickIntent
         let source: LinkPolicy.ClickSource
         let remote: UUID?
+        weak var surface: GhosttySurfaceView?
     }
 
     /// follow carries out a clicked link; `cwd` is the clicking pane's directory, for a relative link, and `pane` its
@@ -53,11 +64,12 @@ struct LinkOpener {
     /// whose loopback a web link then names. A link that only the filesystem can resolve is looked up
     /// off the main actor, the first existing candidate winning, and one with no candidate on disk keeps the route it
     /// has as typed. A reveal intent selects the file a local route names in Finder after that guarded routing, and
-    /// leaves a web link to its web route.
+    /// leaves a web link to its web route. `surface` is the clicked pane, held weakly, whose context a user `open`
+    /// rule runs with.
     func follow(_ raw: String, from origin: LinkPolicy.ClickOrigin, pane: UUID?, cwd: String?, intent: LinkPolicy.ClickIntent,
-                source: LinkPolicy.ClickSource, remote: UUID? = nil) {
+                source: LinkPolicy.ClickSource, remote: UUID? = nil, surface: GhosttySurfaceView? = nil) {
         let click = Click(origin: origin, pane: pane, mode: intent == .browser ? LinkOpenMode.browser : mode(),
-                          reveals: intent == .reveal, source: source, remote: remote)
+                          reveals: intent == .reveal, intent: intent, source: source, remote: remote, surface: surface)
         let candidates = LinkPolicy.locations(for: raw, origin: origin, cwd: cwd)
         guard !candidates.isEmpty else { return carryOut(LinkPolicy.route(for: raw, mode: click.mode, origin: origin), click) }
         let exists = exists
@@ -70,6 +82,18 @@ struct LinkOpener {
     }
 
     private func carryOut(_ route: LinkPolicy.Route, _ click: Click) {
+        guard click.surface != nil, let file = LinkPolicy.openerFile(for: route, source: click.source, intent: click.intent),
+              let rule = opener(file.lastPathComponent) else { return preview(route, click) }
+        let isRegularFile = isRegularFile
+        Task { @MainActor in
+            let regular = await Task.detached(priority: .userInitiated) { isRegularFile(file.path) }.value
+            guard regular else { return preview(route, click) }
+            guard let surface = click.surface else { return }
+            runOpener(rule, file, surface)
+        }
+    }
+
+    private func preview(_ route: LinkPolicy.Route, _ click: Click) {
         if click.reveals, let file = route.localFile { return reveal(file) }
         switch route {
         case .selectSession(let id):

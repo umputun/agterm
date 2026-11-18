@@ -516,17 +516,65 @@ final class CustomCommandRunner {
                               socket: socketProvider())
     }
 
-    /// Spawn the expanded command as a detached `/bin/sh -c`, exporting `$AGT_*` over the app environment and
-    /// running in `cwd` (nil for a sessionless launch, which inherits the app's). `PATH` is widened first
-    /// (`CommandPath`): the app's own is launchd's, and `sh -c` runs no profile, so a bare `agtermctl` would
-    /// exit 127. Only commands opting into failure panels capture stderr; a clean exit reports nothing.
+    /// Spawn the command with its `{AGT_X}` tokens expanded and `$AGT_*` exported, in `cwd` (nil for a sessionless
+    /// launch), recording the run once it started.
     @discardableResult
     private func spawn(_ command: CustomCommand, context: CommandContext, cwd: String?) -> String? {
-        let line = context.expand(command.command)
+        let refusal = launch(command, line: context.expand(command.command), environment: context.environment(),
+                             cwd: cwd, sessionID: context.sessionID)
+        if refusal == nil { usage.record(command) }
+        return refusal
+    }
+
+    /// runOpener runs an `open` rule on the file a ⌘-click named, with the clicked pane's context. The shell text
+    /// runs as written: the context, terminal-derived values included, reaches it only as `$AGT_*` environment,
+    /// with `$AGT_PATH` the file, and it starts in HOME. Returns why it did not start, nil once it has.
+    @discardableResult
+    func runOpener(_ opener: FileOpener, path: String, surface: GhosttySurfaceView) -> String? {
+        guard let (session, store, pane) = clickedPane(surface) else {
+            logger.notice("open rule \"\(opener.command.name, privacy: .public)\": the clicked pane is gone; nothing run")
+            return "the clicked pane is gone"
+        }
+        let context = self.context(for: session, in: store, selectionSurface: nil, pane: pane)
+        var environment = context.environment()
+        environment["AGT_PATH"] = path
+        let refusal = launch(opener.command, line: opener.command.command, environment: environment,
+                             cwd: NSHomeDirectory(), sessionID: context.sessionID)
+        if refusal == nil {
+            store.emitOpenerRun(session: session, pane: pane.rawValue, path: path,
+                                selector: opener.command.name)
+        }
+        return refusal
+    }
+
+    /// clickedPane resolves a clicked surface to its session, owning store and pane, nil for a surface no open
+    /// session holds now (the quick terminal, a closed split).
+    private func clickedPane(_ surface: GhosttySurfaceView) -> (Session, AppStore, CommandContext.Pane)? {
+        // a closed split keeps its weak session pointer while the view lives, so only slot membership names a pane
+        if let session = surface.session, let store = store(owning: session) {
+            if (session.surface as? GhosttySurfaceView) === surface { return (session, store, .left) }
+            if (session.splitSurface as? GhosttySurfaceView) === surface { return (session, store, .right) }
+            return nil
+        }
+        for windowID in library.openIDs() {
+            guard let store = library.store(for: windowID) else { continue }
+            for session in store.workspaces.flatMap(\.sessions) {
+                if let pane = sessionlessPane(of: surface, in: session) { return (session, store, pane) }
+            }
+        }
+        return nil
+    }
+
+    /// launch starts `line` as a detached `/bin/sh -c` with `extra` exported over the app environment, in `cwd`
+    /// (nil inherits the app's). `PATH` is widened first (`CommandPath`): the app's own is launchd's, and `sh -c`
+    /// runs no profile, so a bare `agtermctl` would exit 127. Only commands opting into failure panels capture
+    /// stderr; a clean exit reports nothing, a failure reports through the notification and the panel.
+    private func launch(_ command: CustomCommand, line: String, environment extra: [String: String], cwd: String?,
+                        sessionID: String) -> String? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/sh")
         process.arguments = ["-c", line]
-        var environment = ProcessInfo.processInfo.environment.merging(context.environment()) { _, new in new }
+        var environment = ProcessInfo.processInfo.environment.merging(extra) { _, new in new }
         environment["PATH"] = CommandPath.widened(environment["PATH"],
                                                   bundledCLIDirectory: CLIInstaller.bundledTool?
                                                       .deletingLastPathComponent().path)
@@ -543,7 +591,6 @@ final class CustomCommandRunner {
             process.currentDirectoryURL = URL(fileURLWithPath: cwd, isDirectory: true)
         }
         let name = command.name
-        let sessionID = context.sessionID
         process.terminationHandler = { proc in
             let status = proc.terminationStatus
             // read and remove the file whatever the status, or a successful command leaks one per run.
@@ -558,7 +605,6 @@ final class CustomCommandRunner {
         }
         do {
             try process.run()
-            usage.record(command)
             return nil
         } catch {
             _ = capture?.consume()

@@ -695,4 +695,31 @@ struct LinkPolicyTests {
 
         #expect(link.opensAsLog == expected)
     }
+
+    @Test func openerFileTakesOnlyAPlainClickOnADetectedLinkToAPreviewRoute() {
+        let file = URL(fileURLWithPath: "/tmp/a.md", isDirectory: false)
+        let session = UUID()
+        let previews: [LinkPolicy.Route] = [
+            .image(file, session: session), .markdown(file, session: session, sizePercent: nil),
+            .document(file, session: session, sizePercent: 95),
+            .text(LinkPolicy.TextLink(url: file, line: 3, session: session, sizePercent: nil)),
+        ]
+        for route in previews {
+            #expect(LinkPolicy.openerFile(for: route, source: .detected, intent: .normal) == file)
+            for source in [LinkPolicy.ClickSource.osc8, .other] {
+                #expect(LinkPolicy.openerFile(for: route, source: source, intent: .normal) == nil)
+            }
+            for intent in [LinkPolicy.ClickIntent.browser, .reveal] {
+                #expect(LinkPolicy.openerFile(for: route, source: .detected, intent: intent) == nil)
+            }
+        }
+        let others: [LinkPolicy.Route] = [
+            .reveal(file), .browser(URL(string: "https://example.com")!),
+            .overlay(URL(string: "https://example.com")!, session: session, sizePercent: nil),
+            .forwardRemote("/tmp/a.md", session: session), .selectSession(session), .ignore,
+        ]
+        for route in others {
+            #expect(LinkPolicy.openerFile(for: route, source: .detected, intent: .normal) == nil)
+        }
+    }
 }

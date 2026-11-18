@@ -264,6 +264,14 @@ struct EventCommandsTests {
         ]
         let human = events.map { EventFormatter.human($0, timeZone: TimeZone(secondsFromGMT: 0)!) }
         #expect(human[0] == "00:00:00 status api blocked pane=right blink")
+        let opener = ControlEvent(seq: 98, ts: 0, kind: .openerRun,
+                                  payload: ControlEventPayload(name: "api", pane: "right", path: "/tmp/a.md", selector: "*.md"))
+        #expect(EventFormatter.human(opener, timeZone: TimeZone(secondsFromGMT: 0)!)
+            == "00:00:00 opener.run api right selector=*.md path=/tmp/a.md")
+        let remote = ControlEvent(seq: 97, ts: 0, kind: .openerRun,
+                                  payload: ControlEventPayload(name: "api", pane: "left", host: "buildbox", path: "/s/a.md", selector: "*.md"))
+        #expect(EventFormatter.human(remote, timeZone: TimeZone(secondsFromGMT: 0)!)
+            == "00:00:00 opener.run api left selector=*.md path=/s/a.md host=buildbox")
         #expect(human[1] == "00:00:00 notify api Done: ok")
         #expect(human[2] == "00:00:00 session.created new")
         #expect(EventFormatter.human(ControlEvent(seq: 99, ts: 0, kind: .sessionCreated,
