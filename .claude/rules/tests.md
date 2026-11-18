@@ -28,7 +28,8 @@ A newly understood flake gets its entry there, and a rule here only when it show
   `Task` gets `.high`, or its reply queues behind every test body started before it.
   `LIBDISPATCH_COOPERATIVE_POOL_STRICT=1` shrinks the pool to one thread, so a test that parks a pool thread hangs.
 - A test holding a pty master reads it on every poll while it waits. `zmx attach` exits through
-  `tcsetattr(TCSAFLUSH)`, which on macOS blocks until the master drains, so an unread pty keeps the child alive.
+  `tcsetattr(TCSAFLUSH)`, which on macOS blocks until the master drains, so an unread pty keeps the child alive:
+  after a detach with no bound, after its session ends until zmx patch 0007's close deadline, 2 s from the hangup.
 - A test stub writes sockets through `UnixSocket.write` and never replies to a request cut off before its
   newline. A raw `write` to a closed peer raises SIGPIPE, which can kill the whole Linux test process; the
   writer behind the one recorded SIGPIPE was never identified, and the stubs were the unguarded writes.

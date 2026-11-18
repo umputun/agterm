@@ -49,6 +49,19 @@ longer apply, and re-running `check.py`.
   Init, the daemon answers such queries itself, but upstream also forwards them to an attach it accepted
   and has not yet heard Init from, whose terminal answers again; the program reads the spare reply as the
   answer to its next query. The daemon now drops each query it answered from that output.
+- `0007-drain-output-on-exit.patch` keeps a session's last output when its shell exits. Upstream's attach
+  client returned at the daemon's hangup, dropping output it had read but not written and output still
+  queued behind the hangup, and the daemon made at most one more write per client at the PTY's EOF before
+  shutdown freed the rest. A hangup with the session's socket still in place, a detach or a daemon that
+  died, returns as before. After any other the client reads the socket to EOF and writes stdout until both
+  are done, reading the socket only while stdout keeps up, under one 2 s deadline; on a terminal it stops
+  200 ms short of it, so the reset still fits under it. On macOS TCSAFLUSH, and the exit's close of the
+  tty, wait for a terminal that may never read, so output it has not taken by then is flushed and termios
+  is restored without TCSAFLUSH; a reset it has not taken by the deadline is flushed too, leaving the
+  terminal in the session's modes. The attach a session switch returns through shares the deadline. On a
+  shell exit the daemon goes on sending what its clients have not read, until none is left or one 2 s
+  deadline shared by all of them passes, and takes no new attach, input or command meanwhile. A kill ends
+  the daemon at once; its clients write only what they already hold, under their deadline.
 - `ghostty/0001-formatter-unstyled-blanks.patch` fixes the snapshot a re-attach replays. The formatter
   wrote cells a program skipped with a cursor move as spaces under the previous cell's style, so a gap
   after a colored run came back painted; a skipped cell now closes the style first. Spaces the program
