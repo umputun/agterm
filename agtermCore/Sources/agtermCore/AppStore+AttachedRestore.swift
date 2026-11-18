@@ -60,7 +60,8 @@ extension AppStore {
         session.followedCompanions = Set(saved.followedCompanions ?? [])
         session.companionsBaselined = saved.companionsBaselined == true
         guard !page else {
-            // a Mac's page row has no stream, so its row says it waits for the page until the origin hands it over
+            // a Mac's page row has no full stream (a root only observes membership), so its row says it waits for the
+            // page until the origin hands it over
             session.remotePresentation?.connection = .connecting
             return session
         }

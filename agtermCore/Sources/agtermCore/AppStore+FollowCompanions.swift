@@ -40,13 +40,16 @@ extension AppStore {
         save()
     }
 
-    /// markFollowed records origin ids row `id` has handled, whether or not it has taken its first list yet.
+    /// markFollowed records origin ids row `id` has handled, whether or not it has taken its first list yet, and while an
+    /// undoable close holds it.
     public func markFollowed(_ ids: [String], forSession id: UUID) {
-        guard let session = session(withID: id) else { return }
+        let visible = session(withID: id)
+        guard let session = visible ?? pendingCloseSession(withID: id) else { return }
         let marks = ids.map(Self.originID)
         guard !session.followedCompanions.isSuperset(of: marks) else { return }
         session.followedCompanions.formUnion(marks)
-        save()
+        // a save now would drop a parked row from disk before its close is final; undo saves it with the mark
+        if visible != nil { save() }
     }
 
     /// setFollowsCompanions records whether row `id` holds its origin's companion list, for the `tree` read-back.

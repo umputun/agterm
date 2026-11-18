@@ -34,7 +34,7 @@ extension WindowLibrary {
         allOpenSessions().filter { $0.remoteHost == host && $0.remotePresentation?.binding.origin?.endpoint == endpoint }
     }
 
-    private static func originID(_ id: String) -> String { UUID(uuidString: id)?.uuidString ?? id }
+    static func originID(_ id: String) -> String { UUID(uuidString: id)?.uuidString ?? id }
 }
 
 /// SessionLinkTarget is the open window and live row a clicked session link selects.

@@ -108,9 +108,7 @@ extension ControlServer {
 
     /// markFollowedEverywhere records `ids` as handled in every row here showing origin session `parent`.
     func markFollowedEverywhere(_ ids: [String], parent: String, host: String, endpoint: ControlZmxEndpoint) {
-        for row in library.rowsShowingOrigin(parent, host: host, endpoint: endpoint) {
-            library.store(forSession: row.id)?.markFollowed(ids, forSession: row.id)
-        }
+        library.markOriginCompanionsHandled(ids, parent: parent, host: host, endpoint: endpoint)
     }
 
     /// tickCompanionFollow runs the passes whose transport retries fell due, for rows whose stream is up and follows.

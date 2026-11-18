@@ -2227,7 +2227,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `scheduleCompanionsFlush` one main-queue turn after a tree change, so soft close, undo and reorder need no hook at
   their mutation sites; the hub sends each viewer only a list that differs from its last. The viewer keeps the
   handled origin ids on the row (`Session.followedCompanions`, persisted, baselined from the attach-time `zmx tree`),
-  and marks an id handled in every local row bound to the same origin session whenever any path attaches it. A list
+  and marks an id handled in every copy bound to the same origin session whenever any path attaches it
+  (`WindowLibrary.markOriginCompanionsHandled`): open rows, rows a pending close holds, and rows saved in closed
+  windows, while each copy keeps its own baseline. A list
   attaches each unhandled id under that row, one pass per row in membership order, unless this Mac already shows it
   anywhere, which only marks it. Outcomes are final (a policy refusal), retried on `RemoteRetryBackoff` while the
   stream is up (no answer, a failed ssh exit), or parked until the next list (not attachable now). Any report

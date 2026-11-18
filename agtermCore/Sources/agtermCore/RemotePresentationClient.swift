@@ -56,7 +56,8 @@ public struct RemotePresentationEffects {
     public var companions: @MainActor (PresentationCompanions?) -> Void
     /// leads is the set of the origin's panes this Mac leads, read whenever the client checks for a change.
     public var leads: @MainActor () -> Set<UUID>
-    /// ended reports the origin removed the session for good; the client has stopped and never reconnects.
+    /// ended reports the origin removed the session for good, or, for an observer, that the origin's hello left out the
+    /// companions kind; either way the client has stopped and never reconnects.
     public var ended: @MainActor () -> Void
     /// acked reports the origin's answer to `RemotePresentationClient.ping`.
     public var acked: @MainActor () -> Void

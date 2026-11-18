@@ -88,6 +88,46 @@ final class ControlServerFollowCompanionsTests: XCTestCase {
         XCTAssertTrue(copy.followedCompanions.isSuperset(of: [child, other]))
     }
 
+    func testACopyBackFromUndoDoesNotAttachACompanionClosedUnderAnotherCopyMeanwhile() async throws {
+        let runner = RoutedRunner { _ in Origin.tree(sessions: Origin.session(child, parent: "origin-1")) }
+        let (server, store, transport) = makeServer(runner)
+        let row = try parentRow(in: store)
+        let copy = try parentRow(in: store)
+        XCTAssertTrue(store.softCloseSession(row.id))
+        try open(copy, server: server, transport: transport).send(.companions(list([child])))
+        _ = store.closeSession(try await companion(of: copy, in: store).id)
+        XCTAssertTrue(store.undoPendingClose())
+        XCTAssertTrue(row.followedCompanions.contains(child))
+
+        try open(row, server: server, transport: transport).send(.companions(list([child])))
+        await settled(server, rows: [row])
+
+        XCTAssertTrue(store.companions(of: row.id).isEmpty)
+        XCTAssertTrue(row.followedCompanions.contains(child))
+    }
+
+    func testACopyWhoseStreamWasDownStillFollowsAChildAnotherCopyOnlyBaselined() async throws {
+        let runner = RoutedRunner { _ in Origin.tree(sessions: Origin.session("origin-1", companions: [child]) + "," + Origin.session(child, parent: "origin-1")) }
+        let (server, store, transport) = makeServer(runner)
+        let row = try parentRow(in: store)
+        _ = try open(row, server: server, transport: transport)
+        try XCTUnwrap(transport.closes.last)("connection lost")
+
+        let plain = await server.attachRemoteSession(host: "buildbox", session: "origin-1", window: nil)
+        let copy = try XCTUnwrap(plain.result?.id.flatMap(UUID.init(uuidString:)).flatMap(store.session(withID:)))
+        XCTAssertEqual(copy.followedCompanions, [child])
+        let client = try XCTUnwrap(server.remoteClients[row.id])
+        client.retryNow()
+        client.tick()
+        let line = try XCTUnwrap(transport.lines.last)
+        line(try frame(.hello(PresentationHello(version: 1, kinds: [PresentationHub.companionsKind], mode: .mirror)), rev: 0))
+        line(try frame(.snapshot(PresentationSnapshot(status: nil, hud: nil, companions: list([child]))), rev: 1))
+
+        let followed = try await companion(of: row, in: store)
+        XCTAssertEqual(followed.remoteSessionID, child)
+        XCTAssertTrue(store.companions(of: copy.id).isEmpty)
+    }
+
     func testTwoCopiesGetOneRowInTotalForATerminalAndForTwoPageOffersInFlight() async throws {
         for kind in [PresentationCompanions.Member.Kind.terminal, .page] {
             let runner = RoutedRunner { argv in
@@ -220,7 +260,8 @@ final class ControlServerFollowCompanionsTests: XCTestCase {
 
     func testTheUsersOwnNewCompanionIsPlacedOnceAndNoCopyAttachesIt() async throws {
         let created = Flag()
-        let runner = RoutedRunner { argv in
+        let gate = Gate()
+        let runner = RoutedRunner(gate: gate, gatedCall: 2) { argv in
             let line = argv.joined(separator: " ")
             if line.contains("--parent") {
                 created.value = true
@@ -233,10 +274,17 @@ final class ControlServerFollowCompanionsTests: XCTestCase {
         let copy = try parentRow(in: store)
         let streams = try [open(row, server: server, transport: transport), open(copy, server: server, transport: transport)]
 
-        let reply = await server.createCompanion(row.id.uuidString, options: CompanionOptions(select: true, tint: SidebarTint(color: .red)),
-                                                 window: nil)
-        XCTAssertTrue(reply.ok, reply.error ?? "")
+        let creating = Task {
+            await server.createCompanion(row.id.uuidString, options: CompanionOptions(select: true, tint: SidebarTint(color: .red)), window: nil)
+        }
+        try await waitUntil { gate.reached }
         for stream in streams { stream.send(.companions(list([child]))) }
+        await settled(server, rows: [row, copy])
+        XCTAssertTrue(store.companions(of: row.id).isEmpty)
+        XCTAssertTrue(store.companions(of: copy.id).isEmpty)
+        gate.open()
+        let reply = await creating.value
+        XCTAssertTrue(reply.ok, reply.error ?? "")
         await settled(server, rows: [row, copy])
 
         let mine = try XCTUnwrap(store.companions(of: row.id).first)
@@ -314,10 +362,10 @@ final class ControlServerFollowCompanionsTests: XCTestCase {
 
     func testAServerWindowsRowIgnoresTheMembership() async throws {
         let runner = RoutedRunner { _ in Origin.tree(sessions: Origin.session(child, parent: "origin-1")) }
-        let (server, store, _) = makeServer(runner)
+        let (server, store, transport) = makeServer(runner)
         let row = try parentRow(in: store, catalogOwned: true)
 
-        server.applyOriginCompanions(list([child]), forSession: row.id)
+        try open(row, server: server, transport: transport).send(.companions(list([child])))
         await settled(server, rows: [row])
 
         XCTAssertTrue(runner.invocations.isEmpty)
@@ -699,10 +747,12 @@ private final class RoutedRunner: RemoteCommandRunner, @unchecked Sendable {
     private let lock = NSLock()
     private var recorded: [[String]] = []
     private let gate: Gate?
+    private let gatedCall: Int
     private let answer: @Sendable ([String]) -> RemoteCommandResult
 
-    init(gate: Gate? = nil, _ answer: @escaping @Sendable ([String]) -> RemoteCommandResult) {
+    init(gate: Gate? = nil, gatedCall: Int = 1, _ answer: @escaping @Sendable ([String]) -> RemoteCommandResult) {
         self.gate = gate
+        self.gatedCall = gatedCall
         self.answer = answer
     }
 
@@ -715,7 +765,7 @@ private final class RoutedRunner: RemoteCommandRunner, @unchecked Sendable {
             return recorded.count
         }
         let reply = answer(argv)
-        if count == 1 { await gate?.pass() }
+        if count == gatedCall { await gate?.pass() }
         return reply
     }
 }
