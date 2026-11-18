@@ -324,7 +324,7 @@ session drag are out of scope.
 - Finder open composes `session.new --cwd` with frontmost placement, so it is keep-in-sync exempt.
 - A cold launch by URL (`GURL`) or document (`odoc`) closes the launch window inside that event, before
   `applicationDidFinishLaunching`, after it adopted the saved frontmost id; SwiftUI shows the others.
-  `TitleProbeView.isLaunchHandoff` recognises the close (no user or control close runs inside those events;
+  `LaunchHandoff.isHandoff` (agtermCore) recognises the close (no user or control close runs inside those events;
   `NSRunningApplication.isFinishedLaunching` is already true there, hence `AppDelegate.launchFinished`),
   `WindowRegistry.retire` unregisters that NSWindow and records `launchHandoffID`, every close effect is skipped, and
   one main-queue hop reopens the id with the same store and surfaces. A retired window posts a second `willClose` and

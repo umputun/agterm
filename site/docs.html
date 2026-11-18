@@ -567,7 +567,7 @@ agtermctl session overlay open --html report.html --page</code></pre>
 <h3 id="workspaces-finder">Opening sessions from Finder</h3>
 <ul>
 <li>Drag up to 20 folders from Finder onto the tree to open sessions there. A drop on a row lands in that row's workspace; a drop on empty sidebar space uses the current workspace, or the focused one when the workspace filter narrows the tree to exactly one. Folded workspaces spring open while you hover and close again if you cancel.</li>
-<li><code>open -a agterm &lt;path&gt;</code>, or Open With ▸ agterm on a folder in Finder, adds a session in that directory to the last-active window, starting agterm first when it is not running. To place the session precisely, use <code>agtermctl session new --cwd &lt;path&gt;</code>.</li>
+<li><code>open -a agterm &lt;path&gt;</code>, or Open With ▸ agterm on a folder in Finder, adds a session in that directory to the last-active window, starting agterm first when it is not running. A remote window shows only its server's sessions, so it refuses the folder, with a notification when banners are on. To place the session precisely, use <code>agtermctl session new --cwd &lt;path&gt;</code>.</li>
 <li>Folder-picking panels (<strong>Open Directory…</strong> and the Settings directory choosers) open in the focused pane's directory, or in the directory already configured where there is one, else in your home directory.</li>
 </ul>
 <h3 id="workspaces-narrow">Narrowing the sidebar</h3>

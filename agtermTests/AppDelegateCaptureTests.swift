@@ -528,6 +528,26 @@ final class AppDelegateCaptureTests: XCTestCase {
         XCTAssertNotNil(remoteStore.remoteActions)
     }
 
+    func testLinkReplacingAColdLinkWaitsForEveryWindowThenOnlyItSelects() throws {
+        let fixture = try LinkFixture()
+        defer { fixture.tearDown() }
+        let workspace = fixture.back.workspaces[0].id
+        let older = try XCTUnwrap(fixture.back.addSession(toWorkspace: workspace, cwd: NSTemporaryDirectory(), select: false))
+        let newer = try XCTUnwrap(fixture.back.addSession(toWorkspace: workspace, cwd: NSTemporaryDirectory(), select: false))
+        WindowRegistry.shared.markPresented(fixture.backID, window: fixture.hostBack)
+
+        fixture.delegate.queueSessionLink(older.id, cold: true)
+        fixture.delegate.queueSessionLink(newer.id, cold: false)
+        XCTAssertNotEqual(fixture.back.selectedSessionID, newer.id)
+        XCTAssertNotEqual(fixture.back.selectedSessionID, older.id)
+        WindowRegistry.shared.markPresented(fixture.frontID, window: fixture.hostFront)
+
+        let deadline = Date(timeIntervalSinceNow: 10)
+        while fixture.back.selectedSessionID != newer.id, Date() < deadline { RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05)) }
+        XCTAssertEqual(fixture.back.selectedSessionID, newer.id)
+        XCTAssertEqual(fixture.library.frontmostWindowID, fixture.backID)
+    }
+
     func testSessionLinkOpenedBeforeItsWindowRegistersSelectsOnceItDoes() throws {
         let fixture = try LinkFixture()
         defer { fixture.tearDown() }

@@ -844,7 +844,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   the existing selected/frontmost tree fields.
   HUD links are deferred because a mirrored HUD carries no origin; their disposition stays ignored.
 - Release registers `agterm` with Launch Services (`AGTERM_URL_SCHEME`); Debug declares `agterm-debug`, which
-  nothing opens, so a DerivedData build never takes the clicks. `AppDelegate.application(_:open:)` runs file URLs
+  nothing opens, so a Debug build never takes the clicks. A Release product under any checkout's DerivedData
+  registers `agterm` too and can be the one macOS picks. `AppDelegate.application(_:open:)` runs file URLs
   first, then keeps the batch's last `LinkPolicy.sessionLink` as one pending link with its own request and 10 s
   monotonic deadline. `AppActions.openSessionLink` accepts a UUID naming exactly one open row in this instance,
   with no translation of origin ids (a catalog row reuses its origin's id, so that one matches).

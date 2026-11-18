@@ -140,7 +140,7 @@ targets:
           PRODUCT_BUNDLE_IDENTIFIER: com.umputun.agterm.debug
           # Debug alone needs the three hardened-runtime exceptions; see the header of the file.
           CODE_SIGN_ENTITLEMENTS: agterm/agterm-debug.entitlements
-          # a scheme nothing opens, so Launch Services never hands agterm:// links to a DerivedData build
+          # a scheme nothing opens, so Launch Services never hands agterm:// links to a Debug build
           AGTERM_URL_SCHEME: agterm-debug
         Release:
           CODE_SIGN_ENTITLEMENTS: agterm/agterm-adhoc.entitlements

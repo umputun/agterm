@@ -267,11 +267,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if !directories.isEmpty { queueOpenDirectories(directories, cold: !Self.launchFinished) }
         // after the directories: their session lands in the active window, which the link may change
         if let id = urls.compactMap({ LinkPolicy.sessionLink($0.absoluteString) }).last {
-            sessionLinkRequest += 1
-            pendingSessionLink = PendingSessionLink(id: id, request: sessionLinkRequest, deadline: .now + .seconds(10),
-                                                    cold: !Self.launchFinished)
-            drainPendingSessionLink(request: sessionLinkRequest)
+            queueSessionLink(id, cold: !Self.launchFinished)
         }
+    }
+
+    /// Makes `id` the pending session link, replacing any earlier one, and drains it. A replacement keeps a
+    /// waiting cold link's wait, since the startup raises it waits for are still to come.
+    func queueSessionLink(_ id: UUID, cold: Bool) {
+        sessionLinkRequest += 1
+        let waits = cold || pendingSessionLink?.cold == true
+        pendingSessionLink = PendingSessionLink(id: id, request: sessionLinkRequest, deadline: .now + .seconds(10), cold: waits)
+        drainPendingSessionLink(request: sessionLinkRequest)
     }
 
     /// Selects the pending session link once its row and window have loaded, retrying every 0.1 s until 10 s
@@ -302,7 +308,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Turn every queued `open -a` directory into a new session in the last-active window, dropping an
-    /// entry only once its session lands (a transient failure keeps it queued). Until the frontmost store
+    /// entry once `openSession` settles it (a transient failure keeps it queued). Until the frontmost store
     /// resolves, retries every 0.1 s, bounded so a folder can't wedge a stuck timer.
     func drainPendingOpenDirectories(retry: Int = 0) {
         guard !pendingOpenDirectories.isEmpty else { return }

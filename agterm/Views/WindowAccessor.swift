@@ -324,22 +324,14 @@ struct WindowAccessor: NSViewRepresentable {
             return constrained.nsRect
         }
 
-        /// isLaunchHandoff says a window close is SwiftUI swapping the launch window: it runs inside the open-URL
-        /// or open-documents event that launched the app, which a user or control close never does.
-        static func isLaunchHandoff(event: NSAppleEventDescriptor?, launchFinished: Bool) -> Bool {
-            guard !launchFinished, let event else { return false }
-            if event.eventClass == AEEventClass(kInternetEventClass) { return event.eventID == AEEventID(kAEGetURL) }
-            return event.eventClass == AEEventClass(kCoreEventClass) && event.eventID == AEEventID(kAEOpenDocuments)
-        }
-
         /// handOffLaunchWindow keeps a window open across a cold launch by URL or document: SwiftUI closes its launch
         /// window inside that open event, before launch finishes, and only the window's host goes away. The same
         /// id reopens with its store and surfaces; the dead host's later closes are ignored.
         private static func handOffLaunchWindow(_ window: NSWindow, windowID: WindowInfo.ID, library: WindowLibrary,
                                                 reopen: @escaping @MainActor (WindowInfo.ID) -> Void) -> Bool {
             if WindowRegistry.shared.isRetired(window) { return true }
-            guard isLaunchHandoff(event: NSAppleEventManager.shared().currentAppleEvent,
-                                  launchFinished: AppDelegate.launchFinished) else { return false }
+            guard LaunchHandoff.isHandoff(event: NSAppleEventManager.shared().currentAppleEvent,
+                                          launchFinished: AppDelegate.launchFinished) else { return false }
             WindowRegistry.shared.retire(windowID, window: window)
             DispatchQueue.main.async {
                 guard library.isOpen(windowID), !library.isTerminating else { return }
