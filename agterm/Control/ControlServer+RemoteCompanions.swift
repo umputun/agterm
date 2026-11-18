@@ -299,14 +299,14 @@ extension ControlServer {
             }
         }
         // the origin's page session, so New Companion on the row has that Mac make one there; the origin's endpoint
-        // is what lets a companion attached later find this row as its parent. Only a headless origin streams to a
-        // page row: another Mac shows that page's asks and picks in its own window.
+        // is what lets a companion attached later find this row as its parent. Only a headless origin's page row takes
+        // the full stream: another Mac shows that page's asks and picks in its own window, so its root observes membership.
         store.bindRemote(RemoteBinding(remoteSessionID: originSession, daemonsByLocalPane: [:],
                                        presentationVersion: presentation.headless ? presentation.version : nil,
                                        origin: binding, originHeadless: presentation.headless),
                          forSession: row.id)
         if let companions = source.companions { store.baselineCompanions(companions, forSession: row.id) }
-        if presentation.headless { startRemotePresentation(for: row) }
+        if presentation.headless || parent == nil { startRemotePresentation(for: row) }
         guard let overlay = row.htmlOverlay, let origin = overlay.replicaOf,
               let serve = try? RemoteSession.pageServeCommand(host: host, token: page.token) else {
             store.closeSession(row.id)

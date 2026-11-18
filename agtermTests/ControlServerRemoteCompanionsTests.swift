@@ -391,6 +391,7 @@ final class ControlServerRemoteCompanionsTests: XCTestCase {
                                    identity: AppIdentity(version: "9.9.9", commit: "testsha"), remoteRunner: runner,
                                    socketPath: stateDir.appendingPathComponent("control-\(UUID().uuidString).sock").path)
         server.remoteCompanionPause = {}
+        server.remoteTransport = StreamTransport()
         if let store, let row { return (server, store, row) }
         let active = try XCTUnwrap(library.activeStore)
         let workspace = try XCTUnwrap(active.currentWorkspaceID)
@@ -427,29 +428,14 @@ final class ControlServerRemoteCompanionsTests: XCTestCase {
     }
 
     @MainActor
-    private final class PresentTransport: RemotePresentationTransport {
-        final class Link: RemotePresentationLink {
-            func send(_: Data) {}
-            func stop() {}
-        }
-
-        var opened: [[String]] = []
-
-        func open(_ argv: [String], onLine _: @escaping @MainActor (Data) -> Void,
-                  onClose _: @escaping @MainActor (String) -> Void) -> RemotePresentationLink {
-            opened.append(argv)
-            return Link()
-        }
-    }
-
-    func testAPageAttachedFromAServerStreamsItsPresentationAndOneFromAMacDoesNot() async throws {
+    func testAPageAttachedFromAServerStreamsItsPresentationAndOneFromAMacFollowsOnlyItsMembership() async throws {
         let root = #"{"id":"page-root","name":"dash","windowID":"w1","windowName":"main","workspaceID":"ws1","#
             + #""workspaceName":"work","cwd":"/srv","panes":[],"content":"page"}"#
         for headless in [true, false] {
             let listing = tree(sessions: root, headless: headless)
             let (server, store, _) = try makeServer(ScriptedRunner([listing, pageAttach("page-root")]))
             server.pageLauncher = FakePageLauncher()
-            let transport = PresentTransport()
+            let transport = StreamTransport()
             server.remoteTransport = transport
 
             let attached = await server.attachRemoteSession(host: "buildbox", session: "page-root", window: nil)
@@ -459,8 +445,9 @@ final class ControlServerRemoteCompanionsTests: XCTestCase {
             let binding = store.session(withID: rowID)?.remotePresentation?.binding
             XCTAssertEqual(binding?.originHeadless, headless)
             XCTAssertEqual(binding?.presentationVersion, headless ? 1 : nil)
-            XCTAssertEqual(server.remoteClients[rowID] != nil, headless, "headless \(headless)")
-            XCTAssertEqual(transport.opened.count, headless ? 1 : 0, "headless \(headless)")
+            XCTAssertEqual(transport.lines.count, 1, "headless \(headless)")
+            XCTAssertEqual(transport.hellos.map(\.kinds), [headless ? PresentationHub.supportedKinds : RemotePresentationClient.observerKinds],
+                           "headless \(headless)")
             server.stopRemotePresentations()
         }
     }

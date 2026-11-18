@@ -46,6 +46,20 @@ struct PresentationHubTests {
         #expect(hub.subscriberCount(session: otherSession) == 1)
     }
 
+    @Test func anObserversHelloIsAgreedAndItIsFinishedWithEnded() throws {
+        let hub = makeHub()
+        let observer = Sink()
+        try hub.subscribe(session: Self.session, hello: PresentationHello(version: 1, kinds: RemotePresentationClient.observerKinds, mode: .mirror),
+                          sink: observer) { Self.empty }
+
+        hub.end(sessions: [Self.session])
+
+        guard case .hello(let answer) = observer.bodies.first else { Issue.record("no hello"); return }
+        #expect(Set(answer.kinds) == Set(RemotePresentationClient.observerKinds))
+        #expect(answer.mode == .mirror)
+        #expect(observer.finished?.body == .ended)
+    }
+
     @Test func endingASessionClosesAViewerThatDoesNotListEnded() throws {
         let hub = makeHub()
         let viewer = Sink()

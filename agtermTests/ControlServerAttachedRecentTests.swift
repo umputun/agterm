@@ -297,6 +297,7 @@ final class ControlServerAttachedRecentTests: XCTestCase {
                                    identity: AppIdentity(version: "9.9.9", commit: "testsha"), remoteRunner: runner,
                                    socketPath: stateDir.appendingPathComponent("control-\(UUID().uuidString).sock").path)
         server.remoteCompanionPause = {}
+        server.remoteTransport = StreamTransport()
         servers.append(server)
         return (server, try XCTUnwrap(library.activeStore))
     }

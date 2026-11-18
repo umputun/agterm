@@ -4,6 +4,7 @@ import agtermCore
 
 private let child = "0E2B7C1A-5D4F-4E3B-9A61-7C2D8F0B1A23"
 private let other = "6C1D2E3F-4A5B-4C6D-8E7F-9A0B1C2D3E4F"
+private let pageRoot = "3B2A1C0D-9E8F-4A7B-8C6D-5E4F3A2B1C0D"
 
 @MainActor
 final class ControlServerFollowCompanionsTests: XCTestCase {
@@ -454,7 +455,87 @@ final class ControlServerFollowCompanionsTests: XCTestCase {
         XCTAssertFalse(row.followedCompanions.contains(child))
     }
 
+    func testAPageRootAttachedFromAMacFollowsItsMembershipThroughAnObserverAndKeepsItsRowState() async throws {
+        let listed = Flag()
+        let runner = RoutedRunner { argv in
+            if Origin.pageAttach(argv) { return Origin.pageReply(parent: nil) }
+            let listedChild = listed.value ? "," + Origin.session(child, parent: pageRoot) : ""
+            return Origin.tree(sessions: Origin.pageRootEntry(companions: []) + listedChild)
+        }
+        let (server, store, transport) = makeServer(runner)
+        server.pageLauncher = FakePageLauncher()
+
+        let attached = await server.attachRemoteSession(host: "buildbox", session: pageRoot, window: nil)
+        XCTAssertTrue(attached.ok, attached.error ?? "")
+        let root = try XCTUnwrap(attached.result?.id.flatMap(UUID.init(uuidString:)).flatMap(store.session(withID:)))
+
+        XCTAssertEqual(transport.hellos.last, PresentationHello(version: PresentationCodec.version, kinds: RemotePresentationClient.observerKinds,
+                                                                mode: .mirror))
+        let line = try XCTUnwrap(transport.lines.last)
+        line(try frame(.hello(PresentationHello(version: 1, kinds: RemotePresentationClient.observerKinds, mode: .mirror)), rev: 0))
+        line(try frame(.snapshot(PresentationSnapshot(status: nil, hud: nil, companions: list([]))), rev: 1))
+        listed.value = true
+        line(try frame(.companions(list([child])), rev: 2))
+        let followed = try await companion(of: root, in: store)
+
+        XCTAssertEqual(followed.remoteSessionID, child)
+        XCTAssertEqual(root.remotePresentation?.connection, .unsupported)
+        XCTAssertNil(root.remoteRowNotice)
+    }
+
+    func testAPageRootObserverRestartsWithTheRowAndAnEndedOrRefusingOriginLeavesTheRowAlone() throws {
+        for kinds in [RemotePresentationClient.observerKinds, [PresentationHub.endedKind]] {
+            let (server, store, transport) = makeServer(RoutedRunner { _ in Origin.tree(sessions: "") })
+            store.onRemoteRowVisibility = { [weak server] session, shown in
+                MainActor.assumeIsolated { server?.remoteRowVisibilityChanged(session, shown: shown) }
+            }
+            let root = try pageRow(in: store)
+            server.startRemotePresentation(for: root)
+            XCTAssertTrue(store.softCloseSession(root.id))
+            XCTAssertNil(server.remoteClients[root.id])
+            XCTAssertTrue(store.undoPendingClose())
+            XCTAssertEqual(transport.hellos.count, 2)
+            XCTAssertEqual(transport.hellos.last?.kinds, RemotePresentationClient.observerKinds)
+
+            let line = try XCTUnwrap(transport.lines.last)
+            line(try frame(.hello(PresentationHello(version: 1, kinds: kinds, mode: .mirror)), rev: 0))
+            if kinds.contains(PresentationHub.companionsKind) {
+                line(try frame(.snapshot(PresentationSnapshot(status: nil, hud: nil, companions: list([child]))), rev: 1))
+                line(try frame(.ended, rev: 2))
+            }
+
+            XCTAssertNil(server.companionFollow.rows[root.id], "\(kinds)")
+            XCTAssertNotNil(store.session(withID: root.id), "\(kinds)")
+            XCTAssertEqual(root.remotePresentation?.connection, .connecting, "\(kinds)")
+            XCTAssertTrue(store.companions(of: root.id).isEmpty, "\(kinds)")
+            server.stopRemotePresentations()
+        }
+    }
+
+    func testACatalogPageRowKeepsTheFullStream() throws {
+        let (server, store, transport) = makeServer(RoutedRunner { _ in Origin.tree(sessions: "") })
+        let row = try pageRow(in: store, catalogOwned: true)
+
+        server.startRemotePresentation(for: row)
+
+        XCTAssertEqual(transport.hellos.last, PresentationHello(version: PresentationCodec.version, kinds: PresentationHub.supportedKinds,
+                                                                mode: .presenter))
+    }
+
     // MARK: - fixtures
+
+    private func pageRow(in store: AppStore, catalogOwned: Bool = false) throws -> Session {
+        let workspace = try XCTUnwrap(store.currentWorkspaceID)
+        let row = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: NSHomeDirectory(), remoteHost: "buildbox",
+                                                 remoteSessionID: pageRoot, content: .page))
+        store.bindRemote(RemoteBinding(remoteSessionID: pageRoot, daemonsByLocalPane: [:], presentationVersion: catalogOwned ? 1 : nil,
+                                       origin: RemoteBinding.Origin(host: "buildbox", endpoint: endpoint, sessionName: "dash"),
+                                       catalogOwned: catalogOwned),
+                         forSession: row.id)
+        store.setRemoteConnection(.connecting, forSession: row.id)
+        store.baselineCompanions([], forSession: row.id)
+        return row
+    }
 
     private func waitUntil(_ condition: () -> Bool) async throws {
         let deadline = Date().addingTimeInterval(10)
@@ -544,8 +625,15 @@ final class ControlServerFollowCompanionsTests: XCTestCase {
 private enum Origin {
     static func pageAttach(_ argv: [String]) -> Bool { argv.joined(separator: " ").contains("page-attach") }
 
-    static func pageReply(parent: String) -> RemoteCommandResult {
-        RemoteCommandResult(status: 0, stdout: #"{"ok":true,"result":{"id":"\#(child)","parent":"\#(parent)","companionPage":{"#
+    static func pageRootEntry(companions: [String]) -> String {
+        let members = companions.map { #"{"id":"\#($0)","name":"c"}"# }.joined(separator: ",")
+        return #"{"id":"\#(pageRoot)","name":"dash","windowID":"w1","windowName":"main","workspaceID":"ws1","workspaceName":"work","#
+            + #""cwd":"/srv","panes":[],"content":"page","companions":[\#(members)]}"#
+    }
+
+    static func pageReply(parent: String?) -> RemoteCommandResult {
+        let parentKey = parent.map { #""parent":"\#($0)","# } ?? ""
+        return RemoteCommandResult(status: 0, stdout: #"{"ok":true,"result":{"id":"\#(child)",\#(parentKey)"companionPage":{"#
             + #""page":"5A1E7C2B-3D4F-4E5A-8B6C-7D8E9F0A1B2C","token":"tok-1","source":{"file":{"path":"/srv/report.html","grantRoot":"/srv"}},"#
             + #""identity":"report.html","chromeless":false,"javascript":true,"navigation":false,"browse":false,"#
             + #""persistent":false,"follow":false}}}"#, stderr: "")
@@ -612,20 +700,26 @@ private final class RoutedRunner: RemoteCommandRunner, @unchecked Sendable {
 }
 
 @MainActor
-private final class StreamTransport: RemotePresentationTransport {
+final class StreamTransport: RemotePresentationTransport {
     final class Link: RemotePresentationLink {
-        func send(_: Data) {}
+        let sent: (Data) -> Void
+        init(sent: @escaping (Data) -> Void) { self.sent = sent }
+        func send(_ line: Data) { sent(line) }
         func stop() {}
     }
 
     var lines: [@MainActor (Data) -> Void] = []
     var closes: [@MainActor (String) -> Void] = []
+    var hellos: [PresentationHello] = []
 
     func open(_: [String], onLine: @escaping @MainActor (Data) -> Void,
               onClose: @escaping @MainActor (String) -> Void) -> RemotePresentationLink {
         lines.append(onLine)
         closes.append(onClose)
-        return Link()
+        return Link { [weak self] line in
+            guard case .hello(let hello)? = (try? PresentationCodec.decode(line.dropLast()))?.body else { return }
+            self?.hellos.append(hello)
+        }
     }
 }
 

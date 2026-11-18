@@ -23,9 +23,13 @@ extension ControlServer {
             return
         }
         let transport = pool.flatMap { pool in path.map { PooledTransport(pool: pool, path: $0, inner: remoteTransport) } }
-        let client = RemotePresentationClient(argv: argv, presentationVersion: binding.presentationVersion,
-                                              transport: transport ?? remoteTransport, effects: remoteEffects(for: id),
-                                              now: hudClock)
+        // a Mac's page root has no stream of its own, so its version is unset; zmx present predates page attachment and
+        // the hello is the capability check
+        let observer = Self.observesMembershipOnly(session, binding: binding)
+        let client = RemotePresentationClient(argv: argv, presentationVersion: observer ? PresentationCodec.version : binding.presentationVersion,
+                                              transport: transport ?? remoteTransport,
+                                              effects: observer ? observerEffects(for: id) : remoteEffects(for: id),
+                                              now: hudClock, observer: observer)
         remoteClients[id] = client
         library.store(forSession: id)?.onOriginFrame = { [weak self] session, body in
             MainActor.assumeIsolated { self?.sendToOrigin(body, forSession: session) ?? false }
@@ -101,6 +105,21 @@ extension ControlServer {
         } else {
             stopRemotePresentation(session.id)
         }
+    }
+
+    /// observesMembershipOnly says `session` is a page root attached from a Mac: the origin shows the page's asks and
+    /// picks itself, so the row follows only its companion membership and keeps its page channel's state.
+    static func observesMembershipOnly(_ session: Session, binding: RemoteBinding) -> Bool {
+        session.content == .page && session.parentID == nil && !binding.originHeadless && !binding.catalogOwned
+    }
+
+    private func observerEffects(for id: UUID) -> RemotePresentationEffects {
+        RemotePresentationEffects(
+            status: { _ in }, snapshotStatus: { _ in }, hud: { _ in }, notify: { _ in },
+            connection: { [weak self] connection in self?.companionStreamChanged(connection, forSession: id) },
+            companions: { [weak self] companions in self?.applyOriginCompanions(companions, forSession: id) },
+            ended: { [weak self] in self?.forgetCompanionFollow(id) },
+            warn: { reason in remoteLogger.info("membership stream for \(id, privacy: .public): \(reason, privacy: .public)") })
     }
 
     private func remoteEffects(for id: UUID) -> RemotePresentationEffects {

@@ -799,6 +799,18 @@ struct AppStoreTreeProjectionTests {
         #expect(store.controlTree().workspaces[0].sessions[0].presenters == ControlPresentersNode(mirrors: 2, viewers: 2))
     }
 
+    @Test func aMembershipObserverCountsAsAMirroringViewer() throws {
+        let store = makeStore()
+        let hub = PresentationHub(staleTimeout: 30)
+        store.presentationHub = hub
+        let session = try #require(store.addSession(toWorkspace: store.addWorkspace(name: "work").id, cwd: "/tmp"))
+
+        try hub.subscribe(session: session.id, hello: PresentationHello(version: 1, kinds: RemotePresentationClient.observerKinds, mode: .mirror),
+                          sink: NullSink()) { store.presentationSnapshot(forSession: session.id) }
+
+        #expect(store.controlTree().workspaces[0].sessions[0].presenters == ControlPresentersNode(mirrors: 1, viewers: 1))
+    }
+
     @Test func anOriginSurfaceIsRemoteExactlyWhenItsNextWorkGoesToAViewer() throws {
         let store = makeStore()
         let hub = PresentationHub(staleTimeout: 30)

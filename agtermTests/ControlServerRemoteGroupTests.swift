@@ -297,6 +297,7 @@ final class ControlServerRemoteGroupTests: XCTestCase {
                                    identity: AppIdentity(version: "9.9.9", commit: "testsha"), remoteRunner: runner,
                                    socketPath: stateDir.appendingPathComponent("control-\(UUID().uuidString).sock").path)
         server.pageLauncher = FakePageLauncher()
+        server.remoteTransport = StreamTransport()
         return (server, library.activeStore!) // swiftlint:disable:this force_unwrapping
     }
 

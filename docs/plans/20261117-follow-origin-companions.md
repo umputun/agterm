@@ -289,18 +289,20 @@
 **Files:**
 - Modify: `agtermCore/Sources/agtermCore/RemotePresentationClient.swift` (observer mode), test
   `RemotePresentationClientTests.swift`
-- Modify: `agterm/Control/ControlServer+FollowCompanions.swift` (start and stop the observer),
-  `ControlServer+RemoteCompanions.swift`, `ControlServer+AttachedRestore.swift`
-- Modify: `agtermTests/ControlServerFollowCompanionsTests.swift`
-- Modify: `agtermCore/Tests/agtermCoreTests/RemotePresentationStateTests.swift` (origin read-back with an observer)
+- Modify: `agterm/Control/ControlServer+RemotePresentation.swift` (start the observer),
+  `ControlServer+RemoteCompanions.swift`
+- Modify: `agtermTests/ControlServerFollowCompanionsTests.swift`, `ControlServerAttachedRestoreTests.swift`,
+  `ControlServerRemoteCompanionsTests.swift`
+- Modify: `agtermCore/Tests/agtermCoreTests/PresentationHubTests.swift`, `AppStoreTreeProjectionTests.swift`
+  (origin read-back with an observer)
 
-- [ ] write failing tests: an observer client advertises only `companions`, never sends `presenterAcquire` on hello
+- [x] write failing tests: an observer client advertises only `companions` and `ended`, never sends `presenterAcquire` on hello
       or vacancy, takes no asks, picks, pages or lead, and closes its stream when the origin's hello does not agree
       the kind; a Mac page root attached directly, refilled at restore and brought back by undo starts the observer
       stream; its page channel stays its lifecycle; an origin without the kind leaves the page row as it is today;
       the origin's `presenters` read-back counts the observer as a viewer
-- [ ] add the observer mode and start it for a non-headless page root; keep headless page roots on their stream
-- [ ] run the targeted tests (`-only-testing:`, `swift test --filter`) - must pass before task 5
+- [x] add the observer mode and start it for a non-headless page root; keep headless page roots on their stream
+- [x] run the targeted tests (`-only-testing:`, `swift test --filter`) - must pass before task 5
 
 ### Task 5: Read-back, skill, docs, and acceptance
 
