@@ -94,6 +94,17 @@ s=$(agtermctl zmx tree studio.local --json |
 [ -n "$s" ] && agtermctl zmx attach studio.local "$s"
 ```
 
+To bring every top-level session of the other Mac over at once, each into a local workspace named like
+its workspace there:
+
+```bash
+agtermctl zmx tree studio.local --json |
+  jq -r '.result.remote.sessions[] | select(.parent == null) | [.id, .workspaceName] | @tsv' |
+  while IFS="$(printf '\t')" read -r id ws; do
+    agtermctl zmx attach studio.local "$id" --companions --workspace-name "$ws" --create-workspace
+  done
+```
+
 The row is marked remote and carries `remoteHost` in the tree. Closing it ends only this side's connection,
 and it does not come back after a relaunch.
 

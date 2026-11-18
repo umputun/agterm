@@ -2541,7 +2541,10 @@ running agterm has no CLI an ssh command can find, and the read fails with exit 
 the destination window's current workspace, selected, with the remote session's split when it has one.
 `--window` takes a local open window ID, unique prefix, or `active`; omitted, it uses the frontmost window
 after discovery. An invalid or closed destination fails without creating a session. Targeting a background
-window leaves the frontmost window unchanged. `SESSION` is the
+window leaves the frontmost window unchanged. `--workspace W` (id, unique prefix or `active`) or
+`--workspace-name NAME` puts the row in that workspace of the window instead of the current one;
+`--create-workspace` with a name creates it when missing and reuses it otherwise, and a missing name without it
+fails before anything is created. A companion that joins its parent's row goes where that row is. `SESSION` is the
 `id` from `zmx tree`, never the name: remote names are editable and repeat across workspaces. Returns the
 new local session's `id`; read `remoteHost` and `remoteSessionID` on its tree node. The remote is resolved AGAIN before anything
 is created, so a session that has gone since the listing fails and creates nothing. A connection that

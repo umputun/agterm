@@ -362,14 +362,16 @@ extension ControlServer {
         }
     }
 
-    /// attachRemotePageRow attaches a page `zmx tree` listed: a top-level page as a row of `store`'s current workspace,
-    /// a page companion under the one row here showing its parent.
+    /// attachRemotePageRow attaches a page `zmx tree` listed: a top-level page as a row of `workspace` (nil is `store`'s
+    /// current one), a page companion under the one row here showing its parent.
     func attachRemotePageRow(_ remote: ControlRemoteSession, tree: ControlRemoteTree, host: String,
-                             in store: AppStore) async -> ControlResponse {
+                             in store: AppStore, workspace target: ControlAttachWorkspace?) async -> ControlResponse {
         let origin = RemoteBinding.Origin(host: host, endpoint: tree.endpoint, sessionName: remote.name)
         guard remote.parent != nil else {
-            guard let workspace = store.currentWorkspaceID else {
-                return ControlResponse(ok: false, error: "no window to attach into")
+            let workspace: UUID
+            switch attachWorkspace(target, in: store) {
+            case .failure(let response): return response
+            case .success(let id): workspace = id
             }
             return await attachRemotePage(remote.id, origin: origin, presentation: PagePresentation(tree),
                                           at: .root(store: store, workspace: workspace), select: true,

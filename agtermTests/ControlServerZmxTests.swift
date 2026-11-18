@@ -514,6 +514,67 @@ final class ControlServerZmxTests: XCTestCase {
         XCTAssertEqual(store.workspace(forSession: companion)?.id, home)
     }
 
+    func testAttachIntoANamedWorkspaceCreatesItOnlyWhenAsked() async throws {
+        let server = makeServer(list: "", remoteRunner: FakeRemoteRunner(result: Self.groupProjection))
+        let store = try XCTUnwrap(library.activeStore)
+        let current = try XCTUnwrap(store.currentWorkspaceID)
+
+        let missing = await server.attachRemoteSession(host: "buildbox", session: "s1", window: nil,
+                                                       workspace: .name("api", create: false))
+        XCTAssertEqual(missing.error, "no workspace named \"api\" (pass --create-workspace to add it)")
+        XCTAssertNil(store.workspace(named: "api"))
+        XCTAssertNil(store.workspaces.flatMap(\.sessions).first { $0.remoteHost != nil })
+
+        let first = await server.attachRemoteSession(host: "buildbox", session: "s1", window: nil,
+                                                     workspace: .name("api", create: true))
+        let second = await server.attachRemoteSession(host: "buildbox", session: "s1", window: nil,
+                                                      workspace: .name("api", create: true))
+
+        let api = try XCTUnwrap(store.workspace(named: "api"))
+        XCTAssertEqual(store.workspaces.filter { $0.name == "api" }.count, 1)
+        for reply in [first, second] {
+            XCTAssertTrue(reply.ok, reply.error ?? "")
+            let row = try XCTUnwrap(reply.result?.id.flatMap(UUID.init(uuidString:)))
+            XCTAssertEqual(store.workspace(forSession: row)?.id, api.id)
+        }
+        XCTAssertNotEqual(api.id, current)
+    }
+
+    func testAttachIntoAWorkspaceByIdTakesItOverTheCurrentOne() async throws {
+        let server = makeServer(list: "", remoteRunner: FakeRemoteRunner(result: Self.groupProjection))
+        let store = try XCTUnwrap(library.activeStore)
+        let first = try XCTUnwrap(store.currentWorkspaceID)
+        let other = store.addWorkspace(name: "other").id
+        XCTAssertEqual(store.currentWorkspaceID, other)
+
+        let reply = await server.attachRemoteSession(host: "buildbox", session: "s1", window: nil,
+                                                     workspace: .id(String(first.uuidString.prefix(8))))
+        let unknown = await server.attachRemoteSession(host: "buildbox", session: "s1", window: nil, workspace: .id("zzzz"))
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        let row = try XCTUnwrap(reply.result?.id.flatMap(UUID.init(uuidString:)))
+        XCTAssertEqual(store.workspace(forSession: row)?.id, first)
+        XCTAssertEqual(unknown.error, "no such workspace: zzzz")
+        XCTAssertEqual(store.workspaces.flatMap(\.sessions).filter { $0.remoteHost != nil }.count, 1)
+    }
+
+    func testACompanionJoiningItsParentStaysInTheParentsWorkspaceWhateverWorkspaceIsNamed() async throws {
+        let server = makeServer(list: "", remoteRunner: FakeRemoteRunner(result: Self.groupProjection))
+        let store = try XCTUnwrap(library.activeStore)
+        let parentReply = await server.attachRemoteSession(host: "buildbox", session: "s1")
+        let parent = try XCTUnwrap(parentReply.result?.id.flatMap(UUID.init(uuidString:)))
+        let home = try XCTUnwrap(store.workspace(forSession: parent)?.id)
+
+        let reply = await server.attachRemoteSession(host: "buildbox", session: "c1", window: nil,
+                                                     workspace: .name("api", create: true))
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        XCTAssertEqual(reply.result?.parent, parent.uuidString)
+        let companion = try XCTUnwrap(reply.result?.id.flatMap(UUID.init(uuidString:)))
+        XCTAssertEqual(store.workspace(forSession: companion)?.id, home)
+        XCTAssertNil(store.workspace(named: "api"), "a companion that joins its parent creates no workspace")
+    }
+
     func testEveryAttachedRowReportsItsOriginSessionIdInTheTreeAndItsEdges() async throws {
         let server = makeServer(list: "", remoteRunner: FakeRemoteRunner(result: Self.groupProjection))
         let store = try XCTUnwrap(library.activeStore)

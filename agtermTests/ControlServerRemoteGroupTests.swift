@@ -178,6 +178,47 @@ final class ControlServerRemoteGroupTests: XCTestCase {
         XCTAssertEqual(reply?.result?.remoteGroup?.companions.map(\.origin), ["c1"])
     }
 
+    func testAGroupAttachedIntoANamedWorkspaceBringsItsCompanionsThere() async throws {
+        let (server, store) = makeServer(ScriptedRunner([tree([parent(members: ["c1"]), terminal("c1", parent: "P")])]))
+
+        let reply = await server.attachRemoteGroup(host: "buildbox", session: "P", window: nil,
+                                                   workspace: .name("api", create: true))
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        let row = try XCTUnwrap(reply.result?.id.flatMap(UUID.init(uuidString:)))
+        let api = try XCTUnwrap(store.workspace(named: "api")?.id)
+        XCTAssertEqual(store.workspace(forSession: row)?.id, api)
+        XCTAssertEqual(store.companions(of: row).map { store.workspace(forSession: $0.id)?.id }, [api])
+    }
+
+    func testAGroupWithAMissingWorkspaceIsRefusedBeforeAnyRowExists() async throws {
+        let (server, store) = makeServer(ScriptedRunner([tree([parent(members: ["c1"]), terminal("c1", parent: "P")])]))
+
+        let reply = await server.attachRemoteGroup(host: "buildbox", session: "P", window: nil,
+                                                   workspace: .name("api", create: false))
+
+        XCTAssertEqual(reply.error, "no workspace named \"api\" (pass --create-workspace to add it)")
+        XCTAssertTrue(store.workspaces.flatMap(\.sessions).allSatisfy { $0.remoteHost == nil })
+    }
+
+    func testAPageRootAttachedIntoANamedWorkspaceLandsThereAloneOrAsAGroup() async throws {
+        let listing = tree([pageRoot(members: [])])
+        let (server, store) = makeServer(ScriptedRunner([listing, pageAttach(id: "PR", page: rootPageID),
+                                                         listing, pageAttach(id: "PR", page: rootPageID)]))
+
+        let single = await server.attachRemoteSession(host: "buildbox", session: "PR", window: nil,
+                                                      workspace: .name("pages", create: true))
+        let group = await server.attachRemoteGroup(host: "buildbox", session: "PR", window: nil,
+                                                   workspace: .name("pages", create: true))
+
+        let pages = try XCTUnwrap(store.workspace(named: "pages")?.id)
+        for reply in [single, group] {
+            XCTAssertTrue(reply.ok, reply.error ?? "")
+            let row = try XCTUnwrap(reply.result?.id.flatMap(UUID.init(uuidString:)))
+            XCTAssertEqual(store.workspace(forSession: row)?.id, pages)
+        }
+    }
+
     func testAPageRootGroupArrivesAsATopLevelReplicaRowWithItsCompanionsUnderIt() async throws {
         let listing = tree([pageRoot(members: ["c1", "pg"]), terminal("c1", parent: "PR"), page("pg", parent: "PR")])
         let runner = ScriptedRunner([listing, pageAttach(id: "PR", page: rootPageID), pageAttach(id: "pg", parent: "PR")])

@@ -192,6 +192,13 @@ public struct ControlSessionCreateOptions: Equatable, Sendable {
     }
 }
 
+/// ControlAttachWorkspace is the workspace a `zmx.attach` row goes into instead of the window's current one:
+/// `id` takes an id, unique prefix or `active`; `name` an exact sidebar name, created when `create` is set.
+public enum ControlAttachWorkspace: Equatable, Sendable {
+    case id(String)
+    case name(String, create: Bool)
+}
+
 /// Parsed `session.status` payload. Sound validation and playback stay host-side; the dispatcher
 /// hex-validates the per-call `#rrggbb` `color`, and both overrides thread onto the ephemeral
 /// `AgentIndicator`.

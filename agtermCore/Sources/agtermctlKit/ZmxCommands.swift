@@ -99,14 +99,30 @@ struct Zmx: ParsableCommand {
         var window: String?
         @Flag(help: "Also attach every companion of the session, under it; the session must not itself be a companion.")
         var companions = false
+        @Option(help: "Workspace id, unique prefix, or active (default: the window's current workspace).")
+        var workspace: String?
+        @Option(help: "Workspace by name; errors if not found unless --create-workspace. Mutually exclusive with --workspace.")
+        var workspaceName: String?
+        @Flag(help: "With --workspace-name, create the workspace when it does not exist (reuse it otherwise).")
+        var createWorkspace = false
         @OptionGroup var options: BasicOptions
+
+        func validate() throws {
+            if workspace != nil, workspaceName != nil {
+                throw ValidationError("use either --workspace or --workspace-name, not both")
+            }
+            if createWorkspace, workspaceName == nil {
+                throw ValidationError("--create-workspace requires --workspace-name")
+            }
+        }
 
         /// It creates a local session, so it echoes that session's id like every other create command.
         var echoesResultID: Bool { true }
 
         func makeRequest() throws -> ControlRequest {
             ControlRequest(cmd: companions ? .zmxAttachGroup : .zmxAttach, target: session,
-                           args: ControlArgs(host: host, window: window))
+                           args: ControlArgs(workspace: workspace, workspaceName: workspaceName,
+                                             createWorkspace: createWorkspace ? true : nil, host: host, window: window))
         }
 
         func run() throws {

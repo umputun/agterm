@@ -2107,6 +2107,12 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   a session; it never falls back or raises another window. The old `attachRemoteSession(host:session:)`
   witness remains callable. Hosts implementing only that form accept untargeted calls and refuse explicit
   window placement through the new overload's default.
+- `zmx.attach` and `zmx.attach.group` take `session.new`'s workspace fields, parsed into `ControlAttachWorkspace`
+  by the dispatcher with its wording. `ControlServer.attachWorkspace` resolves them after discovery for a row that
+  stands alone (terminal, page root, group parent); a missing name is created there, so a later pre-model refusal
+  can leave it empty, as `session.new --create-workspace` can. A companion joining its parent's row ignores them.
+  The window-only witnesses stay; the workspace overloads' defaults refuse a workspace by name. The row's
+  workspace in `tree` is the read-back.
 - `zmx.attach.group` is its own wire command for the Companions section's older-app reason, and the CLI's
   `zmx attach --companions` maps the decode refusal through `companionSend`. One `zmx tree` read serves the
   whole group: the far side lists every companion of a top-level row as `companions` (`[]` for none, absent

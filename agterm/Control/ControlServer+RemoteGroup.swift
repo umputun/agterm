@@ -3,6 +3,11 @@ import agtermCore
 
 extension ControlServer {
     func attachRemoteGroup(host: String, session: String, window: String?) async -> ControlResponse {
+        await attachRemoteGroup(host: host, session: session, window: window, workspace: nil)
+    }
+
+    func attachRemoteGroup(host: String, session: String, window: String?,
+                           workspace target: ControlAttachWorkspace?) async -> ControlResponse {
         let discovery = await remoteTree(host: host)
         guard discovery.ok, let tree = discovery.result?.remote else { return discovery }
         guard let remote = tree.sessions.first(where: { $0.id == session }) else {
@@ -16,8 +21,10 @@ extension ControlServer {
         case .failure(let response): return response
         case .success(let (_, resolved)): store = resolved
         }
-        guard let workspace = store.currentWorkspaceID else {
-            return ControlResponse(ok: false, error: "no window to attach into")
+        let workspace: UUID
+        switch attachWorkspace(target, in: store) {
+        case .failure(let response): return response
+        case .success(let id): workspace = id
         }
         let attached = remote.content == "page"
             ? await attachRemotePage(remote.id, origin: RemoteBinding.Origin(host: host, endpoint: tree.endpoint, sessionName: remote.name),
