@@ -55,8 +55,7 @@ public final class Session: Identifiable {
     /// transition, not `statusChangedAt`, so a hook re-asserting `blocked` over `blocked` stays muted.
     @ObservationIgnored public var autoFollowConsumed = false
 
-    /// followedCompanions are the origin companion ids an attached row has handled, attached or not, so none is attached
-    /// again by itself; companionsBaselined is whether the row took its first membership list. Both are saved.
+    /// followedCompanions are the origin companions this attached row handled, so none attaches again by itself; companionsBaselined says it took its first list.
     @ObservationIgnored public internal(set) var followedCompanions: Set<String> = []
     @ObservationIgnored public internal(set) var companionsBaselined = false
 
@@ -67,8 +66,7 @@ public final class Session: Identifiable {
     /// Immutable and set at construction, because the first save happens inside `addSession`: a marker
     /// written afterwards would let one snapshot go to disk carrying the ssh command.
     public let remoteHost: String?
-    /// remoteSessionID is the origin's id for the session this row shows, set at construction because
-    /// `addSession` emits `remote.opened` before `bindRemote` runs.
+    /// remoteSessionID is the origin's id for the session this row shows, set at construction because `addSession` emits `remote.opened` before `bindRemote` runs.
     public let remoteSessionID: String?
 
     /// What the session shows, fixed at construction for the same first-save reason as `remoteHost`.
@@ -120,8 +118,7 @@ public final class Session: Identifiable {
         remotePresentation?.binding.catalogOwned == true ? scratchDaemon?.identity : nil
     }
 
-    /// presentsCatalog is whether a remote window's row keeps its presentation stream: live, or ended with its
-    /// scratch still running.
+    /// presentsCatalog is whether a remote window's row keeps its presentation stream: live, or ended with its scratch still running.
     var presentsCatalog: Bool { !ended || scratchDaemon != nil }
 
     /// User-set flagged working-set membership: surfaces the session in the sidebar's cross-workspace
@@ -189,8 +186,7 @@ public final class Session: Identifiable {
     /// both panes exist transposes their layout without replacing either terminal surface.
     public var splitAxis: SplitAxis = .leftRight
 
-    /// While split, whether the second pane holds focus rather than the primary; the detail pane dims the
-    /// inactive one. Meaningless when not split.
+    /// While split, whether the second pane holds focus rather than the primary; the detail pane dims the inactive one. Meaningless when not split.
     public var splitFocused: Bool = false
 
     /// The split divider's primary-pane fraction of the pane area below the titlebar band, captured from the
@@ -222,8 +218,7 @@ public final class Session: Identifiable {
     /// which seeds from `effectiveCwd`.
     @ObservationIgnored public var initialSplitCwd: String?
 
-    /// Terminal font size in points, nil for the ghostty config default. Set on the surface at creation,
-    /// written back on cmd +/-, persisted.
+    /// Terminal font size in points, nil for the ghostty config default. Set on the surface at creation, written back on cmd +/-, persisted.
     @ObservationIgnored public var fontSize: Double?
 
     /// The session's background watermark — an image or rasterized text behind the terminal, nil for none.

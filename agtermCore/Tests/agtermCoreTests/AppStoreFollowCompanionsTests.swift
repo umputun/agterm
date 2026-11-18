@@ -20,7 +20,7 @@ struct AppStoreFollowCompanionsTests {
         let page = UUID()
         let shell = UUID()
         let shown = UUID()
-        store.baselineCompanions(list([(known, .terminal)]), forSession: row.id)
+        store.baselineCompanions([known.uuidString], forSession: row.id)
 
         let follow = store.companionsToFollow(list([(page, .page), (known, .terminal), (shown, .terminal), (shell, .terminal)]),
                                               forSession: row.id, shown: [shown.uuidString.lowercased()])
@@ -41,8 +41,8 @@ struct AppStoreFollowCompanionsTests {
         let row = try attachedRow()
         let copy = try attachedRow()
         let moved = UUID()
-        store.baselineCompanions(list([]), forSession: row.id)
-        store.baselineCompanions(list([(moved, .terminal)]), forSession: copy.id)
+        store.baselineCompanions([], forSession: row.id)
+        store.baselineCompanions([moved.uuidString], forSession: copy.id)
 
         #expect(store.companionsToFollow(list([(moved, .terminal)]), forSession: row.id, shown: []).attach.map(\.id) == [moved])
         #expect(store.companionsToFollow(list([(moved, .terminal)]), forSession: copy.id, shown: []).attach.isEmpty)
@@ -54,8 +54,8 @@ struct AppStoreFollowCompanionsTests {
         let first = UUID()
         let second = UUID()
 
-        store.baselineCompanions(list([(first, .terminal), (second, .page)]), forSession: row.id)
-        store.baselineCompanions(list([]), forSession: empty.id)
+        store.baselineCompanions([first.uuidString, second.uuidString], forSession: row.id)
+        store.baselineCompanions([], forSession: empty.id)
 
         #expect(row.companionsBaselined)
         #expect(row.followedCompanions == [first.uuidString, second.uuidString])
@@ -72,7 +72,7 @@ struct AppStoreFollowCompanionsTests {
         #expect(!row.companionsBaselined)
         #expect(row.followedCompanions == [marked.uuidString])
 
-        store.baselineCompanions(list([(listed, .terminal)]), forSession: row.id)
+        store.baselineCompanions([listed.uuidString], forSession: row.id)
 
         #expect(row.followedCompanions == [marked.uuidString, listed.uuidString])
         #expect(store.companionsToFollow(list([(marked, .terminal), (listed, .terminal)]), forSession: row.id, shown: []).attach.isEmpty)

@@ -179,8 +179,7 @@ public final class AppStore {
     /// The settled selected-pane identity per session that `pane.focused` diffs against.
     @ObservationIgnored var paneFocusBaseline: [UUID: UUID] = [:]
     @ObservationIgnored let paneFocusDebouncer = Debouncer()
-    /// Where this store publishes a session's presentation state for attached viewers. One hub serves every
-    /// window, since a viewer subscribes by session id alone.
+    /// Where this store publishes a session's presentation state for attached viewers. One hub serves every window, since a viewer subscribes by session id alone.
     @ObservationIgnored public var presentationHub: PresentationHub?
     @ObservationIgnored var companionsFlushDue = false
     /// The remote overlay jobs this Mac handed to presenters, shared with the server like the hub.
@@ -668,7 +667,7 @@ public final class AppStore {
         _ = closeSession(sessionID, alreadyFinalized: alreadyFinalized, recordsRecent: false)
     }
 
-    private func closeSession(_ sessionID: UUID, alreadyFinalized: UUID?, recordsRecent: Bool, companions: [SessionSnapshot] = []) -> UUID? {
+    func closeSession(_ sessionID: UUID, alreadyFinalized: UUID?, recordsRecent: Bool, recordsRemote: Bool = true, companions: [SessionSnapshot] = []) -> UUID? {
         guard let location = location(ofSession: sessionID) else { return nil }
         let wasActive = selectedSessionID == sessionID
         let workspace = workspaces[location.workspaceIndex]
@@ -677,7 +676,7 @@ public final class AppStore {
         workspaces[location.workspaceIndex].sessions.remove(at: location.sessionIndex)
         emitSessionClosed(removed, workspace: workspace.id)
         dropLaunchPanes([removed])
-        let recent = recordClosedSession(removed, workspace: workspace, at: location, local: recordsRecent, companions: companions)
+        let recent = recordsRemote ? recordClosedSession(removed, workspace: workspace, at: location, local: recordsRecent, companions: companions) : nil
         finalizePaneIdentities([removed], alreadyFinalized: alreadyFinalized)
         removed.surface?.teardown()
         removed.splitSurface?.teardown()

@@ -46,6 +46,19 @@ final class ControlServerRemoteCompanionsTests: XCTestCase {
         }
     }
 
+    func testAnExplicitlyCreatedCompanionClaimsTheLeadWhereverTheOriginListsIt() async throws {
+        let elsewhere = session(created).replacingOccurrences(of: #""cwd""#, with: #""parent":"origin-9","cwd""#)
+        let runner = ScriptedRunner([origin, reply(id: created), tree(sessions: elsewhere)])
+        let (server, store, row) = try makeServer(runner)
+
+        let reply = await server.createCompanion(row.id.uuidString, options: CompanionOptions(), window: nil)
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        let companion = try XCTUnwrap(reply.result?.id.flatMap(UUID.init(uuidString:)).flatMap(store.session(withID:)))
+        XCTAssertEqual(companion.parentID, row.id)
+        XCTAssertEqual(ZmxLeadBook.shared.states[companion.paneIdentity]?.attachment.claim, true)
+    }
+
     func testDuplicateAsCompanionOnARemoteRowAsksTheOriginToDuplicate() async throws {
         let runner = ScriptedRunner([origin, reply(id: created), tree(sessions: session(created))])
         let (server, store, row) = try makeServer(runner)

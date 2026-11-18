@@ -245,7 +245,7 @@
   `RemotePresentationClientTests.swift`
 - Modify: `agtermTests/ControlServerRemoteCompanionsTests.swift` (existing callers unchanged)
 
-- [ ] write failing hosted tests in `ControlServerFollowCompanionsTests.swift`: a list naming a new terminal companion
+- [x] write failing hosted tests in `ControlServerFollowCompanionsTests.swift`: a list naming a new terminal companion
       attaches it under the row with no lead claim and no selection change; a new page companion attaches under the
       row; a companion closed here is not attached again; a transport failure, a valid page receipt over a failed
       ssh exit included, is retried on the backoff with no membership change; a loopback page companion is requested
@@ -263,25 +263,25 @@
       with a saved set attaches a child created while this Mac was away and leaves a child it had detached alone; a
       row in a remote window (catalog-owned) ignores the frame; an auto-attached headless child takes the presenter
       role as an explicit attach would
-- [ ] write a test in `ControlServerRemoteCompanionsTests.swift` that `attachCreatedCompanion` and `attachCreated`
+- [x] write a test in `ControlServerRemoteCompanionsTests.swift` that `attachCreatedCompanion` and `attachCreated`
       still claim the lead and do no parent check
-- [ ] advertise `companions` in the client hello and route the body to a new effect
-- [ ] add the `RemotePlacement` lead option (default claim) and the optional expected parent and endpoint on
+- [x] advertise `companions` in the client hello and route the body to a new effect
+- [x] add the `RemotePlacement` lead option (default claim) and the optional expected parent and endpoint on
       `attachWhenListed`
-- [ ] seed at plain attach, group attach and `recent.open` from the attach-time tree's `companions`; restore keeps
+- [x] seed at plain attach, group attach and `recent.open` from the attach-time tree's `companions`; restore keeps
       the saved set
-- [ ] attach each followed id: terminal through `attachWhenListed` and `attach` with a `claim: false` lead,
+- [x] attach each followed id: terminal through `attachWhenListed` and `attach` with a `claim: false` lead,
       `select: false` and the expected parent; page through `requestRemotePage` with the returned-parent check and
       `placeRemotePage`; build `shown` at the library seam and check it again at insertion; revalidate the local row
       and its binding after every await; drop an attach the newest list no longer names; mark on success and on a
       final refusal, retry retryable failures on `RemoteRetryBackoff`, park origin-state failures until the next
       list or reconnect; split `requestRemotePage`'s receipt-over-failed-transport case out of `.refused`; log
       failures; waits use the injected clock
-- [ ] mark every attached origin child, by any attach path, in all local rows bound to the same origin session, and
+- [x] mark every attached origin child, by any attach path, in all local rows bound to the same origin session, and
       do the same for `markOnly` ids
-- [ ] defer reconcile on every local copy of the origin session while `createRemoteCompanion` runs, then place under
+- [x] defer reconcile on every local copy of the origin session while `createRemoteCompanion` runs, then place under
       the initiating row, mark in all copies and reconcile each copy's newest list
-- [ ] run the targeted hosted tests (`-only-testing:`) and touched `swift test --filter` suites - must pass before
+- [x] run the targeted hosted tests (`-only-testing:`) and touched `swift test --filter` suites - must pass before
       task 4
 
 ### Task 4: Membership-only stream for an attached Mac page root

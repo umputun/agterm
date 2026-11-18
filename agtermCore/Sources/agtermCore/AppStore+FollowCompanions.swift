@@ -31,10 +31,11 @@ extension AppStore {
         return follow
     }
 
-    /// baselineCompanions takes `list` as row `id`'s first membership: every member counts as handled, nothing is attached.
-    public func baselineCompanions(_ list: PresentationCompanions, forSession id: UUID) {
+    /// baselineCompanions takes `ids`, the origin companions listed when row `id` was attached or in its first membership
+    /// list, as handled: none of them is attached by itself.
+    public func baselineCompanions(_ ids: [String], forSession id: UUID) {
         guard let session = session(withID: id) else { return }
-        session.followedCompanions.formUnion(list.members.map(\.id.uuidString))
+        session.followedCompanions.formUnion(ids.map(Self.originID))
         session.companionsBaselined = true
         save()
     }

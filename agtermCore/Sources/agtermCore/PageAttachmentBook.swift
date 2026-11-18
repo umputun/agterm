@@ -5,6 +5,10 @@ import Foundation
 /// which ends every channel serving it.
 @MainActor
 public final class PageAttachmentBook {
+    /// The refusals no later request can change, which a viewer following companions treats as final.
+    public nonisolated static let contentRefusal = "a markdown, text or document page cannot be shown on another Mac"
+    public nonisolated static let loopbackRefusal = "a page on this Mac's loopback cannot be shown on another Mac"
+
     /// Offer is one attachment handed out and not claimed yet.
     public struct Offer: Sendable {
         public let session: UUID
@@ -46,11 +50,11 @@ public final class PageAttachmentBook {
             return ControlResponse(ok: false, error: "not a page session")
         }
         if source.isContent {
-            return ControlResponse(ok: false, error: "a markdown, text or document page cannot be shown on another Mac")
+            return ControlResponse(ok: false, error: Self.contentRefusal)
         }
         // a loopback address names the host's own server, which the other Mac would never reach
         if case .url(let url) = overlay.source, HtmlSource.isLoopback(url.absoluteString) {
-            return ControlResponse(ok: false, error: "a page on this Mac's loopback cannot be shown on another Mac")
+            return ControlResponse(ok: false, error: Self.loopbackRefusal)
         }
         HtmlOverlayReleases.shared.onServedRelease = { [weak self] page in self?.end(page) }
         let now = clock()

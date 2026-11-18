@@ -40,6 +40,7 @@ struct RemotePresentationClientTests {
         var notifies: [PresentationNotify] = []
         var messages: [PresentationMessage] = []
         var mails: [PresentationMail?] = []
+        var companions: [PresentationCompanions?] = []
         var sounds: [PresentationSound] = []
         var connections: [RemotePresentationConnection] = []
         var modes: [PresentationMode] = []
@@ -105,6 +106,7 @@ struct RemotePresentationClientTests {
             linkRefused: { recorder.linkRefusals.append($0) },
             message: { recorder.messages.append($0) },
             mail: { recorder.mails.append($0) },
+            companions: { recorder.companions.append($0) },
             leads: { recorder.leads },
             ended: { recorder.ends += 1 },
             acked: { recorder.acks += 1 },
@@ -630,6 +632,18 @@ struct RemotePresentationClientTests {
         transport.deliver(line(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 3))
 
         #expect(recorder.mails == [mail, PresentationMail(panes: [:]), nil])
+    }
+
+    @Test func aSnapshotReportsItsCompanionsEvenWhenAbsentAndACompanionsFrameReplacesThem() {
+        let client = makeClient()
+        client.start()
+        let first = PresentationCompanions(members: [PresentationCompanions.Member(id: UUID(), kind: .page)])
+        connect(client, snapshot: PresentationSnapshot(status: nil, hud: nil, companions: first), kinds: [PresentationHub.companionsKind])
+
+        transport.deliver(line(.companions(PresentationCompanions(members: [])), rev: 2))
+        transport.deliver(line(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 3))
+
+        #expect(recorder.companions == [first, PresentationCompanions(members: []), nil])
     }
 
     @Test func aFrameFromAnotherGenerationOrAnOldRevisionIsIgnored() {

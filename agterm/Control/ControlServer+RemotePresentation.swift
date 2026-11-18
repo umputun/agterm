@@ -78,6 +78,7 @@ extension ControlServer {
     func stopRemotePresentation(_ id: UUID) {
         // nothing will answer a pending ping now, so its notice shows
         resolveRemoteEnd(id)
+        forgetCompanionFollow(id)
         remoteClients.removeValue(forKey: id)?.stop()
         linkForwards.release(row: id)
         catalogPool(forSession: id)?.release("present:\(id)")
@@ -86,6 +87,7 @@ extension ControlServer {
     func stopRemotePresentations() {
         for client in remoteClients.values { client.stop() }
         remoteClients.removeAll()
+        companionFollow.rows.removeAll()
         linkForwards.stopAll()
         remoteTick?.cancel()
         remoteTick = nil
@@ -119,6 +121,7 @@ extension ControlServer {
             },
             connection: { [weak self] connection in
                 if case .failed = connection { self?.resolveRemoteEnd(id) }
+                self?.companionStreamChanged(connection, forSession: id)
                 self?.library.store(forSession: id)?.setRemoteConnection(connection, forSession: id)
             },
             context: { [weak self] context in
@@ -152,6 +155,7 @@ extension ControlServer {
             linkRefused: { [weak self] reason in self?.refuseRemoteLinkClick(reason, session: id) },
             message: { [weak self] message in self?.library.store(forSession: id)?.emitRemoteMessage(message, forSession: id) },
             mail: { [weak self] mail in self?.library.store(forSession: id)?.applyRemoteMail(mail, forSession: id) },
+            companions: { [weak self] companions in self?.applyOriginCompanions(companions, forSession: id) },
             leads: { [weak self] in
                 guard let store = self?.library.store(forSession: id), let session = store.session(withID: id) else { return [] }
                 return store.originLeads(of: session)
@@ -234,6 +238,7 @@ extension ControlServer {
                 }
                 for client in self.remoteClients.values { client.tick() }
                 self.tickReconnects()
+                self.tickCompanionFollow()
             }
         }
     }

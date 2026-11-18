@@ -197,9 +197,8 @@ struct AppStoreAttachedRestoreTests {
         let empty = try addAttachedRow(to: store, workspace: work.id, origin: "o2")
         let unbaselined = try addAttachedRow(to: store, workspace: work.id, origin: "o3")
         let child = UUID()
-        store.baselineCompanions(PresentationCompanions(members: [PresentationCompanions.Member(id: child, kind: .page)]),
-                                 forSession: followed.id)
-        store.baselineCompanions(PresentationCompanions(members: []), forSession: empty.id)
+        store.baselineCompanions([child.uuidString], forSession: followed.id)
+        store.baselineCompanions([], forSession: empty.id)
 
         let restored = relaunched(store)
 
@@ -215,8 +214,7 @@ struct AppStoreAttachedRestoreTests {
         let store = makeStore()
         let work = store.addWorkspace(name: "work")
         let row = try addAttachedRow(to: store, workspace: work.id)
-        store.baselineCompanions(PresentationCompanions(members: [PresentationCompanions.Member(id: UUID(), kind: .terminal)]),
-                                 forSession: row.id)
+        store.baselineCompanions([UUID().uuidString], forSession: row.id)
         var snapshot = store.snapshot()
         var object = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(snapshot.workspaces[0])) as? [String: Any])
         var attached = try #require(object["attached"] as? [[String: Any]])

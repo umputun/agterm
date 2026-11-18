@@ -166,7 +166,7 @@ final class RemotePageChannel {
     private var bridges: [Int: CheckedContinuation<String, Error>] = [:]
     private var slots: [Kind: Slots] = [.resource: Slots(limit: ControlServer.pageServeResourceLimit),
                                         .bridge: Slots(limit: ControlServer.pageServeBridgeLimit)]
-    private var closed = false
+    private(set) var closed = false
     /// startWaiters hold loads waiting for a catalog row's pooled connection.
     private var startWaiters: [CheckedContinuation<Void, Error>] = []
 

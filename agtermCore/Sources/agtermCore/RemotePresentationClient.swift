@@ -52,6 +52,8 @@ public struct RemotePresentationEffects {
     public var message: @MainActor (PresentationMessage) -> Void
     /// mail replaces the origin's unacked counts per origin pane; nil from a snapshot of an origin that sends none.
     public var mail: @MainActor (PresentationMail?) -> Void
+    /// companions is the origin's companion membership of the session; nil from a snapshot that carries none.
+    public var companions: @MainActor (PresentationCompanions?) -> Void
     /// leads is the set of the origin's panes this Mac leads, read whenever the client checks for a change.
     public var leads: @MainActor () -> Set<UUID>
     /// ended reports the origin removed the session for good; the client has stopped and never reconnects.
@@ -84,6 +86,7 @@ public struct RemotePresentationEffects {
                 linkRefused: @escaping @MainActor (RemoteLinkRefusal) -> Void = { _ in },
                 message: @escaping @MainActor (PresentationMessage) -> Void = { _ in },
                 mail: @escaping @MainActor (PresentationMail?) -> Void = { _ in },
+                companions: @escaping @MainActor (PresentationCompanions?) -> Void = { _ in },
                 leads: @escaping @MainActor () -> Set<UUID> = { [] },
                 ended: @escaping @MainActor () -> Void = {},
                 acked: @escaping @MainActor () -> Void = {},
@@ -112,6 +115,7 @@ public struct RemotePresentationEffects {
         self.linkRefused = linkRefused
         self.message = message
         self.mail = mail
+        self.companions = companions
         self.leads = leads
         self.ended = ended
         self.acked = acked
@@ -286,6 +290,7 @@ public final class RemotePresentationClient {
             effects.context(snapshot.context)
             effects.info(snapshot.info)
             effects.mail(snapshot.mail)
+            effects.companions(snapshot.companions)
             if let respawns = snapshot.respawns { effects.respawns(respawns, true) }
         case .status(let status): effects.status(status)
         case .context(let context): effects.context(context)
@@ -295,6 +300,7 @@ public final class RemotePresentationClient {
         case .notify(let notify): effects.notify(notify)
         case .message(let message): effects.message(message)
         case .mail(let mail): effects.mail(mail)
+        case .companions(let companions): effects.companions(companions)
         case .sound(let sound): effects.sound(sound)
         case .ping: send(.ack, on: link)
         // an origin that predates the role answers mirror, and nothing is asked of it
@@ -337,7 +343,7 @@ public final class RemotePresentationClient {
             }
         case .ack: effects.acked()
         case .presenterAcquire, .leadReport, .linkClick, .statusClear, .statusSeen, .askResolve, .askRejected, .pickResolve, .pickRejected, .overlayRejected,
-             .overlayClosed, .companions, .unknown,
+             .overlayClosed, .unknown,
              .pageRejected, .pageClosed, .pageState, .pageResult:
             break
         }

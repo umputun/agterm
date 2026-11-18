@@ -87,6 +87,10 @@ extension ControlServer {
         guard tree.sessions.contains(where: { $0.id == listedOrigin }) else {
             return ControlResponse(ok: false, error: "the session on \(host) is not attachable now; nothing was created")
         }
+        // the origin creates under the target's current parent there, which is the group whose followers must wait
+        let group = tree.sessions.first(where: { $0.id == origin })?.parent ?? origin
+        let hold = holdCompanionFollow(OriginKey(host: host, endpoint: tree.endpoint, session: group))
+        defer { releaseCompanionFollow(hold) }
         let result = await remoteRunner.run(argv, deadline: Self.remoteCompanionDeadline)
         if result.refusedArguments {
             return ControlResponse(ok: false, error: "the agterm on \(host) is too old for companions")
@@ -177,10 +181,15 @@ extension ControlServer {
 
     /// RemotePageHandover is a host's answer when asked for one of its pages.
     enum RemotePageHandover {
-        case page(PresentationPage)
+        /// page is the handed-over page and the origin session its host says it belongs under.
+        case page(PresentationPage, parent: String?)
         case refused(String)
+        /// tooOld is a host whose agterm predates page companions.
+        case tooOld(String)
         /// unanswered is no reply at all, which says nothing about the page.
         case unanswered(String)
+        /// interrupted is a handover the host made over a connection that then failed.
+        case interrupted(String)
     }
 
     /// RemotePageOrigin is where a handed-over page comes from: the origin's page session, its host and how that host
@@ -189,19 +198,32 @@ extension ControlServer {
         let session: String
         let binding: RemoteBinding.Origin
         let presentation: PagePresentation
+        /// companions are the origin's companions of a page root, listed when it was attached.
+        var companions: [String]?
     }
 
     /// attachRemotePage asks `origin.host` for one attachment of its page session `originSession` and shows it at
     /// `spot` here. The page stays that Mac's: closing the row here ends only this attachment's channel.
     func attachRemotePage(_ originSession: String, origin binding: RemoteBinding.Origin, presentation: PagePresentation,
-                          at spot: RemotePageSpot, select: Bool) async -> ControlResponse {
+                          at spot: RemotePageSpot, select: Bool, companions: [String]? = nil) async -> ControlResponse {
         switch await requestRemotePage(originSession, host: binding.host) {
-        case .refused(let reason), .unanswered(let reason):
+        case .refused(let reason), .tooOld(let reason), .unanswered(let reason), .interrupted(let reason):
             return ControlResponse(ok: false, error: reason)
-        case .page(let page):
-            return placeRemotePage(page, from: RemotePageOrigin(session: originSession, binding: binding, presentation: presentation),
-                                   at: spot, select: select)
+        case .page(let page, let parent):
+            let source = RemotePageOrigin(session: originSession, binding: binding, presentation: presentation, companions: companions)
+            let placed = placeRemotePage(page, from: source, at: spot, select: select)
+            if placed.ok, case .companion = spot, let parent, pageChannelOpen(placed) {
+                markFollowedEverywhere([originSession], parent: parent, host: binding.host, endpoint: binding.endpoint)
+            }
+            return placed
         }
+    }
+
+    /// pageChannelOpen says the page `placed` answers for still has its channel, which a helper that failed to start
+    /// closes before the reply.
+    func pageChannelOpen(_ placed: ControlResponse) -> Bool {
+        guard let local = placed.result?.pageID.flatMap(UUID.init(uuidString:)) else { return false }
+        return replicaPages[local]?.channel?.closed == false
     }
 
     /// requestRemotePage asks `host` to hand over one attachment of its page session `originSession`.
@@ -214,19 +236,22 @@ extension ControlServer {
         }
         let result = await remoteRunner.run(argv, deadline: Self.remoteCompanionDeadline)
         if result.refusedArguments {
-            return .refused("the agterm on \(host) is too old for page companions")
+            return .tooOld("the agterm on \(host) is too old for page companions")
         }
         guard let reply = try? JSONDecoder().decode(ControlResponse.self, from: Data(result.stdout.utf8)) else {
             let stderr = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
             return .unanswered(stderr.isEmpty ? "\(host) gave no answer" : stderr)
         }
+        if result.status != 0, reply.ok, reply.result?.companionPage != nil {
+            return .interrupted("the connection to \(host) failed after it handed the page over")
+        }
         guard result.status == 0, reply.ok, let page = reply.result?.companionPage else {
             if reply.refusesUnknown(.sessionCompanionPageAttach) {
-                return .refused("the agterm on \(host) is too old for page companions")
+                return .tooOld("the agterm on \(host) is too old for page companions")
             }
             return .refused(reply.error ?? "\(host) did not hand the page over")
         }
-        return .page(page)
+        return .page(page, parent: reply.result?.parent)
     }
 
     /// placeRemotePage shows `page`, handed over by `source`'s host, at `spot` here.
@@ -280,6 +305,7 @@ extension ControlServer {
                                        presentationVersion: presentation.headless ? presentation.version : nil,
                                        origin: binding, originHeadless: presentation.headless),
                          forSession: row.id)
+        if let companions = source.companions { store.baselineCompanions(companions, forSession: row.id) }
         if presentation.headless { startRemotePresentation(for: row) }
         guard let overlay = row.htmlOverlay, let origin = overlay.replicaOf,
               let serve = try? RemoteSession.pageServeCommand(host: host, token: page.token) else {
@@ -337,7 +363,8 @@ extension ControlServer {
                 return ControlResponse(ok: false, error: "no window to attach into")
             }
             return await attachRemotePage(remote.id, origin: origin, presentation: PagePresentation(tree),
-                                          at: .root(store: store, workspace: workspace), select: true)
+                                          at: .root(store: store, workspace: workspace), select: true,
+                                          companions: remote.companions?.map(\.id))
         }
         let rows = attachedParentRows(of: remote, tree: tree, host: host, in: store)
         guard rows.count == 1, let parent = rows.first else {
@@ -375,27 +402,63 @@ extension ControlServer {
         }
     }
 
-    // the destination is read again after every wait: the row may have moved or closed meanwhile
     func attachWhenListed(_ id: String, host: String, closed: String,
                           place: () -> RemotePlacement?) async -> CompanionAttach {
+        switch await attachListed(id, host: host, closed: closed, place: place) {
+        case .attached(let response): return .attached(response)
+        case .transport(let reason), .unavailable(let reason), .dropped(let reason), .refused(let reason): return .failed(reason)
+        }
+    }
+
+    /// ListedAttach is how waiting for an origin session to become attachable ended.
+    enum ListedAttach {
+        case attached(ControlResponse)
+        /// transport: no listing answered within the budget.
+        case transport(String)
+        /// unavailable: the origin answered but never listed the session where it was expected.
+        case unavailable(String)
+        /// dropped: the destination declined it after the wait.
+        case dropped(String)
+        /// refused: the listed session could not be attached as listed.
+        case refused(String)
+    }
+
+    /// ExpectedOrigin is where a session must be listed to be attached: under `parent` of the zmx at `endpoint`.
+    struct ExpectedOrigin {
+        let parent: String
+        let endpoint: ControlZmxEndpoint
+    }
+
+    // the destination is read again after every wait: the row may have moved or closed meanwhile
+    func attachListed(_ id: String, host: String, expected: ExpectedOrigin? = nil, closed: String,
+                      place: () -> RemotePlacement?) async -> ListedAttach {
         let deadline = hudClock().addingTimeInterval(Self.remoteCompanionReadyBudget)
         var reason = "it did not become attachable"
+        var answered = false
         var waited = false
         while true {
             if waited { await remoteCompanionPause() }
             waited = true
             let remaining = deadline.timeIntervalSince(hudClock())
-            guard remaining > 0 else { return .failed(reason) }
+            guard remaining > 0 else { return answered ? .unavailable(reason) : .transport(reason) }
             let listing = await remoteTree(host: host, deadline: min(Self.remoteTreeDeadline, remaining))
             guard let tree = listing.result?.remote else {
                 reason = listing.error ?? reason
                 continue
             }
-            guard let remote = tree.sessions.first(where: { $0.id == id }) else { continue }
-            guard let placement = place() else { return .failed(closed) }
+            answered = true
+            // a membership id is canonical while the tree spells it as its origin did
+            let match: (ControlRemoteSession) -> Bool = expected == nil ? { $0.id == id } : { Self.originID($0.id) == Self.originID(id) }
+            guard let remote = tree.sessions.first(where: match) else { continue }
+            if let expected, tree.endpoint != expected.endpoint || remote.parent.map(Self.originID) != Self.originID(expected.parent) {
+                return .unavailable("it is no longer under that session")
+            }
+            guard let placement = place() else { return .dropped(closed) }
             let attached = attach(remote, from: tree, host: host, placement: placement)
-            guard attached.ok else { return .failed(attached.error ?? "attach failed") }
+            guard attached.ok else { return .refused(attached.error ?? "attach failed") }
             return .attached(attached)
         }
     }
+
+    nonisolated static func originID(_ id: String) -> String { UUID(uuidString: id)?.uuidString ?? id }
 }
