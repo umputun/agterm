@@ -432,4 +432,189 @@ final class AppDelegateCaptureTests: XCTestCase {
         XCTAssertNil(session.splitForegroundCommand)
         XCTAssertEqual(session.takePendingForegroundCommand(pane: .right), ["tail", "-f", "log"])
     }
+
+    func testOpenURLsLandTheFolderInTheActiveWindowThenSelectTheLinkedSession() throws {
+        let fixture = try LinkFixture()
+        defer { fixture.tearDown() }
+        let linked = try XCTUnwrap(fixture.back.addSession(toWorkspace: fixture.back.workspaces[0].id,
+                                                           cwd: NSTemporaryDirectory(), select: false))
+        let folder = fixture.state.appendingPathComponent("folder", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let frontCount = fixture.front.workspaces[0].sessions.count
+
+        fixture.delegate.application(NSApp, open: [folder, try XCTUnwrap(URL(string: "agterm://session/\(linked.id.uuidString)"))])
+
+        XCTAssertEqual(fixture.front.workspaces[0].sessions.count, frontCount + 1)
+        XCTAssertEqual(fixture.front.workspaces[0].sessions.last?.effectiveCwd, folder.path)
+        XCTAssertEqual(fixture.library.frontmostWindowID, fixture.backID)
+        XCTAssertEqual(fixture.back.selectedSessionID, linked.id)
+    }
+
+    func testColdLaunchFolderWaitsForEveryWindowThenLandsInTheLaunchWindow() throws {
+        let fixture = try LinkFixture()
+        defer { fixture.tearDown() }
+        let folder = fixture.state.appendingPathComponent("folder", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let frontCount = fixture.front.workspaces[0].sessions.count
+        let reopened = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 300), styleMask: [.titled, .closable],
+                                backing: .buffered, defer: false)
+        reopened.isReleasedWhenClosed = false
+        defer { reopened.orderOut(nil) }
+        WindowRegistry.shared.retire(fixture.frontID, window: fixture.hostFront)
+        WindowRegistry.shared.register(fixture.frontID, window: reopened)
+
+        fixture.delegate.queueOpenDirectories([folder.path], cold: true)
+        XCTAssertEqual(fixture.front.workspaces[0].sessions.count, frontCount)
+        fixture.library.frontmostWindowID = fixture.backID
+        WindowRegistry.shared.markPresented(fixture.frontID, window: reopened)
+        WindowRegistry.shared.markPresented(fixture.backID, window: fixture.hostBack)
+
+        let deadline = Date(timeIntervalSinceNow: 10)
+        while fixture.front.workspaces[0].sessions.count == frontCount, Date() < deadline { RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05)) }
+        XCTAssertEqual(fixture.front.workspaces[0].sessions.last?.effectiveCwd, folder.path)
+        XCTAssertEqual(fixture.library.frontmostWindowID, fixture.frontID)
+    }
+
+    func testColdLaunchFolderLandsInTheLaunchWindowWhileTheFrontmostOneHasNoWorkspace() throws {
+        let fixture = try LinkFixture()
+        defer { fixture.tearDown() }
+        let folder = fixture.state.appendingPathComponent("folder", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let frontCount = fixture.front.workspaces[0].sessions.count
+        WindowRegistry.shared.retire(fixture.frontID, window: fixture.hostFront)
+        WindowRegistry.shared.register(fixture.frontID, window: fixture.hostFront)
+        fixture.back.workspaces.removeAll()
+        fixture.library.frontmostWindowID = fixture.backID
+        WindowRegistry.shared.markPresented(fixture.frontID, window: fixture.hostFront)
+        WindowRegistry.shared.markPresented(fixture.backID, window: fixture.hostBack)
+
+        fixture.delegate.queueOpenDirectories([folder.path], cold: true)
+
+        XCTAssertEqual(fixture.front.workspaces[0].sessions.count, frontCount + 1)
+        XCTAssertEqual(fixture.library.frontmostWindowID, fixture.frontID)
+    }
+
+    func testColdLaunchFolderForAnEmptyRemoteLaunchWindowIsRefusedThere() throws {
+        let fixture = try LinkFixture()
+        defer { fixture.tearDown() }
+        let folder = fixture.state.appendingPathComponent("folder", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let frontCount = fixture.front.workspaces[0].sessions.count
+        let remoteID = fixture.library.newRemoteWindow(host: "box").id
+        let remoteStore = try XCTUnwrap(fixture.library.store(for: remoteID))
+        remoteStore.workspaces.removeAll()
+        let mirror = RemoteCatalogMirror(host: "box", store: remoteStore, effects: NoCatalogEffects(), viewState: RemoteWindowViewState())
+        let remote = RemoteCatalogActions(mirror: mirror, runner: { _ in (255, "") })
+        remoteStore.remoteActions = remote
+        let host = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 300), styleMask: [.titled, .closable],
+                            backing: .buffered, defer: false)
+        host.isReleasedWhenClosed = false
+        defer {
+            WindowRegistry.shared.unregister(remoteID)
+            host.orderOut(nil)
+        }
+        WindowRegistry.shared.retire(remoteID, window: host)
+        WindowRegistry.shared.register(remoteID, window: host)
+        WindowRegistry.shared.markPresented(fixture.frontID, window: fixture.hostFront)
+        WindowRegistry.shared.markPresented(fixture.backID, window: fixture.hostBack)
+        WindowRegistry.shared.markPresented(remoteID, window: host)
+
+        fixture.delegate.queueOpenDirectories([folder.path], cold: true)
+        XCTAssertEqual(fixture.library.frontmostWindowID, remoteID)
+        fixture.library.frontmostWindowID = fixture.frontID
+        fixture.delegate.drainPendingOpenDirectories()
+
+        XCTAssertEqual(fixture.front.workspaces[0].sessions.count, frontCount)
+        XCTAssertNotNil(remoteStore.remoteActions)
+    }
+
+    func testSessionLinkOpenedBeforeItsWindowRegistersSelectsOnceItDoes() throws {
+        let fixture = try LinkFixture()
+        defer { fixture.tearDown() }
+        let linked = try XCTUnwrap(fixture.back.addSession(toWorkspace: fixture.back.workspaces[0].id,
+                                                           cwd: NSTemporaryDirectory(), select: false))
+        WindowRegistry.shared.unregister(fixture.backID)
+
+        fixture.delegate.application(NSApp, open: [try XCTUnwrap(URL(string: "agterm://session/\(linked.id.uuidString)"))])
+        XCTAssertNotEqual(fixture.back.selectedSessionID, linked.id)
+        WindowRegistry.shared.register(fixture.backID, window: fixture.hostBack)
+
+        let deadline = Date(timeIntervalSinceNow: 10)
+        while fixture.back.selectedSessionID != linked.id, Date() < deadline { RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05)) }
+        XCTAssertEqual(fixture.back.selectedSessionID, linked.id)
+        XCTAssertEqual(fixture.library.frontmostWindowID, fixture.backID)
+    }
+
+    func testAnOlderLinksRetryNeitherSelectsNorConsumesANewerPendingLink() throws {
+        let fixture = try LinkFixture()
+        defer { fixture.tearDown() }
+        let older = try XCTUnwrap(fixture.back.addSession(toWorkspace: fixture.back.workspaces[0].id,
+                                                          cwd: NSTemporaryDirectory(), select: false))
+        let newer = try XCTUnwrap(fixture.back.addSession(toWorkspace: fixture.back.workspaces[0].id,
+                                                          cwd: NSTemporaryDirectory(), select: false))
+        WindowRegistry.shared.unregister(fixture.backID)
+        fixture.delegate.application(NSApp, open: [try XCTUnwrap(URL(string: "agterm://session/\(older.id.uuidString)"))])
+        fixture.delegate.application(NSApp, open: [try XCTUnwrap(URL(string: "agterm://session/\(newer.id.uuidString)"))])
+        WindowRegistry.shared.register(fixture.backID, window: fixture.hostBack)
+
+        fixture.delegate.drainPendingSessionLink(request: 1)
+        XCTAssertNotEqual(fixture.back.selectedSessionID, newer.id)
+        XCTAssertNotEqual(fixture.back.selectedSessionID, older.id)
+
+        let deadline = Date(timeIntervalSinceNow: 10)
+        while fixture.back.selectedSessionID != newer.id, Date() < deadline { RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05)) }
+        XCTAssertEqual(fixture.back.selectedSessionID, newer.id)
+    }
+}
+
+@MainActor
+private struct LinkFixture {
+    let state: URL
+    let library: WindowLibrary
+    let delegate = AppDelegate()
+    let frontID: UUID
+    let backID: UUID
+    let front: AppStore
+    let back: AppStore
+    let hostFront: NSWindow
+    let hostBack: NSWindow
+
+    init() throws {
+        state = FileManager.default.temporaryDirectory
+            .appendingPathComponent("agterm-open-url-\(UUID().uuidString)", isDirectory: true)
+        library = WindowLibrary(directory: state)
+        frontID = try XCTUnwrap(library.activeWindowID)
+        backID = library.newWindow(name: "back").id
+        library.frontmostWindowID = frontID
+        front = try XCTUnwrap(library.store(for: frontID))
+        back = try XCTUnwrap(library.store(for: backID))
+        hostFront = Self.register(frontID)
+        hostBack = Self.register(backID)
+        delegate.library = library
+        delegate.actions = AppActions(library: library)
+    }
+
+    private static func register(_ id: UUID) -> NSWindow {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),
+                              styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        WindowRegistry.shared.register(id, window: window)
+        return window
+    }
+
+    func tearDown() {
+        [frontID, backID].forEach { WindowRegistry.shared.unregister($0) }
+        [hostFront, hostBack].forEach { $0.orderOut(nil) }
+        try? FileManager.default.removeItem(at: state)
+    }
+}
+
+private final class NoCatalogEffects: RemoteCatalogEffects {
+    func attachCommand(host: String, pane: CatalogPane, claim _: Bool) -> String { "attach \(host) \(pane.daemon)" }
+    func catalogRowAdded(_: Session) {}
+    func catalogRowRemoved(_: UUID) {}
+    func catalogRowEnded(_: UUID) {}
+    func catalogPaneNeedsAttach(_: UUID, session _: UUID) {}
+    func catalogBound(_: UUID) -> Bool { true }
+    func catalogStateChanged(_: RemoteCatalogMirror.State) {}
 }

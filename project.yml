@@ -120,6 +120,7 @@ targets:
         GIT_COMMIT: ""
         # Sparkle's appcast; empty means no updater. Only scripts/release.sh passes one.
         AGTERM_UPDATE_FEED: ""
+        AGTERM_URL_SCHEME: agterm
         ENABLE_HARDENED_RUNTIME: YES
         OTHER_LDFLAGS:
           - "-lc++"
@@ -139,6 +140,8 @@ targets:
           PRODUCT_BUNDLE_IDENTIFIER: com.umputun.agterm.debug
           # Debug alone needs the three hardened-runtime exceptions; see the header of the file.
           CODE_SIGN_ENTITLEMENTS: agterm/agterm-debug.entitlements
+          # a scheme nothing opens, so Launch Services never hands agterm:// links to a DerivedData build
+          AGTERM_URL_SCHEME: agterm-debug
         Release:
           CODE_SIGN_ENTITLEMENTS: agterm/agterm-adhoc.entitlements
     postBuildScripts:

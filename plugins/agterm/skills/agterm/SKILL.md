@@ -951,6 +951,11 @@ one row here showing it, never attaching anything or acting there.
 Unknown or closed sessions, a destination window with zoom, dashboard or a pending picker, other `agterm://`
 forms, ⌘⌥-clicks and links in a HUD, quick terminal or program overlay do nothing.
 
+The scheme is registered with macOS, so any other app can open the link too, for example a notification
+tool's click-through URL or `open "agterm://session/$AGTERM_SESSION_ID"`. It selects the session and raises
+its window, starting agterm first when needed. The id must name exactly one open row in that agterm; an
+origin id from an attached session is not translated.
+
 ## Displaying an image inline
 
 Show a png, jpg, gif or webp picture with `--image`; the panel takes the picture's shape and size, up to

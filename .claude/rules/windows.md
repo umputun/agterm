@@ -314,18 +314,22 @@ session drag are out of scope.
 
 ## Finder open
 
-- Warm `open -a agterm /path` (Discussion #230) resolves folders to themselves and files to parents,
-  queues them, and drains into the active store through `openSession(atDirectory:)`. Gate on a current
-  workspace and retry every 0.1 seconds for at most 50 ticks. After insertion, raise the active window so
+- `open -a agterm /path` (Discussion #230) resolves folders to themselves and files to parents,
+  queues them, and drains into the active store through `openSession(atDirectory:)`. A local destination waits
+  for a current workspace, retrying every 0.1 seconds for at most 50 ticks; a remote one refuses at once
+  without waiting for its catalog. After insertion, raise the active window so
   a minimized target becomes visible.
 - `CFBundleDocumentTypes` with `public.folder` and Viewer role adds Finder's Open With entry; it is not
   required for the `odoc` event itself.
-- Cold `open -a` is deliberately unsupported. SwiftUI fully initializes then retracts its auto-created
-  `WindowGroup` before delivering `odoc`, and macOS reaps the windowless process without
-  `applicationWillTerminate`. Independent bundle IDs reproduce it; preventing last-window termination,
-  forced reopen, untitled/reopen delegates, and in-process claim tricks do not solve it.
-- AppKit terminals create windows manually; Muxy's SwiftUI implementation routes cold opens through its
-  CLI. The clean workaround is an `odoc` to `oapp` relaunch, rejected because it double-launches and
-  flickers for the rare cold case. `defaultLaunchBehavior(.presented)` requires macOS 15 and cannot be
-  conditionally expressed in the macOS 14 `SceneBuilder`.
 - Finder open composes `session.new --cwd` with frontmost placement, so it is keep-in-sync exempt.
+- A cold launch by URL (`GURL`) or document (`odoc`) closes the launch window inside that event, before
+  `applicationDidFinishLaunching`, after it adopted the saved frontmost id; SwiftUI shows the others.
+  `TitleProbeView.isLaunchHandoff` recognises the close (no user or control close runs inside those events;
+  `NSRunningApplication.isFinishedLaunching` is already true there, hence `AppDelegate.launchFinished`),
+  `WindowRegistry.retire` unregisters that NSWindow and records `launchHandoffID`, every close effect is skipped, and
+  one main-queue hop reopens the id with the same store and surfaces. A retired window posts a second `willClose` and
+  keeps keying while SwiftUI closes it: those closes, its `bringForward` and its frontmost reports are ignored, and
+  the stray reconcile leaves it to SwiftUI, since closing it from there raises inside AppKit.
+- Every restored window then takes key during its attach-time raises, so a cold open waits for all of them
+  (`WindowRegistry.isPresented`) before acting: a session link selects its row, and queued folders target
+  `launchHandoffID`'s window, judged ready by its own store, then open there (or meet the remote refusal) and raise it.

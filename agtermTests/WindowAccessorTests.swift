@@ -90,6 +90,37 @@ final class WindowAccessorTests: XCTestCase {
         XCTAssertEqual(window.title, "early")
     }
 
+    func testOnlyAnOpenEventBeforeLaunchFinishesIsALaunchHandoff() {
+        let url = NSAppleEventDescriptor(eventClass: AEEventClass(kInternetEventClass), eventID: AEEventID(kAEGetURL),
+                                         targetDescriptor: nil, returnID: AEReturnID(kAutoGenerateReturnID),
+                                         transactionID: AETransactionID(kAnyTransactionID))
+        let documents = NSAppleEventDescriptor(eventClass: AEEventClass(kCoreEventClass), eventID: AEEventID(kAEOpenDocuments),
+                                               targetDescriptor: nil, returnID: AEReturnID(kAutoGenerateReturnID),
+                                               transactionID: AETransactionID(kAnyTransactionID))
+        let cases: [(NSAppleEventDescriptor?, Bool, Bool)] = [
+            (url, false, true), (url, true, false), (documents, false, true), (documents, true, false), (nil, false, false),
+        ]
+        for (event, finished, expected) in cases {
+            XCTAssertEqual(WindowAccessor.TitleProbeView.isLaunchHandoff(event: event, launchFinished: finished), expected)
+        }
+    }
+
+    func testClosingARetiredLaunchWindowKeepsItsWindowOpen() throws {
+        let windowID = try XCTUnwrap(library.activeWindowID)
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.activeSession)
+        window.contentView = WindowAccessor.TitleProbeView(windowID: windowID, library: library, store: store)
+        drain()
+        XCTAssertTrue(WindowRegistry.shared.isRegistered(windowID))
+        WindowRegistry.shared.retire(windowID, window: window)
+
+        window.close()
+
+        XCTAssertTrue(library.isOpen(windowID))
+        XCTAssertTrue(store.session(withID: session.id) === session)
+        XCTAssertFalse(WindowRegistry.shared.isRegistered(windowID))
+    }
+
     private func attachedProbe() throws -> WindowAccessor.TitleProbeView {
         let store = try XCTUnwrap(library.activeStore)
         let probe = WindowAccessor.TitleProbeView(windowID: try XCTUnwrap(library.activeWindowID),
