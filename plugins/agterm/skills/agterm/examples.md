@@ -99,9 +99,10 @@ its workspace there:
 
 ```bash
 agtermctl zmx tree studio.local --json |
-  jq -r '.result.remote.sessions[] | select(.parent == null) | [.id, .workspaceName] | @tsv' |
-  while IFS="$(printf '\t')" read -r id ws; do
-    agtermctl zmx attach studio.local "$id" --companions --workspace-name "$ws" --create-workspace
+  jq -c '.result.remote.sessions[] | select(.parent == null) | {id, ws: .workspaceName}' |
+  while read -r row; do
+    agtermctl zmx attach studio.local "$(jq -r .id <<<"$row")" --companions \
+      --workspace-name="$(jq -r .ws <<<"$row")" --create-workspace
   done
 ```
 

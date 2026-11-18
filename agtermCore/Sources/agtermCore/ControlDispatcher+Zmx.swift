@@ -136,6 +136,7 @@ extension ControlDispatcher {
         if args?.createWorkspace == true {
             return .failure(ArgumentRejection(message: "--create-workspace requires --workspace-name"))
         }
-        return .success(args?.workspace?.trimmedOrNil.map(ControlAttachWorkspace.id))
+        // passed as given, so a blank id fails to resolve as on `session.new` instead of reading as omitted
+        return .success(args?.workspace.map(ControlAttachWorkspace.id))
     }
 }

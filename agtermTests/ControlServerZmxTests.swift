@@ -550,11 +550,13 @@ final class ControlServerZmxTests: XCTestCase {
         let reply = await server.attachRemoteSession(host: "buildbox", session: "s1", window: nil,
                                                      workspace: .id(String(first.uuidString.prefix(8))))
         let unknown = await server.attachRemoteSession(host: "buildbox", session: "s1", window: nil, workspace: .id("zzzz"))
+        let blank = await server.attachRemoteSession(host: "buildbox", session: "s1", window: nil, workspace: .id(" "))
 
         XCTAssertTrue(reply.ok, reply.error ?? "")
         let row = try XCTUnwrap(reply.result?.id.flatMap(UUID.init(uuidString:)))
         XCTAssertEqual(store.workspace(forSession: row)?.id, first)
         XCTAssertEqual(unknown.error, "no such workspace: zzzz")
+        XCTAssertEqual(blank.error, "no such workspace:  ")
         XCTAssertEqual(store.workspaces.flatMap(\.sessions).filter { $0.remoteHost != nil }.count, 1)
     }
 

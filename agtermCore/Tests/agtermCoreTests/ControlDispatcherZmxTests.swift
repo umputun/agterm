@@ -434,10 +434,10 @@ struct ControlDispatcherZmxTests {
     }
 
     @Test(arguments: [
-        (" 1a2b ", nil, false, ControlAttachWorkspace.id("1a2b") as ControlAttachWorkspace?),
+        ("1a2b", nil, false, ControlAttachWorkspace.id("1a2b") as ControlAttachWorkspace?),
         (nil, " api ", false, .name("api", create: false)),
         (nil, "api", true, .name("api", create: true)),
-        ("  ", nil, false, nil), (nil, nil, false, nil),
+        ("  ", nil, false, .id("  ")), (nil, nil, false, nil),
     ])
     func anAttachWorkspaceParsesIdOrName(_ id: String?, _ name: String?, _ create: Bool,
                                          _ expected: ControlAttachWorkspace?) throws {

@@ -168,7 +168,7 @@ extension ControlServer {
     /// of a workspace in the window backed by `store`.
     enum RemotePageSpot {
         case companion(of: UUID)
-        case root(store: AppStore, workspace: UUID)
+        case root(store: AppStore, workspace: AttachDestination)
         /// existing is a page row a relaunch restored, waiting for its page.
         case existing(UUID)
     }
@@ -289,8 +289,13 @@ extension ControlServer {
             case .failure(let refusal): return ControlResponse(ok: false, error: refusal.message)
             case .success(let created): (store, row, parent) = (holder, created, parentID)
             }
-        case .root(let holder, let workspace):
-            guard library.windowID(for: holder) != nil, holder.workspaces.contains(where: { $0.id == workspace }) else {
+        case .root(let holder, let destination):
+            guard library.windowID(for: holder) != nil else {
+                return ControlResponse(ok: false, error: "the window or workspace to attach into was closed")
+            }
+            // a named workspace is created only once the handover succeeded, so a refused page adds none
+            guard let workspace = destination.workspace(in: holder) else { return Self.workspaceNotCreated }
+            guard holder.workspaces.contains(where: { $0.id == workspace }) else {
                 return ControlResponse(ok: false, error: "the window or workspace to attach into was closed")
             }
             switch holder.addReplicaPageRoot(toWorkspace: workspace, host: host, name: binding.sessionName, page: page,
@@ -368,10 +373,10 @@ extension ControlServer {
                              in store: AppStore, workspace target: ControlAttachWorkspace?) async -> ControlResponse {
         let origin = RemoteBinding.Origin(host: host, endpoint: tree.endpoint, sessionName: remote.name)
         guard remote.parent != nil else {
-            let workspace: UUID
+            let workspace: AttachDestination
             switch attachWorkspace(target, in: store) {
             case .failure(let response): return response
-            case .success(let id): workspace = id
+            case .success(let destination): workspace = destination
             }
             return await attachRemotePage(remote.id, origin: origin, presentation: PagePresentation(tree),
                                           at: .root(store: store, workspace: workspace), select: true,

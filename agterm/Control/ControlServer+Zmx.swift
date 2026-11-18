@@ -205,32 +205,51 @@ extension ControlServer {
         }
         switch attachWorkspace(target, in: store) {
         case .failure(let response): return response
-        case .success(let workspace):
+        case .success(let destination):
+            // created only now: discovery and lookup can no longer refuse, only a payload agterm cannot address
+            guard let workspace = destination.workspace(in: store) else { return Self.workspaceNotCreated }
             return attach(remote, from: tree, host: host, placement: RemotePlacement(store: store, workspace: workspace))
         }
     }
 
-    /// attachWorkspace is where a row that stands alone lands in `store`: `target`, else the current workspace. A named
-    /// workspace is created here, after discovery, as `session.new --create-workspace` creates one before its session.
-    func attachWorkspace(_ target: ControlAttachWorkspace?, in store: AppStore) -> ControlTargetResolver.Resolution<UUID> {
+    static let workspaceNotCreated = ControlResponse(ok: false, error: "the workspace to attach into could not be created")
+
+    /// AttachDestination is the workspace an attach resolved: one that exists, or a name `--create-workspace` adds
+    /// when the row is placed, so a refusal before that adds none.
+    enum AttachDestination {
+        case existing(UUID)
+        case create(String)
+
+        /// workspace is the destination's id in `store`, creating a named one now; nil when the name sanitizes to blank.
+        @MainActor func workspace(in store: AppStore) -> UUID? {
+            switch self {
+            case .existing(let id): return id
+            case .create(let name): return store.ensureWorkspace(named: name)?.id
+            }
+        }
+    }
+
+    /// attachWorkspace is where a row that stands alone lands in `store`: `target`, else the current workspace.
+    func attachWorkspace(_ target: ControlAttachWorkspace?, in store: AppStore) -> ControlTargetResolver.Resolution<AttachDestination> {
         switch target {
         case nil:
             guard let id = store.currentWorkspaceID else {
                 return .failure(ControlResponse(ok: false, error: "no window to attach into"))
             }
-            return .success(id)
+            return .success(.existing(id))
         case .id(let raw):
             let resolution = ControlResolve.resolve(raw, candidates: store.workspaces.map(\.id), active: store.currentWorkspaceID)
             guard case .resolved(let id) = resolution else {
                 let message = ControlResolve.errorMessage(noun: "workspace", target: raw, resolution: resolution)
                 return .failure(ControlResponse(ok: false, error: message))
             }
-            return .success(id)
+            return .success(.existing(id))
         case .name(let name, let create):
-            guard let found = create ? store.ensureWorkspace(named: name) : store.workspace(named: name) else {
+            if let found = store.workspace(named: name) { return .success(.existing(found.id)) }
+            guard create else {
                 return .failure(ControlResponse(ok: false, error: "no workspace named \"\(name)\" (pass --create-workspace to add it)"))
             }
-            return .success(found.id)
+            return .success(.create(name))
         }
     }
 

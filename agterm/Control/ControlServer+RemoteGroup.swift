@@ -21,16 +21,20 @@ extension ControlServer {
         case .failure(let response): return response
         case .success(let (_, resolved)): store = resolved
         }
-        let workspace: UUID
+        let destination: AttachDestination
         switch attachWorkspace(target, in: store) {
         case .failure(let response): return response
-        case .success(let id): workspace = id
+        case .success(let resolved): destination = resolved
         }
-        let attached = remote.content == "page"
-            ? await attachRemotePage(remote.id, origin: RemoteBinding.Origin(host: host, endpoint: tree.endpoint, sessionName: remote.name),
-                                     presentation: PagePresentation(tree), at: .root(store: store, workspace: workspace), select: true,
-                                     companions: remote.companions?.map(\.id))
-            : attach(remote, from: tree, host: host, placement: RemotePlacement(store: store, workspace: workspace))
+        let attached: ControlResponse
+        if remote.content == "page" {
+            attached = await attachRemotePage(remote.id, origin: RemoteBinding.Origin(host: host, endpoint: tree.endpoint, sessionName: remote.name),
+                                              presentation: PagePresentation(tree), at: .root(store: store, workspace: destination), select: true,
+                                              companions: remote.companions?.map(\.id))
+        } else {
+            guard let workspace = destination.workspace(in: store) else { return Self.workspaceNotCreated }
+            attached = attach(remote, from: tree, host: host, placement: RemotePlacement(store: store, workspace: workspace))
+        }
         guard attached.ok, let parentID = attached.result?.id.flatMap(UUID.init(uuidString:)) else { return attached }
 
         let known = remote.companions != nil

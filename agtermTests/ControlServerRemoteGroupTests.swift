@@ -219,6 +219,23 @@ final class ControlServerRemoteGroupTests: XCTestCase {
         }
     }
 
+    func testAPageRootTheOriginRefusesCreatesNoNamedWorkspace() async throws {
+        let refused = RemoteCommandResult(status: 0, stdout: #"{"ok":false,"error":"not a shareable page"}"#, stderr: "")
+        let listing = tree([pageRoot(members: [])])
+        let (server, store) = makeServer(ScriptedRunner([listing, refused, listing, refused]))
+        let current = store.currentWorkspaceID
+
+        let single = await server.attachRemoteSession(host: "buildbox", session: "PR", window: nil,
+                                                      workspace: .name("pages", create: true))
+        let group = await server.attachRemoteGroup(host: "buildbox", session: "PR", window: nil,
+                                                   workspace: .name("pages", create: true))
+
+        XCTAssertFalse(single.ok)
+        XCTAssertFalse(group.ok)
+        XCTAssertNil(store.workspace(named: "pages"))
+        XCTAssertEqual(store.currentWorkspaceID, current)
+    }
+
     func testAPageRootGroupArrivesAsATopLevelReplicaRowWithItsCompanionsUnderIt() async throws {
         let listing = tree([pageRoot(members: ["c1", "pg"]), terminal("c1", parent: "PR"), page("pg", parent: "PR")])
         let runner = ScriptedRunner([listing, pageAttach(id: "PR", page: rootPageID), pageAttach(id: "pg", parent: "PR")])

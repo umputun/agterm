@@ -2537,14 +2537,15 @@ each pane (a page session needs none), and the far side must be new enough to an
 half-attached. It also needs `agtermctl` installed by the cask or the Help action: a machine merely
 running agterm has no CLI an ssh command can find, and the read fails with exit 127.
 
-`agtermctl zmx attach HOST SESSION [--window W]` opens one of those sessions here, marked remote, in
-the destination window's current workspace, selected, with the remote session's split when it has one.
+`agtermctl zmx attach HOST SESSION [--window W] [--workspace W | --workspace-name NAME [--create-workspace]]`
+opens one of those sessions here, marked remote, in the destination window's current workspace, selected, with the remote session's split when it has one.
 `--window` takes a local open window ID, unique prefix, or `active`; omitted, it uses the frontmost window
 after discovery. An invalid or closed destination fails without creating a session. Targeting a background
 window leaves the frontmost window unchanged. `--workspace W` (id, unique prefix or `active`) or
 `--workspace-name NAME` puts the row in that workspace of the window instead of the current one;
 `--create-workspace` with a name creates it when missing and reuses it otherwise, and a missing name without it
-fails before anything is created. A companion that joins its parent's row goes where that row is. `SESSION` is the
+fails before anything is created. A missing workspace is created only once the row can be placed, so a refused
+attach adds none. A companion that joins its parent's row goes where that row is. `SESSION` is the
 `id` from `zmx tree`, never the name: remote names are editable and repeat across workspaces. Returns the
 new local session's `id`; read `remoteHost` and `remoteSessionID` on its tree node. The remote is resolved AGAIN before anything
 is created, so a session that has gone since the listing fails and creates nothing. A connection that
@@ -2559,7 +2560,7 @@ pane's ssh joins an existing `ControlMaster` connection, that master's settings 
 
 A terminal companion attached on its own opens under the one row in the destination window attached from
 its parent, in that row's workspace (`result.parent` names it); with no such row, or more than one, it opens on its own.
-A top-level page session opens as a top-level row in the destination window's current workspace, showing that
+A top-level page session opens as a top-level row in the destination workspace, showing that
 Mac's page through its own channel; with `--companions` its companions attach under it.
 `agtermctl zmx attach HOST SESSION --companions` (`zmx.attach.group`) attaches a top-level session and then
 each of its companions under it from one read, in the origin's companion order when reported and in the
