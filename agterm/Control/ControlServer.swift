@@ -129,7 +129,7 @@ final class ControlServer {
     lazy var remoteOpeners = RemoteOpeners()
     var remoteConnectionIDs: [UUID: UUID] = [:]
     /// snapshotBook holds the files this Mac offered for viewers' `open` rules.
-    lazy var snapshotBook = SnapshotOfferBook()
+    lazy var snapshotBook = SnapshotOfferBook(clock: { [unowned self] in hudClock() })
     /// pageLauncher and forwardLauncher start a page's channel helper and port forward; injectable so a hosted test needs no ssh.
     var pageLauncher: RemotePageLauncher = RemotePageProcess()
     /// catalogPageClaims are the remote page rows a claim runs for; `ControlServer+CatalogPage` owns them.

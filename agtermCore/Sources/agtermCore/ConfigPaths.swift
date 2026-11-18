@@ -90,7 +90,7 @@ public enum ConfigPaths {
         # reload`) to apply. Blank lines and lines starting with `#` are ignored. A line that is
         # rejected or skipped is reported in Settings ▸ Key Mapping and by `agtermctl keymap list`.
         #
-        # Three verbs:
+        # Four verbs:
         #
         #   map <chord> [--repeat] <action>
         #       Rebind a built-in action. Chords use kitty syntax: mods joined by `+`, e.g.

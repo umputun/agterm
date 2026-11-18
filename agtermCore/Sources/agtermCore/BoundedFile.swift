@@ -57,6 +57,12 @@ public enum BoundedFile {
         }
     }
 
+    /// readPrefix returns the first `count` bytes of the regular file at `path`, whatever its length now; nil when it
+    /// holds fewer.
+    public static func readPrefix(path: String, count: Int) -> Result<Data?, Failure> {
+        withDescriptor(path: path, maxBytes: nil) { fd, _ in .success(readFully(fd, offset: 0, count: count)) }
+    }
+
     /// readTail returns the last `maxBytes` of the regular file at `path` plus the byte before them, which tells
     /// `LogTail` whether the window opens on a line boundary. Any size is accepted. nil when the file still has
     /// `unchangedFrom`'s stamp: nothing is read then.

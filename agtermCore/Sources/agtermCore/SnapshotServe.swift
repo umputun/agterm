@@ -174,9 +174,10 @@ public final class SnapshotServeStream: Sendable {
             return owner.sendWaiting(line)
         }
         let data: Data
-        switch BoundedFile.read(path: file, maxBytes: size) {
-        case .success(let read) where read.count == size: data = read
-        case .success, .failure(.tooLarge): return _ = send(.failure(id: id, error: "file changed since it was offered"))
+        // a log keeps growing after the offer measured it, so the offered prefix is the snapshot
+        switch BoundedFile.readPrefix(path: file, count: size) {
+        case .success(let read?): data = read
+        case .success(nil), .failure(.tooLarge): return _ = send(.failure(id: id, error: "file changed since it was offered"))
         case .failure(.unreadable): return _ = send(.failure(id: id, error: "file cannot be read"))
         }
         guard !cancelled() else { return _ = send(.failure(id: id, error: PageServeFrame.cancelled)) }

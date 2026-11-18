@@ -70,16 +70,24 @@ public struct ControlKeymapCommand: Codable, Sendable, Equatable {
     }
 }
 
-/// One `open` line from `keymap.conf`: the selectors it still owns, its shell text and its line.
+/// One `open` line from `keymap.conf`: the selectors it still owns, its shell text and its line. The failure-panel
+/// fields are set only for a line with `--error-hud`.
 public struct ControlKeymapOpener: Codable, Sendable, Equatable {
     public var selectors: [String]
     public var command: String
     public var line: Int
+    public var errorHud: Bool?
+    public var errorPosition: HudPosition?
+    public var errorPane: OverlayPane?
 
-    public init(selectors: [String], command: String, line: Int) {
+    public init(selectors: [String], command: String, line: Int, errorHud: Bool? = nil, errorPosition: HudPosition? = nil,
+                errorPane: OverlayPane? = nil) {
         self.selectors = selectors
         self.command = command
         self.line = line
+        self.errorHud = errorHud
+        self.errorPosition = errorPosition
+        self.errorPane = errorPane
     }
 }
 
@@ -176,7 +184,10 @@ public extension ControlKeymap {
                                 repeats: $0.repeats)
         }
         let openers = keymap.openers.map {
-            ControlKeymapOpener(selectors: $0.selectors.map(\.text), command: $0.command.command, line: $0.line)
+            let panel = $0.command.errorHud
+            return ControlKeymapOpener(selectors: $0.selectors.map(\.text), command: $0.command.command, line: $0.line,
+                                       errorHud: panel ? true : nil, errorPosition: panel ? $0.command.errorPosition : nil,
+                                       errorPane: panel ? $0.command.errorPane : nil)
         }
         return ControlKeymap(path: path, actions: actions, commands: commands,
                              diagnostics: diagnostics.map { ControlKeymapDiagnostic(line: $0.line, message: $0.message) },

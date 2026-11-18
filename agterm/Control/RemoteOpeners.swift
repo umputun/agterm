@@ -28,9 +28,9 @@ final class RemoteOpeners {
     private var transfers: [UUID: Transfer] = [:]
 
     /// record books a click in `surface` when a rule takes a name it may resolve to; nil sends it without a snapshot.
-    func record(raw: String, connection: UUID, session: UUID, pane: UUID, surface: GhosttySurfaceView) -> UUID? {
+    func record(raw: String, connection: UUID, session: UUID, surface: GhosttySurfaceView) -> UUID? {
         defer { prune() }
-        guard let click = book.record(raw: raw, connection: connection, session: session, pane: pane, rules: rules()) else {
+        guard let click = book.record(raw: raw, connection: connection, session: session, rules: rules()) else {
             return nil
         }
         surfaces[click] = WeakSurface(surface)
@@ -68,10 +68,13 @@ final class RemoteOpeners {
         return true
     }
 
-    /// teardown ends every click of a connection that went away, reporting none of them.
-    func teardown(connection: UUID) {
-        for entry in book.teardown(connection: connection) { endTransfer(entry.click) }
+    /// teardown ends every click of a connection that went away and returns the ones whose snapshot was in flight.
+    @discardableResult
+    func teardown(connection: UUID) -> [PendingOpenerClicks.Entry] {
+        let gone = book.teardown(connection: connection)
+        for entry in gone { endTransfer(entry.click) }
         prune()
+        return gone.filter(\.inFlight)
     }
 
     /// overdue retires the transfers still reading past the read deadline and returns them, for the caller to report;

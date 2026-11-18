@@ -330,8 +330,8 @@ public enum LinkPolicy {
         return names
     }
 
-    /// previewBytes is the byte cap of the page a file named `name` opens as, nil for a file no page shows: an `open`
-    /// rule receives only what the built-in page could have read.
+    /// previewBytes is the byte cap of the page a file named `name` opens as, nil for a file no page shows; it also caps
+    /// a remote snapshot.
     public static func previewBytes(forFileName name: String) -> Int? {
         guard !name.contains("/") else { return nil }
         switch localPath("/" + name) {

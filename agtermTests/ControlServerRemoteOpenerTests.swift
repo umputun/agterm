@@ -153,6 +153,23 @@ final class ControlServerRemoteOpenerTests: XCTestCase {
         XCTAssertFalse(fix.session.hudActive)
     }
 
+    func testAStreamFailingMidTransferReportsTheCopyOnceAndRunsNothing() async throws {
+        let fix = try connected(files: ["notes.md": Data("# notes\n".utf8)], held: ["notes.md"])
+        let click = try book(fix, "./notes.md")
+        _ = try book(fix, "./other.md")
+        try offer(fix, click: click, name: "notes.md", size: 8)
+        try await waitUntil { fix.launcher.origins.first?.received.isEmpty == false }
+
+        fix.transport.close("ssh: lost")
+        try await waitUntil { fix.session.hudActive }
+        try await settle()
+
+        XCTAssertEqual(fix.session.hudSpec?.message, RemoteLinkRefusal.snapshotFailed.message(host: "buildbox"))
+        XCTAssertTrue(fix.launches.runs.isEmpty)
+        XCTAssertEqual(try stagedCopies(fix), [])
+        XCTAssertTrue(fix.server.remoteOpeners.isIdle)
+    }
+
     func testATransferPastTheReadDeadlineFailsOnceAndRunsNothing() async throws {
         let fix = try connected(files: ["notes.md": Data("# notes\n".utf8)], held: ["notes.md"])
         let click = try book(fix, "./notes.md")

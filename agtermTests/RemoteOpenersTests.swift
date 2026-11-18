@@ -13,9 +13,9 @@ final class RemoteOpenersTests: XCTestCase {
         openers.rules = { parseKeymap("open *.md mdview").0.openers }
         let (connection, session) = (UUID(), UUID())
         let surface = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), command: "/bin/cat")
-        let reading = try XCTUnwrap(openers.record(raw: "/srv/a.md", connection: connection, session: session, pane: UUID(),
+        let reading = try XCTUnwrap(openers.record(raw: "/srv/a.md", connection: connection, session: session,
                                                    surface: surface))
-        let staging = try XCTUnwrap(openers.record(raw: "/srv/b.md", connection: connection, session: session, pane: UUID(),
+        let staging = try XCTUnwrap(openers.record(raw: "/srv/b.md", connection: connection, session: session,
                                                    surface: surface))
         for (click, name) in [(reading, "a.md"), (staging, "b.md")] {
             XCTAssertNotNil(openers.accept(PresentationLinkSnapshot(click: click, token: "t", name: name, size: 1),

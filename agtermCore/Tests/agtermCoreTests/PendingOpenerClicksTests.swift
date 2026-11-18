@@ -9,7 +9,6 @@ struct PendingOpenerClicksTests {
     private let clock = Clock()
     private let connection = UUID()
     private let session = UUID()
-    private let pane = UUID()
 
     private func rules(_ text: String) -> [FileOpener] {
         let (keymap, diagnostics) = parseKeymap(text)
@@ -23,7 +22,7 @@ struct PendingOpenerClicksTests {
     }
 
     private func record(_ raw: String, in book: PendingOpenerClicks, rules: [FileOpener]) -> UUID? {
-        book.record(raw: raw, connection: connection, session: session, pane: pane, rules: rules)
+        book.record(raw: raw, connection: connection, session: session, rules: rules)
     }
 
     private func snapshot(_ click: UUID, name: String) -> PresentationLinkSnapshot {
@@ -73,9 +72,9 @@ struct PendingOpenerClicksTests {
         #expect(book.accept(snapshot(click, name: "notes.md"), connection: connection, session: UUID()) == nil)
         #expect(book.accept(snapshot(click, name: "other.md"), connection: connection, session: session) == nil)
         let accepted = try #require(book.accept(snapshot(click, name: "notes.md"), connection: connection, session: session))
-        #expect(accepted.entry.pane == pane)
+        #expect(accepted.entry.click == click)
         #expect(book.accept(snapshot(click, name: "notes.md"), connection: connection, session: session) == nil)
-        #expect(book.isCurrent(click, connection: connection))
+        #expect(book.contains(click))
     }
 
     @Test func anOfferArrivingAfterTheClaimWindowIsRejectedAndTheEntryDropped() throws {
@@ -85,7 +84,7 @@ struct PendingOpenerClicksTests {
         clock.now = clock.now.addingTimeInterval(PendingOpenerClicks.window + 1)
 
         #expect(book.accept(snapshot(click, name: "notes.md"), connection: connection, session: session) == nil)
-        #expect(!book.isCurrent(click, connection: connection))
+        #expect(!book.contains(click))
         #expect(book.isEmpty)
     }
 
@@ -97,7 +96,7 @@ struct PendingOpenerClicksTests {
         clock.now = clock.now.addingTimeInterval(PendingOpenerClicks.window + 1)
         book.expire()
 
-        #expect(book.isCurrent(click, connection: connection))
+        #expect(book.contains(click))
     }
 
     @Test func anOfferOverItsPagesCapIsNotAccepted() throws {
@@ -135,7 +134,7 @@ struct PendingOpenerClicksTests {
         #expect(book.retire(spawned) != nil)
 
         #expect(book.accept(snapshot(refused, name: "a.md"), connection: connection, session: session) == nil)
-        #expect(!book.isCurrent(spawned, connection: connection))
+        #expect(!book.contains(spawned))
         #expect(book.retire(spawned) == nil)
     }
 
@@ -144,7 +143,7 @@ struct PendingOpenerClicksTests {
         let pending = try #require(record("/srv/a.md", in: book, rules: rules("open *.md view")))
         let inFlight = try #require(record("/srv/b.md", in: book, rules: rules("open *.md view")))
         #expect(book.accept(snapshot(inFlight, name: "b.md"), connection: connection, session: session) != nil)
-        let other = try #require(book.record(raw: "/srv/c.md", connection: UUID(), session: session, pane: pane,
+        let other = try #require(book.record(raw: "/srv/c.md", connection: UUID(), session: session,
                                              rules: rules("open *.md view")))
 
         let removed = book.teardown(connection: connection)
@@ -152,7 +151,7 @@ struct PendingOpenerClicksTests {
         #expect(Set(removed.map(\.click)) == [pending, inFlight])
         #expect(removed.first { $0.click == inFlight }?.inFlight == true)
         #expect(book.accept(snapshot(pending, name: "a.md"), connection: connection, session: session) == nil)
-        #expect(!book.isCurrent(inFlight, connection: connection))
+        #expect(!book.contains(inFlight))
         #expect(book.retire(other) != nil)
     }
 }

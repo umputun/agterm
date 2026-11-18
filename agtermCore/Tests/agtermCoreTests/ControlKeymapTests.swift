@@ -226,6 +226,11 @@ import Testing
         let (keymap, _) = parseKeymap("open *.md,README mdview \"$AGT_PATH\"\n")
         let payload = ControlKeymap.project(keymap: keymap, diagnostics: [], path: "/tmp/keymap.conf")
         #expect(payload.openers == [ControlKeymapOpener(selectors: ["*.md", "README"], command: #"mdview "$AGT_PATH""#, line: 1)])
+        let paneled = parseKeymap("open *.md --error-hud mdview\nopen *.txt --error-position top --error-pane left --error-hud tv\n").0
+        #expect(ControlKeymap.project(keymap: paneled, diagnostics: [], path: "/tmp/k").openers == [
+            ControlKeymapOpener(selectors: ["*.md"], command: "mdview", line: 1, errorHud: true, errorPosition: .center),
+            ControlKeymapOpener(selectors: ["*.txt"], command: "tv", line: 2, errorHud: true, errorPosition: .topCenter, errorPane: .left),
+        ])
         let none = ControlKeymap.project(keymap: Keymap(builtinOverrides: [:], commands: []), diagnostics: [], path: "/tmp/k")
         let json = String(decoding: try JSONEncoder().encode(none), as: UTF8.self)
         #expect(!json.contains("openers"))

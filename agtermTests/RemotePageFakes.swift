@@ -307,11 +307,13 @@ final class FakePresentationTransport: RemotePresentationTransport {
 
     var links: [Link] = []
     var deliver: [(Data) -> Void] = []
+    private var closes: [(String) -> Void] = []
     private var rev = 0
 
     func open(_: [String], onLine: @escaping @MainActor (Data) -> Void,
-              onClose _: @escaping @MainActor (String) -> Void) -> RemotePresentationLink {
+              onClose: @escaping @MainActor (String) -> Void) -> RemotePresentationLink {
         deliver.append(onLine)
+        closes.append(onClose)
         let link = Link()
         links.append(link)
         return link
@@ -320,6 +322,10 @@ final class FakePresentationTransport: RemotePresentationTransport {
     func feed(_ body: PresentationFrame.Body) throws {
         rev += 1
         deliver.last?(Data(try PresentationCodec.encode(PresentationFrame(gen: 3, rev: rev, body: body)).dropLast()))
+    }
+
+    func close(_ reason: String) {
+        closes.last?(reason)
     }
 
     var clicks: [PresentationLinkClick] {

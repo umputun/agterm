@@ -32,7 +32,14 @@ extension SocketClient {
         }
         if let openers = keymap.openers, !openers.isEmpty {
             lines.append(contentsOf: ["", "openers:"])
-            lines.append(contentsOf: openers.map { "    \($0.selectors.joined(separator: ","))  \($0.command)" })
+            lines.append(contentsOf: openers.map { opener in
+                var row = "    \(opener.selectors.joined(separator: ","))"
+                if opener.errorHud == true {
+                    row += "  --error-hud --error-position \((opener.errorPosition ?? .defaultPosition).rawValue)"
+                    if let pane = opener.errorPane { row += " --error-pane \(pane.rawValue)" }
+                }
+                return row + "  \(opener.command)"
+            })
         }
         if !keymap.diagnostics.isEmpty {
             lines.append(contentsOf: ["", "diagnostics:"])

@@ -1466,6 +1466,13 @@ struct KeymapTests {
         #expect(diagnostics == [KeymapDiagnostic(line: 1, message: message)])
     }
 
+    @Test(arguments: [#"open *.md view "${AGT_PATH}""#, "open *.md view ${AGT_PANE} $AGT_PATH"])
+    func aShellExpansionOfAnAgtVariableIsKept(line: String) throws {
+        let (keymap, diagnostics) = parseKeymap(line)
+        #expect(diagnostics.isEmpty)
+        #expect(try #require(keymap.openers.first).command.command == String(line.dropFirst("open *.md ".count)))
+    }
+
     @Test func aLaterOpenLineTakesARepeatedSelectorAndTheEarlierLineIsDiagnosed() throws {
         let (keymap, diagnostics) = parseKeymap("open *.md,*.txt first\nopen *.md second\nopen *.txt third\n")
         #expect(keymap.openers.map(\.line) == [2, 3])

@@ -78,9 +78,14 @@ extension ControlServer {
         for entry in remoteOpeners.overdue() { refuseRemoteLinkClick(.snapshotFailed, session: entry.session) }
     }
 
-    /// renewOpenerConnection ends the clicks booked on `id`'s current stream, so a later stream's offers never match them.
+    /// renewOpenerConnection ends the clicks booked on `id`'s current stream, so a later stream's offers never match them,
+    /// and reports each snapshot it cut off: the row stays, and nothing else answers that click.
     func renewOpenerConnection(_ id: UUID) {
-        endOpenerConnection(id)
+        if let connection = remoteConnectionIDs[id] {
+            for entry in remoteOpeners.teardown(connection: connection) {
+                refuseRemoteLinkClick(.snapshotFailed, session: entry.session)
+            }
+        }
         remoteConnectionIDs[id] = UUID()
     }
 

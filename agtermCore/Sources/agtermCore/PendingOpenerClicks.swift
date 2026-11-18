@@ -1,7 +1,7 @@
 import Foundation
 
 /// PendingOpenerClicks holds the clicks this Mac forwarded asking for a snapshot, each scoped to the presentation
-/// connection, session and pane it was made in and carrying the `open` rules of click time, so a keymap reload
+/// connection and session it was made in and carrying the `open` rules of click time, so a keymap reload
 /// during the transfer cannot change which command runs. An entry stays, in flight, from an accepted snapshot until
 /// the spawn or a failure retires it; one whose origin opened a page instead is never answered and expires.
 @MainActor
@@ -15,7 +15,6 @@ public final class PendingOpenerClicks {
         public let click: UUID
         public let connection: UUID
         public let session: UUID
-        public let pane: UUID
         public let candidates: [String]
         public let rules: [FileOpener]
         let created: Date
@@ -37,13 +36,13 @@ public final class PendingOpenerClicks {
 
     /// record books a click on `raw` when one of `rules` takes a name it may resolve to, and returns its id; nil when
     /// none could, which sends the click as before.
-    public func record(raw: String, connection: UUID, session: UUID, pane: UUID, rules: [FileOpener]) -> UUID? {
+    public func record(raw: String, connection: UUID, session: UUID, rules: [FileOpener]) -> UUID? {
         expire()
         let candidates = LinkPolicy.candidateNames(for: raw)
         let eligible = rules.filter { rule in candidates.contains { rules.opener(forFile: $0) == rule } }
         guard !eligible.isEmpty else { return nil }
         let click = UUID()
-        entries[click] = Entry(click: click, connection: connection, session: session, pane: pane, candidates: candidates,
+        entries[click] = Entry(click: click, connection: connection, session: session, candidates: candidates,
                                rules: eligible, created: now())
         return click
     }
@@ -70,11 +69,6 @@ public final class PendingOpenerClicks {
         entry.accepted = now()
         entries[snapshot.click] = entry
         return (entry, rule)
-    }
-
-    /// isCurrent says whether `click` is still booked on `connection`, rechecked before the spawn.
-    public func isCurrent(_ click: UUID, connection: UUID) -> Bool {
-        entries[click]?.connection == connection
     }
 
     /// retire removes a click for its spawn, a failure or a refusal naming it.

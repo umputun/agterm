@@ -30,8 +30,8 @@ extension ControlServer {
                                       originTakesLeads: client?.claimsLead == true) {
         case .failure(let reason): return reason
         case .success(var frame):
-            if snapshots, let surface, let pane = click.pane, let connection = remoteConnectionIDs[click.session],
-               let booked = remoteOpeners.record(raw: click.raw, connection: connection, session: click.session, pane: pane,
+            if snapshots, let surface, click.pane != nil, let connection = remoteConnectionIDs[click.session],
+               let booked = remoteOpeners.record(raw: click.raw, connection: connection, session: click.session,
                                                  surface: surface) {
                 frame.click = booked
                 frame.openers = remoteOpeners.book.selectors(for: booked)

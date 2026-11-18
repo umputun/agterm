@@ -2149,7 +2149,8 @@ still shows its panel. An unknown name answers `no custom command named NAME`.
   always booleans, `errorPosition` is the canonical position (default `center`), and `errorPane` is `left` or `right`,
   omitted for session-wide placement. The human listing shows `--repeat` and error options for opted-in commands.
 - `openers[]` — the `open` lines: `selectors` (the ones each line still owns after a later line took one),
-  `command` and `line`; omitted when there are none.
+  `command` and `line`, plus `errorHud`, `errorPosition` and `errorPane` (when set) for a line with `--error-hud`;
+  omitted when there are none.
 - `diagnostics[]` — `line` + `message` per parse problem (`keymap.reload` returns only the count).
 - `menu[]` — the key equivalents the menu bar carries: `chord`, the owning `menu`, the item `title`, its
   `selector`, and `enabled: false` when the item is disabled. agterm's own items report `menuAction:`;

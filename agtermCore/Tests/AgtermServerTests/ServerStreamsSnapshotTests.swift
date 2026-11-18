@@ -91,6 +91,30 @@ extension ServerStreamsTests {
         #expect(!streams.claimPageStream(snapshot.token).ok)
     }
 
+    @Test func aFileThatGrowsAfterTheOfferServesTheOfferedBytesAndAShrunkOneFails() async throws {
+        let session = try snapshotSession()
+        let viewer = try await presenter(for: session)
+        defer { viewer.disconnect() }
+        let log = try snapshotFile("build.log", "line 1\n")
+        let note = try snapshotFile("notes.md", "# notes\n")
+
+        try snapshotClick("./build.log", on: session, click: UUID(), openers: ["*.log"], from: viewer)
+        guard case .linkSnapshot(let grown)? = await answer(from: viewer) else { Issue.record("no snapshot"); return }
+        try snapshotClick("./notes.md", on: session, click: UUID(), openers: ["*.md"], from: viewer)
+        guard case .linkSnapshot(let shrunk)? = await answer(from: viewer) else { Issue.record("no snapshot"); return }
+        let handle = try FileHandle(forWritingTo: URL(fileURLWithPath: log))
+        try handle.seekToEnd()
+        try handle.write(contentsOf: Data("line 2\n".utf8))
+        try handle.close()
+        try Data("#\n".utf8).write(to: URL(fileURLWithPath: note))
+
+        let served = try await read(try channel(grown.token), id: 1, path: "build.log")
+        #expect(served.data == Data("line 1\n".utf8))
+        #expect(served.end == .end(id: 1))
+        let failed = try await read(try channel(shrunk.token), id: 1, path: "notes.md")
+        #expect(failed.end == .failure(id: 1, error: "file changed since it was offered"))
+    }
+
     @Test func aClickWithoutAnIDOrFromAViewerWithoutSnapshotsOpensThePage() async throws {
         let session = try snapshotSession()
         _ = try snapshotFile("notes.md")

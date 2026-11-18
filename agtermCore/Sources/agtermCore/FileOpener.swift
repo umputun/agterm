@@ -101,7 +101,7 @@ func parseOpenLine(_ rest: String, line: Int, openers: inout [FileOpener], diagn
         diagnostics.append(KeymapDiagnostic(line: line, message: "\(subject) takes no --repeat; line skipped"))
         return
     }
-    guard !command.command.contains("{AGT_") else {
+    guard command.command.range(of: #"(^|[^$])\{AGT_"#, options: .regularExpression) == nil else {
         diagnostics.append(KeymapDiagnostic(line: line,
             message: "\(subject) shell text is run as written, so {AGT_...} is not expanded; use \"$AGT_PATH\" and $AGT_*; line skipped"))
         return

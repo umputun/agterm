@@ -199,4 +199,11 @@ struct KeymapFormatterTests {
                                     openers: [ControlKeymapOpener(selectors: ["*.md", "README"], command: "mdview", line: 3)])
         #expect(SocketClient.formatKeymap(payload) == "keymap: /tmp/keymap.conf\n\nactions:\n\nopeners:\n    *.md,README  mdview")
     }
+
+    @Test func formatsAnOpenRulesFailurePanelOptions() {
+        let payload = ControlKeymap(path: "/tmp/keymap.conf", actions: [], commands: [], diagnostics: [],
+                                    openers: [ControlKeymapOpener(selectors: ["*.md"], command: "mdview", line: 1, errorHud: true,
+                                                                  errorPosition: .topRight, errorPane: .left)])
+        #expect(SocketClient.formatKeymap(payload).hasSuffix("\n    *.md  --error-hud --error-position top-right --error-pane left  mdview"))
+    }
 }

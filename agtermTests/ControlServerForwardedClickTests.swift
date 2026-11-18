@@ -352,6 +352,20 @@ final class ControlServerForwardedClickTests: XCTestCase {
         XCTAssertFalse(server.claimPageServe(snapshot.token).ok)
     }
 
+    func testAnOfferNobodyClaimsExpiresOnTheServersClock() async throws {
+        let (_, session) = try addSession()
+        let presenter = try present(session, snapshots: true)
+        _ = try write("notes.md", "# notes\n")
+        let start = Date()
+        server.hudClock = { start }
+
+        clickForSnapshot("./notes.md", in: session, click: UUID(), openers: ["*.md"])
+        try await waitUntil { !presenter.snapshots.isEmpty }
+        server.hudClock = { start.addingTimeInterval(AppStore.pageClaimWindow + 1) }
+
+        XCTAssertFalse(server.claimPageServe(try XCTUnwrap(presenter.snapshots.first).token).ok)
+    }
+
     func testAClickNoSelectorTakesOrFromAViewerWithoutSnapshotsOpensThePage() async throws {
         let (_, session) = try addSession()
         _ = try write("notes.md", "# notes\n")
