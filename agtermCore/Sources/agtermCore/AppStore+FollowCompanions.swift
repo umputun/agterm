@@ -49,6 +49,11 @@ extension AppStore {
         save()
     }
 
+    /// setFollowsCompanions records whether row `id` holds its origin's companion list, for the `tree` read-back.
+    public func setFollowsCompanions(_ follows: Bool, forSession id: UUID) {
+        session(withID: id)?.remotePresentation?.followsCompanions = follows
+    }
+
     // origin ids arrive in either case from a tree or a binding; membership frames carry the canonical form
     private static func originID(_ id: String) -> String {
         UUID(uuidString: id)?.uuidString ?? id

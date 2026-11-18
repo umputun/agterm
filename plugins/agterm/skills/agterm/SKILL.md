@@ -283,9 +283,10 @@ build or login, which `zmx reset` moves to the current one; omitted otherwise),
 session; an attached row is saved and attached again at relaunch, while a remote window rebuilds its rows),
 `remoteSessionID` (the origin's id for the session an attached row shows, the id `zmx attach` takes; on a remote window's row it equals the row's `id`; omitted for a local session),
 `presentation` (attached session only: the mirroring stream's `state` - `connecting`, `connected`,
-`unsupported`, or `failed` with `error` - not the ssh connection's - plus `mode`, `presenter` while its stream holds that role, else `mirror`),
+`unsupported` (also a page row from another Mac, which reads `followsCompanions`), or `failed` with `error` - not the ssh connection's - plus `mode`, `presenter` while its stream holds that role, else `mirror`),
 `presenters` (origin session: `viewers`, the attached streams showing it, `mirrors`, those without the
-presenter role, and `presenter: true` when one holds it) and `remoteOverlays` (origin session: overlay slots a presenting Mac holds, a page's
+presenter role, and `presenter: true` when one holds it), `followsCompanions` (an attached top-level row that
+attaches its origin's new companions under itself) and `remoteOverlays` (origin session: overlay slots a presenting Mac holds, a page's
 `pageID` included; HTML pages follow the same placement, see reference.md Remote sessions),
 `hasSplit` (whether a second pane exists at all, shown or hidden; omitted when there is none — read this
 rather than `split`, which is false for a split hidden with ⌘D even though its pane is still alive),
@@ -782,9 +783,10 @@ chosen open local window's current workspace (default: frontmost after discovery
 keeps the frontmost window unchanged; an invalid or closed target fails. Takes the ID from that
 listing, not the name, and resolves the remote again first, so a session that has gone fails instead of
 handing back a fresh shell wearing its name. Closing it here ends only this side's connection. An open row is
-saved and attached again at the next launch; one whose session is gone from the origin closes. Add `--companions` to attach the group; see
-[details](reference.md#restore). An attached page row shows the origin's page over its page channel and mirrors
-nothing; an attached terminal row mirrors the origin session's status, context, `notify`
+saved and attached again at the next launch; one whose session is gone from the origin closes. Add `--companions` to attach the group; companions created or moved
+under the session on the origin later attach under a top-level row by themselves; see
+[details](reference.md#restore). An attached page row from another Mac shows the origin's page over its page channel and mirrors
+nothing beyond following its companions; one from agterm-server and an attached terminal row mirrors the origin session's status, context, `notify`
 notifications, HUD and the layout of attached panes over a stream that reconnects by itself
 ([details](reference.md#restore)); read
 `presentation.state` in `tree`, and expect mirrored status, context and HUD to clear while it is down. An

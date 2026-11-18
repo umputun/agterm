@@ -470,7 +470,7 @@ public final class AppStore {
                                           parent: session.parentID?.uuidString,
                                           collapsed: !session.isExpanded && parents.contains(session.id) ? true : nil,
                                           content: session.content == .page ? "page" : nil, info: session.effectiveInfo,
-                                          remoteSessionID: session.remoteSessionID)
+                                          remoteSessionID: session.remoteSessionID, followsCompanions: session.parentID == nil && session.remotePresentation?.followsCompanions == true ? true : nil)
             }
             return ControlWorkspaceNode(id: workspace.id.uuidString, name: workspace.name,
                                         active: workspace.id == activeWorkspaceID,

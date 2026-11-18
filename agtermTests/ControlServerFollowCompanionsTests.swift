@@ -322,6 +322,7 @@ final class ControlServerFollowCompanionsTests: XCTestCase {
 
         XCTAssertTrue(runner.invocations.isEmpty)
         XCTAssertTrue(store.companions(of: row.id).isEmpty)
+        XCTAssertEqual(row.remotePresentation?.followsCompanions, false)
     }
 
     func testAFollowedChildOfAServerOpensItsOwnPresentationStream() async throws {
@@ -375,6 +376,7 @@ final class ControlServerFollowCompanionsTests: XCTestCase {
         await settled(server, rows: [row])
         XCTAssertTrue(store.companions(of: row.id).isEmpty)
         XCTAssertNil(server.companionFollow.rows[row.id]?.list)
+        XCTAssertEqual(row.remotePresentation?.followsCompanions, false)
 
         let client = try XCTUnwrap(server.remoteClients[row.id])
         client.retryNow()
@@ -383,6 +385,23 @@ final class ControlServerFollowCompanionsTests: XCTestCase {
         line(try frame(.hello(PresentationHello(version: 1, kinds: [PresentationHub.companionsKind], mode: .mirror)), rev: 0))
         line(try frame(.snapshot(PresentationSnapshot(status: nil, hud: nil, companions: list([child]))), rev: 1))
         _ = try await companion(of: row, in: store)
+        XCTAssertEqual(row.remotePresentation?.followsCompanions, true)
+    }
+
+    func testAnOriginWhoseHelloLeavesOutTheKindFollowsNothingEvenWithAListInItsSnapshot() async throws {
+        let runner = RoutedRunner { _ in Origin.tree(sessions: Origin.session(child, parent: "origin-1")) }
+        let (server, store, transport) = makeServer(runner)
+        let row = try parentRow(in: store)
+        server.startRemotePresentation(for: row)
+        let line = try XCTUnwrap(transport.lines.last)
+
+        line(try frame(.hello(PresentationHello(version: 1, kinds: ["status"], mode: .mirror)), rev: 0))
+        line(try frame(.snapshot(PresentationSnapshot(status: nil, hud: nil, companions: list([child]))), rev: 1))
+        await settled(server, rows: [row])
+
+        XCTAssertEqual(row.remotePresentation?.connection, .connected)
+        XCTAssertEqual(row.remotePresentation?.followsCompanions, false)
+        XCTAssertTrue(store.companions(of: row.id).isEmpty)
     }
 
     func testARetryForAChildTheListNoLongerNamesIsDropped() async throws {
@@ -480,6 +499,7 @@ final class ControlServerFollowCompanionsTests: XCTestCase {
 
         XCTAssertEqual(followed.remoteSessionID, child)
         XCTAssertEqual(root.remotePresentation?.connection, .unsupported)
+        XCTAssertEqual(root.remotePresentation?.followsCompanions, true)
         XCTAssertNil(root.remoteRowNotice)
     }
 
@@ -505,6 +525,7 @@ final class ControlServerFollowCompanionsTests: XCTestCase {
             }
 
             XCTAssertNil(server.companionFollow.rows[root.id], "\(kinds)")
+            XCTAssertEqual(root.remotePresentation?.followsCompanions, false, "\(kinds)")
             XCTAssertNotNil(store.session(withID: root.id), "\(kinds)")
             XCTAssertEqual(root.remotePresentation?.connection, .connecting, "\(kinds)")
             XCTAssertTrue(store.companions(of: root.id).isEmpty, "\(kinds)")

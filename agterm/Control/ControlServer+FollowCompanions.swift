@@ -64,6 +64,9 @@ extension ControlServer {
 
     /// applyOriginCompanions takes a membership list from row `id`'s stream; nil, a snapshot without one, forgets the row.
     func applyOriginCompanions(_ list: PresentationCompanions?, forSession id: UUID) {
+        let binding = library.store(forSession: id)?.session(withID: id)?.remotePresentation?.binding
+        let follows = list != nil && binding?.origin != nil && binding?.catalogOwned == false && streamFollows(id)
+        library.store(forSession: id)?.setFollowsCompanions(follows, forSession: id)
         guard let list else {
             companionFollow.rows[id] = nil
             return
@@ -82,11 +85,13 @@ extension ControlServer {
         let generation = companionFollow.nextID()
         companionFollow.rows[id]?.list = nil
         companionFollow.rows[id]?.generation = generation
+        library.store(forSession: id)?.setFollowsCompanions(false, forSession: id)
     }
 
     /// forgetCompanionFollow drops what row `id` was following, at its stream's stop; an attach in flight finds it gone.
     func forgetCompanionFollow(_ id: UUID) {
         companionFollow.rows[id] = nil
+        library.store(forSession: id)?.setFollowsCompanions(false, forSession: id)
     }
 
     func holdCompanionFollow(_ key: OriginKey) -> OriginKey {

@@ -407,6 +407,9 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     /// The presentation streams on this session: how many mirror it, a count of connections so two rows
     /// attached from one Mac are two, and whether one presents it. Omitted when there is none.
     public let presenters: ControlPresentersNode?
+    /// followsCompanions is true while an attached top-level row holds its origin's companion list and attaches new
+    /// members under itself; omitted for an origin that does not send one, a companion row, and while the stream is down.
+    public let followsCompanions: Bool?
     /// Overlay slots a viewer presenting this session holds, on the origin; omitted when none is held. Such
     /// an overlay covers nothing here, so `overlay` and `paneOverlays` leave it out.
     public let remoteOverlays: [ControlRemoteOverlayNode]?
@@ -443,8 +446,9 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
                 remoteOverlays: [ControlRemoteOverlayNode]? = nil, htmlOverlays: [ControlHtmlOverlayNode]? = nil,
                 hiddenOverlays: [String]? = nil, lastSelectedAt: Double? = nil,
                 tint: String? = nil, tintOn: [String]? = nil, parent: String? = nil, collapsed: Bool? = nil,
-                content: String? = nil, info: SessionInfo? = nil, remoteSessionID: String? = nil) {
+                content: String? = nil, info: SessionInfo? = nil, remoteSessionID: String? = nil, followsCompanions: Bool? = nil) {
         self.remoteSessionID = remoteSessionID
+        self.followsCompanions = followsCompanions
         self.content = content
         self.info = info?.source
         self.infoMarkdown = info?.markdown

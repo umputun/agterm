@@ -315,22 +315,22 @@
 - Modify: `site/docs.html`, `site/commands.html`
 - Modify: `.claude/rules/control-api.md`, `ARCHITECTURE.md` if it lists the frame kinds
 
-- [ ] write failing tests for `followsCompanions` on the session node: true with an agreeing origin, omitted
+- [x] write failing tests for `followsCompanions` on the session node: true with an agreeing origin, omitted
       otherwise; and for its CLI output if the tree printer shows remote fields
-- [ ] add the read-back and its CLI output
-- [ ] docs: `site/docs.html:788` names attaching a Linux host's session into a normal window as well as remote
+- [x] add the read-back and its CLI output
+- [x] docs: `site/docs.html:788` names attaching a Linux host's session into a normal window as well as remote
       windows; `site/docs.html:826`, `site/commands.html:4592` and `reference.md:2558` replace "Companions created
       over there later are not followed" with the follow and local-detach behavior; `site/commands.html` lists
       `followsCompanions`; the skill's SKILL.md says rows follow their origin's companions; with two local copies,
       the docs say a new child gets one row, under either copy; the parked-child restart limit is stated; the
       origin's viewer count
       including a page root's observer is stated
-- [ ] rules: `control-api.md` gets the `companions` kind, the relay, the remembered-set contract and the observer
+- [x] rules: `control-api.md` gets the `companions` kind, the relay, the remembered-set contract and the observer
       stream; `:496` is reworded (a child already shown that moves between parents still keeps its old grouping) and
       `:467` is reworded (a Mac page root has a membership-only observer, no full stream)
-- [ ] verify every Overview requirement, both origins and the page root case
-- [ ] run gates once: `cd agtermCore && swift test`, `make test-app`, `make lint`, the Release build
-- [ ] move this plan to `docs/plans/completed/`
+- [x] verify every Overview requirement, both origins and the page root case
+- [x] run gates once: `cd agtermCore && swift test`, `make test-app`, `make lint`, the Release build
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Items requiring manual intervention or external systems - no checkboxes, informational only*

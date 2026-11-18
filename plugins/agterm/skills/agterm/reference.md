@@ -174,12 +174,14 @@ from the server's catalog),
 `remoteSessionID` (the origin's id for the session an attached row shows, companions and page rows included,
 the id `zmx attach` takes; on a remote window's row it equals the row's `id`; omitted for a local session),
 `presentation` (on an attached session only: `state` is `connecting`, `connected`, `unsupported` for an
-origin too old to stream, or `failed` with the reason in `error`, and `mode` is `presenter` when this
+origin too old to stream and for a page row from another Mac, which reads `followsCompanions` instead, or `failed` with the reason in `error`, and `mode` is `presenter` when this
 row's stream holds the presenter role (see Remote sessions) or `mirror` when it does not; it says whether the stream is up,
 never whether the panes' ssh connections are),
 `presenters` (on an origin session: `viewers`, how many streams show it, one per attached row and not per
-Mac; `mirrors`, those without the presenter role; and `presenter: true` when one holds it; omitted when none
-does; an older origin omits `viewers`),
+Mac, a page root attached from another Mac included; `mirrors`, those without the presenter role; and
+`presenter: true` when one holds it; omitted when none does; an older origin omits `viewers`),
+`followsCompanions` (on an attached top-level row: true while it holds its origin's companion list and attaches
+new companions under itself; omitted for an origin too old to send one and while the stream is down),
 `remoteOverlays` (on an origin session: the overlay slots a presenting Mac holds, each `{pane?,
 sizePercent?, pageID?}`, `pageID` for a page, while the session itself stays uncovered here; omitted when
 none is held),
@@ -2555,7 +2557,7 @@ reply's `id` is the parent here and `remoteGroup` carries `membershipKnown` plus
 per member, `id` recording that the row was created, not that it still exists. Any member unavailable or failing makes the command fail with the attached rows kept and the
 error naming the parent and what is missing; `membershipKnown: false` means the origin does not report
 `companions`, so one it did not list cannot be named. An app too old for the command creates nothing.
-Companions created on the origin later are not followed.
+A top-level attached row then follows its origin session: a companion created or moved under it there later attaches under the row without changing the selection or the origin's lead, unless this Mac already shows it, and one closed here is never attached again by itself. With two rows attached from one origin session a new companion gets one row, under either. A listed companion that is not attachable yet (ended, its daemon not up) waits for the next membership change or reconnect, so one restarted on the origin is picked up then, not at the restart. A page root attached from another Mac follows through a membership-only stream. An origin that predates the `companions` kind follows nothing; `followsCompanions` in `tree` reads it back.
 
 File ▸ Attach Remote… is the same flow in the GUI and has no command of its own: it offers the machines in
 `<config dir>/remotes.conf` (one `destination [label]` per line, `#` comments), asks which in the picker
@@ -2565,8 +2567,7 @@ companions when it is a top-level session. It is the
 `zmx tree`, `pick` and `zmx attach --companions` instead.
 
 A program in an attached session runs on the origin and talks to the origin's agterm, so what it asks
-agterm to draw would show there only. Every terminal attach therefore also opens a presentation stream (a page row
-uses its page channel instead and mirrors nothing), and this
+agterm to draw would show there only. Every terminal attach therefore also opens a presentation stream (a page row from another Mac uses its page channel instead and mirrors nothing, following only its companions when it is top-level; one from agterm-server gets the full stream), and this
 Mac mirrors the origin session's status, its `session context`, its `session info` line, its `notify` notifications, its HUD and
 the layout of panes already attached.
 Nothing has to be set up beyond the `agtermctl` PATH precondition above. What to expect:
