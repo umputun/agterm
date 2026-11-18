@@ -14,9 +14,11 @@ struct WindowAccessor: NSViewRepresentable {
     let library: WindowLibrary
     let store: AppStore
     let captureOnExit: AppDelegate.ExitCapture?
+    let reopenWindow: @MainActor (WindowInfo.ID) -> Void
 
     func makeNSView(context _: Context) -> TitleProbeView {
-        TitleProbeView(windowID: windowID, library: library, store: store, captureOnExit: captureOnExit)
+        TitleProbeView(windowID: windowID, library: library, store: store, captureOnExit: captureOnExit,
+                       reopenWindow: reopenWindow)
     }
 
     func updateNSView(_ nsView: TitleProbeView, context _: Context) {
@@ -28,6 +30,7 @@ struct WindowAccessor: NSViewRepresentable {
         private let library: WindowLibrary
         private let store: AppStore
         private let captureOnExit: AppDelegate.ExitCapture?
+        private let reopenWindow: @MainActor (WindowInfo.ID) -> Void
 
         /// Observer tokens: AppKit rebuilds the titlebar subviews on key/fullscreen, so the blend re-applies.
         nonisolated(unsafe) private var titlebarObservers: [NSObjectProtocol] = []
@@ -39,11 +42,12 @@ struct WindowAccessor: NSViewRepresentable {
         private var closeProxy: WindowCloseDelegateProxy?
 
         init(windowID: WindowInfo.ID, library: WindowLibrary, store: AppStore,
-             captureOnExit: AppDelegate.ExitCapture? = nil) {
+             captureOnExit: AppDelegate.ExitCapture? = nil, reopenWindow: @escaping @MainActor (WindowInfo.ID) -> Void = { _ in }) {
             self.windowID = windowID
             self.library = library
             self.store = store
             self.captureOnExit = captureOnExit
+            self.reopenWindow = reopenWindow
             super.init(frame: .zero)
         }
 
@@ -148,7 +152,8 @@ struct WindowAccessor: NSViewRepresentable {
                     DispatchQueue.main.async { [weak self] in
                         guard let self, let window = self.window else { return }
                         self.applyTitlebarBlend(window)
-                        if becameFrontmost { self.reportFrontmost(windowID) }
+                        // a retired launch window still keys while SwiftUI closes it; its id lives in another window
+                        if becameFrontmost, !WindowRegistry.shared.isRetired(window) { self.reportFrontmost(windowID) }
                     }
                 }
                 titlebarObservers.append(token)
@@ -157,8 +162,11 @@ struct WindowAccessor: NSViewRepresentable {
             // `self` — the view deallocates as the window closes, so a `[weak self]` hop would no-op.
             let closeToken = NotificationCenter.default.addObserver(
                 forName: NSWindow.willCloseNotification, object: window, queue: .main
-            ) { [library, store, windowID, captureOnExit, weak window] _ in
+            ) { [library, store, windowID, captureOnExit, reopenWindow, weak window] _ in
                 MainActor.assumeIsolated {
+                    if let window, Self.handOffLaunchWindow(window, windowID: windowID, library: library, reopen: reopenWindow) {
+                        return
+                    }
                     // persist the final frame (keyed by its id) so an in-session reopen or a restart restores
                     // size/position; SwiftUI's own index-based autosave can't.
                     if let window {
@@ -241,7 +249,11 @@ struct WindowAccessor: NSViewRepresentable {
             // automation has nothing to hit. bring it forward un-minimized, re-asserted next tick because
             // state restoration can re-apply the miniaturized state right after the view attaches.
             bringForward(window)
-            DispatchQueue.main.async { [weak self] in self?.bringForward(window) }
+            DispatchQueue.main.async { [weak self, windowID] in
+                guard let self else { return }
+                self.bringForward(window)
+                WindowRegistry.shared.markPresented(windowID, window: window)
+            }
             scheduleUITestWindowForward(window)
             // a reopened/raised window can become key DURING creation, before these observers exist, missing
             // that initial didBecomeKey. report frontmost so the palette/session switcher route to THIS window.
@@ -277,6 +289,7 @@ struct WindowAccessor: NSViewRepresentable {
         }
 
         private func bringForward(_ window: NSWindow) {
+            guard !WindowRegistry.shared.isRetired(window) else { return }
             if window.isMiniaturized { window.deminiaturize(nil) }
             window.makeKeyAndOrderFront(nil)
         }
@@ -309,6 +322,22 @@ struct WindowAccessor: NSViewRepresentable {
                                                        min: WindowGeometry.Size(window.minSize),
                                                        displayFrame: displayFrame)
             return constrained.nsRect
+        }
+
+        /// handOffLaunchWindow keeps a window open across a cold launch by URL or document: SwiftUI closes its launch
+        /// window inside that open event, before launch finishes, and only the window's host goes away. The same
+        /// id reopens with its store and surfaces; the dead host's later closes are ignored.
+        private static func handOffLaunchWindow(_ window: NSWindow, windowID: WindowInfo.ID, library: WindowLibrary,
+                                                reopen: @escaping @MainActor (WindowInfo.ID) -> Void) -> Bool {
+            if WindowRegistry.shared.isRetired(window) { return true }
+            guard LaunchHandoff.isHandoff(event: NSAppleEventManager.shared().currentAppleEvent,
+                                          launchFinished: AppDelegate.launchFinished) else { return false }
+            WindowRegistry.shared.retire(windowID, window: window)
+            DispatchQueue.main.async {
+                guard library.isOpen(windowID), !library.isTerminating else { return }
+                reopen(windowID)
+            }
+            return true
         }
 
         /// Installs (or re-asserts) the confirm-before-close proxy as the window's delegate, chaining to

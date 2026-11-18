@@ -41,7 +41,8 @@ final class WindowContentViewTitlebarTests: XCTestCase {
         let store = try XCTUnwrap(library.activeStore)
         let session = try XCTUnwrap(store.activeSession)
         window.contentView = NSHostingView(rootView: WindowTitleSync(store: store, library: library,
-                                                                    windowID: windowID, captureOnExit: nil))
+                                                                    windowID: windowID, captureOnExit: nil,
+                                                                    reopenWindow: { _ in }))
         window.layoutIfNeeded()
         try waitForTitle(session.displayName)
 

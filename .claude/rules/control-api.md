@@ -843,6 +843,16 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   There is no control twin: `session select` and `window select` already cover selection, read back through
   the existing selected/frontmost tree fields.
   HUD links are deferred because a mirrored HUD carries no origin; their disposition stays ignored.
+- Release registers `agterm` with Launch Services (`AGTERM_URL_SCHEME`); Debug declares `agterm-debug`, which
+  nothing opens, so a Debug build never takes the clicks. A Release product under any checkout's DerivedData
+  registers `agterm` too and can be the one macOS picks. `AppDelegate.application(_:open:)` runs file URLs
+  first, then keeps the batch's last `LinkPolicy.sessionLink` as one pending link with its own request and 10 s
+  monotonic deadline. `AppActions.openSessionLink` accepts a UUID naming exactly one open row in this instance,
+  with no translation of origin ids (a catalog row reuses its origin's id, so that one matches).
+  It applies the same gates and raises unconditionally, since `raiseAndSelect` skips the active window, which may
+  be minimized. It returns false while the row or its window is loading; a link that arrived before launch finished
+  also waits for every open window's `WindowRegistry.isPresented`.
+  No control twin: `open agterm://…` is the CLI and selection reads back as before.
 - libghostty keeps a `:line[:column]` suffix in the path it hands over and resolves a relative path only when that
   exact path exists, so `./main.go:42` arrives raw. `LinkPolicy.locations` lists the candidates for such a link, the
   literal path first so a file named with a colon wins, then the path without the suffix. libghostty keeps a sentence's

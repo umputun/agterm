@@ -46,6 +46,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Directories from `open -a agterm /path` not yet turned into sessions — queued until the frontmost
     /// store resolves, so the new session lands in the last-active window.
     private var pendingOpenDirectories: [String] = []
+    private var coldOpenDirectories = false
+
+    /// Set once `applicationDidFinishLaunching` runs; `NSRunningApplication.isFinishedLaunching` turns
+    /// true earlier, while SwiftUI is still settling the launch window.
+    private(set) static var launchFinished = false
+
+    private struct PendingSessionLink {
+        let id: UUID
+        let request: Int
+        let deadline: ContinuousClock.Instant
+        /// Arrived before launch finished, so the restored windows are still taking key.
+        let cold: Bool
+    }
+
+    private var pendingSessionLink: PendingSessionLink?
+    private var sessionLinkRequest = 0
 
     private var restoreObserver: NSObjectProtocol?
     private var scheduledReconciliationReasons: Set<String> = []
@@ -70,6 +86,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_: Notification) {
+        Self.launchFinished = true
         NSApp.setActivationPolicy(.regular)
         if ContentView.isUITestLaunch {
             scheduleUITestWindowActivationRetries()
@@ -243,26 +260,77 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// `open -a agterm /path` (the OS "open terminal here" integration): each URL resolves to a directory
     /// (folder → itself, file → its parent, via `OpenPathResolver`), queued and drained into a new session
-    /// in the last-active window. WARM case only — a running instance already has a window to graft into.
+    /// in the last-active window.
+    /// An `agterm://session/<id>` URL from another app selects that session; the batch's last one wins.
     func application(_: NSApplication, open urls: [URL]) {
         let directories = urls.compactMap { OpenPathResolver.directory(for: $0) }
-        guard !directories.isEmpty else { return }
+        if !directories.isEmpty { queueOpenDirectories(directories, cold: !Self.launchFinished) }
+        // after the directories: their session lands in the active window, which the link may change
+        if let id = urls.compactMap({ LinkPolicy.sessionLink($0.absoluteString) }).last {
+            queueSessionLink(id, cold: !Self.launchFinished)
+        }
+    }
+
+    /// Makes `id` the pending session link, replacing any earlier one, and drains it. A replacement keeps a
+    /// waiting cold link's wait, since the startup raises it waits for are still to come.
+    func queueSessionLink(_ id: UUID, cold: Bool) {
+        sessionLinkRequest += 1
+        let waits = cold || pendingSessionLink?.cold == true
+        pendingSessionLink = PendingSessionLink(id: id, request: sessionLinkRequest, deadline: .now + .seconds(10), cold: waits)
+        drainPendingSessionLink(request: sessionLinkRequest)
+    }
+
+    /// Selects the pending session link once its row and window have loaded, retrying every 0.1 s until 10 s
+    /// after it arrived. A newer link replaces it, ending the older link's retries. A link that launched the
+    /// app first waits for every restored window to finish its attach-time raises, each of which takes key.
+    func drainPendingSessionLink(request: Int) {
+        guard let link = pendingSessionLink, link.request == request else { return }
+        guard ContinuousClock.now < link.deadline else {
+            pendingSessionLink = nil
+            return
+        }
+        let restoring = link.cold && !(library?.openIDs().allSatisfy(WindowRegistry.shared.isPresented) ?? false)
+        if !restoring, actions?.openSessionLink(link.id) == true {
+            pendingSessionLink = nil
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            self?.drainPendingSessionLink(request: request)
+        }
+    }
+
+    /// Queues `open -a` directories and drains them. A cold launch's folders wait for every restored window's
+    /// attach-time raises, then land in the window that launch adopted as frontmost.
+    func queueOpenDirectories(_ directories: [String], cold: Bool) {
+        if cold { coldOpenDirectories = true }
         pendingOpenDirectories.append(contentsOf: directories)
         drainPendingOpenDirectories()
     }
 
     /// Turn every queued `open -a` directory into a new session in the last-active window, dropping an
-    /// entry only once its session lands (a transient failure keeps it queued). Until the frontmost store
+    /// entry once `openSession` settles it (a transient failure keeps it queued). Until the frontmost store
     /// resolves, retries every 0.1 s, bounded so a folder can't wedge a stuck timer.
     func drainPendingOpenDirectories(retry: Int = 0) {
         guard !pendingOpenDirectories.isEmpty else { return }
-        guard let actions, library?.activeStore?.currentWorkspaceID != nil else {
-            guard retry < 50 else { pendingOpenDirectories.removeAll(); return }
+        let restoring = coldOpenDirectories && !(library?.openIDs().allSatisfy(WindowRegistry.shared.isPresented) ?? false)
+        let coldTarget = coldOpenDirectories
+            ? WindowRegistry.shared.launchHandoffID.flatMap { library?.isOpen($0) == true ? $0 : nil } : nil
+        // a remote store refuses the folder in openSession, so it never waits for its catalog's workspaces
+        let ready = (coldTarget.flatMap { library?.store(for: $0) } ?? library?.activeStore)
+            .map { $0.remoteActions != nil || $0.currentWorkspaceID != nil } ?? false
+        guard let actions, !restoring, ready else {
+            guard retry < 50 else {
+                pendingOpenDirectories.removeAll()
+                coldOpenDirectories = false
+                return
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
                 self?.drainPendingOpenDirectories(retry: retry + 1)
             }
             return
         }
+        coldOpenDirectories = false
+        if let coldTarget { actions.takeFrontmost(coldTarget) }
         NSApp.activate()
         let beforeCount = pendingOpenDirectories.count
         while let directory = pendingOpenDirectories.first, actions.openSession(atDirectory: directory) {
@@ -338,7 +406,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard expected > 0, WindowRegistry.shared.registeredCount >= expected else { return }
 
         let extras = NSApp.windows.filter { window in
-            isTerminalWindowGroupWindow(window) && !WindowRegistry.shared.contains(window)
+            isTerminalWindowGroupWindow(window) && !WindowRegistry.shared.contains(window) && !WindowRegistry.shared.isRetired(window)
         }
         guard !extras.isEmpty else { return }
 

@@ -82,6 +82,9 @@ C-boundary concurrency before changing the bridge.
   live socket, and exporting a short `AGTERM_STATE_DIR` is what keeps inherited commands off it.
 - After launching an instance for manual testing, do not touch it. For an assisted experiment, announce
   every action. Ask before acting when unclear.
+- A check that needs another app in front when an open event reaches a Debug instance (a URL or a Finder
+  open) runs from a companion of this session in the live agterm, typed with `session type` and read with
+  `session text`, never handed to Eugene.
 - Put nontrivial work in an isolated worktree and remove it after merge. See the build section for artifact
   links and cleanup.
 - Comments and docs are liabilities kept short. Keep only non-obvious constraints, rejected alternatives,

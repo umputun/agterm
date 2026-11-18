@@ -90,6 +90,22 @@ final class WindowAccessorTests: XCTestCase {
         XCTAssertEqual(window.title, "early")
     }
 
+    func testClosingARetiredLaunchWindowKeepsItsWindowOpen() throws {
+        let windowID = try XCTUnwrap(library.activeWindowID)
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.activeSession)
+        window.contentView = WindowAccessor.TitleProbeView(windowID: windowID, library: library, store: store)
+        drain()
+        XCTAssertTrue(WindowRegistry.shared.isRegistered(windowID))
+        WindowRegistry.shared.retire(windowID, window: window)
+
+        window.close()
+
+        XCTAssertTrue(library.isOpen(windowID))
+        XCTAssertTrue(store.session(withID: session.id) === session)
+        XCTAssertFalse(WindowRegistry.shared.isRegistered(windowID))
+    }
+
     private func attachedProbe() throws -> WindowAccessor.TitleProbeView {
         let store = try XCTUnwrap(library.activeStore)
         let probe = WindowAccessor.TitleProbeView(windowID: try XCTUnwrap(library.activeWindowID),
