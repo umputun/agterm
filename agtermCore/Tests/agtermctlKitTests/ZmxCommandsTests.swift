@@ -62,6 +62,22 @@ struct ZmxCommandsTests {
         #expect(try Zmx.Attach.parse(["buildbox", "s1"]).makeRequest().cmd == .zmxAttach)
     }
 
+    @Test func attachCarriesTheDestinationWorkspaceOnBothCommands() throws {
+        let named = try Zmx.Attach.parse(["buildbox", "s1", "--companions", "--workspace-name", "api", "--create-workspace"])
+        #expect(try named.makeRequest() == ControlRequest(cmd: .zmxAttachGroup, target: "s1",
+            args: ControlArgs(workspaceName: "api", createWorkspace: true, host: "buildbox")))
+
+        let byID = try Zmx.Attach.parse(["buildbox", "s1", "--workspace", "1a2b"])
+        #expect(try byID.makeRequest() == ControlRequest(cmd: .zmxAttach, target: "s1",
+            args: ControlArgs(workspace: "1a2b", host: "buildbox")))
+    }
+
+    @Test(arguments: [["--workspace", "w", "--workspace-name", "api"], ["--create-workspace"],
+                      ["--workspace", "w", "--create-workspace"]])
+    func attachRefusesAContradictoryWorkspace(_ flags: [String]) {
+        #expect(throws: (any Error).self) { try Zmx.Attach.parse(["buildbox", "s1"] + flags) }
+    }
+
     @Test func aGroupAttachPrintsTheParentThenEachCompanionOriginToLocal() {
         let group = ControlRemoteGroup(membershipKnown: true, companions: [
             ControlRemoteGroupMember(origin: "c1", id: "L1"), ControlRemoteGroupMember(origin: "pg", id: "L2"),

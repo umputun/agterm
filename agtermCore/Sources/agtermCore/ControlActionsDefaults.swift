@@ -265,6 +265,20 @@ public extension ControlActions {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("zmx.attach.group"))
     }
 
+    func attachRemoteSession(host: String, session: String, window: String?, workspace: ControlAttachWorkspace?) async -> ControlResponse {
+        guard workspace == nil else {
+            return ControlResponse(ok: false, error: ControlActionsUnsupported.message("zmx.attach --workspace"))
+        }
+        return await attachRemoteSession(host: host, session: session, window: window)
+    }
+
+    func attachRemoteGroup(host: String, session: String, window: String?, workspace: ControlAttachWorkspace?) async -> ControlResponse {
+        guard workspace == nil else {
+            return ControlResponse(ok: false, error: ControlActionsUnsupported.message("zmx.attach.group --workspace"))
+        }
+        return await attachRemoteGroup(host: host, session: session, window: window)
+    }
+
     func splitSession(_ target: String?, window: String?, mode: String?, axis _: SplitAxis?) -> ControlResponse {
         splitSession(target, window: window, mode: mode)
     }

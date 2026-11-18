@@ -427,8 +427,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   loopback URL is refused at both ends. `zmx tree` lists a page companion with no panes when its parent is listed; the
   Attach Remote picker hides those rows, and `zmx attach` places one only under the single row bound to its parent.
   A top-level page is a group root: listed with no panes and its `companions`, offered by the picker, and attached by
-  `zmx attach` or `zmx.attach.group` as a top-level replica row (`addReplicaPageRoot`) in the destination's current
-  workspace, rechecked after the ssh wait. Its binding carries the origin's host, endpoint and name with an empty
+  `zmx attach` or `zmx.attach.group` as a top-level replica row (`addReplicaPageRoot`) in the destination workspace,
+  rechecked (or created for `--create-workspace`) after the ssh wait. Its binding carries the origin's host, endpoint and name with an empty
   daemon map; `attachedParentRows` matches a later companion on its session id and endpoint.
   A terminal companion attached alone joins that row the same way (`attachedParentRows`), in the row's own workspace,
   and stands alone when no row or several match.
@@ -2101,12 +2101,19 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   pre-model failures leaving no half-built row; ssh itself starts AFTER insertion, so a transport failure
   is an ordinary pane exit on the held path. It matches the
   session by ID ALONE — remote names are mutable and non-unique across workspaces — and panes by role,
-  never array position. The row is selected in the destination window's current workspace.
+  never array position. The row is selected in the destination workspace, the window's current one by default.
 - `zmx.attach --window` resolves an open local destination after discovery, immediately before insertion.
   Omitted, it uses the then-frontmost window. An explicit invalid or closed window fails without creating
   a session; it never falls back or raises another window. The old `attachRemoteSession(host:session:)`
   witness remains callable. Hosts implementing only that form accept untargeted calls and refuse explicit
   window placement through the new overload's default.
+- `zmx.attach` and `zmx.attach.group` take `session.new`'s workspace fields, parsed into `ControlAttachWorkspace`
+  by the dispatcher with its wording. `ControlServer.attachWorkspace` resolves them after discovery for a row that
+  stands alone (terminal, page root, group parent). A missing name comes back as `AttachDestination.create` and is
+  created at placement: after the handover for a page root, after discovery for a terminal row, whose only later
+  refusal is a payload agterm cannot address. A companion joining its parent's row ignores them.
+  The window-only witnesses stay; the workspace overloads' defaults refuse a workspace by name. The row's
+  workspace in `tree` is the read-back.
 - `zmx.attach.group` is its own wire command for the Companions section's older-app reason, and the CLI's
   `zmx attach --companions` maps the decode refusal through `companionSend`. One `zmx tree` read serves the
   whole group: the far side lists every companion of a top-level row as `companions` (`[]` for none, absent

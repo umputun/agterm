@@ -179,6 +179,11 @@ extension ControlServer {
     /// attach, handing back a fresh shell wearing the session's name. Everything that can fail is checked
     /// before the model is touched, so a refusal leaves no half-built row behind.
     func attachRemoteSession(host: String, session: String, window: String?) async -> ControlResponse {
+        await attachRemoteSession(host: host, session: session, window: window, workspace: nil)
+    }
+
+    func attachRemoteSession(host: String, session: String, window: String?,
+                             workspace target: ControlAttachWorkspace?) async -> ControlResponse {
         let discovery = await remoteTree(host: host)
         guard discovery.ok, let tree = discovery.result?.remote else { return discovery }
         // by id only: remote session names are mutable and deliberately non-unique across workspaces, and
@@ -191,17 +196,61 @@ extension ControlServer {
         case .failure(let response): return response
         case .success(let (_, resolved)): store = resolved
         }
-        if remote.content == "page" { return await attachRemotePageRow(remote, tree: tree, host: host, in: store) }
+        if remote.content == "page" { return await attachRemotePageRow(remote, tree: tree, host: host, in: store, workspace: target) }
         // a companion joins its parent's group when exactly one row here shows that parent, else it stands alone
         let parents = remote.parent == nil ? [] : attachedParentRows(of: remote, tree: tree, host: host, in: store)
         if parents.count == 1, let parent = parents.first, let workspace = store.workspace(forSession: parent.id)?.id {
             return attach(remote, from: tree, host: host,
                           placement: RemotePlacement(store: store, workspace: workspace, parent: parent.id))
         }
-        guard let workspace = store.currentWorkspaceID else {
-            return ControlResponse(ok: false, error: "no window to attach into")
+        switch attachWorkspace(target, in: store) {
+        case .failure(let response): return response
+        case .success(let destination):
+            // created only now: discovery and lookup can no longer refuse, only a payload agterm cannot address
+            guard let workspace = destination.workspace(in: store) else { return Self.workspaceNotCreated }
+            return attach(remote, from: tree, host: host, placement: RemotePlacement(store: store, workspace: workspace))
         }
-        return attach(remote, from: tree, host: host, placement: RemotePlacement(store: store, workspace: workspace))
+    }
+
+    static let workspaceNotCreated = ControlResponse(ok: false, error: "the workspace to attach into could not be created")
+
+    /// AttachDestination is the workspace an attach resolved: one that exists, or a name `--create-workspace` adds
+    /// when the row is placed, so a refusal before that adds none.
+    enum AttachDestination {
+        case existing(UUID)
+        case create(String)
+
+        /// workspace is the destination's id in `store`, creating a named one now; nil when the name sanitizes to blank.
+        @MainActor func workspace(in store: AppStore) -> UUID? {
+            switch self {
+            case .existing(let id): return id
+            case .create(let name): return store.ensureWorkspace(named: name)?.id
+            }
+        }
+    }
+
+    /// attachWorkspace is where a row that stands alone lands in `store`: `target`, else the current workspace.
+    func attachWorkspace(_ target: ControlAttachWorkspace?, in store: AppStore) -> ControlTargetResolver.Resolution<AttachDestination> {
+        switch target {
+        case nil:
+            guard let id = store.currentWorkspaceID else {
+                return .failure(ControlResponse(ok: false, error: "no window to attach into"))
+            }
+            return .success(.existing(id))
+        case .id(let raw):
+            let resolution = ControlResolve.resolve(raw, candidates: store.workspaces.map(\.id), active: store.currentWorkspaceID)
+            guard case .resolved(let id) = resolution else {
+                let message = ControlResolve.errorMessage(noun: "workspace", target: raw, resolution: resolution)
+                return .failure(ControlResponse(ok: false, error: message))
+            }
+            return .success(.existing(id))
+        case .name(let name, let create):
+            if let found = store.workspace(named: name) { return .success(.existing(found.id)) }
+            guard create else {
+                return .failure(ControlResponse(ok: false, error: "no workspace named \"\(name)\" (pass --create-workspace to add it)"))
+            }
+            return .success(.create(name))
+        }
     }
 
     /// RemotePlacement is where an attached row goes: a workspace, or under `parent`, a remote row of the same host.

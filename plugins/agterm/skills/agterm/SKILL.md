@@ -779,8 +779,9 @@ the ids: neither is unique), `context` when set, `status`/`statusColor`/`statusS
 per-pane `foreground`; only a session whose every pane
 still has a live daemon is listed (a top-level page session, which has none, is listed too), and an empty list does NOT mean the far side is not in live mode -
 `zmx list` reports that · `zmx attach
-HOST SESSION [--window W]` - open one of them here, marked remote and carrying its split, in the
-chosen open local window's current workspace (default: frontmost after discovery). A background target
+HOST SESSION [--window W] [--workspace W | --workspace-name NAME [--create-workspace]]` - open one of them
+here, marked remote and carrying its split, in the chosen open local window's current workspace (default:
+frontmost after discovery), or in the named workspace, the way `session new` takes one. A background target
 keeps the frontmost window unchanged; an invalid or closed target fails. Takes the ID from that
 listing, not the name, and resolves the remote again first, so a session that has gone fails instead of
 handing back a fresh shell wearing its name. Closing it here ends only this side's connection. An open row is

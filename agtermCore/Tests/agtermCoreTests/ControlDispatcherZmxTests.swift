@@ -433,6 +433,46 @@ struct ControlDispatcherZmxTests {
         #expect(actions.calls.isEmpty)
     }
 
+    @Test(arguments: [
+        ("1a2b", nil, false, ControlAttachWorkspace.id("1a2b") as ControlAttachWorkspace?),
+        (nil, " api ", false, .name("api", create: false)),
+        (nil, "api", true, .name("api", create: true)),
+        ("  ", nil, false, .id("  ")), (nil, nil, false, nil),
+    ])
+    func anAttachWorkspaceParsesIdOrName(_ id: String?, _ name: String?, _ create: Bool,
+                                         _ expected: ControlAttachWorkspace?) throws {
+        let args = ControlArgs(workspace: id, workspaceName: name, createWorkspace: create ? true : nil)
+        #expect(try ControlDispatcher.attachWorkspace(args).get() == expected)
+    }
+
+    @Test(arguments: [
+        ("w", "api", false, "use either --workspace or --workspace-name, not both"),
+        (nil, nil, true, "--create-workspace requires --workspace-name"),
+        ("w", nil, true, "--create-workspace requires --workspace-name"),
+        (nil, " ", false, "workspace name must not be blank"),
+    ])
+    func anAttachRefusesAContradictoryWorkspaceBeforeTheHostIsCalled(_ id: String?, _ name: String?, _ create: Bool,
+                                                                     _ error: String) async {
+        for cmd in [Command.zmxAttach, .zmxAttachGroup] {
+            let placed = ControlArgs(workspace: id, workspaceName: name, createWorkspace: create ? true : nil, host: "buildbox")
+            let actions = MockControlActions()
+            let response = await dispatch(ControlRequest(cmd: cmd, target: "s1", args: placed), actions)
+            #expect(response?.error == error)
+            #expect(actions.calls.isEmpty)
+        }
+    }
+
+    @Test func anOlderAttachHostRefusesAnExplicitWorkspaceByName() async throws {
+        let actions = MockControlActions()
+        let single = try #require(await dispatch(ControlRequest(cmd: .zmxAttach, target: "s1",
+            args: ControlArgs(workspaceName: "api", host: "buildbox")), actions))
+        #expect(single.error == "zmx.attach --workspace is not supported on this platform")
+        let group = try #require(await dispatch(ControlRequest(cmd: .zmxAttachGroup, target: "s1",
+            args: ControlArgs(workspace: "w", host: "buildbox")), actions))
+        #expect(group.error == "zmx.attach.group --workspace is not supported on this platform")
+        #expect(actions.calls.isEmpty)
+    }
+
     @Test func aGroupAttachReachesTheGroupActionWhoseDefaultRefusesByName() async throws {
         let actions = MockControlActions()
         let response = try #require(await dispatch(ControlRequest(cmd: .zmxAttachGroup, target: " s1 ",

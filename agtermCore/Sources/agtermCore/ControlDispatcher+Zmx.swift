@@ -24,10 +24,15 @@ extension ControlDispatcher {
                 return ControlResponse(ok: false, error: "invalid remote session")
             }
             let window = request.args?.window?.trimmedOrNil
-            if request.cmd == .zmxAttachGroup {
-                return await actions.attachRemoteGroup(host: host, session: session, window: window)
+            let workspace: ControlAttachWorkspace?
+            switch Self.attachWorkspace(request.args) {
+            case .success(let value): workspace = value
+            case .failure(let rejection): return ControlResponse(ok: false, error: rejection.message)
             }
-            return await actions.attachRemoteSession(host: host, session: session, window: window)
+            if request.cmd == .zmxAttachGroup {
+                return await actions.attachRemoteGroup(host: host, session: session, window: window, workspace: workspace)
+            }
+            return await actions.attachRemoteSession(host: host, session: session, window: window, workspace: workspace)
         case .zmxPresent:
             // no `active` default: a viewer names the session it attached, and a guess would stream another
             guard let session = request.target?.trimmedOrNil else {
@@ -114,5 +119,24 @@ extension ControlDispatcher {
             return .failure(ArgumentRejection(message: "zmx.kill.pane requires --pane-id"))
         }
         return .success(ZmxKillArguments(target: target, pane: pane, paneID: paneID))
+    }
+
+    /// attachWorkspace reads an attach's destination workspace with `session.new`'s rules and wording; nil leaves the
+    /// window's current workspace.
+    static func attachWorkspace(_ args: ControlArgs?) -> Result<ControlAttachWorkspace?, ArgumentRejection> {
+        if args?.workspace != nil, args?.workspaceName != nil {
+            return .failure(ArgumentRejection(message: "use either --workspace or --workspace-name, not both"))
+        }
+        if let raw = args?.workspaceName {
+            guard let name = raw.trimmedOrNil else {
+                return .failure(ArgumentRejection(message: "workspace name must not be blank"))
+            }
+            return .success(.name(name, create: args?.createWorkspace == true))
+        }
+        if args?.createWorkspace == true {
+            return .failure(ArgumentRejection(message: "--create-workspace requires --workspace-name"))
+        }
+        // passed as given, so a blank id fails to resolve as on `session.new` instead of reading as omitted
+        return .success(args?.workspace.map(ControlAttachWorkspace.id))
     }
 }

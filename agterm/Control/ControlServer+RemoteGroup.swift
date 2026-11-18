@@ -3,6 +3,11 @@ import agtermCore
 
 extension ControlServer {
     func attachRemoteGroup(host: String, session: String, window: String?) async -> ControlResponse {
+        await attachRemoteGroup(host: host, session: session, window: window, workspace: nil)
+    }
+
+    func attachRemoteGroup(host: String, session: String, window: String?,
+                           workspace target: ControlAttachWorkspace?) async -> ControlResponse {
         let discovery = await remoteTree(host: host)
         guard discovery.ok, let tree = discovery.result?.remote else { return discovery }
         guard let remote = tree.sessions.first(where: { $0.id == session }) else {
@@ -16,14 +21,20 @@ extension ControlServer {
         case .failure(let response): return response
         case .success(let (_, resolved)): store = resolved
         }
-        guard let workspace = store.currentWorkspaceID else {
-            return ControlResponse(ok: false, error: "no window to attach into")
+        let destination: AttachDestination
+        switch attachWorkspace(target, in: store) {
+        case .failure(let response): return response
+        case .success(let resolved): destination = resolved
         }
-        let attached = remote.content == "page"
-            ? await attachRemotePage(remote.id, origin: RemoteBinding.Origin(host: host, endpoint: tree.endpoint, sessionName: remote.name),
-                                     presentation: PagePresentation(tree), at: .root(store: store, workspace: workspace), select: true,
-                                     companions: remote.companions?.map(\.id))
-            : attach(remote, from: tree, host: host, placement: RemotePlacement(store: store, workspace: workspace))
+        let attached: ControlResponse
+        if remote.content == "page" {
+            attached = await attachRemotePage(remote.id, origin: RemoteBinding.Origin(host: host, endpoint: tree.endpoint, sessionName: remote.name),
+                                              presentation: PagePresentation(tree), at: .root(store: store, workspace: destination), select: true,
+                                              companions: remote.companions?.map(\.id))
+        } else {
+            guard let workspace = destination.workspace(in: store) else { return Self.workspaceNotCreated }
+            attached = attach(remote, from: tree, host: host, placement: RemotePlacement(store: store, workspace: workspace))
+        }
         guard attached.ok, let parentID = attached.result?.id.flatMap(UUID.init(uuidString:)) else { return attached }
 
         let known = remote.companions != nil

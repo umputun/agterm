@@ -821,13 +821,14 @@ agtermctl zmx tree                                    # without a host: what thi
 agtermctl zmx attach studio.local 7c1e…               # the id from that listing, not the name
 agtermctl zmx attach studio.local 7c1e… --companions  # with its companions
 agtermctl zmx attach studio.local 7c1e… --window &quot;$win&quot;  # into an open window (id from window list), not raised
+agtermctl zmx attach studio.local 7c1e… --workspace-name api --create-workspace  # into the workspace named api
 
 # pick from the listing and attach the choice
 s=$(agtermctl zmx tree studio.local --json \
   | jq &#39;[.result.remote.sessions[] | {id, label: .name, subtitle: (.windowName + &quot;/&quot; + .workspaceName + &quot; &quot; + .cwd)}]&#39; \
   | agtermctl pick --prompt &quot;Attach which session?&quot; | jq -r &#39;.id // empty&#39;)
 [ -n &quot;$s&quot; ] &amp;&amp; agtermctl zmx attach studio.local &quot;$s&quot;</code></pre>
-<p>Without <code>--window</code> the session opens in the frontmost window.</p>
+<p>Without <code>--window</code> the session opens in the frontmost window, and without <code>--workspace</code> or <code>--workspace-name</code> in that window's current workspace. <code>--create-workspace</code> adds a named workspace that does not exist yet. A companion that joins its parent's row goes where that row is.</p>
 <p><strong>What can be attached</strong></p>
 <ul>
 <li>Only a session whose every pane still has a live program is listed. The choice is checked again at attach time, so a session that ended in between fails instead of handing back a fresh shell wearing its name.</li>
