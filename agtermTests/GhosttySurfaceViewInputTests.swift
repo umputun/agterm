@@ -929,6 +929,75 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         }
     }
 
+    func testPasteChordFollowsTheLayoutsChordRule() {
+        struct Press {
+            let name: String
+            let keyCode: UInt16
+            let produced: String
+            let ascii: Bool
+            let paste: Bool
+        }
+        let cases = [
+            Press(name: "russian v position", keyCode: 9, produced: "м", ascii: false, paste: true),
+            Press(name: "dvorak k at the v position", keyCode: 9, produced: "k", ascii: true, paste: false),
+            Press(name: "dvorak v at the period position", keyCode: 47, produced: "v", ascii: true, paste: true),
+            Press(name: "us v", keyCode: 9, produced: "v", ascii: true, paste: true),
+            Press(name: "russian other key", keyCode: 8, produced: "с", ascii: false, paste: false),
+        ]
+        for press in cases {
+            XCTAssertEqual(GhosttySurfaceView.isPasteChord(keyCode: press.keyCode, produced: press.produced,
+                                                           layoutIsASCIICapable: press.ascii), press.paste, press.name)
+        }
+    }
+
+    func testCommandVPastesThroughTheSeam() throws {
+        final class Offers { var seen: [PasteOffer] = [] }
+        let offers = Offers()
+        let saved = PasteTransfer.shared
+        defer { PasteTransfer.shared = saved }
+        PasteTransfer.shared.text = { offer, _ in
+            offers.seen.append(offer)
+            return .failure(PasteFailure("recorded"))
+        }
+        let png = Data([0x89, 0x50, 0x4E, 0x47, 1])
+        let pasteboard = NSPasteboard.general
+        let kept = (pasteboard.pasteboardItems ?? []).map { item in
+            let copy = NSPasteboardItem()
+            item.types.forEach { type in item.data(forType: type).map { copy.setData($0, forType: type) } }
+            return copy
+        }
+        defer {
+            pasteboard.clearContents()
+            if !kept.isEmpty { pasteboard.writeObjects(kept) }
+        }
+        pasteboard.clearContents()
+        pasteboard.setData(png, forType: .png)
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 400, height: 300), styleMask: [.titled],
+                              backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        let terminal = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), command: "/bin/cat")
+        terminal.frame = CGRect(x: 0, y: 0, width: 400, height: 300)
+        window.contentView?.addSubview(terminal)
+        terminal.createSurface()
+        defer {
+            terminal.teardown()
+            window.close()
+        }
+        XCTAssertTrue(terminal.isRealized)
+        func press(_ flags: NSEvent.ModifierFlags) throws {
+            terminal.keyDown(with: try XCTUnwrap(NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0, windowNumber: window.windowNumber,
+                context: nil, characters: "v", charactersIgnoringModifiers: "v", isARepeat: false, keyCode: 9)))
+        }
+
+        try press([.command, .shift])
+        try press(.command)
+        let deadline = Date(timeIntervalSinceNow: 5)
+        while offers.seen.isEmpty, Date() < deadline { RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01)) }
+
+        XCTAssertEqual(offers.seen, [PasteOffer(image: png)], "only ⌘V itself reaches the seam")
+    }
+
     func testABareModifierLeavesAConsumedHeldExitOpen() {
         for modes in ["", "\\033[>31u"] {
             let fixture = HeldExitFixture(leaving: modes)

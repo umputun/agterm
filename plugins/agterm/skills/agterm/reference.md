@@ -729,7 +729,15 @@ error keeps those names for compatibility.
   omitted and `left` are the main pane, which still reaches a promoted split survivor. An unparseable value
   is `--pane must be left, right, or scratch`, rejected in the dispatcher so a raw socket client gets it too.
   Read it back with `session text --pane` naming the same pane. A never-shown session →
-  `session not realized`.
+  `session not realized`. It follows ⌘V's rule: copied files paste as shell-escaped paths, and an image-only
+  clipboard is saved as a PNG whose path is pasted. In a pane whose program runs on another host (an attached
+  pane, a remote window's pane) the files or image are copied there first, up to 100 MB and 10,000 files and folders, and
+  the path pasted is the remote one; the reply waits for the copy, a failure answers its reason and pastes
+  nothing, and a second paste while the pane is copying answers `a paste is still copying`. Claude Code attaches
+  a pasted image path, so ⌘V, not Ctrl-V, pastes a screenshot into Claude Code in a remote pane: its own Ctrl-V
+  reads the clipboard of the host it runs on. A ghostty.conf paste binding, and the bundled one at the V position on a Latin alternative layout, paste text only there.
+- `paste receive` — internal, run by agterm over ssh on the host where a pasted file must land; never run it by
+  hand.
 - `session select-all [--target] [--window W]` — select the session's entire terminal buffer (main pane),
   the socket analogue of ⌘A / Edit ▸ Select All (libghostty `select_all`). Read the resulting selection
   back with `session copy`. A never-shown session → `session not realized`.

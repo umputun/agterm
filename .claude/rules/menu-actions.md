@@ -64,7 +64,9 @@ paths:
   command: `zmx tree` + `pick` + `zmx attach [--companions]` already script it. A HUD over the starting
   session shows the ssh waits and a failure, the latter hiding itself after `remoteAttachErrorSeconds`;
   a partial group attach moves the failure to the new parent row, and a window with no session or a parent
-  row already gone falls back to `notifyCommandFailure`.
+  row already gone falls back to `notifyCommandFailure`. `RemoteAttachHud` opens only into an empty slot, its own
+  panel, or an error panel an earlier one left: another operation's progress or a script's HUD stays, and the
+  failure goes to the notification. Paste reuses it for its copy panel.
 - File ▸ Open Remote Window… uses the same host list and picker, then a second pick of the Mac's open windows
   when the host is a Mac with several (`AppActions+RemoteAttach`, `RemoteOriginWindow`); one window or an
   agterm-server host asks nothing. `window remote open --origin-window` is its control twin.

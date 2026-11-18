@@ -48,6 +48,27 @@ final class RemoteCommandProcessRunnerTests: XCTestCase {
         XCTAssertEqual(result.stderr, "err")
     }
 
+    func testAnInputFileIsTheCommandsStandardInput() async throws {
+        let input = FileManager.default.temporaryDirectory.appendingPathComponent("runner-input-\(UUID().uuidString)")
+        try Data("bundle bytes".utf8).write(to: input)
+        defer { try? FileManager.default.removeItem(at: input) }
+
+        let result = await runner.run(["sh", "-c", "cat; printf done >&2"], deadline: 10, input: input)
+
+        XCTAssertEqual(result.status, 0)
+        XCTAssertEqual(result.stdout, "bundle bytes")
+        XCTAssertEqual(result.stderr, "done")
+    }
+
+    func testAnUnreadableInputFileIsAnErrorWithoutRunning() async {
+        let missing = FileManager.default.temporaryDirectory.appendingPathComponent("runner-missing-\(UUID().uuidString)")
+
+        let result = await runner.run(["sh", "-c", "printf ran"], deadline: 10, input: missing)
+
+        XCTAssertEqual(result.status, -1)
+        XCTAssertEqual(result.stdout, "")
+    }
+
     func testAMissingExecutableIsAnErrorRatherThanAHang() async {
         let result = await runner.run(["agterm-no-such-command-\(UUID().uuidString)"], deadline: 10)
 

@@ -448,7 +448,7 @@ public struct ControlDispatcher {
         case .sessionPaste:
             switch parsePane(request.args?.pane) {
             case .pane(let parsed):
-                return actions.pasteSession(request.target, window: request.args?.window, pane: parsed)
+                return await actions.pasteSession(request.target, window: request.args?.window, pane: parsed)
             case .rejected(let rejection): return rejection
             }
         case .sessionSelectAll:

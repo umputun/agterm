@@ -211,6 +211,7 @@
             <a href="#zmx" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">zmx</a>
             <a href="#remote" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">remote server</a>
             <a href="#clipboard" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">clipboard</a>
+            <a href="#paste" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">paste</a>
             <a href="#terminfo" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">terminfo</a>
             <a href="#server" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">server</a>
             <a href="#update" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">update</a>
@@ -1548,6 +1549,9 @@
                 are accepted too. Read it back with
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session text --pane</span> naming the same
                 pane. A never-shown session gives <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session not realized</span>.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                It follows ⌘V's <a href="/docs#terminals-paste" style="color: #6d82f3">paste rule</a>: copied files paste as their paths, and an image-only clipboard is saved as a PNG whose path is pasted. In a pane whose program runs on another host the files or image are copied there first and the reply waits for the copy; a failure answers its reason and pastes nothing, and a paste while that pane is still copying answers <span style="font-family: &quot;JetBrains Mono&quot;, monospace">a paste is still copying</span>.
               </p>
             </div>
 
@@ -4804,6 +4808,40 @@
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 Each receiving terminal applies its own <span style="font-family: &quot;JetBrains Mono&quot;, monospace">clipboard-write</span> setting, so one set to <span style="font-family: &quot;JetBrains Mono&quot;, monospace">ask</span> prompts and one set to <span style="font-family: &quot;JetBrains Mono&quot;, monospace">deny</span> drops the copy. Exit status 0 does not confirm that the session or any terminal received the text. A copy made while the pane's program is in the middle of heavy output can land inside one of its escape sequences and garble that one sequence.
+              </p>
+            </div>
+          </section>
+
+          <section id="paste" style="scroll-margin-top: 88px; padding-top: 56px">
+            <h2
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 700;
+                font-size: 28px;
+                letter-spacing: -0.02em;
+                margin: 0 0 16px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+              "
+            >
+              paste
+            </h2>
+
+            <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 0 0 12px">
+              Internal: agterm runs it over ssh, and it never opens the control socket, so it has no protocol command, no
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--target</span> and no
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--json</span>.
+            </p>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl paste receive
+              </div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Receive the files, folders or image pasted or dropped into a pane whose program runs on this host. The Mac showing the pane runs it over ssh and sends them on standard input; it prints the staged paths as JSON, which that Mac pastes. It is not meant to be run by hand, and refuses a terminal on standard input.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                Files are written under <span style="font-family: &quot;JetBrains Mono&quot;, monospace">agterm/paste</span> in the user's cache folder (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">~/Library/Caches</span> on macOS, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">~/.cache</span> on Linux), readable only by the user, and pastes older than 24 hours are removed on the next paste. A paste is limited to 100 MB and 10,000 entries; a larger one, or one this host cannot write, exits 1 with the reason in the JSON.
               </p>
             </div>
           </section>

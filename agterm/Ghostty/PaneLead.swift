@@ -8,6 +8,7 @@ import AppKit
 /// `.claude/rules/control-api.md` owns the contract.
 @MainActor
 enum PaneLead {
+    static let coveredRefusal = "pane is covered while another Mac leads it; take the lead first (session lead)"
     /// Replaces a pane's surface with a fresh attach. Installed once by the app, which owns the factories.
     static var reattach: ((_ old: GhosttySurfaceView, _ claim: Bool) -> Void)?
     /// replace swaps a pane's surface for one built from `launch`, uncovered. Installed once by the app.

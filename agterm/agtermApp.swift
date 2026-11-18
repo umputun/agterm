@@ -169,6 +169,13 @@ struct agtermApp: App {
             guard let controlServer else { return done(false) }
             controlServer.openDocumentLink(url, session: session, sizePercent: percent, completion: done)
         }
+        PasteTransfer.shared.text = { [weak controlServer] offer, surface in
+            guard let controlServer else { return .failure(PasteFailure("control server is gone")) }
+            return await controlServer.pasteText(offer, for: surface)
+        }
+        PasteTransfer.shared.refuse = { [weak controlServer] surface, reason in
+            controlServer?.reportPasteRefusal(reason, for: surface)
+        }
         let liveReset = LiveResetCoordinator(settingsModel: settingsModel,
                                              selection: { [weak controlServer] in controlServer?.liveResetSelection() })
         controlServer.liveReset = liveReset

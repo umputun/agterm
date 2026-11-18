@@ -235,6 +235,22 @@ struct RemoteSessionTests {
         #expect(throws: (any Error).self) { try RemoteSession.pageServeCommand(host: "-oProxyCommand=x", token: "t1") }
     }
 
+    @Test func pasteReceiveUsesPlainStdioAndReachesTheInstalledCli() throws {
+        let fake = try FakeRemote()
+        defer { fake.cleanUp() }
+        try fake.installAgtermctl(exitCodes: [0])
+
+        let argv = try RemoteSession.pasteReceiveCommand(host: "buildbox", controlPath: "/tmp/m")
+        let run = try fake.runRemote(argv)
+
+        #expect(argv.prefix(2) == ["ssh", "-T"])
+        #expect(argv.contains("ControlPath=/tmp/m"))
+        #expect(argv.last?.contains(RemoteSession.cliPathPrefix) == true)
+        #expect(run.status == 0)
+        #expect(try fake.calls() == [["paste", "receive"]])
+        #expect(throws: (any Error).self) { try RemoteSession.pasteReceiveCommand(host: "-oProxyCommand=x") }
+    }
+
     @Test func attachForcesAPtyAndNeverBoundsItsLifetime() throws {
         let argv = try RemoteSession.attachCommand(host: "buildbox", endpoint: endpoint, daemon: daemon)
         #expect(argv.prefix(9) == ["ssh", "-tt", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
