@@ -56,6 +56,8 @@ struct RemotePresentationClientTests {
         var overlayResizes: [PresentationOverlayChange] = []
         var respawns: [(PresentationRespawns, Bool)] = []
         var linkRefusals: [RemoteLinkRefusal] = []
+        var refusedClicks: [UUID] = []
+        var snapshots: [PresentationLinkSnapshot] = []
         var warnings: [String] = []
         var leads: Set<UUID> = []
         var ends = 0
@@ -104,6 +106,8 @@ struct RemotePresentationClientTests {
             sound: { recorder.sounds.append($0) },
             respawns: { recorder.respawns.append(($0, $1)) },
             linkRefused: { recorder.linkRefusals.append($0) },
+            linkClickRefused: { recorder.refusedClicks.append($0) },
+            linkSnapshot: { recorder.snapshots.append($0) },
             message: { recorder.messages.append($0) },
             mail: { recorder.mails.append($0) },
             companions: { recorder.companions.append($0) },
@@ -592,6 +596,22 @@ struct RemotePresentationClientTests {
         transport.deliver(line(.linkRefused(PresentationLinkRefusal(reason: .notFound)), rev: 2))
 
         #expect(recorder.linkRefusals == [.notFound])
+        #expect(recorder.refusedClicks.isEmpty)
+    }
+
+    @Test func aRefusalNamingItsClickAndASnapshotReachTheApp() {
+        let client = makeClient()
+        client.start()
+        connect(client, mode: .presenter, kinds: [PresentationHub.linkClickKind, PresentationHub.linkSnapshotKind])
+        let click = UUID()
+        let snapshot = PresentationLinkSnapshot(click: UUID(), token: "tok", name: "a.md", size: 3)
+
+        transport.deliver(line(.linkRefused(PresentationLinkRefusal(reason: .notAPage, click: click)), rev: 2))
+        transport.deliver(line(.linkSnapshot(snapshot), rev: 3))
+
+        #expect(recorder.refusedClicks == [click])
+        #expect(recorder.linkRefusals == [.notAPage])
+        #expect(recorder.snapshots == [snapshot])
     }
 
     @Test func anAnswerWithTheStreamDownIsDropped() {

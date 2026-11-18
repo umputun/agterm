@@ -7,7 +7,7 @@ public enum OpenerSelector: Equatable, Hashable, Sendable {
     case basename(String)
 
     /// parse reads one selector, nil for a glob other than `*.ext` or a name holding a path separator.
-    static func parse(_ token: String) -> OpenerSelector? {
+    public static func parse(_ token: String) -> OpenerSelector? {
         let globs: Set<Character> = ["*", "?", "[", "]"]
         if token.hasPrefix("*.") {
             let ext = String(token.dropFirst(2))
@@ -24,6 +24,14 @@ public enum OpenerSelector: Equatable, Hashable, Sendable {
         switch self {
         case .extension(let ext): "*.\(ext)"
         case .basename(let name): name
+        }
+    }
+
+    /// matches says whether the selector takes a file named `name` (a basename).
+    public func matches(_ name: String) -> Bool {
+        switch self {
+        case .extension(let ext): (name as NSString).pathExtension.lowercased() == ext
+        case .basename(let basename): name == basename
         }
     }
 }
@@ -44,13 +52,18 @@ public struct FileOpener: Equatable, Sendable {
 }
 
 public extension Keymap {
+    /// opener returns the rule for a file named `name` (a basename); see `[FileOpener].opener(forFile:)`.
+    func opener(forFile name: String) -> FileOpener? { openers.opener(forFile: name) }
+}
+
+public extension Array where Element == FileOpener {
     /// opener returns the rule for a file named `name` (a basename), a basename selector before an extension one;
     /// nil when no rule takes it.
     func opener(forFile name: String) -> FileOpener? {
-        if let exact = openers.first(where: { $0.selectors.contains(.basename(name)) }) { return exact }
+        if let exact = first(where: { $0.selectors.contains(.basename(name)) }) { return exact }
         let ext = (name as NSString).pathExtension.lowercased()
         guard !ext.isEmpty else { return nil }
-        return openers.first { $0.selectors.contains(.extension(ext)) }
+        return first { $0.selectors.contains(.extension(ext)) }
     }
 }
 

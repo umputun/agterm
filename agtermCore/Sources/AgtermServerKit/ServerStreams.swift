@@ -36,6 +36,9 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
     /// catalogRecent is the server's Recent Closed list as the catalog carries it.
     var catalogRecent: @MainActor () -> [ControlRecentItem]? = { nil }
     var catalogVersions = CatalogVersions(server: "", protocolVersion: PresentationCodec.version, catalog: CatalogCodec.version)
+    /// snapshotBook holds the files offered for viewers' `open` rules.
+    lazy var snapshotBook = SnapshotOfferBook(clock: { [unowned self] in now() })
+    var snapshotOffers: SnapshotOfferBook? { snapshotBook }
     /// pageAttachments are the server's page rows handed to the Macs that attach them.
     lazy var pageAttachments = PageAttachmentBook(clock: { [unowned self] in now() }, servedPage: { [unowned self] id, page in
         guard let row = store.session(withID: id), row.content == .page, row.htmlOverlay?.id == page else { return nil }
@@ -287,6 +290,7 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
         for stream in overlayJobStreams.values { stream.shutdown() }
         for stream in pageServeStreams.values { stream.shutdown() }
         pageAttachments.shutdown()
+        snapshotBook.shutdown()
     }
 }
 
@@ -294,40 +298,48 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
 
 extension ServerStreams {
     /// receiveLinkClick opens the page a path clicked on viewer `sender` names, on that viewer, the way a Mac origin
-    /// does: the path resolves against the pane's directory here, and only page routes open. Every other click is
-    /// answered with one refusal to that viewer; a click whose viewer left meanwhile is dropped.
+    /// does: the path resolves against the pane's directory here, and only page routes open. A click asking for a
+    /// snapshot whose file one of its selectors takes is answered with a claim on that file instead. Every other click
+    /// is answered with one refusal to that viewer, naming the click when it carried an id; a click whose viewer left
+    /// meanwhile is dropped.
     func receiveLinkClick(_ click: PresentationLinkClick, forSession id: UUID, from sender: Int) {
+        let clickID = click.click
         guard let target = store.forwardedClickPane(id, pane: click.pane) else {
-            return refuseLinkClick(.paneNotAttached, to: sender)
+            return refuseLinkClick(.paneNotAttached, to: sender, click: clickID)
         }
         let origin = LinkPolicy.ClickOrigin.pane(id)
         let candidates = LinkPolicy.locations(for: click.raw, origin: origin, cwd: target.cwd)
         let check = checkPage
         let liveText = presentationHub.supports(PresentationHub.pageTextKind, owner: sender)
+        let selectors = snapshotSelectors(click, from: sender)
         Task { @MainActor [weak self] in
-            let (route, present, opening) = await Task.detached(priority: .userInitiated) {
+            let (route, present, snapshot, opening) = await Task.detached(priority: .userInitiated) {
                 let exists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
                 let route = LinkPolicy.resolvedRoute(for: click.raw, candidates: candidates, mode: click.mode, origin: origin,
                                                      exists: exists)
                 let present = route.localFile.map { exists($0.path(percentEncoded: false)) } ?? false
-                let opening = present
+                let snapshot = present ? Self.snapshotCandidate(route, selectors: selectors) : nil
+                let opening = present && snapshot == nil
                     ? Self.clickedPage(route, logs: liveText, from: sender).map { ($0.source, check($0.source, $0.options)) } : nil
-                return (route, present, opening)
+                return (route, present, snapshot, opening)
             }.value
             guard let self, presentationHub.isConnected(owner: sender) else { return }
             // a location nobody found routes as typed, and a relative one then has nothing to open
-            if route == .ignore, !candidates.isEmpty { return refuseLinkClick(.notFound, to: sender) }
+            if route == .ignore, !candidates.isEmpty { return refuseLinkClick(.notFound, to: sender, click: clickID) }
             switch route {
             case .image, .markdown, .text, .document, .reveal:
-                guard present else { return refuseLinkClick(.notFound, to: sender) }
+                guard present else { return refuseLinkClick(.notFound, to: sender, click: clickID) }
             default:
                 break
             }
-            guard let (source, checked) = opening else { return refuseLinkClick(.notAPage, to: sender) }
+            if let snapshot, let clickID, store.session(withID: id) != nil {
+                return offerSnapshot(snapshot, click: clickID, to: sender)
+            }
+            guard let (source, checked) = opening else { return refuseLinkClick(.notAPage, to: sender, click: clickID) }
             guard case .success(let options) = checked, let session = store.session(withID: id), !session.hudActive,
                   !session.overlayHidden(nil),
                   handOver(ServerActions.pageOverlay(source, options: options), in: session, options: options) == .opened
-            else { return refuseLinkClick(.notOpened, to: sender) }
+            else { return refuseLinkClick(.notOpened, to: sender, click: clickID) }
         }
     }
 
@@ -352,7 +364,7 @@ extension ServerStreams {
                                                          clicked: true, textLog: textLog, forwardedTo: sender))
     }
 
-    private func refuseLinkClick(_ reason: RemoteLinkRefusal, to sender: Int) {
-        presentationHub.send(.linkRefused(PresentationLinkRefusal(reason: reason)), toOwner: sender)
+    private func refuseLinkClick(_ reason: RemoteLinkRefusal, to sender: Int, click: UUID?) {
+        presentationHub.send(.linkRefused(PresentationLinkRefusal(reason: reason, click: click)), toOwner: sender)
     }
 }

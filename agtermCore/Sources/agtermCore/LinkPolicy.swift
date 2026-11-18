@@ -304,6 +304,45 @@ public enum LinkPolicy {
         return found
     }
 
+    /// candidateNames lists the file names a link clicked in a remote pane may resolve to on its origin: the last
+    /// component of the literal path and of each spelling `locations` would try, with any `:line` suffix also split
+    /// off. Empty for a link naming no file. The origin's resolution picks one of them, which is what a viewer checks
+    /// a returned snapshot's name against.
+    public static func candidateNames(for raw: String) -> [String] {
+        guard forwardsRemotely(raw) else { return [] }
+        let path: String
+        if isBarePath(raw) || isRelativeSpelling(raw) {
+            path = raw
+        } else if let url = URL(string: raw) {
+            path = url.path(percentEncoded: false)
+        } else {
+            return []
+        }
+        var names: [String] = []
+        let add = { (spelling: String) in
+            let name = String(spelling.reversed().prefix { $0 != "/" }.reversed())
+            if !name.isEmpty, name != ".", name != "..", !names.contains(name) { names.append(name) }
+        }
+        for spelling in [path] + trimmedSpellings(path) {
+            add(spelling)
+            if let suffix = lineSuffix(spelling) { add(suffix.path) }
+        }
+        return names
+    }
+
+    /// previewBytes is the byte cap of the page a file named `name` opens as, nil for a file no page shows: an `open`
+    /// rule receives only what the built-in page could have read.
+    public static func previewBytes(forFileName name: String) -> Int? {
+        guard !name.contains("/") else { return nil }
+        switch localPath("/" + name) {
+        case .image: return ImagePage.maxBytes
+        case .markdown: return MarkdownPage.maxBytes
+        case .document: return DocumentPage.maxBytes
+        case .text: return TextPage.maxBytes
+        case .open, .reveal, .ignore: return nil
+        }
+    }
+
     /// trailingPunctuation ends a sentence after a printed path; libghostty's path rule keeps it in the link.
     /// A comma or a closing bracket already ends the link, and a detected one never ends in a colon.
     static let trailingPunctuation: Set<Character> = [".", "?", "!", ";"]

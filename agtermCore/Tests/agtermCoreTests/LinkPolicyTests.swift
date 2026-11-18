@@ -722,4 +722,42 @@ struct LinkPolicyTests {
             #expect(LinkPolicy.openerFile(for: route, source: .detected, intent: .normal) == nil)
         }
     }
+
+    @Test(arguments: [
+        ("/srv/app/notes.md", ["notes.md"]),
+        ("src/Makefile:3", ["Makefile:3", "Makefile"]),
+        ("./main.go:12:4", ["main.go:12:4", "main.go"]),
+        ("~/docs/readme.md.", ["readme.md.", "readme.md"]),
+        ("file:///srv/a%20b.md", ["a b.md"]),
+        ("file://buildbox/srv/x.png", ["x.png"]),
+        ("https://example.com/x.md", []),
+        ("notes.md", []),
+        ("/srv/app/", []),
+    ])
+    func candidateNamesAreTheBasenamesEverySpellingCouldResolveTo(raw: String, names: [String]) {
+        #expect(LinkPolicy.candidateNames(for: raw) == names)
+    }
+
+    @Test func aCandidateNamePicksTheRuleTheResolvedFileWouldTake() {
+        let (keymap, diagnostics) = parseKeymap("""
+            open *.swift view-swift
+            open file.swift view-one
+            open Makefile view-make
+            """)
+        #expect(diagnostics.isEmpty)
+        let pick = { (raw: String) in LinkPolicy.candidateNames(for: raw).compactMap { keymap.opener(forFile: $0) }.first }
+        #expect(pick("src/Makefile:3")?.command.command == "view-make")
+        #expect(pick("src/file.swift:3")?.command.command == "view-one")
+        #expect(pick("src/other.swift")?.command.command == "view-swift")
+        #expect(pick("src/other.txt") == nil)
+    }
+
+    @Test func previewBytesIsTheCapOfThePageAFileNameWouldOpen() {
+        #expect(LinkPolicy.previewBytes(forFileName: "shot.PNG") == ImagePage.maxBytes)
+        #expect(LinkPolicy.previewBytes(forFileName: "notes.md") == MarkdownPage.maxBytes)
+        #expect(LinkPolicy.previewBytes(forFileName: "page.html") == DocumentPage.maxBytes)
+        #expect(LinkPolicy.previewBytes(forFileName: "main.go") == TextPage.maxBytes)
+        #expect(LinkPolicy.previewBytes(forFileName: "Makefile") == TextPage.maxBytes)
+        #expect(LinkPolicy.previewBytes(forFileName: "archive.zip") == nil)
+    }
 }

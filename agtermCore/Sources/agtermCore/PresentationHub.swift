@@ -81,7 +81,7 @@ public final class PresentationHub {
     /// The frame kinds this origin can produce.
     public static let supportedKinds = ["status", "hud", "notify", "message", "mail", "context", "info", "layout", "sound", askFormKind, askOtherKind,
                                         overlayPointsKind, pageContentKind, pageDocumentKind, pageLinksKind, statusShapesKind,
-                                        statusCheckmarkKind, linkClickKind, pendingSnapshotKind, jobTokenKind, pageForwardKind,
+                                        statusCheckmarkKind, linkClickKind, linkSnapshotKind, pendingSnapshotKind, jobTokenKind, pageForwardKind,
                                         pageTextKind, pageFilesKind, pageExpandKind, statusClearKind, restartRespawnKind, presenterVacantKind,
                                         leadReportKind, offerIdentityKind, endedKind, companionsKind]
                                         + pageKinds + pickKinds
@@ -150,6 +150,9 @@ public final class PresentationHub {
     }
     /// linkClickKind advertises forwarded clicks and the refusal frame that answers one.
     public static let linkClickKind = "link.click"
+    /// linkSnapshotKind advertises snapshots: a forwarded click carrying an id and `open` selectors may be answered with
+    /// the file instead of a page.
+    public static let linkSnapshotKind = "link.snapshot"
 
     private let staleTimeout: TimeInterval
     private let now: () -> Date

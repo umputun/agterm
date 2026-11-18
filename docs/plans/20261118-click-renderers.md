@@ -251,21 +251,27 @@
   `LinkPolicy.swift` (`candidateNames`), `AgtermServerKit/ServerStreams.swift` (forwarded click, adopt branch)
 - Modify tests: `PresentationFramesTests.swift`, `PageServeFramesTests.swift`, `LinkPolicyTests.swift`
 
-- [ ] failing tests: frame round trip with and without the new fields and an old frame decoding; kind
+- [x] failing tests: frame round trip with and without the new fields and an old frame decoding; kind
       negotiation; `candidateNames` for literal, `:line` and trailing-punctuation spellings; the book (one
       snapshot per click id within its connection, session and pane; `src/Makefile:3` matches a `Makefile` rule;
       `file.swift` beats `*.swift` for `src/file.swift:3`; a name outside the candidates, unknown ids, a second
       token, a late arrival and anything after teardown rejected; expiry on an injected clock); staging (0700,
       unsafe name, over-cap size, one-hour sweep on an injected clock)
-- [ ] move the link frame types to `PresentationLink.swift` unchanged, then add the fields, the snapshot payload,
+- [x] move the link frame types to `PresentationLink.swift` unchanged, then add the fields, the snapshot payload,
       the body case, the kind and the two client callbacks
-- [ ] snapshot seam on `PageServeHost` with default implementations, `pageClaimUnanswered` dropping a claimed
+- [x] snapshot seam on `PageServeHost` with default implementations, `pageClaimUnanswered` dropping a claimed
       snapshot; agterm-server's forwarded click offers a
       snapshot on a match within the cap and opens the page otherwise; refusals carry the click id
-- [ ] server seam tests in `ServerStreamsSnapshotTests`: one read served, a second read, another path and a bridge
+- [x] server seam tests in `ServerStreamsSnapshotTests`: one read served, a second read, another path and a bridge
       request refused, unclaimed offer expiry, an over-cap file opening the page, no close after the last frame,
       a claim whose reply failed to write dropped by `pageClaimUnanswered` with no page loss or reoffer
-- [ ] run `swift test`
+- [x] run `swift test`
+- ➕ `SnapshotServe.swift` (agtermCore) holds `SnapshotOfferBook` and `SnapshotServeStream`, shared by agterm-server
+      and the Mac; `PageServeHost.snapshotOffers` (defaulted nil) is its one seam. The origin decides the offer from the
+      route, a selector match and `BoundedFile.size` under `LinkPolicy.previewBytes`, before `checkPage`, and only for a
+      viewer listing `link.snapshot`. An over-cap file falls to the page path, whose refusal names the click.
+      The pending entry keeps its click-time rules (`[FileOpener].opener(forFile:)`), so a reload mid-transfer cannot
+      change the command. ⚠️ the server seam and client-callback tests were written after their code.
 
 ### Task 5: Mac origin and viewer wiring with the remote round trip (hosted)
 
