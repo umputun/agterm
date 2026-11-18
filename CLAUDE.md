@@ -44,6 +44,8 @@ C-boundary concurrency before changing the bridge.
 - A decline of a feature request that a custom command covers explains the extension model with the request
   as the worked example: README's "bind X yourself", `site/docs.html#extend`, the agent skill, the cookbook.
   It also points "can you add X" requests to Discussions ▸ Ideas instead of issues.
+- Text a user reads (replies, docs, UI strings) names a sidebar entry a session or a companion;
+  `row` is the rules files' internal shorthand and never appears there.
 - Custom forks are not supported. An answer, recipe or decision is made for agterm itself and is never limited or
   adjusted for what a reporter's fork has or lacks. agterm-linux stays in view only as `agtermCore`'s downstream
   consumer (module boundaries below).
