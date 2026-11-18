@@ -30,6 +30,7 @@ It covers the same ground as [annotate-pane-output](../annotate-pane-output/) an
 - agterm 0.26.2 or later. `session paste --pane` shipped there, which is how the notes reach a split or scratch pane; the `foregroundShell` fields in `tree`, which tell a pane holding a bare shell from one whose process could not be read, came in 0.26.0. Everything else is older: `session overlay open --block`, `--size-percent`, `--background-color` and `notify` shipped by 0.13.0.
 - [plannotator-tui](https://github.com/plannotator/plannotator-tui) 0.9.9 or later: `brew trust plannotator/tap && brew install plannotator/tap/plannotator-tui`. The recipe drives the interface plannotator-tui built for Herdr (see *How it works*) and was written against 0.9.9. Herdr itself is not needed.
 - Python 3.9 or later, standard library only. The `/usr/bin/python3` that comes with the Xcode Command Line Tools is 3.9.
+- For a session attached from another Mac (`zmx attach`, File ▸ Attach Remote…): agterm 0.29.0 or later on this Mac, which gives a custom command `$AGT_SESSION_HOST` (0.26.2 stays enough for local sessions), and the recipe on that Mac too, set up as in *Setup*. The ssh key agterm attaches with is the one the chord uses.
 - Claude Code, for the replies chord. The recipe finds the transcript through a Claude Code Stop hook, so replies from other agents are not reached. The pane chord works with anything.
 
 ## Setup
@@ -72,15 +73,20 @@ command "Annotate pane output"  ctrl+cmd+a  ~/.local/bin/agterm-annotate/annotat
 
 Pick chords that are free in your own keymap. A custom command cannot shadow a built-in, so one that collides is demoted to palette-only and the chord appears to do nothing; `agtermctl keymap list` shows what every chord resolved to.
 
+For sessions you attach from another Mac, install the recipe on that Mac as well: the three scripts, executable, at the path this Mac's copy has under its home directory (or anywhere, named by `AGTERM_ANNOTATE_REMOTE` here), its Stop hook in that Mac's `~/.claude/settings.json`, and plannotator-tui. It needs no keymap lines there unless you also press the chords on that Mac. A Linux host running agterm-server needs nothing: the pane chord works on its sessions without it, and the replies chord says it could not run the recipe there.
+
 Settings, read from the environment. Put them in front of the script in the keymap line:
 
 - `AGTERM_ANNOTATE_LINES` is how many lines the pane chord reads when nothing is selected, 50 by default.
 - `PLANNOTATOR_TUI` and `AGTERMCTL` take an absolute path when either binary is somewhere the script does not look. It tries `PATH`, both Homebrew prefixes and `~/.cargo/bin` for plannotator-tui.
 - `AGTERM_ANNOTATE_DIR` moves the cache the hook writes, `~/.cache/agterm-annotate` by default. Set it for the hook too, or the two stop meeting.
 - `AGTERM_ANNOTATE_LOG` moves the log, `$TMPDIR/agterm-annotate.log` by default.
+- `AGTERM_ANNOTATE_REMOTE` is the path of `annotate.py` on the Mac a session is attached from, when it is not this install's path under that Mac's home directory.
 - `CLAUDE_FG_MATCH` is the pattern an argv element of the pane's foreground must match for reply notes to be submitted, `(^|/)claude$` by default. Widen it when you start Claude through a wrapper, e.g. `(^|/)(claude|mywrapper)$`.
 
-Whether each chord submits its notes is the `SUBMIT` table at the top of `annotate.py`.
+Whether each chord submits its notes is the `SUBMIT` table at the top of `annotate.py` on the Mac you press it on, attached panes included.
+
+On an attached pane the replies chord's work happens in the copy on the other Mac, started by a non-interactive ssh command, so the keymap line here does not reach it. `AGTERM_ANNOTATE_DIR` and `CLAUDE_FG_MATCH` must be set where that Mac's login shell sets them for such a command (`~/.zshenv` for zsh, `~/.config/fish/config.fish` for fish), or a moved cache reads as "no transcript" and a wrapper's notes arrive unsent.
 
 ## Usage
 
@@ -111,6 +117,16 @@ The gotchas that cost time:
 - The theme is set to dark through `PLANNOTATOR_TUI_THEME`. On `auto` the viewer asks the terminal for its background color at startup, and a key typed into that window is lost.
 - Putting text at a prompt unsent needs `session paste`, because `session type` sends a real Return for each newline. `session paste` reads the system clipboard, so the script saves it, pastes, and puts it back. Before the Return that submits reply notes it waits 0.4 s, since the agent is still reading a long paste when `session paste` returns.
 
+### A session attached from another Mac
+
+A session attached with `zmx attach` runs its programs on the Mac it came from. Claude, its transcript and the Stop hook's record of it are all there, and the row here only runs `ssh … zmx attach agterm-<id>`. So for the replies chord on such a pane `annotate.py` asks its copy on that Mac, over ssh with the `BatchMode` agterm's own attach uses:
+
+1. `annotate.py locate agterm-<id>` finds the session, pane and window that run that zmx daemon through the far side's `agtermctl zmx tree`, and answers with the pane's foreground, read from that window's tree, and the transcript its Stop hook recorded. agterm gives a custom command `$AGT_SESSION_HOST` but not the session's id on the other Mac, and the daemon name in the pane's ssh command line is the one key both sides share.
+2. The overlay here runs `ssh -tt <host> annotate.py serve <session> <pane> <window>`, which starts plannotator-tui on that Mac against its own transcript. Nothing is copied: a long session's transcript runs to tens of megabytes.
+3. Once the overlay closes, `annotate.py take <session> <pane> <window>` hands back the last send and whether Claude still runs in that pane there. This Mac's `SUBMIT` decides whether the notes are submitted at all. They are pasted here, and the pane's ssh carries them over.
+
+The pane chord stays on this Mac: what the pane printed is on this screen too. It asks `locate` only for the agent's name and the shell check, and goes on without them when the other side cannot answer. A split or scratch pane opened here on an attached session runs locally and takes the ordinary path. The helpers accept only a daemon name, session and window ids and `left` or `right`, so the command line ssh sends holds nothing a login shell, `sh` or `fish`, could read differently.
+
 ## Limits
 
 - **It types into your session, and the replies chord sends.** Pane notes are pasted at the prompt of the pane you pressed the chord in. Reply notes are pasted and submitted when Claude runs in that pane, so the agent acts on them without you reading them first; set `SUBMIT` in `annotate.py` to stop at the prompt instead.
@@ -122,4 +138,5 @@ The gotchas that cost time:
 - It depends on plannotator-tui's Herdr interface, which that project documents for Herdr rather than as a public API. A release that changes it shows up as an error in the viewer's footer.
 - A promoted pane can open the wrong replies. The hook keys its record on the pane the agent's shell started in, while the chord reports the pane it fires from now, and the two diverge after closing the left half of a split promotes the right one.
 - No search inside the viewer, and a reply opens one message at a time rather than everything since your last prompt.
+- **An attached pane depends on a private detail.** The other Mac's session is found through the daemon name in the pane's ssh command line, which agterm does not document. An agterm that changes that command breaks the replies chord on attached panes with a banner, and the local panes keep working. Each press also costs two ssh round trips; `locate` took 0.96 s over a tailnet, and `take` was not timed.
 - One review per pane at a time; pressing the chord again while the viewer is open is dropped with a banner. The script removes its lock on exit and on SIGTERM. A SIGKILL leaves it behind, and the banner then names the lock directory to remove. A session that already has an overlay open cannot take another, so the chord says so and stops.
