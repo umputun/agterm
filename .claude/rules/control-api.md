@@ -2234,7 +2234,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   anywhere, which only marks it. Outcomes are final (a policy refusal), retried on `RemoteRetryBackoff` while the
   stream is up (no answer, a failed ssh exit), or parked until the next list (not attachable now). Any report
   but `connected` drops the list until the next snapshot, and a create in flight holds the origin
-  (`holdCompanionFollow`) so its own New Companion is not attached twice. A Mac page root, which has no full
+  (`holdCompanionFollow`) so its own New Companion is not attached twice; a failed create marks the child its error
+  names, leaving that attach to the user. A Mac page root, which has no full
   stream, opens a membership observer: hello `companions` plus `ended` as a mirror, never the presenter role or a
   lead, answering only pings; its state never reaches the row, so the page channel keeps the row's lifetime and
   notice, and it counts in the origin's `presenters`. Read back `followsCompanions` on the row.

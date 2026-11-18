@@ -106,11 +106,6 @@ extension ControlServer {
         for row in library.rowsShowingOrigin(key.session, host: key.host, endpoint: endpoint(of: key)) { reconcileCompanions(row.id) }
     }
 
-    /// markFollowedEverywhere records `ids` as handled in every row here showing origin session `parent`.
-    func markFollowedEverywhere(_ ids: [String], parent: String, host: String, endpoint: ControlZmxEndpoint) {
-        library.markOriginCompanionsHandled(ids, parent: parent, host: host, endpoint: endpoint)
-    }
-
     /// tickCompanionFollow runs the passes whose transport retries fell due, for rows whose stream is up and follows.
     func tickCompanionFollow() {
         let now = hudClock()
@@ -144,7 +139,7 @@ extension ControlServer {
             let follow = store.companionsToFollow(list, forSession: id, shown: shown)
             let wanted = Set(follow.attach.map(\.id.uuidString))
             companionFollow.rows[id]?.retries = row.retries.filter { wanted.contains($0.key) }
-            if !follow.markOnly.isEmpty { markFollowedEverywhere(follow.markOnly, parent: key.session, host: key.host, endpoint: endpoint(of: key)) }
+            if !follow.markOnly.isEmpty { library.markOriginCompanionsHandled(follow.markOnly, parent: key.session, host: key.host, endpoint: endpoint(of: key)) }
             for member in follow.attach where isDue(member, row: id) {
                 guard isCurrent(id, pass: pass, generation: generation) else { break }
                 let attempt = FollowAttempt(child: member.id.uuidString, row: id, key: key, generation: generation)
@@ -181,7 +176,7 @@ extension ControlServer {
         let (child, id, key) = (attempt.child, attempt.row, attempt.key)
         if case .handled = outcome {
             companionFollow.rows[id]?.retries[child] = nil
-            markFollowedEverywhere([child], parent: key.session, host: key.host, endpoint: endpoint(of: key))
+            library.markOriginCompanionsHandled([child], parent: key.session, host: key.host, endpoint: endpoint(of: key))
             return
         }
         guard companionFollow.rows[id]?.generation == attempt.generation else { return }
@@ -267,7 +262,7 @@ extension ControlServer {
               companionFollow.rows[id]?.list?.members.contains(where: { $0.id.uuidString == child }) == true,
               !row.followedCompanions.contains(child), let workspace = store.workspace(forSession: id)?.id else { return nil }
         guard !library.shownOriginSessions(host: key.host, endpoint: endpoint(of: key)).contains(child) else {
-            markFollowedEverywhere([child], parent: key.session, host: key.host, endpoint: endpoint(of: key))
+            library.markOriginCompanionsHandled([child], parent: key.session, host: key.host, endpoint: endpoint(of: key))
             return nil
         }
         return RemotePlacement(store: store, workspace: workspace, parent: id, select: false, claimLead: false)

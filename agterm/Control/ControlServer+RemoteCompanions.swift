@@ -87,8 +87,11 @@ extension ControlServer {
         guard tree.sessions.contains(where: { $0.id == listedOrigin }) else {
             return ControlResponse(ok: false, error: "the session on \(host) is not attachable now; nothing was created")
         }
-        // the origin creates under the target's current parent there, which is the group whose followers must wait
-        let group = tree.sessions.first(where: { $0.id == origin })?.parent ?? origin
+        // the origin creates under the target's current parent there, which is the group whose followers must wait; a
+        // target missing from the tree, such as a companion whose split daemon stopped, is still in its parent's membership
+        let group = tree.sessions.first(where: { $0.id == origin })?.parent
+            ?? tree.sessions.first(where: { $0.companions?.contains(where: { $0.id == origin }) == true })?.id
+            ?? listedOrigin
         let hold = holdCompanionFollow(OriginKey(host: host, endpoint: tree.endpoint, session: group))
         defer { releaseCompanionFollow(hold) }
         let result = await remoteRunner.run(argv, deadline: Self.remoteCompanionDeadline)
@@ -100,8 +103,13 @@ extension ControlServer {
             return ControlResponse(ok: false, error: "\(host) gave no answer\(stderr.isEmpty ? "" : " (\(stderr))"); "
                                    + "whether the companion was created there is unknown")
         }
+        // a created child the error names is the user's to attach, so no follower attaches it as well
+        let leaveToUser = { [self] (created: String) in
+            library.markOriginCompanionsHandled([created], parent: reply.result?.parent ?? group, host: host, endpoint: tree.endpoint)
+        }
         // a full receipt with a failed transport still names work the origin did, so it is reported, never redone
         if result.status != 0, reply.ok, let created = reply.result?.id, UUID(uuidString: created) != nil {
+            leaveToUser(created)
             return ControlResponse(ok: false, error: "created companion \(created) on \(host) but the connection failed before "
                                    + "attaching it; `agtermctl zmx attach \(host) \(created)` attaches it")
         }
@@ -127,6 +135,7 @@ extension ControlServer {
         case .attached(let response):
             return response
         case .failed(let reason):
+            leaveToUser(created)
             return ControlResponse(ok: false, error: "created companion \(created) on \(host) but could not attach it: "
                                    + "\(reason); `agtermctl zmx attach \(host) \(created)` attaches it")
         }
@@ -213,7 +222,7 @@ extension ControlServer {
             let source = RemotePageOrigin(session: originSession, binding: binding, presentation: presentation, companions: companions)
             let placed = placeRemotePage(page, from: source, at: spot, select: select)
             if placed.ok, case .companion = spot, let parent, pageChannelOpen(placed) {
-                markFollowedEverywhere([originSession], parent: parent, host: binding.host, endpoint: binding.endpoint)
+                library.markOriginCompanionsHandled([originSession], parent: parent, host: binding.host, endpoint: binding.endpoint)
             }
             return placed
         }
@@ -413,9 +422,9 @@ extension ControlServer {
     /// ListedAttach is how waiting for an origin session to become attachable ended.
     enum ListedAttach {
         case attached(ControlResponse)
-        /// transport: no listing answered within the budget.
+        /// transport: the budget ran out on a listing that did not answer.
         case transport(String)
-        /// unavailable: the origin answered but never listed the session where it was expected.
+        /// unavailable: the origin listed the session elsewhere, or its last answer in the budget did not list it.
         case unavailable(String)
         /// dropped: the destination declined it after the wait.
         case dropped(String)
@@ -433,20 +442,20 @@ extension ControlServer {
     func attachListed(_ id: String, host: String, expected: ExpectedOrigin? = nil, closed: String,
                       place: () -> RemotePlacement?) async -> ListedAttach {
         let deadline = hudClock().addingTimeInterval(Self.remoteCompanionReadyBudget)
-        var reason = "it did not become attachable"
-        var answered = false
+        let unlisted = "it did not become attachable"
+        var last = ListedAttach.transport(unlisted)
         var waited = false
         while true {
             if waited { await remoteCompanionPause() }
             waited = true
             let remaining = deadline.timeIntervalSince(hudClock())
-            guard remaining > 0 else { return answered ? .unavailable(reason) : .transport(reason) }
+            guard remaining > 0 else { return last }
             let listing = await remoteTree(host: host, deadline: min(Self.remoteTreeDeadline, remaining))
             guard let tree = listing.result?.remote else {
-                reason = listing.error ?? reason
+                last = .transport(listing.error ?? unlisted)
                 continue
             }
-            answered = true
+            last = .unavailable(unlisted)
             // a membership id is canonical while the tree spells it as its origin did
             let match: (ControlRemoteSession) -> Bool = expected == nil ? { $0.id == id } : { Self.originID($0.id) == Self.originID(id) }
             guard let remote = tree.sessions.first(where: match) else { continue }

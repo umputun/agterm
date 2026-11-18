@@ -31,6 +31,8 @@ extension ControlServer {
                                               effects: observer ? observerEffects(for: id) : remoteEffects(for: id),
                                               now: hudClock, observer: observer)
         remoteClients[id] = client
+        // a row back from Undo keeps the flag its old stream set; a new stream follows nothing before its snapshot
+        library.store(forSession: id)?.setFollowsCompanions(false, forSession: id)
         library.store(forSession: id)?.onOriginFrame = { [weak self] session, body in
             MainActor.assumeIsolated { self?.sendToOrigin(body, forSession: session) ?? false }
         }

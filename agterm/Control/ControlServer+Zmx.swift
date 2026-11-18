@@ -271,7 +271,7 @@ extension ControlServer {
                                        originHeadless: tree.headless == true),
                          forSession: created.id)
         if let members = remote.companions { store.baselineCompanions(members.map(\.id), forSession: created.id) }
-        if let parent = remote.parent { markFollowedEverywhere([remote.id], parent: parent, host: host, endpoint: tree.endpoint) }
+        if let parent = remote.parent { library.markOriginCompanionsHandled([remote.id], parent: parent, host: host, endpoint: tree.endpoint) }
         // the row's created event fired inside `addSession`, before the binding existed; seeded first, so no list beats it
         startRemotePresentation(for: created)
         // a FIXED target, never `focusActiveSession`: it follows `splitFocused`, which the new split's deck

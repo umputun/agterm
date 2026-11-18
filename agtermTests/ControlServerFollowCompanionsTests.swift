@@ -245,6 +245,25 @@ final class ControlServerFollowCompanionsTests: XCTestCase {
         XCTAssertFalse(row.followedCompanions.contains(child))
     }
 
+    func testAChildWhoseLaterPollsFailInTransportIsRetriedNotParked() async throws {
+        let polls = Counter()
+        let runner = RoutedRunner { _ in
+            polls.bump()
+            return polls.value == 1 ? Origin.tree(sessions: "") : RemoteCommandResult(status: 255, stdout: "", stderr: "unreachable")
+        }
+        let (server, store, transport) = makeServer(runner)
+        advancingClock(server)
+        let row = try parentRow(in: store)
+        let stream = try open(row, server: server, transport: transport)
+
+        stream.send(.companions(list([child])))
+        await settled(server, rows: [row])
+
+        XCTAssertGreaterThan(polls.value, 1)
+        XCTAssertNotNil(server.companionFollow.rows[row.id]?.retries[child])
+        XCTAssertFalse(server.companionFollow.rows[row.id]?.parked.contains(child) == true)
+    }
+
     func testAChildMovedAwayOnTheOriginIsNotAttachedUnderTheOldParent() async throws {
         let runner = RoutedRunner { _ in Origin.tree(sessions: Origin.session(child, parent: "origin-2")) }
         let (server, store, transport) = makeServer(runner)
@@ -294,6 +313,91 @@ final class ControlServerFollowCompanionsTests: XCTestCase {
         XCTAssertEqual(mine.tint, SidebarTint(color: .red))
         XCTAssertEqual(ZmxLeadBook.shared.states[mine.paneIdentity]?.attachment.claim, true)
         XCTAssertTrue(copy.followedCompanions.contains(child))
+    }
+
+    func testANewCompanionWhoseConnectionFailsAfterItsReceiptIsNotAttachedByAnyCopy() async throws {
+        let created = Flag()
+        let gate = Gate()
+        let runner = RoutedRunner(gate: gate, gatedCall: 2) { argv in
+            if argv.joined(separator: " ").contains("--parent") {
+                created.value = true
+                return RemoteCommandResult(status: 255, stdout: #"{"ok":true,"result":{"id":"\#(child)","parent":"origin-1"}}"#,
+                                           stderr: "connection closed")
+            }
+            return Origin.tree(sessions: Origin.session("origin-1") + (created.value ? "," + Origin.session(child, parent: "origin-1") : ""))
+        }
+        let (server, store, transport) = makeServer(runner)
+        let row = try parentRow(in: store)
+        let copy = try parentRow(in: store)
+        let streams = try [open(row, server: server, transport: transport), open(copy, server: server, transport: transport)]
+
+        let creating = Task { await server.createCompanion(row.id.uuidString, options: CompanionOptions(select: true, tint: nil), window: nil) }
+        try await waitUntil { gate.reached }
+        for stream in streams { stream.send(.companions(list([child]))) }
+        gate.open()
+        let reply = await creating.value
+        await settled(server, rows: [row, copy])
+
+        XCTAssertFalse(reply.ok)
+        XCTAssertTrue(reply.error?.contains("zmx attach buildbox \(child)") == true, reply.error ?? "")
+        XCTAssertTrue(store.companions(of: row.id).isEmpty)
+        XCTAssertTrue(store.companions(of: copy.id).isEmpty)
+        XCTAssertTrue(row.followedCompanions.contains(child))
+        XCTAssertTrue(copy.followedCompanions.contains(child))
+    }
+
+    func testANewCompanionThatNeverBecameAttachableIsNotAttachedLaterByAnyCopy() async throws {
+        let listed = Flag()
+        let runner = RoutedRunner { argv in
+            if argv.joined(separator: " ").contains("--parent") {
+                return RemoteCommandResult(status: 0, stdout: #"{"ok":true,"result":{"id":"\#(child)","parent":"origin-1"}}"#, stderr: "")
+            }
+            return Origin.tree(sessions: Origin.session("origin-1") + (listed.value ? "," + Origin.session(child, parent: "origin-1") : ""))
+        }
+        let (server, store, transport) = makeServer(runner)
+        advancingClock(server)
+        let row = try parentRow(in: store)
+        let stream = try open(row, server: server, transport: transport)
+
+        let reply = await server.createCompanion(row.id.uuidString, options: CompanionOptions(select: true, tint: nil), window: nil)
+        XCTAssertFalse(reply.ok)
+        XCTAssertTrue(reply.error?.contains("could not attach it") == true, reply.error ?? "")
+        listed.value = true
+        stream.send(.companions(list([child])))
+        await settled(server, rows: [row])
+
+        XCTAssertTrue(store.companions(of: row.id).isEmpty)
+        XCTAssertTrue(row.followedCompanions.contains(child))
+    }
+
+    func testAFailedNewCompanionOfAnUnlistedCompanionMarksItsParentsGroup() async throws {
+        let unlisted = Flag()
+        let created = Flag()
+        let runner = RoutedRunner { argv in
+            if argv.joined(separator: " ").contains("--parent") {
+                created.value = true
+                return RemoteCommandResult(status: 255, stdout: #"{"ok":true,"result":{"id":"\#(child)","parent":"origin-1"}}"#,
+                                           stderr: "connection closed")
+            }
+            let members = [other] + (created.value ? [child] : [])
+            return Origin.tree(sessions: Origin.session("origin-1", companions: members)
+                               + (unlisted.value ? "" : "," + Origin.session(other, parent: "origin-1"))
+                               + (created.value ? "," + Origin.session(child, parent: "origin-1") : ""))
+        }
+        let (server, store, transport) = makeServer(runner)
+        let row = try parentRow(in: store)
+        let stream = try open(row, server: server, transport: transport)
+        stream.send(.companions(list([other])))
+        let target = try await companion(of: row, in: store)
+        unlisted.value = true
+
+        let reply = await server.createCompanion(target.id.uuidString, options: CompanionOptions(select: true, tint: nil), window: nil)
+        XCTAssertFalse(reply.ok)
+        stream.send(.companions(list([other, child])))
+        await settled(server, rows: [row])
+
+        XCTAssertEqual(store.companions(of: row.id).map(\.remoteSessionID), [other])
+        XCTAssertTrue(row.followedCompanions.contains(child))
     }
 
     func testAHeldOriginFollowsNothingUntilTheHoldIsReleased() async throws {
@@ -434,6 +538,24 @@ final class ControlServerFollowCompanionsTests: XCTestCase {
         line(try frame(.snapshot(PresentationSnapshot(status: nil, hud: nil, companions: list([child]))), rev: 1))
         _ = try await companion(of: row, in: store)
         XCTAssertEqual(row.remotePresentation?.followsCompanions, true)
+    }
+
+    func testARowBackFromUndoReportsNoFollowingUntilItsNewStreamsSnapshot() async throws {
+        let (server, store, transport) = makeServer(RoutedRunner { _ in Origin.tree(sessions: "") })
+        store.onRemoteRowVisibility = { [weak server] session, shown in
+            MainActor.assumeIsolated { server?.remoteRowVisibilityChanged(session, shown: shown) }
+        }
+        let row = try parentRow(in: store, handled: [child])
+        let stream = try open(row, server: server, transport: transport)
+        stream.send(.snapshot(PresentationSnapshot(status: nil, hud: nil, companions: list([child]))))
+        await settled(server, rows: [row])
+        XCTAssertEqual(row.remotePresentation?.followsCompanions, true)
+
+        XCTAssertTrue(store.softCloseSession(row.id))
+        XCTAssertTrue(store.undoPendingClose())
+
+        XCTAssertEqual(transport.hellos.count, 2)
+        XCTAssertEqual(row.remotePresentation?.followsCompanions, false)
     }
 
     func testAnOriginWhoseHelloLeavesOutTheKindFollowsNothingEvenWithAListInItsSnapshot() async throws {

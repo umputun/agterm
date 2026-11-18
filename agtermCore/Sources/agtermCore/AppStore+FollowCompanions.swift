@@ -5,11 +5,6 @@ import Foundation
 public struct CompanionFollow: Equatable, Sendable {
     public var attach: [PresentationCompanions.Member]
     public var markOnly: [String]
-
-    public init(attach: [PresentationCompanions.Member], markOnly: [String]) {
-        self.attach = attach
-        self.markOnly = markOnly
-    }
 }
 
 // MARK: - Following an origin's companions on an attached row
@@ -42,7 +37,7 @@ extension AppStore {
 
     /// markFollowed records origin ids row `id` has handled, whether or not it has taken its first list yet, and while an
     /// undoable close holds it.
-    public func markFollowed(_ ids: [String], forSession id: UUID) {
+    func markFollowed(_ ids: [String], forSession id: UUID) {
         let visible = session(withID: id)
         guard let session = visible ?? pendingCloseSession(withID: id) else { return }
         let marks = ids.map(Self.originID)
