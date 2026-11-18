@@ -306,8 +306,8 @@ C-boundary concurrency before changing the bridge.
   every detached app daemon in the state directory. Semantic deletion kills the named daemon, while app and
   reopenable-window close only end attach clients. Keep reap, semantic kill, and leader refresh synchronous:
   launch ordering, termination finalization, and same-call tree foreground depend on their completion.
-- Live fallback capture and replay are paired across two boundaries. Clean-exit capture reads zmx-backed panes
-  from one fresh resolver snapshot under the exit deadline. A restored factory consumes the pending argv only
+- Live fallback capture and replay are paired across two boundaries. Clean-exit capture reads each zmx-backed
+  pane from the kernel under the exit deadline, never from `zmx list`. A restored factory consumes the pending argv only
   after `.wrapped` is established, then passes it to zmx as a create-only attach payload. A surviving daemon
   ignores it; a missing daemon runs it. Never add an app-side daemon preflight or consume on fallback.
 

@@ -129,12 +129,13 @@ struct agtermApp: App {
         // assignment invalidates nothing, leaving File ▸ Attach Remote disabled until an unrelated rebuild.
         actions.settingsModel = settingsModel
         captureOnExit = AppDelegate.makeExitCapture(
-            settingsModel: settingsModel, zmxResolver: restored.foregroundResolver)
+            settingsModel: settingsModel, zmxForeground: restored.daemonForeground)
         welcomeDue = FirstRunWelcome.isDue(welcomeShown: settingsModel.settings.welcomeShown,
                                            hasPriorState: hadPriorState)
         let controlServer = ControlServer(library: library, actions: actions, settingsModel: settingsModel,
                                           identity: Self.appIdentity,
                                           zmxForegroundResolver: restored.foregroundResolver,
+                                          zmxDaemonForeground: restored.daemonForeground,
                                           zmxClient: restored.zmxClient,
                                           zmxOutdatedBefore: restored.zmxOutdatedBefore)
         _controlServer = State(initialValue: controlServer)
@@ -389,6 +390,7 @@ struct agtermApp: App {
     private struct RestoredRuntime {
         let library: WindowLibrary
         let foregroundResolver: ZmxForegroundResolver?
+        let daemonForeground: ZmxDaemonForeground?
         /// Handed to `ControlServer` so the zmx commands can list and kill. It used to live only inside the
         /// finalizer/reap closures, where nothing else could reach it.
         let zmxClient: ZmxClient?
@@ -416,7 +418,8 @@ struct agtermApp: App {
         guard !isHostedUnitTest else {
             return RestoredRuntime(library: WindowLibrary(directory: stateDirectory, paneFinalizer: nil,
                                                           flaggedLayout: flaggedLayout),
-                                   foregroundResolver: nil, zmxClient: nil, spawnContext: LaunchSpawnContext())
+                                   foregroundResolver: nil, daemonForeground: nil, zmxClient: nil,
+                                   spawnContext: LaunchSpawnContext())
         }
         let ghostty = GhosttyApp.shared
         let environment = ProcessInfo.processInfo.environment
@@ -425,7 +428,7 @@ struct agtermApp: App {
         let client = ZmxClient(executablePath: executable,
                               socketDirectory: ZmxSupport.socketDirectory(forStateDirectory: stateDirectory.path),
                               sweeper: ProcessSweeper())
-        let foregroundResolver = ZmxForegroundResolver(leaderProvider: { client.sessionLeaderPIDs(timeout: $0) })
+        let foregroundResolver = ZmxForegroundResolver(leaderProvider: { client.sessionLeaderPIDs() })
         let context = LaunchSpawnContext()
         let library = WindowLibrary(
             directory: stateDirectory,
@@ -449,7 +452,8 @@ struct agtermApp: App {
         if let outcome = LaunchOrchestration.run(launch, consumer: consumer) {
             ghostty.recordLiveResetOutcome(outcome)
         }
-        return RestoredRuntime(library: library, foregroundResolver: foregroundResolver, zmxClient: client,
+        return RestoredRuntime(library: library, foregroundResolver: foregroundResolver,
+                               daemonForeground: .socket(directory: client.endpoint.socketDirectory), zmxClient: client,
                                spawnContext: context, zmxOutdatedBefore: outdatedBefore)
     }
 

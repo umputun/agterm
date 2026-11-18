@@ -107,26 +107,20 @@ final class ControlServerRestoreCaptureTests: XCTestCase {
         XCTAssertEqual(server.launchRestoreMode, .none)
     }
 
-    func testLiveLaunchConfiguredForRerunCapturesThroughTheZmxResolver() throws {
+    func testLiveLaunchConfiguredForRerunCapturesThroughTheDaemonLookup() throws {
         let worker = try startWorker()
         defer { stopWorker(worker) }
         let session = try XCTUnwrap(library.activeStore?.activeSession)
         session.surface = GhosttySurfaceView(
             workingDirectory: "/tmp", env: ["AGTERM_PANE_ID": session.paneIdentity.uuidString], backedByZmx: true)
-        var snapshotTimeout: TimeInterval?
-        let resolver = ZmxForegroundResolver(
-            leaderProvider: {
-                snapshotTimeout = $0
-                return [ZmxSupport.daemonName(for: session.paneIdentity): worker.processIdentifier]
-            },
-            leaderProbe: { _ in .foreground(worker.processIdentifier) })
-        let server = makeServer(launchMode: .live, zmxForegroundResolver: resolver)
+        let daemon = ZmxSupport.daemonName(for: session.paneIdentity)
+        let server = makeServer(launchMode: .live,
+                                zmxDaemonForeground: ZmxDaemonForeground { $0 == daemon ? worker.processIdentifier : nil })
 
         let response = server.captureRestoreCommands()
 
         XCTAssertTrue(response.ok, response.error ?? "")
         XCTAssertEqual(response.result?.count, 1)
-        XCTAssertEqual(snapshotTimeout, ZmxClient.captureInvocationTimeout)
         let windowID = try XCTUnwrap(library.activeWindowID)
         let persisted = PersistenceStore(
             directory: stateDir.appendingPathComponent("windows"), fileName: "\(windowID.uuidString).json").load()
@@ -164,14 +158,14 @@ final class ControlServerRestoreCaptureTests: XCTestCase {
     }
 
     private func makeServer(launchMode: RestoreMode,
-                            zmxForegroundResolver: ZmxForegroundResolver? = nil) -> ControlServer {
+                            zmxDaemonForeground: ZmxDaemonForeground? = nil) -> ControlServer {
         ControlServer(
             library: library,
             actions: AppActions(library: library),
             settingsModel: settingsModel,
             identity: AppIdentity(version: "9.9.9", commit: "testsha"),
             launchRestoreMode: launchMode,
-            zmxForegroundResolver: zmxForegroundResolver,
+            zmxDaemonForeground: zmxDaemonForeground,
             socketPath: stateDir.appendingPathComponent("control-\(UUID().uuidString).sock").path
         )
     }

@@ -72,6 +72,33 @@ public enum ZmxLeaderMap {
     }
 }
 
+/// ZmxDaemonLeader picks a daemon's pty shell from the kernel's view of its children, the way `zmx list` names
+/// it, without asking the daemon.
+public enum ZmxDaemonLeader {
+    /// Row is the kernel's record of one child, read in one call.
+    public struct Row: Equatable, Sendable {
+        public let parent: Int32
+        /// ownsTerminal is a session leader with a controlling terminal, which only the daemon's `forkpty`
+        /// child is: the process that created the socket leaves its child a session leader without one.
+        public let ownsTerminal: Bool
+        /// foreground is the terminal's foreground process group, 0 without one.
+        public let foreground: Int32
+
+        public init(parent: Int32, ownsTerminal: Bool, foreground: Int32) {
+            self.parent = parent
+            self.ownsTerminal = ownsTerminal
+            self.foreground = foreground
+        }
+    }
+
+    /// foreground is the foreground group of `daemon`'s pty, nil when the children do not identify one.
+    public static func foreground(ofDaemon daemon: Int32, children: [Int32], row: (Int32) -> Row?) -> Int32? {
+        guard children.count == 1, let child = row(children[0]), child.parent == daemon, child.ownsTerminal,
+              child.foreground > 0 else { return nil }
+        return child.foreground
+    }
+}
+
 public struct ZmxRefreshGate: Sendable {
     public static let reconcileInterval: TimeInterval = 30
 

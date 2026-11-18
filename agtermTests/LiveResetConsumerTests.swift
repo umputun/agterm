@@ -258,7 +258,7 @@ final class LiveResetConsumerTests: XCTestCase {
         let session = try XCTUnwrap(library.activeStore?.workspaces.flatMap(\.sessions).first { $0.paneIdentity == seeded.paneIdentity })
         rows = [row(session, leader: 10)]
         try store.write(LiveReset.Marker(targets: [target(session, leader: 10)]))
-        let resolver = ZmxForegroundResolver(leaderProvider: { _ in [:] }, leaderProbe: { .foreground($0) })
+        let resolver = ZmxForegroundResolver(leaderProvider: { [:] }, leaderProbe: { .foreground($0) })
         var retired: [ControlZmxEndpoint] = []
         let client = makeClient()
         let launch = LaunchOrchestration.Inputs(library: library, client: client, resolver: resolver, context: context,
@@ -285,7 +285,7 @@ final class LiveResetConsumerTests: XCTestCase {
         rows = [row(session, leader: 10)]
         try store.write(LiveReset.Marker(targets: [target(session, leader: 10)]))
         let client = makeClient()
-        let resolver = ZmxForegroundResolver(leaderProvider: { _ in [:] }, leaderProbe: { .foreground($0) })
+        let resolver = ZmxForegroundResolver(leaderProvider: { [:] }, leaderProbe: { .foreground($0) })
         let decision = RestoreLaunchDecision(requested: .live, active: .live, liveUnavailableReason: nil)
 
         var listsBeforeRetirement: Int?

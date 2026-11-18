@@ -466,7 +466,7 @@ final class SessionHostFishSeamTests: XCTestCase {
             let attachment = try attach(configuration, session: session(creation, command: command))
             try wait("foreground payload output") { FileManager.default.fileExists(atPath: output.path) }
             let leader = try assertDaemon(configuration, supervised: supervised)
-            let resolver = ZmxForegroundResolver(leaderProvider: { _ in [configuration.daemonName: leader] })
+            let resolver = ZmxForegroundResolver(leaderProvider: { [configuration.daemonName: leader] })
             resolver.refreshIfNeeded()
 
             XCTAssertEqual(ForegroundProcess.running(for: attachment.surface, shellBasename: "fish", zmxResolver: resolver),
