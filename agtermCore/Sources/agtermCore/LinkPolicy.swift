@@ -379,6 +379,13 @@ public enum LinkPolicy {
         case normal, browser, reveal
     }
 
+    /// ClickSource says what produced an opened link. `detected` is text libghostty recognized as a link and the
+    /// user clicked; `osc8` is a hyperlink whose target the printing program chose and the screen need not show;
+    /// `other` is anything else: a detected link opened outside a mouse release, or a kind this build does not know.
+    public enum ClickSource: Equatable, Sendable {
+        case detected, osc8, other
+    }
+
     /// clickIntent reads a link click's chord. ⌘⇧ asks for the browser over an overlay setting, except under
     /// mouse capture, where ⌘⇧ is the only link click and so follows the setting. ⌘⌥ reveals a local path in
     /// Finder from any origin; under capture, where Shift is the bypass, ⌘⌥⇧ does.

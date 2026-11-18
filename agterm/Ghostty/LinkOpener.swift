@@ -44,6 +44,7 @@ struct LinkOpener {
         let pane: UUID?
         let mode: LinkOpenMode
         let reveals: Bool
+        let source: LinkPolicy.ClickSource
         let remote: UUID?
     }
 
@@ -54,9 +55,9 @@ struct LinkOpener {
     /// has as typed. A reveal intent selects the file a local route names in Finder after that guarded routing, and
     /// leaves a web link to its web route.
     func follow(_ raw: String, from origin: LinkPolicy.ClickOrigin, pane: UUID?, cwd: String?, intent: LinkPolicy.ClickIntent,
-                remote: UUID? = nil) {
+                source: LinkPolicy.ClickSource, remote: UUID? = nil) {
         let click = Click(origin: origin, pane: pane, mode: intent == .browser ? LinkOpenMode.browser : mode(),
-                          reveals: intent == .reveal, remote: remote)
+                          reveals: intent == .reveal, source: source, remote: remote)
         let candidates = LinkPolicy.locations(for: raw, origin: origin, cwd: cwd)
         guard !candidates.isEmpty else { return carryOut(LinkPolicy.route(for: raw, mode: click.mode, origin: origin), click) }
         let exists = exists

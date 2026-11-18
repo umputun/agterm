@@ -137,11 +137,11 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         let id = UUID()
         let raw = "agterm://session/\(id.uuidString)"
         let followed = recordLinks(mode: .overlay, overlayOpens: true)
-        pane.openLink(raw, intent: .reveal)
+        pane.openLink(raw, intent: .reveal, source: .detected)
         XCTAssertTrue(followed.selected.isEmpty)
         XCTAssertTrue(followed.revealed.isEmpty)
-        pane.openLink(raw, intent: .browser)
-        pane.openLink(raw, intent: .normal)
+        pane.openLink(raw, intent: .browser, source: .detected)
+        pane.openLink(raw, intent: .normal, source: .detected)
         XCTAssertEqual(followed.selected.map(\.0), [id, id])
         XCTAssertEqual(followed.selected.map(\.1), [.pane(session.id), .pane(session.id)])
         XCTAssertEqual(followed.selected.map(\.2), [session.paneIdentity, session.paneIdentity])
@@ -172,7 +172,7 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         hud.hudBodyFile = "/tmp/agterm-test-hud-body-missing"
         defer { hud.hudBodyFile = nil }
         let followed = recordLinks(mode: .overlay, overlayOpens: true)
-        hud.openLink("agterm://session/\(UUID().uuidString)", intent: .normal)
+        hud.openLink("agterm://session/\(UUID().uuidString)", intent: .normal, source: .detected)
         XCTAssertTrue(followed.selected.isEmpty)
         XCTAssertTrue(followed.opened.isEmpty)
         XCTAssertTrue(followed.revealed.isEmpty)
@@ -185,13 +185,13 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         let url = URL(fileURLWithPath: "/tmp/shot.png", isDirectory: false)
 
         let shown = recordLinks(mode: .browser, overlayOpens: true)
-        pane.openLink("/tmp/shot.png", intent: .normal)
+        pane.openLink("/tmp/shot.png", intent: .normal, source: .detected)
         XCTAssertEqual(shown.images.map(\.0), [url])
         XCTAssertEqual(shown.images.map(\.1), [session.id])
         XCTAssertTrue(shown.revealed.isEmpty)
 
         let refused = recordLinks(mode: .overlay, overlayOpens: false)
-        pane.openLink("/tmp/shot.png", intent: .normal)
+        pane.openLink("/tmp/shot.png", intent: .normal, source: .detected)
         XCTAssertEqual(refused.images.count, 1)
         XCTAssertEqual(refused.revealed, [url])
     }
@@ -203,18 +203,18 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         let url = URL(fileURLWithPath: "/tmp/notes.md", isDirectory: false)
 
         let shown = recordLinks(mode: .overlay75, overlayOpens: true)
-        pane.openLink("/tmp/notes.md", intent: .normal)
+        pane.openLink("/tmp/notes.md", intent: .normal, source: .detected)
         XCTAssertEqual(shown.markdowns.map(\.0), [url])
         XCTAssertEqual(shown.markdowns.map(\.1), [session.id])
         XCTAssertEqual(shown.markdowns.map(\.2), [75])
         XCTAssertTrue(shown.revealed.isEmpty)
 
         let browser = recordLinks(mode: .overlay, overlayOpens: true)
-        pane.openLink("/tmp/notes.md", intent: .browser)
+        pane.openLink("/tmp/notes.md", intent: .browser, source: .detected)
         XCTAssertEqual(browser.markdowns.map(\.2), [95])
 
         let refused = recordLinks(mode: .overlay, overlayOpens: false)
-        pane.openLink("file:///tmp/notes.md", intent: .normal)
+        pane.openLink("file:///tmp/notes.md", intent: .normal, source: .detected)
         XCTAssertEqual(refused.markdowns.count, 1)
         XCTAssertEqual(refused.revealed, [url])
     }
@@ -226,14 +226,14 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         let url = URL(fileURLWithPath: "/tmp/pr.html", isDirectory: false)
 
         let shown = recordLinks(mode: .overlay75, overlayOpens: true)
-        pane.openLink("/tmp/pr.html", intent: .normal)
+        pane.openLink("/tmp/pr.html", intent: .normal, source: .detected)
         XCTAssertEqual(shown.documents.map(\.0), [url])
         XCTAssertEqual(shown.documents.map(\.1), [session.id])
         XCTAssertEqual(shown.documents.map(\.2), [75])
         XCTAssertTrue(shown.revealed.isEmpty)
 
         let refused = recordLinks(mode: .overlay, overlayOpens: false)
-        pane.openLink("file:///tmp/pr.html", intent: .normal)
+        pane.openLink("file:///tmp/pr.html", intent: .normal, source: .detected)
         XCTAssertEqual(refused.documents.count, 1)
         XCTAssertEqual(refused.revealed, [url])
     }
@@ -245,12 +245,12 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         let url = URL(fileURLWithPath: "/tmp/main.go", isDirectory: false)
 
         let shown = recordLinks(mode: .overlay75, overlayOpens: true)
-        pane.openLink("/tmp/main.go", intent: .normal)
+        pane.openLink("/tmp/main.go", intent: .normal, source: .detected)
         XCTAssertEqual(shown.texts, [LinkPolicy.TextLink(url: url, line: nil, session: session.id, sizePercent: 75)])
         XCTAssertTrue(shown.revealed.isEmpty)
 
         let refused = recordLinks(mode: .overlay, overlayOpens: false)
-        pane.openLink("file:///tmp/main.go", intent: .normal)
+        pane.openLink("file:///tmp/main.go", intent: .normal, source: .detected)
         XCTAssertEqual(refused.texts.count, 1)
         XCTAssertEqual(refused.revealed, [url])
     }
@@ -263,7 +263,7 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         let probe = ExistsProbe(["/w/src/a.go"])
         LinkOpener.shared.exists = { probe.check($0) }
 
-        pane.openLink("src/a.go:42:7", intent: .normal)
+        pane.openLink("src/a.go:42:7", intent: .normal, source: .detected)
 
         try await waitUntil { !followed.texts.isEmpty }
         XCTAssertEqual(followed.texts, [LinkPolicy.TextLink(url: URL(fileURLWithPath: "/w/src/a.go", isDirectory: false), line: 42,
@@ -278,14 +278,14 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         pane.session = session
         let literal = recordLinks(mode: .overlay, overlayOpens: true)
         LinkOpener.shared.exists = { $0 == "/x/a.go:42" || $0 == "/x/a.go" }
-        pane.openLink("/x/a.go:42", intent: .normal)
+        pane.openLink("/x/a.go:42", intent: .normal, source: .detected)
         try await waitUntil { !literal.revealed.isEmpty }
         XCTAssertEqual(literal.revealed, [URL(fileURLWithPath: "/x/a.go:42", isDirectory: false)])
         XCTAssertTrue(literal.texts.isEmpty)
 
         let missing = recordLinks(mode: .overlay, overlayOpens: true)
-        pane.openLink("/x/b.go:3", intent: .normal)
-        pane.openLink("./c.go:3", intent: .normal)
+        pane.openLink("/x/b.go:3", intent: .normal, source: .detected)
+        pane.openLink("./c.go:3", intent: .normal, source: .detected)
         try await waitUntil { !missing.revealed.isEmpty }
         try await Task.sleep(for: .milliseconds(200))
         XCTAssertEqual(missing.revealed, [URL(fileURLWithPath: "/x/b.go:3", isDirectory: false)])
@@ -301,7 +301,7 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         let probe = ExistsProbe(["/tmp/review.md"])
         LinkOpener.shared.exists = { probe.check($0) }
 
-        pane.openLink("/tmp/review.md.", intent: .normal)
+        pane.openLink("/tmp/review.md.", intent: .normal, source: .detected)
 
         try await waitUntil { !followed.markdowns.isEmpty }
         XCTAssertEqual(followed.markdowns.map(\.0), [URL(fileURLWithPath: "/tmp/review.md", isDirectory: false)])
@@ -309,7 +309,7 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         XCTAssertTrue(followed.revealed.isEmpty)
 
         let missing = recordLinks(mode: .overlay, overlayOpens: true)
-        pane.openLink("/tmp/gone.md.", intent: .normal)
+        pane.openLink("/tmp/gone.md.", intent: .normal, source: .detected)
         try await waitUntil { !missing.revealed.isEmpty }
         XCTAssertEqual(missing.revealed, [URL(fileURLWithPath: "/tmp/gone.md.", isDirectory: false)])
         XCTAssertTrue(missing.markdowns.isEmpty)
@@ -323,7 +323,7 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         let probe = ExistsProbe([])
         LinkOpener.shared.exists = { probe.check($0) }
 
-        pane.openLink("./a;$(rm -rf x)`id`'.go:3", intent: .normal)
+        pane.openLink("./a;$(rm -rf x)`id`'.go:3", intent: .normal, source: .detected)
 
         try await waitUntil { probe.paths.count == 2 }
         try await Task.sleep(for: .milliseconds(200))
@@ -352,8 +352,8 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         let files = ["/tmp/a.go", "/tmp/a.png", "/tmp/r.md", "/tmp/Run.command", "/Applications/Some.app", "/tmp/a.html",
                      "/tmp/a.svg", "file:///tmp/b.go"]
 
-        for raw in files { pane.openLink(raw, intent: .reveal) }
-        pane.openLink("/x/a.go:3", intent: .reveal)
+        for raw in files { pane.openLink(raw, intent: .reveal, source: .detected) }
+        pane.openLink("/x/a.go:3", intent: .reveal, source: .detected)
         try await waitUntil { followed.revealed.count == files.count + 1 }
 
         let paths = files.map { $0.replacingOccurrences(of: "file://", with: "") } + ["/x/a.go"]
@@ -369,10 +369,10 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         let web = try XCTUnwrap(URL(string: "https://example.com/pr/1"))
         let followed = recordLinks(mode: .overlay, overlayOpens: true)
 
-        pane.openLink(web.absoluteString, intent: .reveal)
-        pane.openLink("/net/host/a.go", intent: .reveal)
-        pane.openLink("file://otherhost/tmp/a.go", intent: .reveal)
-        pane.openLink("//host/share/a.go", intent: .reveal)
+        pane.openLink(web.absoluteString, intent: .reveal, source: .detected)
+        pane.openLink("/net/host/a.go", intent: .reveal, source: .detected)
+        pane.openLink("file://otherhost/tmp/a.go", intent: .reveal, source: .detected)
+        pane.openLink("//host/share/a.go", intent: .reveal, source: .detected)
 
         XCTAssertEqual(followed.overlaid.map(\.0), [web])
         XCTAssertTrue(followed.revealed.isEmpty)
@@ -401,9 +401,9 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         let followed = recordLinks(mode: .overlay75, overlayOpens: true)
         let forwarded = recordForwards(answer: nil)
 
-        pane.openLink("/tmp/shot.png", intent: .normal)
-        pane.openLink("src/main.py:42", intent: .normal)
-        pane.openLink("file:///tmp/notes.md", intent: .browser)
+        pane.openLink("/tmp/shot.png", intent: .normal, source: .detected)
+        pane.openLink("src/main.py:42", intent: .normal, source: .detected)
+        pane.openLink("file:///tmp/notes.md", intent: .browser, source: .detected)
 
         XCTAssertEqual(forwarded.clicks, [
             RemoteLinkClick(raw: "/tmp/shot.png", session: session.id, pane: session.paneIdentity, mode: .overlay75),
@@ -422,9 +422,9 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         let followed = recordLinks(mode: .overlay, overlayOpens: true)
         let forwarded = recordForwards(answer: .originTooOld)
 
-        pane.openLink("/tmp/notes.md", intent: .normal)
-        pane.openLink("/tmp/notes.md", intent: .reveal)
-        pane.openLink("x-custom://run", intent: .normal)
+        pane.openLink("/tmp/notes.md", intent: .normal, source: .detected)
+        pane.openLink("/tmp/notes.md", intent: .reveal, source: .detected)
+        pane.openLink("x-custom://run", intent: .normal, source: .detected)
 
         XCTAssertEqual(forwarded.clicks.map(\.raw), ["/tmp/notes.md"])
         XCTAssertEqual(forwarded.refusals.map(\.1), [.originTooOld, .revealIntent])
@@ -467,7 +467,7 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         let forwarded = recordForwards(answer: nil)
         _ = recordLinks(mode: .overlay, overlayOpens: true)
 
-        scratch.openLink("src/a.py:3", intent: .normal)
+        scratch.openLink("src/a.py:3", intent: .normal, source: .detected)
 
         XCTAssertEqual(scratch.linkClickOrigin, .remotePane(session.id))
         XCTAssertEqual(scratch.linkClickRemoteSession, session.id)
@@ -483,7 +483,7 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         let forwards = recordLoopbacks()
         let local = try XCTUnwrap(URL(string: "http://localhost:51000/app?x=1#top"))
 
-        pane.openLink("http://localhost:3000/app?x=1#top", intent: .normal)
+        pane.openLink("http://localhost:3000/app?x=1#top", intent: .normal, source: .detected)
 
         XCTAssertEqual(forwards.asked.map(\.0), [try XCTUnwrap(ForwardedPage("http://localhost:3000/app?x=1#top"))])
         XCTAssertEqual(forwards.asked.map(\.1), [session.id])
@@ -492,11 +492,11 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         XCTAssertEqual(followed.overlaid.map(\.0), [local])
         XCTAssertEqual(followed.overlaid.map(\.1), [session.id])
 
-        pane.openLink("http://127.0.0.1:3000/", intent: .browser)
+        pane.openLink("http://127.0.0.1:3000/", intent: .browser, source: .detected)
         forwards.pending[1](local)
         XCTAssertEqual(followed.opened, [local])
 
-        pane.openLink("http://localhost:3000/", intent: .normal)
+        pane.openLink("http://localhost:3000/", intent: .normal, source: .detected)
         forwards.pending[2](nil)
         XCTAssertEqual(forwarded.refusals.map(\.1), [.forwardFailed])
         XCTAssertEqual(followed.overlaid.count, 1)
@@ -513,8 +513,8 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         let followed = recordLinks(mode: .browser, overlayOpens: false)
         let forwards = recordLoopbacks()
 
-        localPane.openLink("http://localhost:3000/", intent: .normal)
-        remotePane.openLink("https://example.com/", intent: .normal)
+        localPane.openLink("http://localhost:3000/", intent: .normal, source: .detected)
+        remotePane.openLink("https://example.com/", intent: .normal, source: .detected)
 
         XCTAssertTrue(forwards.asked.isEmpty)
         XCTAssertEqual(followed.opened.map(\.absoluteString), ["http://localhost:3000/", "https://example.com/"])
@@ -532,7 +532,7 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         let followed = recordLinks(mode: .overlay, overlayOpens: true)
         let forwards = recordLoopbacks()
 
-        overlay.openLink("http://localhost:3000/", intent: .normal)
+        overlay.openLink("http://localhost:3000/", intent: .normal, source: .detected)
 
         XCTAssertTrue(forwards.asked.isEmpty)
         XCTAssertEqual(followed.opened.map(\.absoluteString), ["http://localhost:3000/"])
@@ -541,7 +541,7 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         XCTAssertTrue(store.presentReplicaOverlay(job, command: "ssh buildbox run-job j1", forSession: session.id) { _ in })
         session.overlaySurface = overlay
 
-        overlay.openLink("http://localhost:3000/x", intent: .normal)
+        overlay.openLink("http://localhost:3000/x", intent: .normal, source: .detected)
 
         XCTAssertEqual(overlay.linkClickOrigin, .programOverlay)
         XCTAssertEqual(forwards.asked.map(\.1), [session.id])
@@ -561,8 +561,8 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         let forwarded = recordForwards(answer: nil)
         _ = recordLinks(mode: .overlay, overlayOpens: true)
 
-        primary.openLink("/tmp/a.md", intent: .normal)
-        split.openLink("/tmp/b.md", intent: .normal)
+        primary.openLink("/tmp/a.md", intent: .normal, source: .detected)
+        split.openLink("/tmp/b.md", intent: .normal, source: .detected)
 
         XCTAssertEqual(forwarded.clicks.map(\.pane), [session.paneIdentity, session.splitPaneIdentity])
         XCTAssertNil(bareSurface().linkClickPane)
@@ -575,18 +575,18 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         let url = try XCTUnwrap(URL(string: "https://example.com/pr/1"))
 
         let shown = recordLinks(mode: .overlay, overlayOpens: true)
-        pane.openLink(url.absoluteString, intent: .normal)
+        pane.openLink(url.absoluteString, intent: .normal, source: .detected)
         XCTAssertEqual(shown.overlaid.map(\.0), [url])
         XCTAssertEqual(shown.overlaid.map(\.1), [session.id])
         XCTAssertEqual(shown.overlaid.map(\.2), [nil])
         XCTAssertTrue(shown.opened.isEmpty)
 
         let sized = recordLinks(mode: .overlay75, overlayOpens: true)
-        pane.openLink(url.absoluteString, intent: .normal)
+        pane.openLink(url.absoluteString, intent: .normal, source: .detected)
         XCTAssertEqual(sized.overlaid.map(\.2), [75])
 
         let refused = recordLinks(mode: .overlay, overlayOpens: false)
-        pane.openLink(url.absoluteString, intent: .normal)
+        pane.openLink(url.absoluteString, intent: .normal, source: .detected)
         XCTAssertEqual(refused.overlaid.count, 1)
         XCTAssertEqual(refused.opened, [url])
     }
@@ -603,14 +603,14 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         let mail = try XCTUnwrap(URL(string: "mailto:a@example.com"))
 
         let browser = recordLinks(mode: .browser, overlayOpens: true)
-        pane.openLink(web.absoluteString, intent: .normal)
+        pane.openLink(web.absoluteString, intent: .normal, source: .detected)
         XCTAssertEqual(browser.opened, [web])
 
         let overlay = recordLinks(mode: .overlay, overlayOpens: true)
-        hud.openLink(web.absoluteString, intent: .normal)
-        pane.openLink(mail.absoluteString, intent: .normal)
-        pane.openLink("file:///tmp/x.bin", intent: .normal)
-        pane.openLink("x-custom://run", intent: .normal)
+        hud.openLink(web.absoluteString, intent: .normal, source: .detected)
+        pane.openLink(mail.absoluteString, intent: .normal, source: .detected)
+        pane.openLink("file:///tmp/x.bin", intent: .normal, source: .detected)
+        pane.openLink("x-custom://run", intent: .normal, source: .detected)
         XCTAssertEqual(overlay.opened, [web, mail])
         XCTAssertEqual(overlay.revealed, [URL(fileURLWithPath: "/tmp/x.bin", isDirectory: false)])
         XCTAssertTrue(browser.overlaid.isEmpty && overlay.overlaid.isEmpty)

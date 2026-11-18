@@ -228,7 +228,7 @@ extension GhosttySurfaceView {
         reportMousePos(from: event, mods: forwarded)
         let intent = keepsAlt ? .normal : chord
         releaseIntent.withLock { $0 = intent }
-        defer { releaseIntent.withLock { $0 = .normal } }
+        defer { releaseIntent.withLock { $0 = nil } }
         _ = ghostty_surface_mouse_button(surface, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_LEFT, forwarded)
     }
 
@@ -237,9 +237,9 @@ extension GhosttySurfaceView {
     func passiveClick(_ state: ghostty_input_mouse_state_e, with event: NSEvent) {
         guard let surface else { return }
         reportMousePos(from: event)
-        let intent = state == GHOSTTY_MOUSE_RELEASE ? clickIntent(event) : .normal
+        let intent = state == GHOSTTY_MOUSE_RELEASE ? clickIntent(event) : nil
         releaseIntent.withLock { $0 = intent }
-        defer { releaseIntent.withLock { $0 = .normal } }
+        defer { releaseIntent.withLock { $0 = nil } }
         _ = ghostty_surface_mouse_button(surface, state, GHOSTTY_MOUSE_LEFT, linkMods(event))
     }
 
@@ -654,9 +654,9 @@ extension GhosttySurfaceView: @preconcurrency NSTextInputClient {
 
     /// openLink acts on a clicked terminal link (`GHOSTTY_ACTION_OPEN_URL`); what happens to it is the host-free
     /// `LinkPolicy`'s decision.
-    func openLink(_ raw: String, intent: LinkPolicy.ClickIntent) {
+    func openLink(_ raw: String, intent: LinkPolicy.ClickIntent, source: LinkPolicy.ClickSource) {
         LinkOpener.shared.follow(raw, from: linkClickOrigin, pane: linkClickPane, cwd: linkClickCwd, intent: intent,
-                                 remote: linkClickRemoteSession)
+                                 source: source, remote: linkClickRemoteSession)
     }
 
     /// applyLinkHover shows the link under a ⌘-held pointer, naming the session a session link would select.

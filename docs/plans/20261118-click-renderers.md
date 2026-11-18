@@ -78,8 +78,11 @@
   options only. Example: `open *.md,*.markdown mdview "$AGT_PATH"`. A basename selector beats an extension
   selector for the same file; a selector repeated on a later line wins, and the earlier line is diagnosed, as
   `map` is last-wins.
-- **Which clicks**: only ghostty's `TEXT` kind (plain detected path or plain `file://`, as measured in Task 1).
-  `OSC8`, `HTML` and `UNKNOWN` keep the built-in route. Reveal (⌘⌥) and browser (⌘⇧) intents are decided first and
+- **Which clicks**: only a detected link clicked during a real mouse release (`ClickSource.detected`: ghostty's
+  `UNKNOWN` kind while `releaseIntent` holds a value). Task 1 measured a plain path, a plain `file://` and a relative
+  name as `UNKNOWN` and OSC 8 as `OSC8`; at the pin `TEXT`/`HTML` come only from `write_screen_file:open`, never a
+  click. `osc8`, `other` (TEXT, HTML, an unknown future kind, `UNKNOWN` outside a release) keep the built-in route;
+  Eugene approved this gate in place of the planned `TEXT` one. Reveal (⌘⌥) and browser (⌘⇧) intents are decided first and
   never run a rule. Rules apply exactly where a click opens a built-in preview today: a pane, a split, a scratch
   (with that surface's context) and a remote pane (through the snapshot). HUD, program-overlay and quick-terminal
   clicks reveal the file today (`LinkPolicy.route`) and keep doing so.
@@ -116,9 +119,10 @@
   failure-panel set (`--repeat` and a chord included), any `{AGT_` token, and an earlier line whose selector a
   later line claims.
 - Openers are read at click time from `SettingsModel.keymap`; the keyboard matcher keeps no second copy.
-- `LinkPolicy.ClickSource` (`text`, `osc8`, `html`, `unknown`) mapped from the C enum in the app target.
+- `LinkPolicy.ClickSource` (`detected`, `osc8`, `other`) mapped from the C enum plus release provenance in the
+  app target (`releaseIntent` is nil outside a release).
   `LinkPolicy.openerFile(for route: Route, source: ClickSource, intent: ClickIntent) -> URL?` returns the file
-  only for `.text` source, normal intent and the four preview routes. `LinkPolicy.candidateNames(for raw:)`
+  only for `.detected` source, normal intent and the four preview routes. `LinkPolicy.candidateNames(for raw:)`
   returns the basenames of the literal path and of each spelling the `:line` split and `trimmedSpellings` try.
 - Event `opener.run`: `ControlEventPayload` gains `path` and `selector`; the event carries those plus session and
   pane, `path` being the file the command received (the staged copy on a remote click) and `host` set for a
@@ -168,17 +172,22 @@
   `agterm/Ghostty/LinkOpener.swift`, `agtermCore/Sources/agtermCore/LinkPolicy.swift`
 - Modify tests: `agtermTests/GhosttySurfaceViewInputTests.swift`
 
-- [ ] failing hosted tests on `LinkClickFixture`: a printed absolute path, a printed relative path and a printed
-      `file://` link reach `openLink` as `TEXT`, an OSC 8 link as `OSC8`; the tests stay in the suite so a
-      `GHOSTTY_REV` bump that changes the mapping fails them
-- [ ] `LinkPolicy.ClickSource`; carry the kind from the callback through `openLink` and `LinkOpener.follow`
-      (a HUD click reaches the same callback through `passiveClick` and carries its real kind); no behavior change
-- [ ] record the measured kinds here; if plain paths are not `TEXT`, stop and bring it to Eugene; if only
-      `file://` differs, keep it on the built-in route and note it for the docs
-- [ ] check an agterm-linux clone (`fork:true`) for exhaustive switches over `RemoteLinkRefusal`, the presentation
-      frame body and `ControlEventKind`, and for `RemotePresentationClient`/`PageServeHost` conformers, before any
-      later task adds a case or requirement; record what it uses and adjust the additive plan if anything breaks
-- [ ] run `GhosttySurfaceViewInputTests` with `-only-testing`
+- [x] measure the kinds real clicks carry (temporary probe in the callback, removed): printed `/tmp/x.md`,
+      `file:///tmp/x.md` and a relative name arrive as `UNKNOWN` (0), the relative one already absolute; an OSC 8
+      link to `file:///tmp/x.md` as `OSC8` (3). Ghostty `src/Surface.zig` at the pin: `processLinks` sends
+      `.unknown` for a detected link and `.osc8` for a hyperlink; `TEXT`/`HTML` only from `write_screen_file:open`.
+      Brought to Eugene; he approved the released-`UNKNOWN` gate
+- [x] `LinkPolicy.ClickSource` (`detected`, `osc8`, `other`); `releaseIntent` optional, nil outside a release;
+      the callback maps kind plus release into a source and carries it through `openLink` and `LinkOpener.follow`
+      (a HUD click reaches the same callback through `passiveClick` and carries its real source); no behavior change
+- [x] hosted mapping test in `GhosttyCallbacksTests`: released `UNKNOWN` is `detected`, unreleased `UNKNOWN`,
+      `TEXT`, `HTML` and an unknown raw value are `other`, `OSC8` is `osc8`. The real-click pinning tests need an
+      observable effect, so they move to Task 3, where a rule firing (or not) shows the source
+- [x] agterm-linux `linux-port` (7f95d85): calls `Keymap(builtinOverrides:commands:)` (a defaulted `openers`
+      argument keeps it compiling) and `ControlEventKind(rawValue:)`; its `PresentationFrame.Body` switch has a
+      `default`; no conformer of `RemotePresentationClient` or `PageServeHost`, no switch over `RemoteLinkRefusal`.
+      The additive plan stands
+- [x] run the affected tests with `-only-testing` (GhosttyCallbacks, GhosttySurfaceViewInput, AppActionsFocus: 83 passed)
 
 ### Task 2: `open` rule in the keymap and its read-back
 
@@ -210,14 +219,18 @@
   `agtermctlKitTests/EventCommandsTests.swift`, `agtermTests/CustomCommandRunnerTests.swift`,
   `agtermTests/GhosttySurfaceViewInputTests.swift`
 
-- [ ] failing host-free tests for `openerFile`: `.text` source with each preview route returns the file; `osc8`,
-      `html`, `unknown`, reveal and browser intents, `.reveal` and web routes return nil; event round trip and
+- [ ] failing host-free tests for `openerFile`: `.detected` source with each preview route returns the file;
+      `osc8`, `other`, reveal and browser intents, `.reveal` and web routes return nil; event round trip and
       human formatting
 - [ ] failing hosted tests: env and cwd the process sees (a script writing them to a temp file), a click on an
       unfocused split names that split's pane values, a scratch click gets the scratch context, a quick-terminal
       click on a matching file reveals it and launches nothing, a `{AGT_SESSION_NAME}` in the shell text stays literal, a missing renderer (exit 127) posts the
       notification and with `--error-hud` the panel and opens nothing, no launch for a directory or FIFO, an
       OSC 8 link to a matching file opens the built-in page
+- [ ] real-click pinning tests on `LinkClickFixture` (moved from Task 1, they need a rule's effect to observe the
+      source): a ⌘-click on a printed absolute path, a printed relative name and a printed `file://` link runs the
+      matching rule, an OSC 8 link to the same file opens the built-in page; they stay in the suite so a
+      `GHOSTTY_REV` bump that relabels either kind fails them
 - [ ] `LinkOpener` captures the clicked pane before the async lookup; in `carryOut`, before the preview arms,
       `openerFile` plus a matching rule from `SettingsModel.keymap`, the regular-file check off the main actor,
       then the runner
@@ -268,11 +281,11 @@
       a post-spawn failure reporting through the command path
 - [ ] viewer: `LinkOpener` decides remote eligibility before building `RemoteLinkClick`, from the click's
       `ClickSource` and `ClickIntent` (never from `LinkOpenMode`, where `.browser` cannot tell the explicit ⌘⇧
-      intent from the Browser setting); only a `.text` source with normal intent, an origin listing
+      intent from the Browser setting); only a `.detected` source with normal intent, an origin listing
       `link.snapshot` and a rule matching a candidate name record a pending click and send click id and
       selectors; everything else sends today's frame
 - [ ] hosted tests for that gate against a capable origin: a matching OSC 8 target and an explicit browser-intent
-      click send today's frame with no snapshot request; a normal `.text` click with the Browser link mode
+      click send today's frame with no snapshot request; a normal `.detected` click with the Browser link mode
       configured still qualifies
 - [ ] Mac origin: offer a snapshot on a match within the cap, open the page otherwise, click id on refusals;
       adopt snapshot claims through `ControlServer.swift`'s adopt branch
