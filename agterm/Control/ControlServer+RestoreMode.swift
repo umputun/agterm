@@ -62,7 +62,7 @@ extension ControlServer {
         }
         let sessions = library.allOpenSessions()
         let captured = AppDelegate.captureForegroundCommands(
-            sessions: sessions, zmxResolver: zmxForegroundResolver)
+            sessions: sessions, zmxForeground: zmxDaemonForeground)
         // this command's whole claim is that the argv reached disk, so the ack waits on the write and not on
         // the assignment: `saveAllOpen` swallows the result, `saveAllOpenChecked` reports it.
         guard library.saveAllOpenChecked() else {

@@ -4,12 +4,12 @@ import os
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    typealias ForegroundCommandReader = (GhosttySurfaceView, String?, ZmxForegroundResolver.Snapshot?) -> [String]?
+    typealias ForegroundCommandReader = (GhosttySurfaceView, String?, ZmxDaemonForeground?) -> [String]?
     typealias ExitCapture = @MainActor @Sendable ([Session]) -> Int
 
     private static let logger = Logger(subsystem: "com.umputun.agterm", category: "AppDelegate")
 
-    // adds a nominal 150 ms for pane reads after the listing timeout and cleanup grace
+    // checked before each pane read; a pane reached after it keeps only its unconsumed pending argv
     static let exitCaptureBudget: Duration = .milliseconds(800)
 
     /// App-global window library, set on scene appear; terminate flushes every window's state.
@@ -552,13 +552,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Keep the exit policy live so a mode selected after launch governs the next launch.
     static func makeExitCapture(settingsModel: SettingsModel,
-                                zmxResolver: ZmxForegroundResolver?) -> ExitCapture {
+                                zmxForeground: ZmxDaemonForeground?) -> ExitCapture {
         return { sessions in
             guard GhosttyApp.capturesForegroundOnExit(mode: settingsModel.settings.effectiveRestoreMode) else {
                 for session in sessions { session.clearCapturedForegroundCommands() }
                 return 0
             }
-            return captureForegroundCommands(sessions: sessions, zmxResolver: zmxResolver,
+            return captureForegroundCommands(sessions: sessions, zmxForeground: zmxForeground,
                                              preserveUnconsumedPending: true)
         }
     }
@@ -580,11 +580,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// out of the persisted field: persisting it while the pending copy stays armed lets a later show consume
     /// and replay it, and a crash before the next capture then replays the persisted copy a second time.
     static func captureForegroundCommands(
-        sessions: [Session], zmxResolver: ZmxForegroundResolver? = nil,
+        sessions: [Session], zmxForeground suppliedZmxForeground: ZmxDaemonForeground? = nil,
         preserveUnconsumedPending: Bool = false,
         timeRemaining suppliedTimeRemaining: (() -> Bool)? = nil,
-        commandReader: ForegroundCommandReader = { view, shell, snapshot in
-            ForegroundProcess.command(for: view, shellBasename: shell, zmxSnapshot: snapshot)
+        commandReader: ForegroundCommandReader = { view, shell, zmxForeground in
+            ForegroundProcess.command(for: view, shellBasename: shell, zmxForeground: zmxForeground)
         }
     ) -> Int {
         // filtered here rather than at each caller, so quit and `restore.capture` get the same rule: a
@@ -598,9 +598,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let hasWrappedPane = sessions.contains { session in
             session.surface?.backedByZmx == true || session.splitSurface?.backedByZmx == true
         }
-        let zmxSnapshot = hasWrappedPane
-            ? zmxResolver?.freshSnapshot(timeout: ZmxClient.captureInvocationTimeout)
-            : nil
+        let zmxForeground = hasWrappedPane ? suppliedZmxForeground : nil
         var captured = 0
         // `loadStore` moves the persisted argv into the pending slot and rewrites the file with nil, so this
         // is the only thing that refills it: at exit, writing nil over a slot NO factory consumed destroys
@@ -609,8 +607,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let pending = preserveUnconsumedPending ? session.pendingForegroundCommand : nil
             let pendingSplit = preserveUnconsumedPending ? session.pendingSplitForegroundCommand : nil
             if let view = session.surface as? GhosttySurfaceView {
-                let read = timeRemaining() && (!view.backedByZmx || zmxSnapshot != nil)
-                    ? commandReader(view, shellBasename, zmxSnapshot) : nil
+                let read = timeRemaining() && (!view.backedByZmx || zmxForeground != nil)
+                    ? commandReader(view, shellBasename, zmxForeground) : nil
                 if read != nil { captured += 1 }
                 session.foregroundCommand = read ?? pending
             } else {
@@ -618,8 +616,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             if let split = session.splitSurface as? GhosttySurfaceView,
                session.isSplit || split.backedByZmx {
-                let read = timeRemaining() && (!split.backedByZmx || zmxSnapshot != nil)
-                    ? commandReader(split, shellBasename, zmxSnapshot) : nil
+                let read = timeRemaining() && (!split.backedByZmx || zmxForeground != nil)
+                    ? commandReader(split, shellBasename, zmxForeground) : nil
                 if read != nil { captured += 1 }
                 session.splitForegroundCommand = read ?? pendingSplit
             } else {

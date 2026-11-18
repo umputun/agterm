@@ -20,10 +20,10 @@ enum ForegroundProcess {
     /// losing the `--wait` hold and the close-on-exit shape.
     @MainActor
     static func command(for view: GhosttySurfaceView, shellBasename: String?,
-                        zmxSnapshot: ZmxForegroundResolver.Snapshot? = nil) -> [String]? {
+                        zmxForeground: ZmxDaemonForeground? = nil) -> [String]? {
         let pid: pid_t?
         if view.backedByZmx, let sessionName = view.zmxSessionName {
-            pid = zmxSnapshot?.foregroundPID(sessionName: sessionName)
+            pid = zmxForeground?.foregroundPID(sessionName)
         } else {
             pid = view.foregroundPid()
         }

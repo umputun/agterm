@@ -236,7 +236,7 @@ Each entry separates a demonstrated cause from one that is only consistent with 
 - **Runs.** One local `make test-app` on 2026-11-17, load average about 21 at the time.
 - **Cause, not established.** Ten isolated runs passed in 0.19-0.28 s, and ten more passed under 20 busy-loop
   processes (load average 113), so CPU contention alone did not reproduce it.
-- **Fix.** None yet.
+- **Fix.** The test went with the listing: the quit capture no longer runs `zmx list` (#1042).
 
 ### macOS watchdog hang with no test started
 
@@ -353,7 +353,6 @@ Causes not found, left as backlog items with their capture steps:
 
 - `docs/backlog/hosted-tests-hang-in-ci-until-job-timeout.md`
 - `docs/backlog/fish-seam-payload-test-times-out-under-load.md`
-- `docs/backlog/exit-capture-test-misses-a-120-ms-listing-in-full-runs.md`
 - `docs/backlog/session-host-fixture-start-stalls-before-pidfile.md`
 - `docs/backlog/control-calls-stall-under-title-flood-on-ci.md`, the `spam-8` stall, which the retired case no
   longer exercises

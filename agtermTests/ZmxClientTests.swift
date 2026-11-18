@@ -325,15 +325,14 @@ final class ZmxClientTests: XCTestCase {
         """.write(to: executable, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: executable.path)
         let client = ZmxClient(executablePath: executable.path, socketDirectory: root.path)
+        let timeout: TimeInterval = 0.1
         let started = Date()
 
-        XCTAssertNil(client.sessionLeaderPIDs(timeout: 0.1))
+        XCTAssertNil(client.sessionLeaderPIDs(timeout: timeout))
 
         let elapsed = Date().timeIntervalSince(started)
-        XCTAssertEqual(ZmxClient.captureWallClockLimit,
-                       ZmxClient.captureInvocationTimeout + ZmxClient.terminationGrace)
-        XCTAssertGreaterThanOrEqual(elapsed, 0.09)
-        XCTAssertLessThan(elapsed, ZmxClient.captureWallClockLimit + 0.1)
+        XCTAssertGreaterThanOrEqual(elapsed, timeout - 0.01)
+        XCTAssertLessThan(elapsed, timeout + ZmxClient.terminationGrace + 0.4)
     }
 
     private static let sweptDaemon = "agterm-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"

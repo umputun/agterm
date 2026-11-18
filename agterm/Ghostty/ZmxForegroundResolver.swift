@@ -13,19 +13,8 @@ final class ZmxForegroundResolver {
         case dead
     }
 
-    typealias LeaderProvider = (TimeInterval?) -> [String: pid_t]?
+    typealias LeaderProvider = () -> [String: pid_t]?
     typealias Probe = (pid_t) -> LeaderProbe
-
-    struct Snapshot {
-        let leaders: [String: pid_t]
-        let leaderProbe: Probe
-
-        func foregroundPID(sessionName: String) -> pid_t? {
-            guard let leader = leaders[sessionName] else { return nil }
-            guard case .foreground(let pid) = leaderProbe(leader) else { return nil }
-            return pid
-        }
-    }
 
     private static let logger = Logger(subsystem: "com.umputun.agterm", category: "ZmxForeground")
     private let leaderProvider: LeaderProvider
@@ -43,12 +32,8 @@ final class ZmxForegroundResolver {
     }
 
     func refreshIfNeeded(now: Date = Date()) {
-        guard refreshGate.shouldRefresh(now: now), let refreshed = leaderProvider(nil) else { return }
+        guard refreshGate.shouldRefresh(now: now), let refreshed = leaderProvider() else { return }
         leaders = refreshed
-    }
-
-    func freshSnapshot(timeout: TimeInterval) -> Snapshot? {
-        leaderProvider(timeout).map { Snapshot(leaders: $0, leaderProbe: leaderProbe) }
     }
 
     /// A nil snapshot means the listing failed, and stale leaders are dropped rather than kept so no pane
