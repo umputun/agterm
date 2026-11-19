@@ -393,8 +393,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     /// each omitted when its pane is unrealized.
     public let realized: Bool?
 
-    /// The host a teleported session is attached to; nil/omitted for a local one. Live-only — a remote
-    /// session is never persisted, so this never survives a relaunch.
+    /// remoteHost is the SSH destination of a remote session; omitted for a local one.
     public let remoteHost: String?
     /// The origin's id for the session an attached row shows, the id `zmx attach` takes; omitted for a local one.
     public let remoteSessionID: String?

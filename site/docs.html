@@ -857,7 +857,7 @@ agtermctl session new --remote srv --window &quot;$win&quot;                   #
 <li>The title bar shows a cloud and the host; hide it with <strong>Settings ▸ Interface ▸ Remote host</strong>. The Ctrl-Tab switcher and the recent and attention lists mark the row the same way.</li>
 <li>Closing the row ends only this Mac's connection, and the programs over there keep running. <code>agtermctl session close --terminate</code> ends the session on the other Mac too, and <code>agtermctl zmx kill</code> ends the targeted pane's program there.</li>
 <li>A closed row joins <strong>File ▸ Open Recent</strong> under Remote Sessions. Reopening attaches again while the other Mac still lists the session, or has it reopen its own entry first. Reopen Closed Item (⌘Z) inside the other Mac's undo time undoes a terminate there.</li>
-<li>An open row is saved and attached again at the next launch. If the other Mac no longer has the session, the row says it ended there.</li>
+<li>An open session is saved and attached again at the next launch. If agterm confirms that an attached terminal session is gone on the host, it closes the session here.</li>
 <li><code>agtermctl tree --json</code> reports <code>remoteHost</code> and <code>remoteSessionID</code> on the row.</li>
 </ul>
 <h3 id="remote-sessions-lead">Who leads a pane</h3>
@@ -1235,8 +1235,8 @@ map ctrl+shift+k  command_palette
 # or to several alternatives, joined by | with no spaces
 map cmd+t|ctrl+a&gt;t  toggle_scratch
 # custom commands: the quoted name shows in the palette; the chord is optional
-command &quot;Open in Zed&quot;  cmd+shift+e  open -a Zed {AGT_SESSION_PWD}
-command &quot;Lazygit&quot;      ctrl+a&gt;g     agtermctl session overlay open &#39;zsh -lc lazygit&#39; --socket {AGT_SOCKET}
+command &quot;Open in Zed&quot;  cmd+shift+e  open -a Zed &quot;$AGT_SESSION_PWD&quot;
+command &quot;Lazygit&quot;      ctrl+a&gt;g     agtermctl session overlay open &#39;zsh -lc lazygit&#39; --socket &quot;$AGT_SOCKET&quot;
 command &quot;Deploy&quot;               ./deploy.sh
 # one system-wide chord that summons the quick terminal from any app
 global-hotkey ctrl+opt+space

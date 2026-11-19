@@ -89,7 +89,7 @@ struct Zmx: ParsableCommand {
             list was taken fails rather than handing back a fresh shell wearing its name.
 
             Closing it here ends only this side's connection: the far-side processes keep running, and \
-            nothing this command does can kill them. The session is not restored after a relaunch.
+            nothing this command does can kill them. An open attached session is saved and attached again at the next launch.
             """)
         @Argument(help: "The host, as ssh would take it.")
         var host: String
