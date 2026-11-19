@@ -12,6 +12,9 @@ SDK_URL="https://download.swift.org/swift-6.3.2-release/static-sdk/swift-6.3.2-R
 SDK_SHA256=3fd798bef6f4408f1ea5a6f94ce4d4052830c4326ab85ebc04f983f01b3da407
 # runs the built binary for its --version check; a static musl binary needs nothing from the image
 CHECK_IMAGE=alpine:3.20
+# musl gives a thread 128 KiB of stack unless PT_GNU_STACK asks for more, up to 8 MiB; libdispatch's workers, which
+# drain the server's main actor, take that default, and a release build outgrows it
+STACK_SIZE=8388608
 
 die() { echo "server-build: $*" >&2; exit 2; }
 
@@ -35,7 +38,7 @@ mkdir -p "$out"
 # installed SDK and SwiftPM's scratch path, at the same tree path so its incremental state stays valid; the tree and
 # the scratch path are per architecture, so two builds can run at once
 docker run --rm --cpus 8 -v "$ROOT:/src:ro" -v "$bundle:/sdk.tar.gz:ro" -v agterm-server-build:/build -v "$out:/out" \
-  -e SDK="$SDK" -e ARCH="$arch" -e VERSION="$version" "$SWIFT_IMAGE" bash -euo pipefail -c '
+  -e SDK="$SDK" -e ARCH="$arch" -e VERSION="$version" -e STACK_SIZE="$STACK_SIZE" "$SWIFT_IMAGE" bash -euo pipefail -c '
     swift sdk list --swift-sdks-path /build/sdks | grep -qx "$SDK" \
       || swift sdk install --swift-sdks-path /build/sdks /sdk.tar.gz >/dev/null
     rm -rf "/build/tree-$ARCH"
@@ -48,10 +51,15 @@ docker run --rm --cpus 8 -v "$ROOT:/src:ro" -v "$bundle:/sdk.tar.gz:ro" -v agter
     grep -q "public static let current = \"$VERSION\"" "$stamp" || { echo "server-build: could not stamp $VERSION" >&2; exit 2; }
     build=(swift build -c release --swift-sdks-path /build/sdks --swift-sdk "$ARCH-swift-linux-musl"
       --scratch-path "/build/scratch-musl-$ARCH"
-      -Xlinker --strip-all)
+      -Xlinker --strip-all -Xlinker -z -Xlinker "stack-size=$STACK_SIZE")
     "${build[@]}" --product agterm-server
     "${build[@]}" --product agtermctl
-    cp "$("${build[@]}" --show-bin-path)/agterm-server" "$("${build[@]}" --show-bin-path)/agtermctl" /out/
+    bin="$("${build[@]}" --show-bin-path)"
+    for product in agterm-server agtermctl; do
+      stack="$(readelf -lW "$bin/$product" | awk '"'"'$1 == "GNU_STACK" { print $6 }'"'"')"
+      [[ "$((stack))" == "$STACK_SIZE" ]] || { echo "server-build: $product has a $stack stack size, not $STACK_SIZE" >&2; exit 2; }
+    done
+    cp "$bin/agterm-server" "$bin/agtermctl" /out/
   '
 [[ -x "$out/agterm-server" && -x "$out/agtermctl" ]] || die "the $arch build left no binaries in $out"
 # only the architecture Docker runs natively can be executed here; the other keeps the source stamp checked above

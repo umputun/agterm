@@ -131,7 +131,7 @@ final class PaneObserver {
     /// settleExited runs the exit transition of a pane whose daemon a confirmed kill ended. zmx writes no exit record
     /// for a killed daemon, so one is written here and the pane settles as if its shell had exited.
     func settleExited(_ session: Session, identity: UUID) {
-        FileManager.default.createFile(atPath: panes.exitRecord(identity), contents: nil)
+        _ = FileManager.default.createFile(atPath: panes.exitRecord(identity), contents: nil)
         session.daemonBackedPanes.remove(identity)
         settle(session, gone: [identity])
         onApplied?()
