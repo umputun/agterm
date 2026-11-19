@@ -269,4 +269,15 @@ struct CatalogProjectionTests {
     @Test func anEmptyWindowHasNoWorkspaces() {
         #expect(origin.workspaces(of: store, projection: projection).isEmpty)
     }
+
+    @Test func aReadBegunBeforeARestartConfirmedAPaneStillListsItRunning() {
+        var confirmations = OriginConfirmations()
+        let began = ContinuousClock.now
+        let pane = UUID()
+        confirmations.confirm(pane, at: began.advanced(by: .milliseconds(5)))
+
+        #expect(confirmations.applied(readBegan: began) == [pane])
+        #expect(confirmations.applied(readBegan: began.advanced(by: .milliseconds(10))).isEmpty)
+        #expect(confirmations.applied(readBegan: began).isEmpty, "a read that covered the confirmation retires it")
+    }
 }

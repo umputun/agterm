@@ -101,11 +101,31 @@ extension ControlServer {
         }
     }
 
-    /// markOriginRestart keeps `pane` listed as running while `session restart` replaces its shell.
-    func markOriginRestart(_ pane: UUID, running: Bool) {
-        if running { restartingPanes.insert(pane) } else { restartingPanes.remove(pane) }
-        for catalog in originCatalogs.values { catalog.projection.evidence.restarting = restartingPanes }
-        if !running { refreshOriginEvidence() }
+    /// holdOriginRestart keeps `pane` listed as running while a `session restart` replaces its shell.
+    func holdOriginRestart(_ pane: UUID) {
+        restartHolds[pane, default: 0] += 1
+        publishRestarting()
+    }
+
+    /// releaseOriginRestart drops one restart's hold on `pane`; the last release rereads which panes run.
+    func releaseOriginRestart(_ pane: UUID) {
+        guard let count = restartHolds[pane] else { return }
+        restartHolds[pane] = count > 1 ? count - 1 : nil
+        publishRestarting()
+        if restartHolds[pane] == nil { refreshOriginEvidence() }
+    }
+
+    /// originPaneConfirmed lists `pane` as running once a restart saw its new shell, ahead of the inventory, so
+    /// releasing the restart's hold cannot show it held in between.
+    func originPaneConfirmed(_ pane: UUID) {
+        originConfirmations.confirm(pane, at: .now)
+        originEvidence?.running.insert(pane)
+        for catalog in originCatalogs.values { catalog.projection.evidence.running.insert(pane) }
+    }
+
+    private func publishRestarting() {
+        let restarting = Set(restartHolds.keys)
+        for catalog in originCatalogs.values { catalog.projection.evidence.restarting = restarting }
     }
 
     /// refreshOriginEvidence rereads the inventory once, coalescing requests made while a read runs.
@@ -125,10 +145,12 @@ extension ControlServer {
         let read = Task { @MainActor in
             repeat {
                 originRereads = false
+                let began = ContinuousClock.now
                 guard let observed = await client.backgroundSessionRecords(timeout: Self.originInventoryTimeout) else { return false }
                 let walk = library.paneClaims()
                 let inventory = ZmxInventory.join(observed: observed, claims: walk.claims, inventoryComplete: walk.complete)
-                let evidence = CatalogPaneEvidence(inventory: inventory, restarting: restartingPanes)
+                var evidence = CatalogPaneEvidence(inventory: inventory, restarting: Set(restartHolds.keys))
+                evidence.running.formUnion(originConfirmations.applied(readBegan: began))
                 originEvidence = evidence
                 for catalog in originCatalogs.values where catalog.projection.evidence != evidence {
                     catalog.projection.evidence = evidence

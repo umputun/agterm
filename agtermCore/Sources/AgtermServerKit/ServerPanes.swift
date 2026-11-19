@@ -17,8 +17,9 @@ final class ServerPanes {
     let baseEnvironment: [String: String]
     /// leaders is each listed pane's shell pid from the last applied listing, which the tree's foreground reads start at.
     var leaders: [UUID: Int32] = [:]
-    /// restarting are panes a restart has killed and not yet started again, which no listing may settle meanwhile.
-    var restarting: Set<UUID> = []
+    /// restartHolds counts, per pane, the restarts that killed its daemon and have not yet confirmed or given up on the
+    /// new one, which no listing may settle meanwhile; each restart releases only its own hold.
+    private var restartHolds: [UUID: Int] = [:]
     /// processes is the host's process table, through which a kill hangs up the pane's foreground job.
     var processes: any ProcessTable = ProcProcessTable()
     private var startedAt: [UUID: Date] = [:]
@@ -98,6 +99,25 @@ final class ServerPanes {
     /// cannot hold it.
     func started(_ identity: UUID, since date: Date) -> Bool {
         startedAt[identity].map { $0 >= date } ?? false
+    }
+
+    /// confirmed records that a restart saw `identity`'s new shell run: a listing begun before then may predate the
+    /// daemon, so it counts as a start.
+    func confirmed(_ identity: UUID) {
+        startedAt[identity] = Date()
+    }
+
+    func holdRestart(_ identity: UUID) {
+        restartHolds[identity, default: 0] += 1
+    }
+
+    func releaseRestart(_ identity: UUID) {
+        guard let count = restartHolds[identity] else { return }
+        restartHolds[identity] = count > 1 ? count - 1 : nil
+    }
+
+    func isRestarting(_ identity: UUID) -> Bool {
+        restartHolds[identity] != nil
     }
 
     /// end kills the daemons of panes the store finalized before the command that closed them replies, so a

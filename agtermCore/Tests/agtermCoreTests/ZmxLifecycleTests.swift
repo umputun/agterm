@@ -151,6 +151,19 @@ struct ZmxLifecycleTests {
         #expect(ZmxDaemonLeader.foreground(ofDaemon: 10, children: children, row: { $0 == 20 ? row : nil }) == want)
     }
 
+    @Test(arguments: [
+        (children: [Int32(20)], row: ZmxDaemonLeader.Row(parent: 10, ownsTerminal: true, foreground: 30), want: Int32?(20)),
+        (children: [20], row: ZmxDaemonLeader.Row(parent: 10, ownsTerminal: true, foreground: 0), want: Int32?(20)),
+        (children: [], row: ZmxDaemonLeader.Row(parent: 10, ownsTerminal: true, foreground: 30), want: nil),
+        (children: [20, 21], row: ZmxDaemonLeader.Row(parent: 10, ownsTerminal: true, foreground: 30), want: nil),
+        (children: [20], row: ZmxDaemonLeader.Row(parent: 11, ownsTerminal: true, foreground: 30), want: nil),
+        (children: [20], row: ZmxDaemonLeader.Row(parent: 10, ownsTerminal: false, foreground: 30), want: nil),
+    ])
+    func daemonLeaderPidIsTheSingleTerminalOwningChildWhateverItsForeground(
+        children: [Int32], row: ZmxDaemonLeader.Row, want: Int32?) {
+        #expect(ZmxDaemonLeader.leader(ofDaemon: 10, children: children, row: { $0 == 20 ? row : nil }) == want)
+    }
+
     @Test func daemonLeaderIsNilWhenTheChildRowIsGone() {
         #expect(ZmxDaemonLeader.foreground(ofDaemon: 10, children: [20], row: { _ in nil }) == nil)
     }

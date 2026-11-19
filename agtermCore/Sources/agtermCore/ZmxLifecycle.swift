@@ -91,11 +91,20 @@ public enum ZmxDaemonLeader {
         }
     }
 
+    /// leader is the pid of `daemon`'s pty shell, nil when the children do not identify one.
+    public static func leader(ofDaemon daemon: Int32, children: [Int32], row: (Int32) -> Row?) -> Int32? {
+        shell(ofDaemon: daemon, children: children, row: row)?.pid
+    }
+
     /// foreground is the foreground group of `daemon`'s pty, nil when the children do not identify one.
     public static func foreground(ofDaemon daemon: Int32, children: [Int32], row: (Int32) -> Row?) -> Int32? {
-        guard children.count == 1, let child = row(children[0]), child.parent == daemon, child.ownsTerminal,
-              child.foreground > 0 else { return nil }
-        return child.foreground
+        guard let shell = shell(ofDaemon: daemon, children: children, row: row), shell.row.foreground > 0 else { return nil }
+        return shell.row.foreground
+    }
+
+    private static func shell(ofDaemon daemon: Int32, children: [Int32], row: (Int32) -> Row?) -> (pid: Int32, row: Row)? {
+        guard children.count == 1, let child = row(children[0]), child.parent == daemon, child.ownsTerminal else { return nil }
+        return (children[0], child)
     }
 }
 

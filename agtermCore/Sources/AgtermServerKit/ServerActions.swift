@@ -26,8 +26,15 @@ public final class ServerActions: ControlActions {
     }
     /// paneExited runs the exit transition of a pane whose daemon a confirmed kill ended.
     var paneExited: ((Session, UUID) -> Void)?
-    /// restartWaits bounds a restart's waits for the old program to end and the new shell to appear.
-    var restartWaits = (program: Duration.seconds(1), shell: Duration.seconds(10), poll: Duration.milliseconds(100))
+    /// restartWaits bounds a restart's waits: the old program's end, the new shell before the reply, and the new shell
+    /// before its viewers are told, counted from the launch.
+    var restartWaits = (program: Duration.seconds(1), shell: Duration.seconds(10), follow: Duration.seconds(60),
+                        poll: Duration.milliseconds(100))
+    /// daemonLeader reads a launch's daemon shell pid from the kernel, nil while none runs.
+    var daemonLeader: @Sendable (ProcDaemon.Target) -> Int32? = ProcDaemon.leader
+    /// restartFollows is each pane's restart still waiting for its new shell; a later restart's confirmed kill
+    /// replaces it.
+    var restartFollows: [UUID: RestartFollow] = [:]
     /// operationBook runs each operation id at most once against the server's catalog.
     let operationBook = CatalogOperationBook()
     /// recentClosed is the history the store writes its closes into; nil serves no `recent.*`.

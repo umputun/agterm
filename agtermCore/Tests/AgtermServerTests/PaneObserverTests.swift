@@ -343,7 +343,7 @@ struct PaneObserverTests {
 
     @Test func aPaneBeingRestartedIsNotSettledByAListingWithoutIt() throws {
         let session = try session()
-        harness.panes.restarting.insert(session.paneIdentity)
+        harness.panes.holdRestart(session.paneIdentity)
 
         observer.apply([], listedAt: later)
 

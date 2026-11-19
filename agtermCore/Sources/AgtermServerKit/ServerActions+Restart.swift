@@ -1,6 +1,21 @@
 import Foundation
 import agtermCore
 
+/// RestartFollow is one restart's wait for its new shell, read by the reply and settled by the watch that outlives it.
+@MainActor
+final class RestartFollow {
+    let respawns: Int
+    let deadline: ContinuousClock.Instant
+    var leader: Int32?
+    var confirmedAt: ContinuousClock.Instant?
+    var ended = false
+
+    init(respawns: Int, deadline: ContinuousClock.Instant) {
+        self.respawns = respawns
+        self.deadline = deadline
+    }
+}
+
 /// `session.restart` on agterm-server: the Mac's order of checks and waits over the server's daemons, so a pane keeps
 /// its identity, daemon name and environment. `.claude/rules/control-api.md` owns the contract.
 extension ServerActions {
@@ -36,10 +51,13 @@ extension ServerActions {
             return Self.restartFailure("the process table cannot be read, so the old program could not be tracked; nothing was changed")
         }
         let runner = panes.runner
-        panes.restarting.insert(pane.identity)
-        defer { panes.restarting.remove(pane.identity) }
+        panes.holdRestart(pane.identity)
+        var heldByFollow = false
+        defer { if !heldByFollow { panes.releaseRestart(pane.identity) } }
         switch await Task.detached(operation: { runner.killConfirmed(daemon, force: true) }).value {
-        case .killed: processes.send(SIGHUP, to: program)
+        case .killed:
+            processes.send(SIGHUP, to: program)
+            restartFollows[pane.identity] = nil
         case .staleSocket: return Self.restartFailure("\(daemon) did not confirm the kill; nothing was started")
         case .failed(let reason): return Self.restartFailure("could not end the pane's shell: \(reason); nothing was started")
         }
@@ -58,6 +76,7 @@ extension ServerActions {
         // after the wait, which lets other requests run: mail sent to the old program meanwhile must not reach the new one
         MessageBus.shared.dispose(pane: pane.identity)
         let workspace = store.sessionLocation(ofSession: session.id)?.workspace
+        let target = launchTarget(daemon)
         let start = ServerPanes.Start(identity: pane.identity, session: session, workspace: workspace, pane: pane.role,
                                       program: replay.map { .replay($0.argv) } ?? .returning(options.command ?? ""),
                                       directory: replay?.workingDirectory ?? session.cwd(for: pane.role == .right ? .right : .left))
@@ -66,11 +85,11 @@ extension ServerActions {
             return Self.restartFailure("the old shell ended (pid \(oldPid)) and the new shell could not be started: \(refusal); "
                 + "the pane was closed")
         }
-        panes.restarting.remove(pane.identity)
-        guard let newPid = await leader(of: daemon, otherThan: oldPid, within: restartWaits.shell) else {
-            return Self.restartFailure("the old shell ended (pid \(oldPid)) and no new one was observed")
+        heldByFollow = true
+        guard let newPid = await follow(session, identity: pane.identity, target: target, oldPid: oldPid) else {
+            return Self.restartFailure("the old shell ended (pid \(oldPid)) and the replacement was requested but could not be "
+                + "verified in time")
         }
-        streams.noteRespawn(session: session.id, daemon: daemon)
         return Self.restarted(session, pane: pane, oldPid: oldPid, newPid: newPid, replayed: replay?.argv)
     }
 
@@ -79,6 +98,7 @@ extension ServerActions {
         guard pane.role == .left else { return Self.restartFailure("an ended session restarts its primary pane") }
         guard let command else { return Self.restartFailure("an ended session has no program to replay; pass --command") }
         let workspace = store.sessionLocation(ofSession: session.id)?.workspace
+        let target = launchTarget(ZmxSupport.daemonName(for: pane.identity))
         if let refusal = panes.start(.init(identity: pane.identity, session: session, workspace: workspace, pane: .left,
                                            program: .returning(command), directory: session.effectiveCwd)) {
             return Self.restartFailure(refusal)
@@ -86,11 +106,10 @@ extension ServerActions {
         // what the ended program left (status, ask, HUD, pane overlay) would otherwise sit over the new one
         store.clearPaneOwnedState(session.id, pane: .left)
         store.resumeEndedSession(session.id)
-        guard let newPid = await leader(of: ZmxSupport.daemonName(for: pane.identity), otherThan: nil,
-                                        within: restartWaits.shell) else {
-            return Self.restartFailure("no shell was observed for the restarted pane")
+        panes.holdRestart(pane.identity)
+        guard let newPid = await follow(session, identity: pane.identity, target: target, oldPid: nil) else {
+            return Self.restartFailure("the pane was started but its shell could not be verified in time")
         }
-        streams.noteRespawn(session: session.id, daemon: ZmxSupport.daemonName(for: pane.identity))
         return Self.restarted(session, pane: pane, oldPid: nil, newPid: newPid, replayed: nil)
     }
 
@@ -125,6 +144,52 @@ extension ServerActions {
         }
     }
 
+    /// launchTarget names the daemon a launch about to start creates, stamped before it starts.
+    private func launchTarget(_ daemon: String) -> ProcDaemon.Target {
+        ProcDaemon.Target(name: daemon, directory: panes.configuration.zmxSocketDirectory, executable: panes.configuration.zmxPath,
+                          launchedAt: ProcDaemon.now())
+    }
+
+    /// follow waits for the new shell of `target`'s daemon, taking over the pane's restart hold: up to the reply's wait
+    /// here, and up to the follow window in `watch`, which outlives the reply. Nil unless the shell was seen in time.
+    private func follow(_ session: Session, identity: UUID, target: ProcDaemon.Target, oldPid: Int32?) async -> Int32? {
+        let launched = ContinuousClock.now
+        let entry = RestartFollow(respawns: session.primaryRespawns, deadline: launched + restartWaits.follow)
+        restartFollows[identity] = entry
+        Task { await watch(entry, session: session, identity: identity, target: target, oldPid: oldPid) }
+        let deadline = launched + restartWaits.shell
+        while entry.confirmedAt == nil, !entry.ended, ContinuousClock.now < deadline {
+            try? await Task.sleep(for: restartWaits.poll)
+        }
+        guard let confirmedAt = entry.confirmedAt, confirmedAt <= deadline else { return nil }
+        return entry.leader
+    }
+
+    /// watch announces the respawn once a new shell runs under the daemon, then releases the hold. It gives up silently
+    /// when the window ends, the pane closes or respawns, its shell exits, or a later restart's kill takes the pane.
+    private func watch(_ entry: RestartFollow, session: Session, identity: UUID, target: ProcDaemon.Target, oldPid: Int32?) async {
+        let lookup = daemonLeader
+        defer {
+            entry.ended = true
+            panes.releaseRestart(identity)
+            if restartFollows[identity] === entry { restartFollows[identity] = nil }
+        }
+        while ContinuousClock.now < entry.deadline {
+            let pid = await Task.detached { lookup(target) }.value
+            guard ContinuousClock.now < entry.deadline, restartFollows[identity] === entry, store.session(withID: session.id) === session,
+                  session.paneRole(forIdentity: identity) != nil, session.primaryRespawns == entry.respawns,
+                  !FileManager.default.fileExists(atPath: panes.exitRecord(identity)) else { return }
+            if let pid, pid != oldPid {
+                entry.leader = pid
+                entry.confirmedAt = .now
+                panes.confirmed(identity)
+                streams.noteRespawn(session: session.id, daemon: target.name)
+                return
+            }
+            try? await Task.sleep(for: restartWaits.poll)
+        }
+    }
+
     /// programEnded waits for the hung-up job, kills what is left of it, and waits once more; an unreadable process
     /// table counts as still running.
     private func programEnded(_ job: [ProcessRecord]) async -> Bool {
@@ -142,7 +207,6 @@ extension ServerActions {
     /// endKilledPane runs the exit transition for a pane whose shell a restart ended and did not replace, so the pane
     /// is not left without a shell.
     private func endKilledPane(_ session: Session, identity: UUID) {
-        panes.restarting.remove(identity)
         guard store.session(withID: session.id) === session, session.paneRole(forIdentity: identity) != nil else { return }
         paneExited?(session, identity)
     }

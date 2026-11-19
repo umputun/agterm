@@ -64,7 +64,7 @@ final class PaneObserver {
                     session.daemonBackedPanes.insert(identity)
                     leaders[identity] = record.leaderPID
                     updateCwd(of: session, role: role, leader: record.leaderPID)
-                } else if !panes.started(identity, since: listedAt), !panes.restarting.contains(identity) {
+                } else if !panes.started(identity, since: listedAt), !panes.isRestarting(identity) {
                     gone.append(identity)
                 }
             }

@@ -241,7 +241,9 @@ final class ServerHarness {
         actions.streams.presentationHelloDeadline = 60
         actions.recentClosed = recentClosed
         actions.processes = processes
-        actions.restartWaits = (program: .milliseconds(200), shell: .seconds(5), poll: .milliseconds(10))
+        actions.restartWaits = (program: .milliseconds(200), shell: .seconds(5), follow: .seconds(10), poll: .milliseconds(10))
+        let runner = runner
+        actions.daemonLeader = { target in runner.records?.last { $0.name == target.name }?.leaderPID }
         let observer = PaneObserver(store: store, panes: panes, cwd: { _ in nil })
         self.observer = observer
         actions.paneExited = { session, identity in observer.settleExited(session, identity: identity) }
