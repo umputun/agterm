@@ -1371,7 +1371,8 @@ error keeps those names for compatibility.
   mode, and from Recent Closed; when its file or server is gone, the row stays with the error and a Reload
   button. A saved `--js` file page runs its scripts with the full control bridge at every launch and every
   reopen, with no user action, which is more than a restored `--command` gets (that reruns only in Re-run
-  commands mode); a URL page gets no bridge. A row attached from another Mac is never saved.
+  commands mode); a URL page gets no bridge. On relaunch, agterm restores an attached page session and asks its host for the
+  page again.
 - `session overlay reload [--current] [--pane left|right] [--target] [--window W]` — reload an HTML
   overlay: the file or URL it was opened with (after you rewrote the artifact), or with `--current` the
   page it shows now. Errors `no overlay`, and `the overlay is not an html page` for a program.

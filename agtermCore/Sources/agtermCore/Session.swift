@@ -59,9 +59,8 @@ public final class Session: Identifiable {
     @ObservationIgnored public internal(set) var followedCompanions: Set<String> = []
     @ObservationIgnored public internal(set) var companionsBaselined = false
 
-    /// The host this session is teleported from, nil for a local one. NOT persisted, and excluded from
-    /// every snapshot: a persisted ssh command would reconnect on a `rerun` launch or come back as a
-    /// plain shell under a marker that lies.
+    /// remoteHost is the SSH destination, nil for a local session. Saved attachments keep it in
+    /// `AttachedOriginSnapshot`.
     ///
     /// Immutable and set at construction, because the first save happens inside `addSession`: a marker
     /// written afterwards would let one snapshot go to disk carrying the ssh command.
