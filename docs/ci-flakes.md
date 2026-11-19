@@ -218,6 +218,15 @@ Each entry separates a demonstrated cause from one that is only consistent with 
   `eventually` waits 120 s. Every case that expects a timeout or a window end sets its own short windows. The
   parked-session case takes a 600 s undo grace, so the 3 s default cannot finalize it mid-burst.
 
+### Linux core tests: apt cannot reach the Ubuntu archive
+
+- **Symptom.** The `Install jq, zsh, fish and tcsh` step exits 100 after `Could not connect to archive.ubuntu.com:80
+  ... connection timed out` and `E: Unable to locate package jq`, before any test runs.
+- **Runs.** Job 135549398259 and its rerun 135557548754 (run 44521018331, PR #1057).
+- **Cause, demonstrated.** The archive was down: `archive.ubuntu.com` timed out from a Mac outside GitHub's network
+  at the same time, and answered again about 25 minutes after the first failure.
+- **Fix.** None in the repository. Rerun the failed job once the archive answers.
+
 ### Linux test process killed by SIGPIPE
 
 - **Symptom.** The Linux core tests job ends with signal 13 about 6 s after `swift test` starts, before any test
