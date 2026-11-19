@@ -75,6 +75,27 @@ public struct CatalogPaneEvidence: Equatable, Sendable {
     public func runs(_ pane: UUID) -> Bool { running.contains(pane) || restarting.contains(pane) }
 }
 
+/// OriginConfirmations stamps the panes a `session restart` saw run. An inventory read begun before a stamp can
+/// predate the new daemon, so it keeps that pane running; a later read retires the stamp unless it could not read the
+/// pane's daemon, which zmx reports for a probe that timed out.
+public struct OriginConfirmations: Sendable {
+    private var stamps: [UUID: ContinuousClock.Instant] = [:]
+
+    public init() {}
+
+    public mutating func confirm(_ pane: UUID, at instant: ContinuousClock.Instant) {
+        stamps[pane] = instant
+    }
+
+    /// applied is the panes a read begun at `began` that produced `inventory` still lists as running. A pane parked in
+    /// an undo window keeps its claim, so its unreadable daemon keeps the stamp too.
+    public mutating func applied(readBegan began: ContinuousClock.Instant, inventory: ZmxInventoryResult) -> Set<UUID> {
+        let unreadable = Set(inventory.rows.filter { $0.observation == .unreadable }.compactMap(\.claim?.paneIdentity))
+        stamps = stamps.filter { $0.value > began || unreadable.contains($0.key) }
+        return Set(stamps.keys)
+    }
+}
+
 /// OriginCatalogProjection is one Mac window's catalog. A terminal row is listed once a pane or its scratch runs or a
 /// pane's program exited held, then keeps every pane, a stopped one held, until it leaves the store; a companion is
 /// listed only with its parent.

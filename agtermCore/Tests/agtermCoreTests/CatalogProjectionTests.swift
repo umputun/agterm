@@ -269,4 +269,44 @@ struct CatalogProjectionTests {
     @Test func anEmptyWindowHasNoWorkspaces() {
         #expect(origin.workspaces(of: store, projection: projection).isEmpty)
     }
+
+    @Test func aReadBegunBeforeARestartConfirmedAPaneStillListsItRunning() {
+        var confirmations = OriginConfirmations()
+        let began = ContinuousClock.now
+        let pane = UUID()
+        let empty = ZmxInventory.join(observed: [], claims: [], inventoryComplete: true)
+        confirmations.confirm(pane, at: began.advanced(by: .milliseconds(5)))
+
+        #expect(confirmations.applied(readBegan: began, inventory: empty) == [pane])
+        #expect(confirmations.applied(readBegan: began.advanced(by: .milliseconds(10)), inventory: empty).isEmpty)
+        #expect(confirmations.applied(readBegan: began, inventory: empty).isEmpty, "a read that covered the confirmation retires it")
+    }
+
+    @Test(arguments: [false, true])
+    func aLaterReadThatCouldNotReadAClaimedDaemonKeepsItsConfirmation(parked: Bool) {
+        var confirmations = OriginConfirmations()
+        let began = ContinuousClock.now
+        let pane = UUID()
+        let claim = ZmxPaneClaim(paneIdentity: pane, pane: .left, pendingClose: parked, windowID: UUID(), windowName: "w",
+                                 windowState: .open, workspaceID: nil, workspaceName: nil, sessionID: UUID(), sessionName: nil)
+        let unreadable = [ZmxSessionRecord(name: ZmxSupport.daemonName(for: pane), clients: nil)]
+        confirmations.confirm(pane, at: began)
+        let later = began.advanced(by: .milliseconds(10))
+
+        #expect(confirmations.applied(readBegan: later, inventory: ZmxInventory.join(observed: unreadable, claims: [claim],
+                                                                                     inventoryComplete: true)) == [pane])
+        #expect(confirmations.applied(readBegan: later, inventory: ZmxInventory.join(observed: [], claims: [claim],
+                                                                                     inventoryComplete: true)).isEmpty)
+    }
+
+    @Test func anUnreadableDaemonNoPaneClaimsRetiresTheConfirmation() {
+        var confirmations = OriginConfirmations()
+        let began = ContinuousClock.now
+        let pane = UUID()
+        confirmations.confirm(pane, at: began)
+        let orphan = ZmxInventory.join(observed: [ZmxSessionRecord(name: ZmxSupport.daemonName(for: pane), clients: nil)],
+                                       claims: [], inventoryComplete: true)
+
+        #expect(confirmations.applied(readBegan: began.advanced(by: .milliseconds(10)), inventory: orphan).isEmpty)
+    }
 }

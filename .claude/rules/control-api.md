@@ -326,8 +326,14 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   surface is freed. libghostty routes a queued child-exit by surface address, so a surface created after
   the free can land on that address and take the old child's exit, which closed the pane (measured: the
   event carried the old shell's run time). The same call spawns a pane the deck does not lay out, since
-  libghostty creates a surface for a view outside any window. The reply waits for a new leader pid in
-  `zmx list` and carries `result.restart` (`paneID`, `oldPid`, `newPid`); they are shell pids, the program
+  libghostty creates a surface for a view outside any window. The reply waits up to 10 s for a new
+  leader pid read per daemon from the kernel (`ZmxDaemonForeground.leaderPID` on the Mac, `ProcDaemon` by argv and
+  `ZMX_DIR` on agterm-server, where a socket's peer pid names the process that called `listen`), never `zmx list`,
+  which waits on every daemon (#1055). Past that it answers unverified, and a follow keeps the pane's restart hold and
+  publishes the respawn once the shell shows up, within 60 s of the launch. Holds are counted, one per restart, so a
+  refused retry releases only its own. A later restart's confirmed kill, the pane closing, a parent respawn
+  (`primaryRespawns`) or, on the server, a recorded exit ends the follow without publishing; a confirmed pane is
+  listed running ahead of the inventory (`OriginConfirmations`). A confirmed reply carries `result.restart` (`paneID`, `oldPid`, `newPid`); they are shell pids, the program
   reads back as `foreground`. With no `command` the host replays the pane's foreground program: the
   argv `tree` reports, read through `ForegroundProcess.observed` from a fresh leader listing, filtered by
   host-free `RestartReplay.resolve` and launched through `attachCommand(replaying:)`. It starts in that

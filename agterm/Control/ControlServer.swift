@@ -100,7 +100,19 @@ final class ControlServer {
     var catalogHeartbeat: Task<Void, Never>?
     var originCatalogs: [UUID: OriginCatalog] = [:]
     var originSignatures: [UUID: Set<String>] = [:]
-    var restartingPanes: Set<UUID> = []
+    /// restartHolds counts, per pane, the restarts that killed its daemon and have not yet confirmed or given up on
+    /// the new one; the catalog lists a held pane as running.
+    var restartHolds: [UUID: Int] = [:]
+    /// originConfirmations stamps panes a restart saw run, for an inventory read begun before that.
+    var originConfirmations = OriginConfirmations()
+    /// restartFollows is each pane's restart still waiting for its new shell; a later restart's confirmed kill
+    /// replaces it.
+    var restartFollows: [UUID: RestartFollow] = [:]
+    /// restartWaits bounds a restart's waits for its new shell: before the reply, and before its viewers are told,
+    /// counted from the launch.
+    var restartWaits = (shell: Duration.seconds(10), follow: Duration.seconds(60), poll: Duration.milliseconds(100))
+    /// restartLeader reads the named daemon's shell pid from the kernel; nil only without a zmx client.
+    var restartLeader: (@Sendable (String) -> pid_t?)?
     /// originRead is the inventory read in flight, answering whether it succeeded; a request during it rereads.
     var originRead: Task<Bool, Never>?
     var originRereads = false
@@ -262,6 +274,10 @@ final class ControlServer {
         self.zmxForegroundResolver = zmxForegroundResolver
         self.zmxDaemonForeground = zmxDaemonForeground
         self.zmxClient = zmxClient
+        restartLeader = zmxClient.map { client in
+            let directory = client.endpoint.socketDirectory
+            return { ZmxDaemonForeground.leaderPID(directory: directory, name: $0) }
+        }
         self.zmxOutdatedBefore = zmxOutdatedBefore
         self.liveAttributionProbe = liveAttributionProbe
         self.identity = identity

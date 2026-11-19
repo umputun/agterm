@@ -805,7 +805,9 @@ error keeps those names for compatibility.
   4096 bytes. Clears that pane's status, ask, HUD and pane overlay; keeps its restore pin. A
   background or disowned job of the old shell is not ended. An error naming the old shell's pid means its
   daemon kill was confirmed. If the old foreground job survives SIGKILL or the pane cannot be rebuilt, the
-  pane closes and the error says so. A startup timeout reports only that no new shell was observed.
+  pane closes and the error says so. A new shell not confirmed within 10 s is an error ("could not be verified in
+  time"), though the line may already run, so read `tree` before retrying. Attached Macs still follow a
+  shell that comes up within a minute.
   Does not need the display awake.
 - `session swap [--target] [--window W]`: exchange both terminals' physical positions and primary/split
   roles without restarting either process. Focus follows its terminal; split axis and ratio stay fixed.

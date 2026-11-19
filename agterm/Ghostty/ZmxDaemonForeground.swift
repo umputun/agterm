@@ -11,13 +11,23 @@ struct ZmxDaemonForeground {
         ZmxDaemonForeground { name in lookup(socketPath: directory + "/" + name) }
     }
 
+    /// leaderPID is the pid of the pty shell of the daemon listening at `directory`/`name`, so a restart sees its new
+    /// shell run without `zmx list`, which waits on every other daemon.
+    static func leaderPID(directory: String, name: String) -> pid_t? {
+        withDaemon(socketPath: directory + "/" + name) { ZmxDaemonLeader.leader(ofDaemon: $0, children: children(of: $0), row: row(of:)) }
+    }
+
+    private static func lookup(socketPath: String) -> pid_t? {
+        withDaemon(socketPath: socketPath) { ZmxDaemonLeader.foreground(ofDaemon: $0, children: children(of: $0), row: row(of:)) }
+    }
+
     // the kernel answers the peer pid from the listener before the daemon accepts, so a stopped daemon still
     // resolves; the connection stays open until the child is matched
-    private static func lookup(socketPath: String) -> pid_t? {
+    private static func withDaemon(socketPath: String, _ body: (pid_t) -> pid_t?) -> pid_t? {
         guard let fd = UnixSocket.connected(path: socketPath) else { return nil }
         defer { close(fd) }
         guard let daemon = peerPID(fd: fd) else { return nil }
-        return ZmxDaemonLeader.foreground(ofDaemon: daemon, children: children(of: daemon), row: row(of:))
+        return body(daemon)
     }
 
     private static func peerPID(fd: Int32) -> pid_t? {
