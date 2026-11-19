@@ -247,7 +247,8 @@ final class ServerHarness {
         actions.streams.presentationHelloDeadline = 60
         actions.recentClosed = recentClosed
         actions.processes = processes
-        actions.restartWaits = (program: .milliseconds(200), shell: .seconds(5), follow: .seconds(10), poll: .milliseconds(10))
+        // ceilings, not latencies: the start-of-run burst on CI holds the main actor about a minute
+        actions.restartWaits = (program: .milliseconds(200), shell: .seconds(120), follow: .seconds(180), poll: .milliseconds(10))
         let runner = runner
         actions.daemonLeader = { target in runner.records?.last { $0.name == target.name }?.leaderPID }
         let observer = PaneObserver(store: store, panes: panes, cwd: { _ in nil })

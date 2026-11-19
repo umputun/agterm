@@ -203,6 +203,21 @@ Each entry separates a demonstrated cause from one that is only consistent with 
   parked `loop.next()` on the pool through `Task.detached`, which deadlocked the one-thread run; it runs on a
   plain thread now.
 
+### `ServerActionsRestartTests`: restarts answer "could not be verified in time"
+
+- **Symptom.** Six restart cases that wait for the new shell fail together on the macOS and Linux core jobs:
+  `reply.result?.restart` is nil and the error says the replacement could not be verified in time. Each ran 29
+  to 64 s against the fixture's 5 s reply window.
+- **Runs.** Jobs 135529448616 and 135529448536 (run 44515214921, PR #1057), on the first push.
+- **Cause, inferred from timing.** Suites with nothing to wait on took 51 to 57 s in the same run, the start-of-run
+  burst in the entries above. The reply window (5 s) and the follow window (10 s) count from the launch, and the
+  watch that confirms the shell is a main-actor task, so a stall between the launch and its first lookup can
+  outlast either. Blocking the main actor 6 s there gives the same error locally with those windows and passes with the
+  fix. No actor-hop timestamps were recorded on CI.
+- **Fix.** The harness waits are ceilings, 120 s for the reply and 180 s for the follow, and the restart tests'
+  `eventually` waits 120 s. Every case that expects a timeout or a window end sets its own short windows. The
+  parked-session case takes a 600 s undo grace, so the 3 s default cannot finalize it mid-burst.
+
 ### Linux test process killed by SIGPIPE
 
 - **Symptom.** The Linux core tests job ends with signal 13 about 6 s after `swift test` starts, before any test

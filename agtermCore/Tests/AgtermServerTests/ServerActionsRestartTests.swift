@@ -342,7 +342,8 @@ struct ServerActionsRestartTests {
         harness.actions.daemonLeader = { _ in leader.pid }
         harness.actions.restartWaits.shell = .milliseconds(50)
         _ = await restart(session, command: "make test")
-        #expect(harness.store.softCloseSession(session.id))
+        #expect(harness.store.softCloseSession(session.id, grace: 600))
+        defer { _ = harness.store.finalizePendingClose(ofSession: session.id) }
 
         leader.pid = 101
 
@@ -356,7 +357,6 @@ struct ServerActionsRestartTests {
         running(session.paneIdentity)
         harness.actions.daemonLeader = { _ in nil }
         harness.actions.restartWaits.shell = .milliseconds(50)
-        harness.actions.restartWaits.follow = .seconds(60)
         _ = await restart(session, command: "false")
 
         FileManager.default.createFile(atPath: harness.panes.exitRecord(session.paneIdentity), contents: nil)
@@ -396,7 +396,7 @@ struct ServerActionsRestartTests {
         return snapshot.respawns?.generations ?? [:]
     }
 
-    private func eventually(_ seconds: Double = 10, _ condition: @MainActor () -> Bool) async -> Bool {
+    private func eventually(_ seconds: Double = 120, _ condition: @MainActor () -> Bool) async -> Bool {
         let deadline = Date().addingTimeInterval(seconds)
         while Date() < deadline {
             if condition() { return true }
