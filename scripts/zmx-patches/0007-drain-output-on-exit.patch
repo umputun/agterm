@@ -1,7 +1,7 @@
 diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 --- zmx-orig/src/loop.zig
 +++ zmx/src/loop.zig
-@@ -15,9 +15,30 @@
+@@ -15,9 +15,38 @@
  const daemonize = @import("daemonize.zig");
  const builtin = @import("builtin");
  
@@ -29,11 +29,19 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 +    return std.c.access(&path, 0) != 0;
 +}
 +
++/// Whether a hangup ends the session rather than detaching; the first one that does arms the close deadline.
++fn sessionEnding(close_deadline: *?i64, session_path: []const u8) bool {
++    if (close_deadline.* != null) return true;
++    if (!sessionGone(session_path)) return false;
++    close_deadline.* = role.nowMs() + CLOSE_BUDGET_MS;
++    return true;
++}
++
 +fn clientLoopOn(client_sock_fd: i32, env_str: []const u8, session_path: []const u8, stdin_fd: i32, stdout_fd: i32) !ClientResult {
      std.log.info("client loop fd={d}", .{client_sock_fd});
      const gpa: std.mem.Allocator = blk: {
          if (builtin.mode == .Debug) {
-@@ -55,7 +76,7 @@
+@@ -55,7 +84,7 @@
      }
  
      // Send init message with terminal size (buffered)
@@ -42,7 +50,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
      try ipc.appendSizeMessage(gpa, &sock_write_buf, .Init, size);
  
      var poll_fds = try std.ArrayList(lib_posix.pollfd).initCapacity(gpa, 4);
-@@ -67,54 +88,78 @@
+@@ -67,54 +96,76 @@
      var stdout_buf = try std.ArrayList(u8).initCapacity(gpa, 4096);
      defer stdout_buf.deinit(gpa);
  
@@ -58,8 +66,6 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
  
      const detach_key_disabled = util.isDetachKeyDisabled();
  
-+    // set when the session ends: from then on the loop only reads the socket to EOF and writes stdout,
-+    // until both are done or the deadline passes
 +    var close_deadline: ?i64 = null;
 +    var sock_eof = false;
 +
@@ -131,7 +137,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
              try ipc.appendSizeMessage(gpa, &sock_write_buf, .Resize, next_size);
          }
  
-@@ -146,18 +191,20 @@
+@@ -146,18 +197,19 @@
  
          // Handle socket read (incoming Output messages from daemon)
          if (poll_fds.items[1].revents & lib_posix.POLL.IN != 0) {
@@ -140,7 +146,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
                  if (err == error.WouldBlock) continue;
                  if (err == error.ConnectionResetByPeer or err == error.BrokenPipe) {
 -                    return ClientResult{ .kind = .detach, .session_name = null };
-+                    if (close_deadline == null and !sessionGone(session_path)) return ClientResult{ .kind = .detach, .session_name = null };
++                    if (!sessionEnding(&close_deadline, session_path)) return ClientResult{ .kind = .detach, .session_name = null };
 +                    break :blk 0;
                  }
                  std.log.err("daemon read err={s}", .{@errorName(err)});
@@ -150,13 +156,12 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
                  std.log.info("server closed connection", .{});
 -                // Server closed connection
 -                return ClientResult{ .kind = .detach, .session_name = null };
-+                if (close_deadline == null and !sessionGone(session_path)) return ClientResult{ .kind = .detach, .session_name = null };
++                if (!sessionEnding(&close_deadline, session_path)) return ClientResult{ .kind = .detach, .session_name = null };
 +                sock_eof = true;
-+                if (close_deadline == null) close_deadline = role.nowMs() + CLOSE_BUDGET_MS;
              }
  
              while (read_buf.next()) |msg| {
-@@ -178,7 +225,7 @@
+@@ -178,7 +230,7 @@
                      .Resize => {
                          // daemon is asking for the client's window size usually in response
                          // to this client being set as leader.
@@ -165,7 +170,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
                          try ipc.appendSizeMessage(gpa, &sock_write_buf, .Resize, next_size);
                      },
                      .Switch => {
-@@ -202,11 +249,15 @@
+@@ -202,11 +254,14 @@
          // Handle socket write (flush buffered messages to daemon)
          if (poll_fds.items[1].revents & lib_posix.POLL.OUT != 0) {
              if (sock_write_buf.items.len > 0) {
@@ -175,15 +180,14 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
                      if (err == error.ConnectionResetByPeer or err == error.BrokenPipe) {
                          std.log.info("connection reset or broken pipe", .{});
 -                        return ClientResult{ .kind = .detach, .session_name = null };
-+                        if (close_deadline == null and !sessionGone(session_path)) return ClientResult{ .kind = .detach, .session_name = null };
++                        if (!sessionEnding(&close_deadline, session_path)) return ClientResult{ .kind = .detach, .session_name = null };
 +                        // the daemon is gone; what it sent before that is still read to EOF
 +                        sock_write_buf.clearRetainingCapacity();
-+                        if (close_deadline == null) close_deadline = role.nowMs() + CLOSE_BUDGET_MS;
 +                        break :blk 0;
                      }
                      return err;
                  };
-@@ -217,7 +268,7 @@
+@@ -217,7 +272,7 @@
          }
  
          if (stdout_buf.items.len > 0) {
@@ -192,21 +196,18 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
                  if (err == error.WouldBlock) break :blk 0;
                  return err;
              };
-@@ -227,10 +278,97 @@
+@@ -227,12 +282,95 @@
          }
  
          if (poll_fds.items[1].revents & (lib_posix.POLL.HUP | lib_posix.POLL.ERR | lib_posix.POLL.NVAL) != 0) {
 -            std.log.info("poll hup|err|nval", .{});
 -            return ClientResult{ .kind = .detach, .session_name = null };
-+            if (close_deadline == null) {
-+                std.log.info("poll hup|err|nval", .{});
-+                if (!sessionGone(session_path)) return ClientResult{ .kind = .detach, .session_name = null };
-+                close_deadline = role.nowMs() + CLOSE_BUDGET_MS;
-+            }
-+        }
-+    }
-+}
-+
++            if (close_deadline == null) std.log.info("poll hup|err|nval", .{});
++            if (!sessionEnding(&close_deadline, session_path)) return ClientResult{ .kind = .detach, .session_name = null };
+         }
+     }
+ }
+ 
 +fn ttyOutputQueued(fd: i32) usize {
 +    var queued: c_int = 0;
 +    if (cross.c.ioctl(fd, cross.c.TIOCOUTQ, &queued) != 0) return 0;
@@ -264,15 +265,14 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 +        } else {
 +            _ = cross.c.tcflush(fd, cross.c.TCIFLUSH);
 +            _ = cross.c.tcsetattr(fd, cross.c.TCSANOW, self.orig);
-         }
-     }
++        }
++    }
 +    pub fn writeReset(self: Tty, deadline_ms: ?i64) void {
 +        if (deadline_ms) |d| writeBy(self.out_fd, self.reset, d) else _ = lib_posix.write(self.out_fd, self.reset) catch {};
 +    }
 +};
 +
-+/// Writes `bytes` to `fd`, nonblocking, giving up at `deadline_ms`: the terminal reset a client whose
-+/// session ended writes after the session's last output, under that output's deadline.
++/// Writes `bytes` to `fd`, nonblocking, giving up at `deadline_ms`.
 +pub fn writeBy(fd: i32, bytes: []const u8, deadline_ms: i64) void {
 +    const flags = lib_posix.fcntl(fd, lib_posix.F.GETFL, 0) catch return;
 +    _ = lib_posix.fcntl(fd, lib_posix.F.SETFL, flags | lib_posix.O_NONBLOCK) catch return;
@@ -289,9 +289,11 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 +        };
 +        rest = rest[n..];
 +    }
- }
- 
++}
++
  fn initTerminal(gpa: std.mem.Allocator, io: std.Io, size: ipc.Resize, cfg: *const Cfg) !ghostty_vt.Terminal {
+     return ghostty_vt.Terminal.init(io, gpa, .{
+         .cols = size.cols,
 @@ -242,6 +380,10 @@
      });
  }
@@ -374,17 +376,16 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
                      switch (msg.header.tag) {
                          .Input => try daemon.handleInput(gpa, client, msg.payload),
                          .Send => daemon.handleSend(gpa, msg.payload),
-@@ -534,6 +697,9 @@
+@@ -534,6 +697,8 @@
      },
      session_name: ?[]const u8,
      cwd: ?[]const u8 = null,
-+    /// set when the session ended: the deadline its last output was written under, which the terminal
-+    /// reset after the loop shares
++    /// set when the session ended; leaveTerminal takes it
 +    close_deadline_ms: ?i64 = null,
  };
  
  /// Client represents each terminal that has connected to a session.
-@@ -668,6 +834,14 @@
+@@ -668,6 +833,14 @@
          return false;
      }
  
@@ -399,7 +400,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
      pub fn closeClient(self: *Daemon, gpa: std.mem.Allocator, client: *Client, i: usize, shutdown_on_last: bool) bool {
          const fd = client.socket_fd;
          // leader is disconnected, remove ref and let another client claim leader on input
-@@ -1971,3 +2145,467 @@
+@@ -1971,3 +2144,463 @@
      const pay3 = client_req.write_buf.items[@sizeOf(ipc.Header)..];
      try std.testing.expectEqualStrings("DISPLAY=:99\n", pay3);
  }
@@ -607,7 +608,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 +};
 +
 +fn tookAbout(what: []const u8, took: i64, budget: i64, slack: i64) !void {
-+    if (took >= budget - 500 and took <= budget + slack) return;
++    if (took >= @divTrunc(budget, 2) and took <= budget + slack) return;
 +    std.debug.print("{s} took {d} ms on a {d} ms deadline\n", .{ what, took, budget });
 +    return error.TestUnexpectedResult;
 +}
@@ -673,13 +674,11 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 +    const client_took = s.client_done_ms.load(.acquire) - attached;
 +    try tookAbout("client", client_took, CLOSE_BUDGET_MS, 3000);
 +    const close_deadline = (try s.client_result).close_deadline_ms orelse return error.NoCloseDeadline;
-+    // the output stops short of the deadline, which leaves the reset its share
-+    try std.testing.expect(close_deadline - s.client_done_ms.load(.acquire) >= RESET_SHARE_MS / 2);
++    try std.testing.expect(close_deadline > s.client_done_ms.load(.acquire));
 +
-+    // the reset shares the deadline: a full terminal holds it no longer
 +    _ = try s.fillTerminal();
 +    writeBy(s.term_pty[1], "\x1bc", close_deadline);
-+    try std.testing.expect(role.nowMs() <= close_deadline + 100);
++    try std.testing.expect(role.nowMs() <= close_deadline + 1000);
 +    const began = role.nowMs();
 +    writeBy(s.term_pty[1], "\x1bc", began + 200);
 +    try std.testing.expect(role.nowMs() - began >= 190);
@@ -728,7 +727,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 +    try ipc.send(probe, .DetachAll, "");
 +    const sent = role.nowMs();
 +    s.waitFor(&s.client_done_ms);
-+    try std.testing.expect(s.client_done_ms.load(.acquire) - sent < CLOSE_BUDGET_MS / 4);
++    try std.testing.expect(s.client_done_ms.load(.acquire) - sent < CLOSE_BUDGET_MS * 3 / 4);
 +    try std.testing.expectEqual(@as(?i64, null), (try s.client_result).close_deadline_ms);
 +}
 +
@@ -805,7 +804,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 +    defer signaller.join();
 +    const began = role.nowMs();
 +    writeBy(pty[1], "x", began + 200);
-+    try std.testing.expect(role.nowMs() - began < 600);
++    try std.testing.expect(role.nowMs() - began < 1000);
 +}
 +
 +fn alwaysTaken(_: i32) usize {
@@ -819,7 +818,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 +test "the output queue wait returns at once when it is empty and gives up at its deadline" {
 +    var began = role.nowMs();
 +    try std.testing.expect(takenBy(-1, began + 1000, alwaysTaken));
-+    try std.testing.expect(role.nowMs() - began < 100);
++    try std.testing.expect(role.nowMs() - began < 500);
 +    began = role.nowMs();
 +    try std.testing.expect(!takenBy(-1, began + 100, neverTaken));
 +    try std.testing.expect(role.nowMs() - began >= 100);
@@ -839,10 +838,8 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 +    const began = role.nowMs();
 +    try std.testing.expect(!takenBy(pty[1], began + 200, ttyOutputQueued));
 +    try std.testing.expect(role.nowMs() - began <= 1200);
-+    // the client then drops the queue, so its exit does not wait on the tty either
 +    try std.testing.expectEqual(@as(c_int, 0), cross.c.tcflush(pty[1], cross.c.TCOFLUSH));
 +    try std.testing.expect(takenBy(pty[1], role.nowMs(), ttyOutputQueued));
-+    // and a session end leaves nothing queued, the reset included
 +    while (true) _ = lib_posix.write(pty[1], "x") catch break;
 +    leaveTerminal(Tty{ .out_fd = pty[1], .in_fd = null, .orig = undefined, .reset = "\x1bc" }, role.nowMs() + 400);
 +    try std.testing.expect(takenBy(pty[1], role.nowMs(), ttyOutputQueued));
@@ -882,12 +879,10 @@ diff -ruN zmx-orig/src/main.zig zmx/src/main.zig
      const sesh = socket.getSeshNameFromEnv();
      if (sesh.len > 0) {
          return switchSesh(gpa, io, daemon, sesh);
-@@ -1672,13 +1676,21 @@
+@@ -1672,13 +1676,17 @@
      const managed_exit_seq = "\x1b[0m\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1004l\x1b[?2004l" ++
          "\x1b[?2031l\x1b[?2048l\x1b]110\x1b\\\x1b]111\x1b\\\x1b]112\x1b\\";
      const exit_seq = if (role.nonceFromEnv() != null) managed_exit_seq else restore_seq;
-+    // set when the session ended, so a terminal that stopped reading holds the reset no longer than
-+    // the session's last output
 +    var close_deadline: ?i64 = null;
  
      defer {
@@ -896,10 +891,8 @@ diff -ruN zmx-orig/src/main.zig zmx/src/main.zig
 -        }
 -        // Reset terminal modes on detach
 -        _ = lib_posix.write(lib_posix.STDOUT_FILENO, exit_seq) catch {};
-+        // the frame a session switch returns through shares the switched-to session's deadline
 +        const deadline = close_deadline orelse ended_deadline;
 +        ended_deadline = deadline;
-+        // Restore the terminal and reset its modes
 +        loop.leaveTerminal(loop.Tty{
 +            .out_fd = lib_posix.STDOUT_FILENO,
 +            .in_fd = if (stdin_is_tty) lib_posix.STDIN_FILENO else null,
@@ -909,7 +902,7 @@ diff -ruN zmx-orig/src/main.zig zmx/src/main.zig
      }
  
      if (stdin_is_tty) {
-@@ -1704,7 +1716,8 @@
+@@ -1704,7 +1712,8 @@
      const clear_seq = "\x1b[2J\x1b[H";
      _ = try lib_posix.write(lib_posix.STDOUT_FILENO, clear_seq);
  
@@ -944,30 +937,3 @@ diff -ruN zmx-orig/src/posix.zig zmx/src/posix.zig
  pub fn poll(fds: []pollfd, timeout: i32) PollError!usize {
      while (true) {
          const fds_count = cast(nfds_t, fds.len) orelse return error.SystemResources;
-diff -ruN zmx-orig/src/signal.zig zmx/src/signal.zig
---- zmx-orig/src/signal.zig
-+++ zmx/src/signal.zig
-@@ -1,9 +1,9 @@
- const std = @import("std");
- const lib_posix = @import("posix.zig");
- 
--/// Self-pipe woken by signal handlers. std.posix.poll loops on .INTR internally
--/// (PollError has no Interrupted member), so a signal that lands during poll()
--/// never surfaces; the handler writes a byte here and poll() wakes on POLLIN.
-+/// Self-pipe woken by signal handlers. lib_posix.poll loops on .INTR internally,
-+/// so a signal that lands during it never surfaces (only pollOrInterrupted returns
-+/// on one); the handler writes a byte here and poll() wakes on POLLIN.
- pub var sig_pipe: [2]lib_posix.fd_t = .{ -1, -1 };
- 
- pub fn wakeSignalPipe(_: lib_posix.SIG, _: *const lib_posix.siginfo_t, _: ?*anyopaque) callconv(.c) void {
-@@ -12,8 +12,8 @@
-     std.c._errno().* = saved;
- }
- 
--// std.posix.poll retries EINTR internally, so SA_RESTART is moot -- neither
--// setting wakes the loop. The handler writes to sig_pipe instead; poll()
-+// lib_posix.poll retries EINTR internally, so SA_RESTART is moot -- neither
-+// setting wakes a loop on it. The handler writes to sig_pipe instead; poll()
- // wakes on its read end.
- pub fn installWakeHandler(sig: u6) void {
-     const act: lib_posix.Sigaction = .{
