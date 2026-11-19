@@ -329,13 +329,15 @@ disconnects the CLI sessions attached to it. A daemon-backed conversation can st
 exits: if `codex --no-daemon resume <id>` shows "This conversation is open in another app", stop the
 shared daemon and press R to retry.
 
-### "Claude Code background sessions have no status"
+### "Claude Code background session status lands on another session, or on none"
 
-A session started with `claude --bg` runs under Claude Code's supervisor, which does not pass the
-launching pane's `AGTERM_*` variables, so its status hooks find no `AGTERM_SESSION_ID` and exit quietly.
-`--settings` carries over into a background session and its hooks inherit the `env` block, so pass the
-variables there. With the hooks installed (Help ▸ Install Agent Status Hooks…), launch from the pane that
-should show the status:
+A session started with `claude --bg` or from `claude agents` runs under Claude Code's supervisor, which
+starts on demand from the first shell that needs it. By default the session can inherit `AGTERM_*` from
+that supervisor rather than the pane that launched or shows it, so its status hooks can report to the
+session that started the supervisor, or exit quietly if the supervisor has no session id. `--settings` carries over into a
+background session, and its `env` block reaches both the session and its hooks, so `cbg` explicitly
+passes the launch session, socket and pane. With the hooks installed (Help ▸ Install Agent Status
+Hooks…), launch from the pane that should show the status:
 
 ```bash
 cbg() {
@@ -347,8 +349,9 @@ cbg() {
 cbg "your prompt"
 ```
 
-The status stays with the launching pane; `claude attach` from another pane does not move it. Verified
-hook routing with Claude Code 2.1.311.
+The status stays with the launching pane; `claude attach` from another pane does not move it.
+`cbg` does not set `AGTERM_WINDOW_ID` or `AGTERM_WORKSPACE_ID`. On Claude Code 2.1.327, the four `cbg`
+values reached the Bash tool and a Stop hook.
 
 ### "Claude Code's question/permission prompt is unresponsive after switching apps"
 

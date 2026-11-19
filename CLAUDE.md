@@ -74,11 +74,11 @@ C-boundary concurrency before changing the bridge.
   `mkdir -p "$AGTERM_STATE_DIR/windows"` before launching to skip it: `FirstRunWelcome.hasPriorState`
   looks for `settings.json`, `workspaces.json`, or `windows` before the app writes anything.
   Leave the marker out only when the welcome itself is under test.
-- The control socket binds from the window scene's task, so a backgrounded `open -n -g` can leave the app
-  running with no socket until a window renders.
-  If the socket is still absent 10 s after launch, activate the instance; never leave a socket wait unbounded.
-  An activation by pid once left it unbound for 15 s more (2026-11-07); stopping it and relaunching without `-g`
-  bound the socket at once.
+- The control socket starts in the launch window's scene task; never leave a socket wait unbounded.
+  If the isolated socket still does not answer 10 s after launch, check whether a window rendered and the
+  socket path is right; comparing with a foreground launch tells a background-only failure apart.
+  `agtermApp.init` registers `ApplePersistenceIgnoreState` because AppKit saved state left by an unclean exit
+  otherwise suppresses that window, and with it the socket.
 - `agtermctl` never reads `AGTERM_SOCKET`; it resolves `--socket`, then `AGTERM_STATE_DIR`, then
   `~/Library/Application Support/agterm`. A shell inside the live terminal therefore defaults onto the
   live socket, and exporting a short `AGTERM_STATE_DIR` is what keeps inherited commands off it.

@@ -68,8 +68,12 @@ Before starting such a process from inside agterm, scrub the variables
 (`env -u AGTERM_ENABLED -u AGTERM_PANE -u AGTERM_PANE_ID -u AGTERM_SESSION_ID -u AGTERM_SOCKET -u AGTERM_WINDOW_ID -u AGTERM_WORKSPACE_ID <cmd>`);
 see troubleshooting.md ("agent-status glyph updates the wrong session") for diagnosing and fixing an
 already-poisoned tmux server, and for the Codex shared-daemon limitation, which scrubbing does not fix.
-Claude Code background sessions (`claude --bg`) get none of the variables; troubleshooting.md ("Claude
-Code background sessions have no status") passes them in through `--settings`.
+A Claude Code background session (`claude --bg` or `claude agents`; `CLAUDE_JOB_DIR` is set) is such a
+child: its supervisor starts on demand from the first shell that needs it, so by default the session can
+carry that shell's `AGTERM_*`, not those of the pane that launched or shows it. Inside one, ask the person
+which session an agterm action is for unless the request names it, and use that session's socket and
+ids; troubleshooting.md ("Claude Code background session status lands on another session, or on none")
+covers status.
 
 ## Running agtermctl
 
@@ -77,7 +81,8 @@ Code background sessions have no status") passes them in through `--settings`.
 is not on PATH, the user can install it, or you invoke it by absolute path.
 
 - When `AGTERM_SOCKET` is set, pass `--socket "$AGTERM_SOCKET"` on every call: `agtermctl` never reads it
-  automatically. Otherwise the socket path auto-resolves.
+  automatically. Otherwise the socket path auto-resolves. In a Claude Code background session, use the
+  socket of the session the person named instead (see "Am I inside agterm?").
 - `--socket` and other options go **after** the subcommand: `agtermctl tree --json`, not
   `agtermctl --json tree`.
 - Add `--json` to any command to get the raw JSON response (machine-readable). Without it, ordinary
@@ -155,7 +160,8 @@ the GUI; your shell runs in `$AGTERM_SESSION_ID`, and the user is usually on a d
 you work. For any session-scoped command meant to act on *this* session — `session overlay open`,
 `session scratch`, `session type`, `session text`, `session background`, `session status`, `session copy`,
 … — pass `--target "$AGTERM_SESSION_ID"`. Omit it and
-you open overlays / type into whatever the user has selected, not your own session.
+you open overlays / type into whatever the user has selected, not your own session. In a Claude Code
+background session that id can be another session's (see "Am I inside agterm?").
 
 ## Restore modes
 
