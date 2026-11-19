@@ -17,8 +17,8 @@ final class ServerPanes {
     let baseEnvironment: [String: String]
     /// leaders is each listed pane's shell pid from the last applied listing, which the tree's foreground reads start at.
     var leaders: [UUID: Int32] = [:]
-    /// restartHolds counts, per pane, the restarts that killed its daemon and have not yet confirmed or given up on the
-    /// new one, which no listing may settle meanwhile; each restart releases only its own hold.
+    /// restartHolds counts, per pane, the restarts replacing its shell that have not yet confirmed or given up on the new
+    /// one, which no listing may settle meanwhile; each restart releases only its own hold.
     private var restartHolds: [UUID: Int] = [:]
     /// processes is the host's process table, through which a kill hangs up the pane's foreground job.
     var processes: any ProcessTable = ProcProcessTable()

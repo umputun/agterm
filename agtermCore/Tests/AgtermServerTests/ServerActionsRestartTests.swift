@@ -316,11 +316,47 @@ struct ServerActionsRestartTests {
         #expect(try await respawnCounts(session) == [daemon: 1])
     }
 
+    @Test func aLaterRestartWhoseKillSucceedsTakesThePaneSoOnlyItsShellIsAnnounced() async throws {
+        let session = try newSession()
+        running(session.paneIdentity)
+        let leader = DelayedLeader()
+        harness.actions.daemonLeader = { _ in leader.pid }
+        harness.actions.restartWaits.shell = .milliseconds(50)
+        let daemon = ZmxSupport.daemonName(for: session.paneIdentity)
+        _ = await restart(session, command: "make test")
+        harness.runner.records = [ZmxSessionRecord(name: daemon, clients: 1, leaderPID: 101)]
+        harness.processes.shell(101, job: 301)
+        harness.processes.ends = [SIGKILL]
+        harness.processes.onSignal = { signal in if signal == SIGHUP { leader.pid = 102 } }
+
+        _ = await restart(session, command: "true")
+
+        #expect(await eventually { !self.harness.panes.isRestarting(session.paneIdentity) })
+        #expect(try await respawnCounts(session) == [daemon: 1])
+    }
+
+    @Test func aRestartUnderUndoCloseIsStillAnnouncedWhileTheSessionIsParked() async throws {
+        let session = try newSession()
+        running(session.paneIdentity)
+        let leader = DelayedLeader()
+        harness.actions.daemonLeader = { _ in leader.pid }
+        harness.actions.restartWaits.shell = .milliseconds(50)
+        _ = await restart(session, command: "make test")
+        #expect(harness.store.softCloseSession(session.id))
+
+        leader.pid = 101
+
+        #expect(await eventually { !self.harness.panes.isRestarting(session.paneIdentity) })
+        #expect(harness.store.pendingCloseSession(withID: session.id) === session)
+        #expect(try await respawnCounts(session) == [ZmxSupport.daemonName(for: session.paneIdentity): 1])
+    }
+
     @Test func aShellThatExitsWhilePendingEndsTheFollowSoTheExitSettles() async throws {
         let session = try newSession()
         running(session.paneIdentity)
         harness.actions.daemonLeader = { _ in nil }
         harness.actions.restartWaits.shell = .milliseconds(50)
+        harness.actions.restartWaits.follow = .seconds(60)
         _ = await restart(session, command: "false")
 
         FileManager.default.createFile(atPath: harness.panes.exitRecord(session.paneIdentity), contents: nil)

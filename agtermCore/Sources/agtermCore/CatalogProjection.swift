@@ -76,7 +76,8 @@ public struct CatalogPaneEvidence: Equatable, Sendable {
 }
 
 /// OriginConfirmations stamps the panes a `session restart` saw run. An inventory read begun before a stamp can
-/// predate the new daemon, so it keeps that pane running; a read begun after it retires the stamp.
+/// predate the new daemon, so it keeps that pane running; a later read retires the stamp unless it could not read the
+/// pane's daemon, which zmx reports for a probe that timed out.
 public struct OriginConfirmations: Sendable {
     private var stamps: [UUID: ContinuousClock.Instant] = [:]
 
@@ -86,9 +87,11 @@ public struct OriginConfirmations: Sendable {
         stamps[pane] = instant
     }
 
-    /// applied is the panes a read begun at `began` still lists as running.
-    public mutating func applied(readBegan began: ContinuousClock.Instant) -> Set<UUID> {
-        stamps = stamps.filter { $0.value > began }
+    /// applied is the panes a read begun at `began` that produced `inventory` still lists as running. A pane parked in
+    /// an undo window keeps its claim, so its unreadable daemon keeps the stamp too.
+    public mutating func applied(readBegan began: ContinuousClock.Instant, inventory: ZmxInventoryResult) -> Set<UUID> {
+        let unreadable = Set(inventory.rows.filter { $0.observation == .unreadable }.compactMap(\.claim?.paneIdentity))
+        stamps = stamps.filter { $0.value > began || unreadable.contains($0.key) }
         return Set(stamps.keys)
     }
 }

@@ -143,8 +143,8 @@ extension ControlServer {
     }
 
     /// watch publishes the respawn once a new shell runs under `daemon`, then releases the hold. It gives up silently
-    /// when the window ends, the pane closes or respawns, or a later restart's kill takes the pane; an attach-only lead
-    /// change keeps the pane and its daemon, so it keeps the watch.
+    /// when the window ends, the pane closes past undo or respawns, or a later restart's kill takes the pane; an
+    /// attach-only lead change keeps the pane and its daemon, so it keeps the watch.
     private func watch(_ entry: RestartFollow, session: Session, identity: UUID, daemon: String, oldPid: pid_t) async {
         defer {
             entry.ended = true
@@ -155,7 +155,7 @@ extension ControlServer {
         while ContinuousClock.now < entry.deadline {
             let pid = await Task.detached { lookup(daemon) }.value
             guard ContinuousClock.now < entry.deadline, restartFollows[identity] === entry,
-                  library.store(forSession: session.id)?.session(withID: session.id) === session,
+                  heldSession(session.id) === session,
                   session.paneRole(forIdentity: identity) != nil, session.primaryRespawns == entry.respawns else { return }
             if let pid, pid != oldPid {
                 entry.leader = pid

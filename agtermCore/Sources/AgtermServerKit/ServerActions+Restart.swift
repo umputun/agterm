@@ -166,7 +166,7 @@ extension ServerActions {
     }
 
     /// watch announces the respawn once a new shell runs under the daemon, then releases the hold. It gives up silently
-    /// when the window ends, the pane closes or respawns, its shell exits, or a later restart's kill takes the pane.
+    /// when the window ends, the pane closes past undo or respawns, its shell exits, or a later restart's kill takes it.
     private func watch(_ entry: RestartFollow, session: Session, identity: UUID, target: ProcDaemon.Target, oldPid: Int32?) async {
         let lookup = daemonLeader
         defer {
@@ -176,7 +176,8 @@ extension ServerActions {
         }
         while ContinuousClock.now < entry.deadline {
             let pid = await Task.detached { lookup(target) }.value
-            guard ContinuousClock.now < entry.deadline, restartFollows[identity] === entry, store.session(withID: session.id) === session,
+            guard ContinuousClock.now < entry.deadline, restartFollows[identity] === entry,
+                  (store.session(withID: session.id) ?? store.pendingCloseSession(withID: session.id)) === session,
                   session.paneRole(forIdentity: identity) != nil, session.primaryRespawns == entry.respawns,
                   !FileManager.default.fileExists(atPath: panes.exitRecord(identity)) else { return }
             if let pid, pid != oldPid {

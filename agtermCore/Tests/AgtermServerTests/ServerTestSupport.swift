@@ -177,6 +177,7 @@ final class FakeProcessTable: ProcessTable, @unchecked Sendable {
     private var storedTable: [ProcessRecord]? = []
     private var storedSignals: [(signal: Int32, pids: [Int32])] = []
     private var storedEnds: Set<Int32> = [SIGHUP, SIGKILL]
+    private var storedOnSignal: (@Sendable (Int32) -> Void)?
 
     var table: [ProcessRecord]? {
         get { lock.withLock { storedTable } }
@@ -186,6 +187,10 @@ final class FakeProcessTable: ProcessTable, @unchecked Sendable {
     var ends: Set<Int32> {
         get { lock.withLock { storedEnds } }
         set { lock.withLock { storedEnds = newValue } }
+    }
+    var onSignal: (@Sendable (Int32) -> Void)? {
+        get { lock.withLock { storedOnSignal } }
+        set { lock.withLock { storedOnSignal = newValue } }
     }
 
     func shell(_ shell: Int32, job: Int32? = nil) {
@@ -201,6 +206,7 @@ final class FakeProcessTable: ProcessTable, @unchecked Sendable {
             storedSignals.append((signal, pids))
             if storedEnds.contains(signal) { storedTable = storedTable?.filter { !pids.contains($0.pid) } }
         }
+        onSignal?(signal)
     }
 }
 

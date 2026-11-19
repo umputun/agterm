@@ -451,6 +451,72 @@ final class ControlServerRestartTests: XCTestCase {
         XCTAssertNil(server.restartHolds[session.paneIdentity])
     }
 
+    func testARestartUnderUndoCloseIsPublishedWhileTheSessionIsParked() async throws {
+        let (session, view) = try livePane()
+        let daemon = ZmxSupport.daemonName(for: session.paneIdentity)
+        let server = makeServer(daemon: daemon) { _ in }
+        let leader = LeaderStub()
+        server.restartLeader = { _ in leader.pid }
+        server.restartWaits.shell = .milliseconds(50)
+        let replacement = RealizedReplacement()
+        defer { replacement.restore() }
+        _ = await server.restartSessionPane(
+            session.id.uuidString, window: nil,
+            options: ControlSessionRestartOptions(command: "echo restarted", pane: nil, paneID: view.paneToken))
+        let store = try XCTUnwrap(library.store(forSession: session.id))
+        XCTAssertTrue(store.softCloseSession(session.id))
+
+        leader.pid = 4343
+
+        try await waitUntil { server.respawnGenerations[session.id]?[daemon] == 1 }
+        XCTAssertTrue(store.pendingCloseSession(withID: session.id) === session)
+        XCTAssertNil(server.restartHolds[session.paneIdentity])
+    }
+
+    func testAParentRespawnDuringTheFollowPublishesNothingForTheRestart() async throws {
+        let (session, view) = try livePane()
+        let store = try XCTUnwrap(library.store(forSession: session.id))
+        guard case .success = store.addCompanion(to: session.id) else { return XCTFail("no companion") }
+        let daemon = ZmxSupport.daemonName(for: session.paneIdentity)
+        let server = makeServer(daemon: daemon) { _ in }
+        let leader = LeaderStub()
+        server.restartLeader = { _ in leader.pid }
+        server.restartWaits.shell = .milliseconds(50)
+        let replacement = RealizedReplacement()
+        defer { replacement.restore() }
+        _ = await server.restartSessionPane(
+            session.id.uuidString, window: nil,
+            options: ControlSessionRestartOptions(command: "echo restarted", pane: nil, paneID: view.paneToken))
+
+        XCTAssertEqual(store.closePrimaryPane(session.id), .respawned)
+        leader.pid = 4343
+
+        try await waitUntil { server.restartHolds[session.paneIdentity] == nil }
+        XCTAssertNil(server.respawnGenerations[session.id]?[daemon])
+    }
+
+    func testAnInventoryReadBegunBeforeAConfirmationStillListsThePaneRunning() async throws {
+        let (session, _) = try livePane()
+        let started = stateDir.appendingPathComponent("list-started").path
+        let release = stateDir.appendingPathComponent("list-release").path
+        let zmx = stateDir.appendingPathComponent("zmx-list").path
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+        try "#!/bin/sh\ntouch '\(started)'\nwhile [ ! -e '\(release)' ]; do sleep 0.02; done\n"
+            .write(toFile: zmx, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: zmx)
+        let client = ZmxClient(executablePath: zmx, socketDirectory: "/tmp/zmx-dir") { _ in "" }
+        let server = makeServer(client: client, leader: 4242, daemon: ZmxSupport.daemonName(for: session.paneIdentity))
+        let read = Task { await server.readOriginEvidence(always: true) }
+        try await waitUntil { FileManager.default.fileExists(atPath: started) }
+
+        server.originPaneConfirmed(session.paneIdentity)
+        FileManager.default.createFile(atPath: release, contents: nil)
+
+        let finished = await read.value
+        XCTAssertTrue(finished)
+        XCTAssertEqual(server.originEvidence?.running, [session.paneIdentity])
+    }
+
     func testARestartWhosePaneClosesBeforeItsShellIsSeenPublishesNothing() async throws {
         let (session, view) = try livePane()
         let daemon = ZmxSupport.daemonName(for: session.paneIdentity)

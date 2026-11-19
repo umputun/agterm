@@ -111,7 +111,7 @@ final class ControlServer {
     /// restartWaits bounds a restart's waits for its new shell: before the reply, and before its viewers are told,
     /// counted from the launch.
     var restartWaits = (shell: Duration.seconds(10), follow: Duration.seconds(60), poll: Duration.milliseconds(100))
-    /// restartLeader reads the named daemon's shell pid from the kernel; nil without Live sessions.
+    /// restartLeader reads the named daemon's shell pid from the kernel; nil only without a zmx client.
     var restartLeader: (@Sendable (String) -> pid_t?)?
     /// originRead is the inventory read in flight, answering whether it succeeded; a request during it rereads.
     var originRead: Task<Bool, Never>?

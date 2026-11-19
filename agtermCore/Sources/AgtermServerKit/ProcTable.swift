@@ -149,12 +149,14 @@ enum ProcDaemon {
     static func leader(_ target: Target) -> Int32? {
         #if os(Linux)
         guard let entries = try? FileManager.default.contentsOfDirectory(atPath: "/proc") else { return nil }
-        let processes = entries.lazy.compactMap { Int32($0) }.map { pid in
+        let pids = entries.compactMap { Int32($0) }
+        let table = StatTable(pids: pids)
+        let processes = pids.lazy.map { pid in
             Process(pid: pid, argv: { read("/proc/\(pid)/cmdline").flatMap(ProcForeground.parseCmdline) },
                     environment: { read("/proc/\(pid)/environ").flatMap(ProcForeground.parseCmdline) },
-                    started: { stat(of: pid).flatMap(startTicks(stat:)) }, children: { children(of: pid) })
+                    started: { stat(of: pid).flatMap(startTicks(stat:)) }, children: { table.children(of: pid) })
         }
-        return select(processes, target: target, row: row(of:))
+        return select(processes, target: target, row: table.row(of:))
         #else
         return nil
         #endif
@@ -204,13 +206,19 @@ enum ProcDaemon {
         try? String(contentsOfFile: "/proc/\(pid)/stat", encoding: .utf8)
     }
 
-    private static func children(of pid: Int32) -> [Int32] {
-        guard let text = try? String(contentsOfFile: "/proc/\(pid)/task/\(pid)/children", encoding: .utf8) else { return [] }
-        return text.split(whereSeparator: \.isWhitespace).compactMap { Int32($0) }
-    }
+    /// StatTable reads every process's stat row once, on the first daemon that matches, so children come from the
+    /// parent field: `/proc/<pid>/task/<pid>/children` exists only on kernels built with CONFIG_PROC_CHILDREN.
+    private final class StatTable {
+        private let pids: [Int32]
+        private lazy var rows: [Int32: ZmxDaemonLeader.Row] = Dictionary(uniqueKeysWithValues: pids.compactMap { pid in
+            ProcDaemon.stat(of: pid).flatMap { ProcDaemon.row(pid: pid, stat: $0) }.map { (pid, $0) }
+        })
 
-    private static func row(of pid: Int32) -> ZmxDaemonLeader.Row? {
-        stat(of: pid).flatMap { row(pid: pid, stat: $0) }
+        init(pids: [Int32]) { self.pids = pids }
+
+        func children(of pid: Int32) -> [Int32] { rows.filter { $0.value.parent == pid }.map(\.key) }
+
+        func row(of pid: Int32) -> ZmxDaemonLeader.Row? { rows[pid] }
     }
     #endif
 }

@@ -150,7 +150,7 @@ extension ControlServer {
                 let walk = library.paneClaims()
                 let inventory = ZmxInventory.join(observed: observed, claims: walk.claims, inventoryComplete: walk.complete)
                 var evidence = CatalogPaneEvidence(inventory: inventory, restarting: Set(restartHolds.keys))
-                evidence.running.formUnion(originConfirmations.applied(readBegan: began))
+                evidence.running.formUnion(originConfirmations.applied(readBegan: began, inventory: inventory))
                 originEvidence = evidence
                 for catalog in originCatalogs.values where catalog.projection.evidence != evidence {
                     catalog.projection.evidence = evidence
