@@ -104,7 +104,7 @@ paths:
   `Session.focusedCwd`. It does not copy name, command, panes, status, flag, font size, or watermark.
   `session.duplicate` provides the control form; its `tree.cwd` can differ from focused cwd when a split's
   non-primary pane is focused.
-- Move to lists workspaces for top-level rows and batches. On a single companion row it lists the window's other
+- Move to lists Top-Level Sessions first, then the workspaces, for top-level rows and batches. On a single companion row it lists the window's other
   top-level sessions under workspace headers instead, minus the current parent and what `canMoveCompanion` refuses.
 - `SidebarMode` is per-window `.tree` or `.flagged`. `flaggedSessions` is the derived tree-order
   projection; sessions keep one owning workspace and flags survive moves but not deletion.
@@ -282,6 +282,17 @@ paths:
   Both no-op under the flat flagged list. In either tree layout they apply to all workspaces, including
   those the view omits. Menus/palette target frontmost; `sidebar.expand`/`sidebar.collapse` resolve
   `--window` and can target background windows.
+
+## Top-level sessions
+
+- The root container has no row: `workspaceProjection` yields it first and the Coordinator lists its session nodes as
+  level-0 rows ahead of the workspace rows. Without the disclosure strip a root parent's triangle has no room, so
+  `SidebarOutlineView.rootBlockShift` indents the root block one step instead of reserving the strip.
+- A gap among the level-0 session rows, the one above the first workspace row included, drops into the root
+  (`SidebarDrop.rootGapSlot`); workspace drags count only named workspace rows (`namedWorkspaces`), offset by the
+  root block's row count for the highlight.
+- The root is a focus member like a workspace: hidden under an applied filter unless marked, marked from a root
+  session's row menu, the View menu or the focus editor.
 
 ## Companions
 

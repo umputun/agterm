@@ -177,15 +177,19 @@ extension AppStore {
     /// what `PaletteCommand.isEnabled` reads, so the menu item and the mapped key cannot claim to do
     /// something the action then declines. A lone visible workspace is a dead end only while it is ALREADY
     /// current: when the current one is filtered out, entering the sole survivor is the whole point of the
-    /// step. Off in flagged mode whatever its layout: the flagged tree does render workspace rows, but
-    /// `navigateWorkspace` steps `visibleWorkspaces`, the FOCUS projection, and would land on a workspace
-    /// that view has no row for and select a session that is not flagged.
+    /// step. A sole FOCUSED workspace is current by the destination rule even when the selection is elsewhere
+    /// or absent, so it stays enterable while it holds a session the selection is not in. Off in flagged mode
+    /// whatever its layout: the flagged tree does render workspace rows, but `navigateWorkspace` steps
+    /// `visibleWorkspaces`, the FOCUS projection, and would land on a workspace that view has no row for and
+    /// select a session that is not flagged.
     public var canStepWorkspaces: Bool {
         guard sidebarMode == .tree else { return false }
         let ids = visibleWorkspaces.filter { !$0.isRoot }.map(\.id)
         guard !ids.isEmpty else { return false }
         guard let current = currentWorkspaceID, ids.contains(current) else { return true }
-        return ids.count > 1
+        guard ids.count == 1, current == soleFocusedWorkspaceID else { return ids.count > 1 }
+        let selected = selectedSessionID.flatMap { workspace(forSession: $0)?.id }
+        return selected != current && workspaces.contains { $0.id == current && !$0.sessions.isEmpty }
     }
 
     /// Whether the sidebar has workspace rows: always in the ordinary tree, and in flagged mode only under

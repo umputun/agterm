@@ -2,8 +2,8 @@
 name: agterm
 description: >
   Drive the agterm macOS terminal via agtermctl:
-  manage and move sessions, companions and workspaces; split panes; toggle scratch; run/hide/show overlays;
-  read exit status; show HTML pages, URLs or dev servers in an overlay with saved logins or as a
+  manage and move sessions, companions, workspaces, top-level sessions; split panes; toggle scratch; run/hide/show overlays;
+  read exit status; show HTML pages, URLs or dev servers in an overlay or as a
   page row;
   post a HUD/caption/notification/sidebar activity line; message panes; show a picker, question or input dialog; show images/markdown/code/JSONL; type
   into or restart a pane by id, copy selection, set clipboard, paste files/images, search scrollback; manage windows, font size,
@@ -18,7 +18,7 @@ when_to_use: >
   split the pane, print a link that jumps to a session, use my own renderer or viewer for clicked files, close the overlay, hide the overlay for a moment, show a message over the session, show a question dialog, agtermctl ask,
   ask the user to type a value or a message, let the user pick one or several items from a list,
   show an image inline, show this markdown file rendered, show this source file or log at a line, show me the diff of a file or the changes as links, tail or follow this log file, search the log or text page in the overlay, wrap long lines in the text or log page, show a JSONL file or expand its records, show this HTML page or artifact, make an HTML page or explainer for this and show
-  it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, search the scrollback, flag every session in a workspace, tint a session or workspace row a color, show status or activity under a session in the sidebar, make a companion session, keep a related program next to a session, duplicate this session with its programs as a companion, make this session a companion, move a companion under another session, open a sub-session under this one, fold a session's companions, show a page as a companion of this session, open a page as its own session row in the sidebar, run my custom command, send a message to the other pane or another agent, read my messages, wait for a message, tell me when the selected session changes, wait until that worker session finishes, bring back the session I just closed, attach a session from another Mac, attach a remote session with all its companions, start a new session on another Mac or server, open a remote window for my Linux server, run sessions on a Linux host with agterm-server, watch events or wait for a session on the agterm-server host, install agterm-server on a Linux host, detach or reattach a remote session, copy this to the clipboard, paste a screenshot into Claude Code in a remote session, was agterm upgraded under the running app, check for an agterm update, upgrade agterm without losing sessions, what recipes are there,
+  it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, put a session outside any workspace, make a top-level session, search the scrollback, flag every session in a workspace, tint a session or workspace row a color, show status or activity under a session in the sidebar, make a companion session, keep a related program next to a session, duplicate this session with its programs as a companion, make this session a companion, move a companion under another session, open a sub-session under this one, fold a session's companions, show a page as a companion of this session, open a page as its own session row in the sidebar, run my custom command, send a message to the other pane or another agent, read my messages, wait for a message, tell me when the selected session changes, wait until that worker session finishes, bring back the session I just closed, attach a session from another Mac, attach a remote session with all its companions, start a new session on another Mac or server, open a remote window for my Linux server, run sessions on a Linux host with agterm-server, watch events or wait for a session on the agterm-server host, install agterm-server on a Linux host, detach or reattach a remote session, copy this to the clipboard, paste a screenshot into Claude Code in a remote session, was agterm upgraded under the running app, check for an agterm update, upgrade agterm without losing sessions, what recipes are there,
   the keymap editor will not open.
 allowed-tools: Bash(agtermctl *)
 ---
@@ -96,7 +96,9 @@ is not on PATH, the user can install it, or you invoke it by absolute path.
 ## The model
 
 A **window** is the top level: a named bundle rendered in its own on-screen macOS window. Each window
-holds a tree of **workspaces**, each holding **sessions**. A session has a primary shell and can also
+holds a tree of **workspaces**, each holding **sessions**, plus its **top-level sessions**: sessions outside any
+workspace, shown first in the sidebar. In `tree` they are the one workspace node with `root: true` and an empty name,
+listed last. A session has a primary shell and can also
 have: a **split** pane (a second shell side by side), a **scratch** terminal (a third full-coverage
 shell, toggled like the split), and an ephemeral **overlay** (runs one program on top, then vanishes).
 An overlay covers the whole session, or with `--pane left|right` exactly one split pane, leaving
@@ -146,7 +148,12 @@ a closed window, but not the live `idleMs`, which is `tree`-only. A MINIMIZED wi
 
 Commands that target a session or workspace take `--target` (default `active`):
 
-- `active` — the selected session / current workspace.
+- `active` — the selected session / current workspace, the container a new session lands in, which can be the
+  top-level sessions (reference.md's Addressing has the full rule, and `tree` marks it `active`).
+- `root` — the top-level sessions, wherever a workspace is expected: `session new --workspace root`,
+  `session move root`, `zmx attach --workspace root`, `msg send --all --workspace root`, and `--target root` on
+  `workspace focus`/`workspace flag`. The commands acting on one named workspace (rename, delete, select, move, collapse, expand, tint and detach) refuse it
+  (`top-level sessions are not a workspace`); `workspace go` skips it.
 - a full UUID (case-insensitive), or a unique **prefix** of one (git-style). Zero matches → `notFound`
   error; two or more → `ambiguous` error listing candidates.
 
@@ -332,7 +339,7 @@ terminal-output event stream.
 **workspace** — `workspace new [name] [--collapsed]` (`--collapsed` creates it closed in the sidebar so you can fill
 it with `session new --no-select` without it opening, and keeps it out of the focus set; a plain create
 joins the marked set while the filter is applied, so it is visible) · `workspace rename <name>` ·
-`workspace delete` · `workspace select` ·
+`workspace delete` (the last workspace too; the top-level sessions stay) · `workspace select` ·
 `workspace go --to next|prev` (step the CURRENT workspace one place through the sidebar's visible order, wrapping,
 and select the first session of the one it lands on — relative, so no `--target`, and unaffected by
 whether a workspace is collapsed; `workspace move` REORDERS instead) ·

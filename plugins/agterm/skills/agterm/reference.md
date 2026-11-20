@@ -126,10 +126,11 @@ waits forever on an absent app. SIGINT and SIGTERM use normal process behavior.
   restore it. Reselecting the already-selected session does not count: `session select`,
   `session overlay open --follow` and single-session `session go` leave it in place. `workspace select` on an EMPTY
   workspace has no session to select, so it takes the target instead (and is revealed if the filter was
-  hiding it). Else the selected session's workspace, else the last one. A background create (`workspace new --collapsed`,
+  hiding it). Else, in the sidebar tree while the applied focus filter shows exactly one workspace and the selected
+  session is outside it or nothing is selected, that one; else the selected session's workspace (the top-level sessions when the selected session is one of
+  them), else the last named workspace, else the top-level sessions. A background create (`workspace new --collapsed`,
   `session new --create-workspace --no-select`) never takes it. The tree workspace node's `active` flag
-  reads the SELECTED session's workspace only, so right after a foreground create it can name a
-  different workspace than `--target active` resolves to; address by id when the two must agree.
+  reads this same resolution, so it names what `--target active` resolves to.
 - **For an agent, `active` is the USER's GUI-selected session, not yours.** Your shell is
   `$AGTERM_SESSION_ID`; the user is usually on a different session while you work. Pass
   `--target "$AGTERM_SESSION_ID"` on any session-scoped command (`session overlay open`, `session scratch`,
@@ -327,8 +328,10 @@ the flat layout and, under the tree layout, the workspaces holding a flagged ses
 says, `tree` mode with the filter OFF renders the whole tree regardless of membership, and only `tree`
 mode with the filter ON narrows visibility to the members), and `collapsed` (whether this workspace is COLLAPSED in the sidebar tree — the read side of
 `workspace collapse`/`workspace expand` and `workspace new --collapsed`; `true` when collapsed, omitted
-when expanded, so an all-expanded tree carries no `collapsed` keys), and `tint`/`tintOn` (the workspace row's own
-tint, the read side of `workspace tint`; both omitted when untinted).
+when expanded, so an all-expanded tree carries no `collapsed` keys), `tint`/`tintOn` (the workspace row's own
+tint, the read side of `workspace tint`; both omitted when untinted), and `root` (`true` on the one node holding the
+window's top-level sessions, the sessions outside any workspace: its `name` is empty, it comes last in `workspaces` and
+shows first in the sidebar; omitted on every named workspace).
 
 The tree object itself carries these top-level read-only fields: `idleMs` (milliseconds since the last
 user input in the window, omitted before any activity), `autoFollowMs` (the window's Auto-follow
@@ -383,6 +386,12 @@ buys nothing. A caller with no tree uses `version`.
 
 ## workspace
 
+Each window also holds its top-level sessions, the sessions outside any workspace, in one container shown at the top
+of the sidebar. `root` names it wherever a workspace is expected: `session new --workspace`, `session move <workspace>`,
+`zmx attach --workspace`, `msg send --all --workspace`, and `--target` on `workspace focus` and `workspace flag`;
+`active` resolves to it when it is the current container (Addressing above). The commands that act on one named
+workspace (rename, delete, select, move, collapse, expand, tint and detach) refuse it, by `root`, id, prefix or `active`, with `top-level sessions are not a workspace`.
+
 - `workspace new [name] [--collapsed] [--tint COLOR [--tint-on PARTS]] [--window W]` — create a workspace; returns its id. Name defaults
   to an auto-generated one. `--collapsed` creates it CLOSED in the sidebar tree so a script can build a
   workspace and fill it with `session new --no-select` without it ever opening (a fresh workspace is
@@ -394,7 +403,8 @@ buys nothing. A caller with no tree uses `version`.
   row tint, as `workspace tint` sets one; `--tint-on` without `--tint` is refused, and an invalid value
   creates nothing.
 - `workspace rename <name> [--target] [--window W]`.
-- `workspace delete [--target] [--window W]` — keep-at-least-one; deleting the last workspace errors.
+- `workspace delete [--target] [--window W]` — deletes the last named workspace too, which leaves only the top-level
+  sessions.
 - `workspace select [--target] [--window W]`.
 - `workspace go --to next|prev [--window W]` — step the CURRENT workspace one place through the
   sidebar's visible order, wrapping at both ends, and select the workspace it lands on. Relative, so it
@@ -404,13 +414,15 @@ buys nothing. A caller with no tree uses `version`.
   like any other. While the focus filter is applied, stepping is confined to the marked workspaces, the
   same scoping `session go` gets. Errors with `no other workspace to navigate to` when there is nowhere
   to step: flagged mode under any layout (stepping follows the focus projection, which the flagged
-  tree does not render), or a single visible workspace.
+  tree does not render), no visible workspace, or a single visible one that is already current, except that a workspace the applied focus filter shows alone is
+  still entered while it holds a session and the selection is elsewhere or absent. The top-level
+  sessions are never a stop: from one of them
+  `next` enters the first visible workspace and `prev` the last, even when only one is visible.
 - `workspace move --to up|down|top|bottom [--target] [--window W]` — reorder among siblings. Missing
-  or invalid `--to` errors. Note: `--target active` resolves to the current workspace — a
-  foreground-created workspace that still holds the target, else the selected session's, else
-  the last one; address a specific workspace by id to step the same one.
-- `workspace focus [on|off|toggle|add] [--target] [--window W]` — mark or unmark ONE workspace in the
-  sidebar's focus SET; returns the workspace id. The sidebar renders the marked workspaces when the
+  or invalid `--to` errors. Note: `--target active` resolves to the current container (Addressing above),
+  which can change between calls; address a specific workspace by id to step the same one.
+- `workspace focus [on|off|toggle|add] [--target] [--window W]` — mark or unmark ONE workspace, or the top-level
+  sessions with `--target root`, in the sidebar's focus SET; returns the workspace id. The sidebar renders the marked workspaces when the
   filter is applied, all of them when it is not. `on` sets the marked set to just this workspace and
   APPLIES the filter (the single-workspace zoom); `off` removes it, and the filter switches off once the
   set empties; `toggle` (the default) replace-toggles — it clears when the set is exactly this workspace
@@ -460,7 +472,7 @@ buys nothing. A caller with no tree uses `version`.
   entry, and the `toggle_workspace_filter` keymap action.
 - `workspace flag [on|off|toggle] [--target W] [--window W]` — flag or unflag EVERY session of one workspace
   as one value, including those the flagged tree layout hides; the control twin of the workspace row's Flag
-  All Sessions. `toggle` (default) unflags only when every session is flagged and otherwise flags them all,
+  All Sessions. `--target root` flags the top-level sessions. `toggle` (default) unflags only when every session is flagged and otherwise flags them all,
   so it is not a per-session invert. `on`/`off` are idempotent; an empty workspace changes nothing; returns the workspace
   id. Read back from each session's `flagged`. Unflagging can move the selection like `session flag off`.
 - `workspace tint <COLOR|clear> [--on PARTS] [--target W] [--window W]` - tint the workspace's OWN sidebar
@@ -482,7 +494,7 @@ buys nothing. A caller with no tree uses `version`.
 - `session new [--cwd DIR] [--workspace W] [--workspace-name NAME] [--create-workspace] [--command CMD] [--wait] [--name NAME] [--after SID | --before SID] [--no-select] [--tint COLOR [--tint-on PARTS]] [--window W]`
   — create a session and focus it; returns the new id. `--cwd` sets the start directory (default
   `$HOME`). The destination workspace is addressed one of two mutually-exclusive ways: `--workspace`
-  (id / unique prefix / `active`, the default) or `--workspace-name` (the sidebar label) — the latter
+  (id / unique prefix / `active`, the default, or `root` for the top-level sessions) or `--workspace-name` (the sidebar label) — the latter
   errors if no workspace has that name unless `--create-workspace` is also passed, which reuses an
   existing one or creates it when absent (idempotent). `--command` runs that command as the session's
   process instead of the login shell (no echoed command line; the session closes when the command
@@ -561,7 +573,9 @@ buys nothing. A caller with no tree uses `version`.
   here at the end of the window's current workspace, selected; prints the new row's id. On HOST it goes into the
   workspace named `--workspace-name`, default the current workspace's name, the first when several share it,
   created when missing, and selects
-  nothing there. `--origin-window` names a Mac's window by id or unique prefix, needed when it has several open;
+  nothing there. When the current container here is the top-level sessions and no `--workspace-name` is given, it
+  goes among HOST's top-level sessions, and a HOST predating them refuses before creating anything; a
+  `--workspace-name` still names HOST's workspace while the row here lands among the top-level sessions. `--origin-window` names a Mac's window by id or unique prefix, needed when it has several open;
   agterm-server refuses it. `--cwd` and `--command` are HOST's. A host that does not answer or does not report Live
   sessions or agterm-server is refused before anything is created. The create is sent once: a session created but
   not attached is named in the error for `zmx attach HOST ID`, and a lost reply is reported as an unknown outcome. Refuses `--parent`,
@@ -670,7 +684,7 @@ buys nothing. A caller with no tree uses `version`.
   Nth session of that set in sidebar order, 1-based, sessions in a collapsed workspace included; past the end it
   errors `no session at position N: M navigable` and leaves the selection alone. Returns the newly selected id.
 - `session move <workspace> [--target] [--window W]` — relocate the session to another workspace
-  (appends). OR `session move --to up|down|top|bottom [--target]` — reorder within its workspace. OR
+  (appends), `root` among the top-level sessions. OR `session move --to up|down|top|bottom [--target]` — reorder within its workspace. OR
   `session move --after SID | --before SID [--target]` — place the session directly after / before an
   anchor session (id / unique prefix / `active`). The anchor CARRIES ITS OWN WORKSPACE (resolved across
   all workspaces), so it relocates + positions in one shot, wherever the anchor lives — cross-workspace
@@ -1569,7 +1583,9 @@ shell (no controlling terminal — `/dev/tty` errors). See examples.md for usage
 ## window
 
 - `window new [name] [--minimized]` — create and open a window; returns its id. It replies only once
-  the on-screen window exists, so an immediate `window resize`/`move` on the returned id works.
+  the on-screen window exists, so an immediate `window resize`/`move` on the returned id works. Its first shell
+  starts among the top-level sessions when the frontmost window's selected session is one, in a new `workspace 1`
+  otherwise and when the frontmost window is a remote window.
   `--minimized` parks it in the Dock right after creating it, and leaves frontmost on a window you can
   still see — for building a set of project windows and ending up on one you are looking at. The window
   is presented briefly before it is parked, so expect it to appear and take focus on its way to the Dock.
@@ -2066,7 +2082,7 @@ is drawn on screen.
   (`msg.send`). PANE is a pane id (`surfaces[].paneID` from `tree --json`) or `left` (alias `primary`, `top`), `right`
   (`split`, `bottom`) or `scratch`, resolved once at send time; a bare session is an error. Aliases of one pane are delivered
   once. `--all` reaches every live pane in every open window except the sender and remote rows;
-  `--workspace` narrows it. A split hidden since launch has no terminal yet and is not a live pane.
+  `--workspace` narrows it (`root` for the top-level sessions). A split hidden since launch has no terminal yet and is not a live pane.
   The reply carries `messageID` (shared by every copy), `delivered` (canonical `SESSION:PANE-ID`
   addresses) and `rejected` (`{address, reason, detail?}`, reason `mailbox full` or `unknown pane`; `detail`
   says more, as `remote session` does). The CLI prints the id, one stderr line per rejection (the detail when
@@ -2548,6 +2564,8 @@ far side, so it is also how to see what another machine would answer without ssh
 `presentation` (the presentation protocol version, absent from an app too old to stream),
 and `sessions`, each with `id`, `name`, `windowID`/`windowName` and `workspaceID`/`workspaceName` (show the
 names, group by the ids — neither is unique, so two windows called `main` merge if you group by name),
+`workspaceRoot` (`true` for a session among that host's top-level sessions, whose `workspaceName` is empty; omitted
+otherwise and from a host predating them),
 `context` when its owner set one, `cwd`, `splitAxis` when it has a split, `status`/`statusColor`/`statusShape`
 as the far side's `tree` reports them (omitted when idle, and from an app too old to send them), `parent` on a
 companion, `content: "page"` on a page session, `companions` on a top-level session (every companion in
@@ -2570,7 +2588,7 @@ running agterm has no CLI an ssh command can find, and the read fails with exit 
 opens one of those sessions here, marked remote, in the destination window's current workspace, selected, with the remote session's split when it has one.
 `--window` takes a local open window ID, unique prefix, or `active`; omitted, it uses the frontmost window
 after discovery. An invalid or closed destination fails without creating a session. Targeting a background
-window leaves the frontmost window unchanged. `--workspace W` (id, unique prefix or `active`) or
+window leaves the frontmost window unchanged. `--workspace W` (id, unique prefix, `active`, or `root` for the top-level sessions) or
 `--workspace-name NAME` puts the row in that workspace of the window instead of the current one;
 `--create-workspace` with a name creates it when missing and reuses it otherwise, and a missing name without it
 fails before anything is created. A missing workspace is created only once the row can be placed, so a refused

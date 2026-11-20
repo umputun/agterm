@@ -386,12 +386,15 @@
   `.claude/rules/menu-actions.md` (:249, :303), `.claude/rules/windows.md` (:41), `.claude/rules/keymap.md` (built-in table),
   `ARCHITECTURE.md` if its model section names workspaces
 
-- [ ] docs: top-level sessions, New Top-Level Session, focus with root, `--workspace root` on every destination command,
+- [x] docs: top-level sessions, New Top-Level Session, focus with root, `--workspace root` on every destination command,
   `session.remote.new` from a root destination, `tree` root node, last workspace deletable, new-window source rules
-- [ ] skill: SKILL.md trigger and section for top-level sessions; reference entries for every changed command
-- [ ] rules: sidebar root block, drop rules, focus membership; control-api root addressing, `active` rule and
+- [x] skill: SKILL.md trigger and section for top-level sessions; reference entries for every changed command
+- [x] rules: sidebar root block, drop rules, focus membership; control-api root addressing, `active` rule and
   rejections; menu-actions and windows keep-at-least-one and seeding lines; keymap built-in
-- [ ] verify every decision in Technical Details is implemented
+- [x] verify every decision in Technical Details is implemented
+  - ➕ full `swift test` found three tests Task 3 and Task 6 missed: the keep-one test rewritten to the delete-last
+    contract, the keymap list fixture gained `new_root_session`, and `canStepWorkspaces` keeps a sole focused workspace
+    enterable while it holds a session the selection is not in
 - [ ] gates once: `cd agtermCore && swift test`, `make test-app`, `make lint`, Release build
 - [ ] move this plan to `docs/plans/completed/`
 

@@ -89,20 +89,25 @@ To let the user choose, pipe the listing through the picker:
 ```bash
 s=$(agtermctl zmx tree studio.local --json |
   jq '[.result.remote.sessions[] | {id, label: .name,
-        subtitle: (.windowName + "/" + .workspaceName + "  " + .cwd)}]' |
+        subtitle: (.windowName + (if .workspaceRoot then "" else "/" + .workspaceName end) + "  " + .cwd)}]' |
   agtermctl pick --prompt "Attach which session?" | jq -r '.id // empty')
 [ -n "$s" ] && agtermctl zmx attach studio.local "$s"
 ```
 
-To bring every top-level session of the other Mac over at once, each into a local workspace named like
-its workspace there:
+To bring every session without a parent of the other Mac over at once, each into a local workspace named
+like its workspace there, and one among its top-level sessions among the top-level sessions here:
 
 ```bash
 agtermctl zmx tree studio.local --json |
-  jq -c '.result.remote.sessions[] | select(.parent == null) | {id, ws: .workspaceName}' |
+  jq -c '.result.remote.sessions[] | select(.parent == null) | {id, ws: .workspaceName, root: (.workspaceRoot == true)}' |
   while read -r row; do
-    agtermctl zmx attach studio.local "$(jq -r .id <<<"$row")" --companions \
-      --workspace-name="$(jq -r .ws <<<"$row")" --create-workspace
+    id=$(jq -r .id <<<"$row")
+    if [ "$(jq -r .root <<<"$row")" = true ]; then
+      agtermctl zmx attach studio.local "$id" --companions --workspace root
+    else
+      agtermctl zmx attach studio.local "$id" --companions \
+        --workspace-name="$(jq -r .ws <<<"$row")" --create-workspace
+    fi
   done
 ```
 

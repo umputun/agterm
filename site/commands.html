@@ -618,10 +618,12 @@
                 holding a flagged session, whatever the filter says),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">collapsed</span> (the read side of
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">workspace collapse</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">expand</span>;
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">true</span> when collapsed, omitted when expanded), and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">true</span> when collapsed, omitted when expanded),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tint</span> /
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tintOn</span> (the workspace row's own tint, the read side of
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">workspace tint</span>; both omitted when untinted).
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">workspace tint</span>; both omitted when untinted), and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">root</span> (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">true</span> on the one node holding the top-level sessions, which has an empty
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">name</span>, comes last in <span style="font-family: &quot;JetBrains Mono&quot;, monospace">workspaces</span> and shows first in the sidebar; omitted on every named workspace).
               </p>
               <p style="font-size: 14px; line-height: 1.65; color: #949ba4; margin: 8px 0 0">
                 <strong style="color: #bfbab0">Top level:</strong>
@@ -792,6 +794,15 @@
             >
               workspace
             </h2>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
+              Each window also holds its top-level sessions, the sessions outside any workspace, in one container shown at the
+              top of the sidebar. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">root</span> names it wherever a workspace is expected:
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session new --workspace</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session move</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">zmx attach --workspace</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">msg send --all --workspace</span>, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--target</span> on <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">workspace focus</span> and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">workspace flag</span>. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span> resolves to it when it is the current container, the one a new session
+              lands in. The commands that act on one named workspace (rename, delete, select, move, collapse, expand, tint and detach) refuse it, by <span style="font-family: &quot;JetBrains Mono&quot;, monospace">root</span>, id,
+              prefix or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span>, with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">top-level sessions are not a workspace</span>.
+            </p>
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
@@ -826,8 +837,8 @@
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">workspace.delete</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
-                Delete the target workspace. Keep-at-least-one: deleting the last workspace is an error. Unlike the GUI, nothing
-                blocks on a confirm dialog.
+                Delete the target workspace, the last one included, which leaves only the top-level sessions. Unlike the GUI,
+                nothing blocks on a confirm dialog.
               </p>
             </div>
 
@@ -855,8 +866,11 @@
                 Whether a workspace is collapsed makes no difference — a folded workspace is stepped into like any other. While the
                 workspace focus filter is applied, stepping stays inside the marked workspaces, the same scoping
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session go</span> gets. With nowhere to step — flagged mode in
-                any layout, or a single visible workspace — it errors with
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">no other workspace to navigate to</span>.
+                any layout, no visible workspace, or a single visible one that is already current (one the applied focus filter shows
+                alone is still entered while it holds a session and the selection is elsewhere or absent) — it errors with
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">no other workspace to navigate to</span>. The top-level sessions are
+                never a stop: from one of them <span style="font-family: &quot;JetBrains Mono&quot;, monospace">next</span> enters the first visible workspace and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">prev</span> the last, even
+                when only one is visible.
               </p>
             </div>
 
@@ -882,8 +896,8 @@
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">workspace.focus</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
-                Mark or unmark one workspace in the sidebar's focus set. The sidebar renders the marked workspaces while the
-                filter is applied, all of them while it is not.
+                Mark or unmark one workspace in the sidebar's focus set, or the top-level sessions with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--target root</span>.
+                The sidebar renders the marked workspaces while the filter is applied, all of them while it is not.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">on</span> sets the marked set to just this workspace and
                 applies the filter, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">off</span> removes it (the filter
                 switches off once the set empties),
@@ -961,7 +975,7 @@
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">workspace.flag</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
                 Flag or unflag every session in the target workspace at once, the control twin of the workspace row's
-                Flag All Sessions / Unflag All Sessions. It covers every session, including those the flagged tree layout
+                Flag All Sessions / Unflag All Sessions; <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--target root</span> flags the top-level sessions. It covers every session, including those the flagged tree layout
                 hides. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">toggle</span> (the default) unflags only
                 when every session is already flagged and otherwise flags them all, so a mixed workspace ends up all flagged
                 rather than inverted. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">on</span> and
@@ -1054,7 +1068,7 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--cwd</span> sets the start directory (default
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">$HOME</span>). The destination workspace is addressed
                 either by <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--workspace</span> (id / prefix /
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span>) or by
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span>, or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">root</span> for the top-level sessions) or by
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--workspace-name</span> (the sidebar label) — the
                 latter errors when no workspace has that name, unless
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--create-workspace</span> is also passed, which
@@ -1284,7 +1298,10 @@
                 Create a session on HOST, an ssh destination running agterm in Live sessions mode or agterm-server, and attach it
                 here at the end of the window's current workspace, selected. On HOST it goes into the workspace named
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--workspace-name</span>, default the current workspace's name, the first when several share it, created when missing, and
-                selects nothing there.
+                selects nothing there. When the current container here is the top-level sessions and no <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--workspace-name</span>
+                is given, it goes among HOST's top-level sessions, and a HOST predating them refuses before creating
+                anything; a <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--workspace-name</span> still names HOST's workspace
+                while the row here lands among the top-level sessions.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--origin-window</span> names the Mac's window by id or unique prefix; a Mac with one open window needs none,
                 one with several is refused with their names, and agterm-server refuses the flag. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--cwd</span> and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--command</span> are HOST's. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span> picks the window here.
@@ -1419,7 +1436,7 @@
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
                 Three mutually-exclusive placement intents, exactly one required. A positional
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">&lt;workspace&gt;</span> relocates the session there
-                (appending). <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--to</span> reorders it within its own
+                (appending), <span style="font-family: &quot;JetBrains Mono&quot;, monospace">root</span> among the top-level sessions. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--to</span> reorders it within its own
                 workspace. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--after</span> /
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--before</span> place it directly after or before an
                 anchor session — the anchor carries its own workspace, so cross-workspace placement falls out for free. Repeat
@@ -2992,7 +3009,9 @@
                 on the returned id works.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--minimized</span> parks it in the Dock right after
                 creating it, leaving frontmost on a window you can still see — for building a set of project windows and ending up
-                on one you are looking at. The window is presented briefly before it is parked.
+                on one you are looking at. The window is presented briefly before it is parked. Its first shell starts among the
+                top-level sessions when the frontmost window's selected session is one, in a new workspace 1 otherwise and when
+                the frontmost window is a remote window.
                 <strong style="color: #bfbab0">Returns</strong>
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.id</span>.
               </p>
@@ -3947,7 +3966,7 @@
                 memory by the running app; nothing is drawn on screen. A recipient is SESSION:PANE, where PANE is a pane id
                 (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">paneID</span> on a <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span> surface) or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">left</span> (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">primary</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">top</span>), <span style="font-family: &quot;JetBrains Mono&quot;, monospace">right</span> (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">split</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">bottom</span>) or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">scratch</span>, resolved
                 once at send time. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--to</span> repeats; <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--all</span> reaches every live pane in every open window except the
-                sender and remote rows, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--workspace</span> narrows it. A pane whose split is hidden since launch has no terminal
+                sender and remote rows, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--workspace</span> narrows it (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">root</span> for the top-level sessions). A pane whose split is hidden since launch has no terminal
                 yet and cannot receive. Bodies are at most 64 KiB; a mailbox holds 256 messages or 1 MiB, and a full one rejects that
                 recipient alone. The reply carries <span style="font-family: &quot;JetBrains Mono&quot;, monospace">messageID</span> (shared by every copy), <span style="font-family: &quot;JetBrains Mono&quot;, monospace">delivered</span> and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">rejected</span> with a reason and, where there is more to say, a <span style="font-family: &quot;JetBrains Mono&quot;, monospace">detail</span>; the CLI prints the id and exits 1 when any recipient was rejected.
@@ -4580,6 +4599,8 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">name</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">windowID</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">windowName</span> and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">workspaceID</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">workspaceName</span> (show the names, group by the ids — neither is unique, so grouping by name merges two windows called <span style="font-family: &quot;JetBrains Mono&quot;, monospace">main</span>),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">workspaceRoot</span> (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">true</span> for a session among that host's top-level sessions, whose
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">workspaceName</span> is empty; omitted otherwise and from a host predating them),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">context</span> (only when its owner set one),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">cwd</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitAxis</span> (only when it has a split),
@@ -4600,7 +4621,7 @@
                 Open one of the sessions <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zmx tree</span> listed as a session here, marked remote. It takes the session <em>id</em> from that listing, because remote names are editable and repeat across workspaces. It opens in the destination window's current workspace, selected, carrying the remote session's split when it has one. Returns the new session's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">id</span>; read <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remoteHost</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remoteSessionID</span> on its tree node.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span> takes a local open window ID, unique prefix, or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span>.
                 Omitted, it uses the frontmost window after discovery. An invalid or closed destination fails without creating
-                a session. A background target leaves the frontmost window unchanged. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--workspace</span> (an ID, unique prefix, or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span>) or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--workspace-name</span> puts the row in that workspace of the window instead of its current one, as for <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session new</span>; <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--create-workspace</span> creates a missing named workspace, and without it a missing name fails before anything is created. A terminal companion opens under the one row in the destination window attached from its parent, in that row's workspace; with no such row, or more than one, it opens on its own. A top-level page session opens as a top-level row showing that Mac's page through its own channel, its companions under it with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--companions</span>.
+                a session. A background target leaves the frontmost window unchanged. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--workspace</span> (an ID, unique prefix, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span>, or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">root</span> for the top-level sessions) or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--workspace-name</span> puts the row in that workspace of the window instead of its current one, as for <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session new</span>; <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--create-workspace</span> creates a missing named workspace, and without it a missing name fails before anything is created. A terminal companion opens under the one row in the destination window attached from its parent, in that row's workspace; with no such row, or more than one, it opens on its own. A top-level page session opens as a top-level row showing that Mac's page through its own channel, its companions under it with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--companions</span>.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--companions</span> sends <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zmx.attach.group</span>: it attaches the session and then each of its companions under it, from one read of the origin, in the origin's companion order when reported and in the order of its listed rows from an older origin. A companion's id is refused. Result: <span style="font-family: &quot;JetBrains Mono&quot;, monospace">id</span> (the parent here) and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remoteGroup</span>, with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">membershipKnown</span> (false when the origin does not report <span style="font-family: &quot;JetBrains Mono&quot;, monospace">companions</span>, so one it did not list cannot be named) and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">companions</span> as <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{origin, id?, error?}</span> per member, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">id</span> recording that the row was created, not that it still exists. When any member is unavailable or fails, the command fails with the rows it attached kept and the error naming the parent and each missing companion; the human output also prints a note when membership is unknown. An app too old for the command creates nothing and is named as such. A top-level attached row then follows its origin session: a companion created or moved under it there later attaches under the row without changing the selection or the origin's lead, unless this Mac already shows it, and one closed here is never attached again by itself. With two rows attached from one origin session a new companion gets one row, under either. A listed companion that is not attachable yet (ended, its daemon not up) waits for the next membership change or reconnect, so one restarted on the origin is picked up then, not at the restart. A page root attached from another Mac follows through a membership-only stream. An origin that predates the <span style="font-family: &quot;JetBrains Mono&quot;, monospace">companions</span> kind follows nothing; <span style="font-family: &quot;JetBrains Mono&quot;, monospace">followsCompanions</span> in <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span> reads it back.

@@ -75,6 +75,11 @@ paths:
   Mac with several windows which one, then calls `RemoteAttaching.createRemoteSession`, the creator
   `session.remote.new` runs, with failures in the Attach Remote HUD.
 
+- File ▸ New Top-Level Session (`new_root_session`, keyless) follows New Session, with a palette row, through
+  `AppActions.newRootSession`, which shares New Session's path into the root. `PaletteContext.hasRootWorkspace` disables it
+  in a server window whose owner has no root. Focus items read `PaletteContext.focusNoun`, "Top-Level Sessions" while the
+  active container is the root, and the focus editor lists a disabled root row for a rootless owner.
+
 - New Companion (`new_companion`, keyless) sits beside Duplicate Session in the row menu and the Session
   menu, with a palette row. On a remote row it asks the origin through `RemoteAttaching.createRemoteCompanion`,
   showing the two ssh waits in the Attach Remote HUD.
@@ -246,7 +251,7 @@ paths:
   close/reopen/filter tests in `AppStoreCloseReselectionTests` pin these scopes.
 - Delete Workspace centralizes confirmation in `AppActions.deleteWorkspace(_:in:)`, then removes surfaces,
   recency, and reselection. Row menus pass their own store because right-clicking a background window does
-  not raise it. Menu/palette target active workspace and enforce `uiActionsEnabled`. Keep at least one workspace.
+  not raise it. Menu/palette target active workspace and enforce `uiActionsEnabled`. The last named workspace may go; the root stays.
 
 ## Navigation
 
