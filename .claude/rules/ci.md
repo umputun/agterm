@@ -9,10 +9,10 @@ paths:
   master push keys its group on the sha and completes. All macOS jobs use `macos-26`. Releases are local;
   see `.claude/rules/release.md`.
 - On a same-repo PR by the repository owner, `changes` sets `full` false and `test`, `coverage`, `hosted`
-  and the swiftlint steps of `build` skip: those PRs arrive after the local gates, and the jobs run on the
-  master push.
-  `linux` and `build` still run under the Swift filter and `cookbook` under its own, and a PR touching
-  `ci.yml` runs everything.
+  and `build` skip: those PRs arrive after the local gates, and the jobs run on the master push. The Release
+  checks have no local equivalent, so a Release-only break first shows on master; `release.md` makes a green
+  `build` on the released SHA a release precondition. `linux` still runs under the Swift filter and `cookbook`
+  under its own, and a PR touching `ci.yml` runs everything.
 - `docs/ci-flakes.md` records every investigated intermittent failure by test name and log text; read it
   before investigating a red run, and add an entry after one.
 - Every job carries its own `timeout-minutes`, with generous headroom over observed runtime. A job without

@@ -20,8 +20,9 @@ jobs:
     outputs:
       swift: ${{ steps.filter.outputs.swift }}
       cookbook: ${{ steps.filter.outputs.cookbook }}
-      # the owner's same-repo PRs reach CI after the local test, test-app and lint gates, so those jobs
-      # run on master instead; a workflow change still runs them before merge
+      # the owner's same-repo PRs defer the macOS jobs to the master push: they reach CI after the local test,
+      # test-app and lint gates, and the Release checks run on master before a release; a workflow change still
+      # runs everything before merge
       full: ${{ github.event_name != 'pull_request' || github.event.pull_request.user.id != github.event.repository.owner.id || github.event.pull_request.head.repo.id != github.event.repository.id || steps.filter.outputs.workflow == 'true' }}
     steps:
       - uses: actions/checkout@v7
@@ -285,17 +286,15 @@ jobs:
   build:
     name: Build app
     needs: changes
-    if: needs.changes.outputs.swift == 'true'
+    if: needs.changes.outputs.swift == 'true' && needs.changes.outputs.full == 'true'
     runs-on: macos-26
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       # a job of its own would be a sixth macOS job in a full run, past the five a free account runs at once
       - name: Install swiftlint
-        if: needs.changes.outputs.full == 'true'
         run: brew install swiftlint
       - name: swiftlint (strict)
-        if: needs.changes.outputs.full == 'true'
         run: swiftlint lint --strict
       - name: Read pinned helper revisions
         id: revisions

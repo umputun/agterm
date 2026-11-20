@@ -37,6 +37,11 @@ paths:
 - Before writing or committing a release section, put the exact `CHANGELOG.md` text in a temp file and
   pass it through the `draft-approval` skill's `draft-review.sh`; address annotations and get explicit
   chat approval. `release.sh:70-85` publishes that text as the GitHub release body.
+- **Release only a `master` SHA whose CI `Build app` job passed.** Ordinary same-repo owner PRs skip it, so the
+  master push run is the first run of its checks. `release.sh` rebuilds Release and checks the Developer ID signing,
+  but only `Build app` runs the surface teardown test and the exact ad-hoc entitlement and plist parity checks. The
+  pre-release push below runs it, since its plugin-manifest bump is in the Swift filter; a run with `Build app`
+  skipped does not count.
 - **Commit and push the changelog and website version to `master` before `release.sh --publish`.**
   `gh release create "$TAG"` has no `--target` (`release.sh:166`), so it tags `origin/master`, not local
   `HEAD`. The script pushes only its cloned Homebrew tap; the maintainer must push the main repo.
