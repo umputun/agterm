@@ -278,7 +278,7 @@ diff -ruN zmx-orig/src/role.zig zmx/src/role.zig
 diff -ruN zmx-orig/src/util.zig zmx/src/util.zig
 --- zmx-orig/src/util.zig
 +++ zmx/src/util.zig
-@@ -749,6 +749,71 @@
+@@ -749,6 +749,75 @@
      return false;
  }
  
@@ -301,7 +301,11 @@ diff -ruN zmx-orig/src/util.zig zmx/src/util.zig
 +                if (used.use) return true;
 +                i += 2 + used.consumed;
 +            },
-+            ']', 'P', '_', '^', 'X' => i = stringEnd(payload, i + 2) orelse return true,
++            ']', 'P', '_', '^', 'X' => {
++                // a kitty paste event (mode 5522) arrives as an OSC, not as the pasted text
++                if (std.mem.startsWith(u8, payload[i + 1 ..], "]5522;")) return true;
++                i = stringEnd(payload, i + 2) orelse return true;
++            },
 +            else => return true, // SS3 keys, Alt-modified keys, Esc pressed twice
 +        }
 +    }
@@ -350,7 +354,7 @@ diff -ruN zmx-orig/src/util.zig zmx/src/util.zig
  /// Emit the terminal's pwd as OSC 7.
  ///
  /// This replaces the formatter's own `extra.pwd`, which writes
-@@ -2181,6 +2246,32 @@
+@@ -2181,6 +2250,32 @@
      try testing.expect(!isUserInput("\x1b[O")); // focus out
  }
  
@@ -361,7 +365,7 @@ diff -ruN zmx-orig/src/util.zig zmx/src/util.zig
 +        "\x1b[F",         "\x1b[Z",              "\x1b[3~",       "\x1b[1;5P",       "\x1b[99;5u",
 +        "\x1b[200~x",     "\x1b[<0;10;5M",       "\x1b[<64;1;1M", "\x1b[M !!",       "\x1b[I\x03",
 +        "\x1b[?1u\x1b[A", "\x1b]11;rgb:0/0/0\x07q", "\x1b[12",       "\x1b[102;1:1u",   "\x1b[27u",
-+        "\x1b[97u",       "\x1b[13u",             "\x1b]",          "\x1bP",
++        "\x1b[97u",       "\x1b[13u",             "\x1b]",          "\x1bP",           "\x1b]5522;type=read:status=OK\x1b\\",
 +    };
 +    for (used) |input| {
 +        if (!isLeaderUse(input)) std.debug.print("not counted as use: {any}\n", .{input});

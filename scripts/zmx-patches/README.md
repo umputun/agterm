@@ -66,7 +66,8 @@ longer apply, and re-running `check.py`.
   client sends its `ZMX_MANAGED` token in a new `Identity` message after `Manage`, followed by the token in
   `ZMX_MANAGED_RECLAIM` when that is set. At Init such a client leads while the leader is the attach that
   token names, or one that took a vacant session without claiming and has sent no key, paste or mouse
-  press since, control keys and Esc included and a terminal's own replies not; otherwise it attaches as before. A daemon without the patch ignores the unknown tag.
+  press since, control keys, Esc and kitty paste events included and a terminal's own replies not; otherwise it
+  attaches as before. A daemon without the patch ignores the unknown tag.
 - `ghostty/0001-formatter-unstyled-blanks.patch` fixes the snapshot a re-attach replays. The formatter
   wrote cells a program skipped with a cursor move as spaces under the previous cell's style, so a gap
   after a colored run came back painted; a skipped cell now closes the style first. Spaces the program
