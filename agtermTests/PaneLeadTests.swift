@@ -97,6 +97,22 @@ final class PaneLeadTests: XCTestCase {
         XCTAssertFalse(PaneLead.consumes(try key(.keyUp, code: 0), in: fresh))
     }
 
+    func testAKeyOnAReconnectThatClaimsNothingTakesTheLeadOnItsFirstReport() throws {
+        let identity = UUID()
+        panes.append(identity)
+        let view = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(),
+                                      env: ["AGTERM_PANE_ID": identity.uuidString], backedByZmx: true)
+        ZmxLeadBook.shared.begin(ZmxLeadAttachment(nonce: "n", claim: false), pane: identity, reattaching: true)
+
+        XCTAssertTrue(PaneLead.consumes(try key(.keyDown, code: 0), in: view))
+        XCTAssertTrue(PaneLead.consumes(try key(.keyDown, code: 0, repeating: true), in: view))
+        XCTAssertTrue(reattached.isEmpty, "the reattach on its way is not replaced")
+
+        PaneLead.report(try notice("n:follower:1"), from: view)
+        XCTAssertEqual(reattached.map(\.claim), [true])
+        XCTAssertTrue(PaneLead.consumes(try key(.keyUp, code: 0), in: view), "the press stays swallowed until released")
+    }
+
     // the release can land on the destroyed old view and never reach `consumes`.
     func testATakeoverKeyWhoseReleaseWasNeverSeenDoesNotSwallowItsNextPress() throws {
         let (view, identity) = pane()

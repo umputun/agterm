@@ -23,9 +23,10 @@ struct PaneLeadCover: View {
                 VStack(spacing: 8) {
                     Image(systemName: "rectangle.on.rectangle.slash")
                         .font(.system(size: 28, weight: .light))
-                    Text(Self.title(state: identity.flatMap { book.states[$0] }, remote: session.remoteHost != nil))
+                    let state = identity.flatMap { book.states[$0] }
+                    Text(Self.title(state: state, remote: session.remoteHost != nil))
                         .font(.system(size: 14, weight: .medium))
-                    if !book.reattaching(pane: identity) {
+                    if state?.reattaching != true || state?.attachment.claim == false {
                         Text("Press any key to use it here")
                             .font(.system(size: 12))
                             .opacity(0.7)

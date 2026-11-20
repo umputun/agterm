@@ -65,7 +65,11 @@ extension ControlServer {
             guard ZmxLeadBook.shared.role(pane: identity) != nil || surface.leadCovered else {
                 return ControlResponse(ok: false, error: "pane has no lead to take")
             }
-            if surface.leadCovered, !ZmxLeadBook.shared.reattaching(pane: identity) { PaneLead.reattach?(surface, true) }
+            let book = ZmxLeadBook.shared
+            let reattaching = book.reattaching(pane: identity)
+            if surface.leadCovered, !reattaching { PaneLead.reattach?(surface, true) }
+            // a reconnect or the unowned retry attaches without the claim; its first report takes the lead
+            if reattaching, book.states[identity]?.attachment.claim == false { book.claimOnReport(pane: identity) }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
     }

@@ -350,6 +350,33 @@ final class ControlServerPaneLeadTests: XCTestCase {
                        ControlResponse(ok: false, error: "the scratch terminal has no lead"))
     }
 
+    func testSessionLeadDuringAReattachWithoutTheClaimTakesTheLeadOnItsFirstReport() throws {
+        let server = makeServer()
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: try XCTUnwrap(store.currentWorkspaceID),
+                                                     cwd: NSHomeDirectory()))
+        var claims: [Bool] = []
+        PaneLead.reattach = { _, claim in claims.append(claim) }
+        func reattach(claim: Bool) throws -> GhosttySurfaceView {
+            let view = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(),
+                                          env: ["AGTERM_PANE_ID": session.paneIdentity.uuidString], backedByZmx: true)
+            session.surface = view
+            panes.append(session.paneIdentity)
+            ZmxLeadBook.shared.begin(ZmxLeadAttachment(nonce: "n", claim: claim), pane: session.paneIdentity, reattaching: true)
+            XCTAssertEqual(server.takeSessionLead(session.id.uuidString, window: nil, pane: nil).result?.id, session.id.uuidString)
+            return view
+        }
+
+        let reconnect = try reattach(claim: false)
+        XCTAssertEqual(claims, [], "the reattach on its way is not replaced")
+        PaneLead.report(try XCTUnwrap(ZmxLeadNotice(title: "zmx-role;n:follower:1")), from: reconnect)
+        XCTAssertEqual(claims, [true])
+
+        let takeover = try reattach(claim: true)
+        PaneLead.report(try XCTUnwrap(ZmxLeadNotice(title: "zmx-role;n:follower:1")), from: takeover)
+        XCTAssertEqual(claims, [true], "a takeover already claims, so its report owes nothing more")
+    }
+
     func testSessionLeadTakesACoveredLiveScratch() throws {
         let server = makeServer()
         let store = try XCTUnwrap(library.activeStore)

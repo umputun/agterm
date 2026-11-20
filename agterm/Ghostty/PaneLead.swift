@@ -86,10 +86,17 @@ enum PaneLead {
         guard view.leadCovered else { return false }
         // a modifier alone is not the press the cover asks for, and app shortcuts stay the app's
         guard event.type == .keyDown, !event.modifierFlags.contains(.command) else { return true }
-        // already on its way: the fresh surface is covered too until its first report
-        guard !ZmxLeadBook.shared.reattaching(pane: UUID(uuidString: view.paneToken)) else { return true }
         // a key held since before a drop sends only repeats while the pane waits, so it was never latched
         guard !event.isARepeat else { return true }
+        if let pane, let state = ZmxLeadBook.shared.states[pane], state.reattaching {
+            // a reconnect or the unowned retry claims nothing, so the press makes its first report take the lead;
+            // a takeover is already on its way, its fresh surface covered until that report
+            if !state.attachment.claim {
+                takeoverKeyCode = event.keyCode
+                ZmxLeadBook.shared.claimOnReport(pane: pane)
+            }
+            return true
+        }
         takeoverKeyCode = event.keyCode
         reattach?(view, true)
         return true
