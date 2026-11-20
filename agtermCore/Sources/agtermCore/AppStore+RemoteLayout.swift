@@ -6,6 +6,15 @@ import Foundation
 public protocol RemoteAttachLines: AnyObject {
     func paneAttach(_ origin: RemoteBinding.Origin, daemon: String, local: UUID) -> String
     func scratchAttach(_ origin: RemoteBinding.Origin, daemon: String, local: UUID) -> String
+    /// scratchAttach(_:daemon:local:reclaim:) attaches a scratch again after its link dropped, taking back the lead the
+    /// attach whose nonce is `reclaim` held then if nobody used it since.
+    func scratchAttach(_ origin: RemoteBinding.Origin, daemon: String, local: UUID, reclaim: String?) -> String
+}
+
+extension RemoteAttachLines {
+    public func scratchAttach(_ origin: RemoteBinding.Origin, daemon: String, local: UUID, reclaim _: String?) -> String {
+        scratchAttach(origin, daemon: daemon, local: local)
+    }
 }
 
 extension AppStore {
@@ -112,12 +121,13 @@ extension AppStore {
 
     /// replaceOriginScratchAttachment swaps a stopped origin scratch attach for a fresh one, leaving it shown or hidden as
     /// the origin has it. False when the layout changed that scratch or another attach already replaced it.
-    public func replaceOriginScratchAttachment(_ id: UUID, identity: UUID, attach: RemoteAttachLines) -> Bool {
+    public func replaceOriginScratchAttachment(_ id: UUID, identity: UUID, attach: RemoteAttachLines, reclaim: String? = nil) -> Bool {
         guard let row = session(withID: id), row.scratchFollowsOrigin, let binding = row.remotePresentation?.binding,
               let origin = binding.origin, row.remotePresentation?.layout?.scratch == identity,
               row.scratchDaemon?.identity == identity, row.scratchStoppedGeneration == row.scratchGeneration,
               let client = row.scratchClientIdentity else { return false }
-        replaceScratchSurface(row, command: attach.scratchAttach(origin, daemon: binding.scratchDaemon(for: identity), local: client))
+        replaceScratchSurface(row, command: attach.scratchAttach(origin, daemon: binding.scratchDaemon(for: identity), local: client,
+                                                                 reclaim: reclaim))
         return true
     }
 

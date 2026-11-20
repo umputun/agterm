@@ -12,6 +12,28 @@ struct ZmxLeadTests {
         #expect(recovering.environment == ["ZMX_MANAGED": "n2"])
     }
 
+    @Test func attachmentEnvironmentNamesTheAttachItTakesTheLeadBackFrom() {
+        let reconnecting = ZmxLeadAttachment(nonce: "n2", claim: false, reclaim: "n1")
+
+        #expect(reconnecting.environment == ["ZMX_MANAGED": "n2", "ZMX_MANAGED_RECLAIM": "n1"])
+        #expect(reconnecting.assignments == ["ZMX_MANAGED=n2", "ZMX_MANAGED_RECLAIM=n1"])
+    }
+
+    @Test func aDropReclaimsFromALeadingAttachOrTheOneAnUnreportedReconnectWasReclaiming() throws {
+        var leading = ZmxLeadState(attachment: ZmxLeadAttachment(nonce: "n1", claim: false))
+        #expect(leading.reclaimAfterDrop == nil)
+        _ = leading.apply(try #require(ZmxLeadNotice(title: "zmx-role;n1:leader:2")))
+        #expect(leading.reclaimAfterDrop == "n1")
+
+        let claiming = ZmxLeadState(attachment: ZmxLeadAttachment(nonce: "n3", claim: true))
+        #expect(claiming.reclaimAfterDrop == "n3")
+
+        var following = ZmxLeadState(attachment: ZmxLeadAttachment(nonce: "n2", claim: false, reclaim: "n1"))
+        #expect(following.reclaimAfterDrop == "n1")
+        _ = following.apply(try #require(ZmxLeadNotice(title: "zmx-role;n2:follower:3")))
+        #expect(following.reclaimAfterDrop == nil)
+    }
+
     @Test func generatedNonceIsAPlainTokenZmxAccepts() {
         let nonce = ZmxLeadAttachment.makeNonce()
 

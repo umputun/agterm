@@ -18,8 +18,9 @@ extension agtermApp {
     /// run: the session, the daemon and the pane identity all stay, so the program inside keeps the
     /// `AGTERM_PANE_ID` it was started with.
     @MainActor @discardableResult
-    static func reattachPane(_ old: GhosttySurfaceView, claim: Bool, cover: Bool = true, services: SurfaceServices) -> Bool {
-        let lead = ZmxLeadAttachment(claim: claim)
+    static func reattachPane(_ old: GhosttySurfaceView, claim: Bool, cover: Bool = true, reclaim: String? = nil,
+                             services: SurfaceServices) -> Bool {
+        let lead = ZmxLeadAttachment(claim: claim, reclaim: reclaim)
         if let owner = old.scratchOwner { return reattachScratch(old, session: owner, lead: lead, cover: cover, services: services) }
         guard let session = old.session,
               let identity = old.isSplitPane ? session.splitPaneIdentity : session.paneIdentity,

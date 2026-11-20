@@ -348,7 +348,11 @@ extension ControlServer: RemoteAttachLines {
 
     /// scratchAttach never claims the lead either, as the origin's own scratch client does not.
     func scratchAttach(_ origin: RemoteBinding.Origin, daemon: String, local: UUID) -> String {
-        let lead = ZmxLeadAttachment(claim: false)
+        scratchAttach(origin, daemon: daemon, local: local, reclaim: nil)
+    }
+
+    func scratchAttach(_ origin: RemoteBinding.Origin, daemon: String, local: UUID, reclaim: String?) -> String {
+        let lead = ZmxLeadAttachment(claim: false, reclaim: reclaim)
         guard let line = try? RemoteSession.attachPaneCommand(host: origin.host, endpoint: origin.endpoint, daemon: daemon,
                                                               session: "scratch", pane: .left, lead: lead) else {
             return Self.unaddressable(origin.host, what: "scratch")

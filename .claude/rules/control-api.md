@@ -2165,7 +2165,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   child is `cat` with echo off, so nothing can be printed into it: `RemotePaneNotice` inside
   `PaneLeadCover` draws the reconnecting panel with that reason, for left, right and scratch, and the surface
   node's `reconnect` reads it, both from the entry, so both go with the wait. `RemoteReconnectBook` probes (`RemoteSession.probeCommand`) on the remote tick with
-  `RemoteRetryBackoff`, and a host that answers gets `reattachPane(claim: false)`, covered only when the
+  `RemoteRetryBackoff`, and a host that answers gets `reattachPane(claim: false)` with the entry's `reclaim` (Pane lead), covered only when the
   origin had reported a role or the attach it replaced dropped before its first report, and
   `remotePaneResumed`. Re-running the attach in the shell was rejected: it
   would claim the lead on every retry and skip that cleanup. A key on a waiting pane retries now; Command
@@ -2612,7 +2612,14 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   what it reads and types through the daemon are all bound to that one session. Taking the lead is always a FRESH attach into a
   new surface, by the first key on the cover, by `session.lead`, or by itself when the role turns
   `unowned`. The automatic one omits the claim, so it leads only if the daemon is still unowned when it
-  arrives and cannot take a lead someone claimed meanwhile. In place repair was rejected: libghostty
+  arrives and cannot take a lead someone claimed meanwhile.
+  A reconnect after a dropped link, an attached row's origin scratch included, also sets `ZMX_MANAGED_RECLAIM` to
+  `ZmxLeadState.reclaimAfterDrop`: the nonce
+  of the attach that led at the drop, or the one an attach that dropped before its first report was reclaiming.
+  zmx patch 0008 decides at Init, in one step: the reconnect leads while the leader is that attach, matched by the
+  token every managed client sends in `Identity`, or one that filled a vacancy without a claim and has sent no
+  key, paste or mouse press since. Anything else leaves it following, so it never takes a lead someone used.
+  `zmx type` and `zmx send` are not use. An older daemon ignores `Identity` and the reconnect follows as before. In place repair was rejected: libghostty
   reports a new grid before its terminal has it, and the role report reaches the app a main-queue hop
   after the bytes behind it, so a replay could be parsed at the old grid.
 - `agtermApp.reattachPane` runs none of the pane's close paths: session, daemon and pane identity stay,

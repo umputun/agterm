@@ -15,11 +15,12 @@ enum PaneLead {
     static var replace: ((_ old: GhosttySurfaceView, _ launch: PaneReattach, _ lead: ZmxLeadAttachment) -> GhosttySurfaceView?)?
     /// Tells the pane's store that read-back changed.
     static var roleChanged: ((_ view: GhosttySurfaceView) -> Void)?
-    /// Parks a pane whose ssh lost the connection until the host answers again. Installed by the app.
-    static var waitToReconnect: ((_ view: GhosttySurfaceView, _ cover: Bool) -> Void)?
-    /// Attaches a parked pane again without the claim, covered until its first report when `cover`. False
-    /// when nothing was attached.
-    static var reconnect: ((_ old: GhosttySurfaceView, _ cover: Bool) -> Bool)?
+    /// Parks a pane whose ssh lost the connection until the host answers again, with the nonce of the attach
+    /// that led when it dropped. Installed by the app.
+    static var waitToReconnect: ((_ view: GhosttySurfaceView, _ cover: Bool, _ reclaim: String?) -> Void)?
+    /// Attaches a parked pane again without the claim, covered until its first report when `cover`, taking back
+    /// the lead `reclaim` names while nobody used it since. False when nothing was attached.
+    static var reconnect: ((_ old: GhosttySurfaceView, _ cover: Bool, _ reclaim: String?) -> Bool)?
     /// scratchStopped parks a remote window's scratch whose attach lost its link or ended; false for any other view.
     /// Installed by the app.
     static var scratchStopped: ((_ view: GhosttySurfaceView) -> Bool)?
@@ -57,8 +58,8 @@ enum PaneLead {
     static func linkLost(_ notice: RemoteLinkNotice, from view: GhosttySurfaceView) {
         if !view.isDestroyed, scratchStopped?(view) == true { return }
         guard !view.isDestroyed, let pane = UUID(uuidString: view.paneToken),
-              ZmxLeadBook.shared.states[pane]?.attachment.nonce == notice.nonce else { return }
-        waitToReconnect?(view, ZmxLeadBook.shared.role(pane: pane) != nil || ZmxLeadBook.shared.reattaching(pane: pane))
+              let state = ZmxLeadBook.shared.states[pane], state.attachment.nonce == notice.nonce else { return }
+        waitToReconnect?(view, state.role != nil || state.reattaching, state.reclaimAfterDrop)
     }
 
     /// True when `event` belongs to a takeover or a pane waiting to reconnect, and must not reach the terminal.

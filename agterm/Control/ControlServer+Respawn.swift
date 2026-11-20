@@ -71,6 +71,6 @@ extension ControlServer {
         let surface = session.paneIdentity == pane ? session.surface
             : session.splitPaneIdentity == pane ? session.splitSurface : nil
         guard let view = surface as? GhosttySurfaceView else { return }
-        _ = PaneLead.reconnect?(view, true)
+        _ = PaneLead.reconnect?(view, true, nil)
     }
 }

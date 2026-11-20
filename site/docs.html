@@ -879,7 +879,8 @@ agtermctl session new --remote srv --window &quot;$win&quot;                   #
 <li>On the other Mac, those panes are covered with a note that they are in use elsewhere. A key press on the cover, or <code>agtermctl session lead</code>, takes the lead back and covers the pane here.</li>
 <li>Scripts typing into a covered pane on the other Mac still work, and so do their screen reads: both go through the session, not the covered view.</li>
 <li>Closing the session here uncovers the panes over there.</li>
-<li>In a <a href="#remote-window-mac">window of another Mac</a>, this Mac takes the lead when you open the window, in the rows you create, reopen or bring back with undo from here, and in the new pane of a split you add from here; the row's other pane keeps its leader. A reconnect, a relaunch, and rows created on the other Mac leave the lead where it is.</li>
+<li>When the connection drops and a pane or the scratch terminal reconnects, it takes the lead back if this Mac led it when the link dropped and nobody has used it since: the lead is still held by this Mac's lost connection, or another Mac took it only because the pane was free and nothing has been typed, pasted or clicked there since. Otherwise the pane comes back covered. A session started on the host by an agterm without this behavior keeps leaving the lead where it is until it ends.</li>
+<li>In a <a href="#remote-window-mac">window of another Mac</a>, this Mac takes the lead when you open the window, in the rows you create, reopen or bring back with undo from here, and in the new pane of a split you add from here; the row's other pane keeps its leader. A relaunch and rows created on the other Mac leave the lead where it is, and a reconnect takes it back only as described above.</li>
 <li>Both Macs need an agterm with this behavior; against an older one the session arrives at the other Mac's size until you type.</li>
 <li>While another Mac leads at a different size, cursor and screen-text reads here can disagree with the program's layout. Automation that relies on them is unsupported in that state.</li>
 </ul>
@@ -968,7 +969,7 @@ agtermctl session new --remote srv --window &quot;$win&quot;                   #
 <li>If ssh itself failed (exit 255, which a refused login also gives), the panel reads <strong>Connection to HOST lost</strong> and says it is reconnecting. agterm attaches again once the host answers, on the stream's schedule; any key, waking the Mac or a network change retries at once and restarts the schedule. ⌘W still closes the session.</li>
 <li>While the host keeps refusing, the panel adds what ssh said last, such as a changed host key or a rejected login.</li>
 <li>When the host answers, the last screen is replaced before the new connection is up, so a link that drops again right away leaves an empty pane with only the panel.</li>
-<li>The pane comes back without taking the lead: if the other Mac leads by then, it arrives covered. It also arrives covered while the other Mac still counts this Mac's dropped connection as leader, which clears once that connection times out.</li>
+<li>The pane takes the lead back only as <a href="#remote-sessions-lead">Who leads a pane</a> describes; otherwise it arrives covered.</li>
 <li>Any other exit shows <strong>SESSION on HOST ended</strong>; any key closes the pane.</li>
 <li>If the other Mac closes the session, the row here closes by itself with no panel, whether it is open now or comes back at the next launch. A session closed there with undo keeps its row here until the undo window passes; undo there leaves it as it was.</li>
 </ul>
