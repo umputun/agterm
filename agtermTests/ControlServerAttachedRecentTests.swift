@@ -197,6 +197,38 @@ final class ControlServerAttachedRecentTests: XCTestCase {
         XCTAssertEqual(library.remoteRecentClosedItems.map(\.id), [entry.id])
     }
 
+    func testABareReopenWithAServerWindowFrontmostIsRefusedBeforeTheOriginIsAsked() async throws {
+        let runner = ScriptedRunner([ok(ControlResult(closed: ["origin-1"], recentID: "r1"))])
+        let (server, store) = try makeServer(runner)
+        try await terminate(try attachedRow(in: store), server)
+        let entry = try XCTUnwrap(library.remoteRecentClosedItems.first)
+        let remote = try XCTUnwrap(library.store(for: library.newRemoteWindow(host: "box").id))
+
+        let reply = await server.dispatch(ControlRequest(cmd: .recentOpen, target: entry.id.uuidString))
+
+        XCTAssertFalse(reply.ok)
+        XCTAssertEqual(reply.error, "recent.open is not available in a remote window")
+        XCTAssertEqual(runner.invocations.count, 1)
+        XCTAssertEqual(library.remoteRecentClosedItems.map(\.id), [entry.id])
+        XCTAssertNil(shownRow("origin-1", in: remote))
+    }
+
+    func testTheMenusReopenWithAServerWindowFrontmostIsRefusedBeforeTheOriginIsAsked() async throws {
+        let runner = ScriptedRunner([ok(ControlResult(closed: ["origin-1"], recentID: "r1"))])
+        let (server, store) = try makeServer(runner)
+        try await terminate(try attachedRow(in: store), server)
+        let entry = try XCTUnwrap(library.remoteRecentClosedItems.first)
+        let remote = try XCTUnwrap(library.store(for: library.newRemoteWindow(host: "box").id))
+
+        let reply = await server.reopenAttached(entry.id, window: nil)
+
+        XCTAssertFalse(reply.ok)
+        XCTAssertEqual(reply.error, "recent.open is not available in a remote window")
+        XCTAssertEqual(runner.invocations.count, 1)
+        XCTAssertEqual(library.remoteRecentClosedItems.map(\.id), [entry.id])
+        XCTAssertNil(shownRow("origin-1", in: remote))
+    }
+
     func testAGoneSessionWithNoRecordedEntryIsFoundInTheOriginsList() async throws {
         let listed = tree(sessions: session("origin-1"))
         let theirs = ControlRecentItem(id: "r9", kind: "session", title: "c", subtitle: nil, closedAt: 1, workspaceID: "ws1",
