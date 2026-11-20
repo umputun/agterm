@@ -157,9 +157,17 @@ targets:
           # otherwise trip the re-seal below.
           rm -rf "$CODESIGNING_FOLDER_PATH/Contents/Resources/AppIcon.icon"
           core="$SRCROOT/agtermCore"
-          swift build --package-path "$core" -c release --product agtermctl
-          swift build --package-path "$core" -c release --product agterm-session-host
-          src="$(swift build --package-path "$core" -c release --product agtermctl --show-bin-path)/agtermctl"
+          # a scratch path of their own keeps the helpers off the tree swift test builds. CI opts into file
+          # hashing so a restored Debug build skips unchanged sources (Release compiles whole modules);
+          # Xcode 26.0's Swift 6.2 lacks the flag.
+          # scripts/with-helper-prebuild.sh must build the same way.
+          config=release
+          [ "$CONFIGURATION" = Debug ] && config=debug
+          helper=(--package-path "$core" --scratch-path "$core/.build/helpers" -c "$config")
+          [ "${AGTERM_HELPER_HASHING:-}" = 1 ] && helper+=(-Xswiftc -enable-incremental-file-hashing)
+          swift build "${helper[@]}" --product agtermctl
+          swift build "${helper[@]}" --product agterm-session-host
+          src="$(swift build "${helper[@]}" --product agtermctl --show-bin-path)/agtermctl"
           host_src="$(dirname "$src")/agterm-session-host"
           cli_dest="$CODESIGNING_FOLDER_PATH/Contents/MacOS/agtermctl"
           host_dest="$CODESIGNING_FOLDER_PATH/Contents/MacOS/agterm-session-host"

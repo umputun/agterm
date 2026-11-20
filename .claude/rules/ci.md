@@ -68,8 +68,12 @@ paths:
   exceed the five concurrent macOS jobs on a free account. The teardown script fails
   only on a control call unanswered for 60 s, and has no eight-producer case, removed after sustained runner
   contention. `build.sh` and `release.sh` both pass `ARCHS=arm64`, so CI compiles the same slices the shipped
-  app does. Both app builds run under `scripts/with-helper-prebuild.sh`, which starts the Release helper
-  products before the app compile; the helper phase that otherwise builds them after the app still runs.
+  app does. Both app builds run under `scripts/with-helper-prebuild.sh`, which starts the helper products before
+  the app compile; the helper phase that otherwise builds them after the app still runs. Both build in
+  `agtermCore/.build/helpers`, Debug for a Debug app (`AGTERM_HELPER_CONFIG=debug` in `hosted`) and Release
+  otherwise, and CI saves that directory per configuration. CI sets `AGTERM_HELPER_HASHING=1` in the
+  environment for the prebuild and as a build setting for the phase, which adds
+  `-enable-incremental-file-hashing`; Xcode 26.0's Swift 6.2 lacks the flag, so local builds leave it off.
   `hosted` runs the Debug tests `scripts/test-app.sh` runs and needs nothing from `build`; it builds the
   bundled helpers itself. Staging and `xcodebuild build-for-testing` run in steps of their own, since one
   cache-hit run spent 1412s building and testing, and only `xcodebuild test-without-building` runs under the

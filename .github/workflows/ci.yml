@@ -338,8 +338,23 @@ jobs:
           path: build/cas
           key: xcode-cas-v1-arm64-${{ steps.xcode.outputs.build }}-Release-${{ github.sha }}
           restore-keys: xcode-cas-v1-arm64-${{ steps.xcode.outputs.build }}-Release-
+      - name: Restore the helper build
+        id: helpers
+        uses: actions/cache/restore@v6
+        with:
+          path: agtermCore/.build/helpers
+          key: swiftpm-helpers-v1-macos-arm64-release-${{ steps.xcode.outputs.build }}-${{ hashFiles('agtermCore/Package.resolved') }}-${{ github.sha }}
+          restore-keys: swiftpm-helpers-v1-macos-arm64-release-${{ steps.xcode.outputs.build }}-${{ hashFiles('agtermCore/Package.resolved') }}-
       - name: Build libghostty + app (Release)
-        run: scripts/with-helper-prebuild.sh scripts/build.sh COMPILATION_CACHE_ENABLE_CACHING=YES COMPILATION_CACHE_CAS_PATH="$GITHUB_WORKSPACE/build/cas" COMPILATION_CACHE_ENABLE_DIAGNOSTIC_REMARKS=YES
+        env:
+          AGTERM_HELPER_HASHING: "1"
+        run: scripts/with-helper-prebuild.sh scripts/build.sh COMPILATION_CACHE_ENABLE_CACHING=YES COMPILATION_CACHE_CAS_PATH="$GITHUB_WORKSPACE/build/cas" COMPILATION_CACHE_ENABLE_DIAGNOSTIC_REMARKS=YES AGTERM_HELPER_HASHING=1
+      - name: Save the helper build
+        if: steps.helpers.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: agtermCore/.build/helpers
+          key: ${{ steps.helpers.outputs.cache-primary-key }}
       - name: Save the compilation cache
         if: steps.cas.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
@@ -504,7 +519,17 @@ jobs:
           path: build/cas
           key: xcode-cas-v1-arm64-${{ steps.xcode.outputs.build }}-Debug-${{ github.sha }}
           restore-keys: xcode-cas-v1-arm64-${{ steps.xcode.outputs.build }}-Debug-
+      - name: Restore the helper build
+        id: helpers
+        uses: actions/cache/restore@v6
+        with:
+          path: agtermCore/.build/helpers
+          key: swiftpm-helpers-v1-macos-arm64-debug-${{ steps.xcode.outputs.build }}-${{ hashFiles('agtermCore/Package.resolved') }}-${{ github.sha }}
+          restore-keys: swiftpm-helpers-v1-macos-arm64-debug-${{ steps.xcode.outputs.build }}-${{ hashFiles('agtermCore/Package.resolved') }}-
       - name: Build hosted tests
+        env:
+          AGTERM_HELPER_CONFIG: debug
+          AGTERM_HELPER_HASHING: "1"
         run: |
           xcodegen generate
           scripts/with-helper-prebuild.sh xcodebuild build-for-testing \
@@ -512,7 +537,13 @@ jobs:
             -scheme agtermTests \
             -destination 'platform=macOS' \
             -derivedDataPath build/DerivedData \
-            COMPILATION_CACHE_ENABLE_CACHING=YES COMPILATION_CACHE_CAS_PATH="$GITHUB_WORKSPACE/build/cas" COMPILATION_CACHE_ENABLE_DIAGNOSTIC_REMARKS=YES
+            COMPILATION_CACHE_ENABLE_CACHING=YES COMPILATION_CACHE_CAS_PATH="$GITHUB_WORKSPACE/build/cas" COMPILATION_CACHE_ENABLE_DIAGNOSTIC_REMARKS=YES AGTERM_HELPER_HASHING=1
+      - name: Save the helper build
+        if: steps.helpers.outputs.cache-hit != 'true' && matrix.shard == 1
+        uses: actions/cache/save@v6
+        with:
+          path: agtermCore/.build/helpers
+          key: ${{ steps.helpers.outputs.cache-primary-key }}
       - name: Save the compilation cache
         if: steps.cas.outputs.cache-hit != 'true' && matrix.shard == 1
         uses: actions/cache/save@v6
