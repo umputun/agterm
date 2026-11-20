@@ -88,6 +88,19 @@ Each entry separates a demonstrated cause from one that is only consistent with 
   was opened with, `ServerActions` reads the store's registry, and the test harness gives each server its own.
   The app keeps `.shared`. Test: `aFinishedAskIsRetainedInTheStoresRegistryOnly`.
 
+### `ServerStreamsTests.anExpiredAskIsNeverHandedToAConnectedPresenter`
+
+- **Symptom.** `request == nil` fails: the presenter receives the expired ask as an `.askRequest` with an offer.
+- **Runs.** Job 136089544313 (run 44676503256, Linux, PR #1063), in a start-of-run burst where tests took about 32 s.
+- **Cause, demonstrated.** The test set the deadline from `Date()` while the harness freezes `streams.now` at
+  `jobClock`. `openRemoteAsk` checks expiry on the real clock and refuses the ask, so `ServerActions.openAsk`
+  holds it and arms the deadline. A lead report arriving after the open runs `offerPendingInteractions` on the
+  frozen clock, which reads the deadline as ahead once the test started more than 1 s after the harness, and
+  offers the ask before the 50 ms expiry task runs.
+- **Evidence.** A 2 s sleep before the open plus an explicit `onLeadReport` call after it fails at the same
+  assertion locally; either alone passes.
+- **Fix.** The deadline is `harness.jobClock` minus 1 s, expired on both clocks.
+
 ### `ServerStreamsTests.aProgramOpenedOfflineIsOfferedWithATokenThatAClaimMustCarry`
 
 - **Symptom.** The slot owner is nil and the claim is refused (`job not claimable`).

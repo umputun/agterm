@@ -522,7 +522,7 @@ struct ServerStreamsTests {
         let viewer = try await presenter(for: session)
         defer { viewer.disconnect() }
         var late = Self.ask()
-        late.deadline = Date().addingTimeInterval(-1)
+        late.deadline = harness.jobClock.addingTimeInterval(-1)
 
         #expect(openAsk(late, on: session).ok)
 
