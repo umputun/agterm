@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import XCTest
 @testable import agterm
 import agtermCore
@@ -13,6 +14,7 @@ final class SidebarExpansionMirrorTests: XCTestCase {
     private var stateDir: URL!
     private var library: WindowLibrary!
     private var actions: AppActions!
+    private var window: NSWindow!
 
     override func setUp() async throws {
         try await super.setUp()
@@ -26,6 +28,8 @@ final class SidebarExpansionMirrorTests: XCTestCase {
 
     override func tearDown() async throws {
         await MainActor.run {
+            window?.orderOut(nil)
+            window = nil
             actions = nil
             library = nil
             try? FileManager.default.removeItem(at: stateDir)
@@ -61,5 +65,30 @@ final class SidebarExpansionMirrorTests: XCTestCase {
 
         XCTAssertEqual(store.sidebarExpandedWorkspaceIDs, [workspace])
         XCTAssertFalse(store.isCurrentWorkspaceCollapsed)
+    }
+
+    func testCollapseWorkspacesWithATopLevelSessionCurrentKeepsNoRowOpen() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let named = try XCTUnwrap(store.namedWorkspaces.first).id
+        let root = try XCTUnwrap(store.rootWorkspace).id
+        store.setWorkspaceExpanded(named, expanded: false)
+        try XCTUnwrap(store.addSession(toWorkspace: root, cwd: "/tmp"))
+        XCTAssertEqual(store.currentWorkspaceID, root)
+        mountSidebar(for: store)
+
+        actions.collapseOtherWorkspaces(in: store)
+
+        XCTAssertTrue(store.sidebarExpandedWorkspaceIDs.isEmpty)
+        XCTAssertTrue(store.namedWorkspaces.allSatisfy { !$0.isExpanded })
+    }
+
+    private func mountSidebar(for store: AppStore) {
+        let host = NSHostingView(rootView: WorkspaceSidebar(store: store, actions: actions).frame(width: 240, height: 400))
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 240, height: 400),
+                          styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        window.orderFront(nil)
+        host.layoutSubtreeIfNeeded()
     }
 }
