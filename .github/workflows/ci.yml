@@ -6,8 +6,10 @@ on:
   pull_request:
     branches: [master]
 
+# a master push keys on its sha: sharing the ref, a later docs-only push would cancel it and then skip
+# the Swift jobs, leaving the earlier merge unchecked
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -18,6 +20,9 @@ jobs:
     outputs:
       swift: ${{ steps.filter.outputs.swift }}
       cookbook: ${{ steps.filter.outputs.cookbook }}
+      # the owner's same-repo PRs reach CI after the local test, test-app and lint gates, so those jobs
+      # run on master instead; a workflow change still runs them before merge
+      full: ${{ github.event_name != 'pull_request' || github.event.pull_request.user.id != github.event.repository.owner.id || github.event.pull_request.head.repo.id != github.event.repository.id || steps.filter.outputs.workflow == 'true' }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
@@ -42,11 +47,13 @@ jobs:
             cookbook:
               - "cookbook/**"
               - ".github/workflows/ci.yml"
+            workflow:
+              - ".github/workflows/ci.yml"
 
   test:
     name: Unit tests
     needs: changes
-    if: needs.changes.outputs.swift == 'true'
+    if: needs.changes.outputs.swift == 'true' && needs.changes.outputs.full == 'true'
     runs-on: macos-26
     timeout-minutes: 35
     steps:
@@ -138,7 +145,7 @@ jobs:
   coverage:
     name: Coverage upload
     needs: [changes, test]
-    if: needs.changes.outputs.swift == 'true'
+    if: needs.changes.outputs.swift == 'true' && needs.changes.outputs.full == 'true'
     # the coveralls action installs its reporter via a brew tap on macOS (now blocked
     # by homebrew's tap-trust gate); on linux it downloads a binary, so upload here
     runs-on: ubuntu-latest
@@ -162,7 +169,7 @@ jobs:
   lint:
     name: swiftlint
     needs: changes
-    if: needs.changes.outputs.swift == 'true'
+    if: needs.changes.outputs.swift == 'true' && needs.changes.outputs.full == 'true'
     runs-on: macos-26
     timeout-minutes: 10
     steps:
@@ -373,7 +380,7 @@ jobs:
   hosted:
     name: App-hosted tests
     needs: changes
-    if: needs.changes.outputs.swift == 'true'
+    if: needs.changes.outputs.swift == 'true' && needs.changes.outputs.full == 'true'
     runs-on: macos-26
     timeout-minutes: 35
     steps:

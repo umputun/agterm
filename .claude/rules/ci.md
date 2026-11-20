@@ -5,8 +5,13 @@ paths:
 
 ## CI (`ci.yml`)
 
-- `ci.yml` runs for pushes and PRs to `master`; concurrency cancels the older run for the same ref. All
-  macOS jobs use `macos-26`. Releases are local; see `.claude/rules/release.md`.
+- `ci.yml` runs for pushes and PRs to `master`; concurrency cancels the older run for the same PR, while each
+  master push keys its group on the sha and completes. All macOS jobs use `macos-26`. Releases are local;
+  see `.claude/rules/release.md`.
+- On a same-repo PR by the repository owner, `changes` sets `full` false and `test`, `coverage`, `lint`
+  and `hosted` skip: those PRs arrive after the local gates, and the jobs run on the master push.
+  `linux` and `build` still run under the Swift filter and `cookbook` under its own, and a PR touching
+  `ci.yml` runs everything.
 - `docs/ci-flakes.md` records every investigated intermittent failure by test name and log text; read it
   before investigating a red run, and add an entry after one.
 - Every job carries its own `timeout-minutes`, with generous headroom over observed runtime. A job without
@@ -16,7 +21,7 @@ paths:
   `.claude-plugin/**`, `.agents/**`, `project.yml`, `scripts/**`, both SwiftLint configs, and `ci.yml`.
   Keep all three plugin paths: `SkillInstallTests` checks the bundled `SKILL.md` command count, every
   manifest path, and agreement among the three versions. A skill/manifest-only release preflight commit
-  must run the five Swift jobs.
+  must run the five Swift jobs, which it does on a master push or a full PR run.
 - `test`, `build` and `hosted` run in parallel and are each mostly compilation; merging any two puts
   both compiles on the critical path.
 - `test` runs `swift test --enable-code-coverage` in `agtermCore`, exports lcov, and uploads it.
