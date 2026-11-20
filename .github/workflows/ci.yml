@@ -93,13 +93,34 @@ jobs:
         run: brew install fish
       - name: Verify fish
         run: which fish && fish --version
-      # built outside the watchdog so a slow runner's compile cannot spend its budget; the test step reuses it
+      - name: Read the Xcode build
+        id: xcode
+        run: |
+          echo "build=$(xcodebuild -version | awk '/Build version/ {print $3}')" >> "$GITHUB_OUTPUT"
+          xcodebuild -version && echo "SDK $(xcrun --show-sdk-build-version), image $ImageOS $ImageVersion"
+      - name: Restore the SwiftPM build
+        id: spm
+        uses: actions/cache/restore@v6
+        with:
+          path: agtermCore/.build
+          key: swiftpm-v1-macos-arm64-debug-coverage-${{ steps.xcode.outputs.build }}-${{ hashFiles('agtermCore/Package.resolved') }}-${{ github.sha }}
+          restore-keys: swiftpm-v1-macos-arm64-debug-coverage-${{ steps.xcode.outputs.build }}-${{ hashFiles('agtermCore/Package.resolved') }}-
+      # built outside the watchdog so a slow runner's compile cannot spend its budget; the test step reuses it,
+      # which takes the same flags here and there
       - name: swift build tests (with coverage)
         working-directory: agtermCore
-        run: swift build --build-tests --enable-code-coverage
+        run: swift build --build-tests --enable-code-coverage -Xswiftc -enable-incremental-file-hashing
+      - name: Save the SwiftPM build
+        if: steps.spm.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: agtermCore/.build
+          key: ${{ steps.spm.outputs.cache-primary-key }}
+      - name: Report the SwiftPM build cache
+        run: echo "restored '${{ steps.spm.outputs.cache-matched-key }}', $(du -sh agtermCore/.build | cut -f1)"
       - name: swift test (with coverage)
         working-directory: agtermCore
-        run: ../scripts/watchdog.sh swift test --enable-code-coverage
+        run: ../scripts/watchdog.sh swift test --enable-code-coverage -Xswiftc -enable-incremental-file-hashing
         env:
           AGTERM_REQUIRE_FISH: "1"
           AGTERM_REQUIRE_ZMX: "1"
@@ -225,6 +246,17 @@ jobs:
           AGTERM_ZMX_ZIG=/opt/zig-x86_64-linux-0.16.0/zig AGTERM_ZMX_TARGET=x86_64-linux-musl \
             AGTERM_ZMX_STAGE_DIR=build/linux/x86_64/zmx AGTERM_ZMX_STAMP_FILE=build/linux/x86_64/.zmx-build-stamp \
             scripts/setup.sh --zmx-only
+      - name: Read the Swift toolchain
+        id: toolchain
+        run: echo "swift=$(swift --version 2>&1 | sha256sum | cut -c1-12)" >> "$GITHUB_OUTPUT"
+      # restored before the chown below so the test user owns it
+      - name: Restore the SwiftPM build
+        id: spm
+        uses: actions/cache/restore@v6
+        with:
+          path: agtermCore/.build
+          key: swiftpm-v1-linux-x86_64-debug-${{ steps.toolchain.outputs.swift }}-${{ hashFiles('agtermCore/Package.resolved') }}-${{ github.sha }}
+          restore-keys: swiftpm-v1-linux-x86_64-debug-${{ steps.toolchain.outputs.swift }}-${{ hashFiles('agtermCore/Package.resolved') }}-
       - name: Create the test user
         # root passes the permission checks several tests rely on failing
         run: |
@@ -232,7 +264,17 @@ jobs:
           chown -R agterm-test "$GITHUB_WORKSPACE"
       - name: swift build
         working-directory: agtermCore
-        run: runuser --user agterm-test -- env HOME=/home/agterm-test swift build --build-tests
+        run: >-
+          runuser --user agterm-test -- env HOME=/home/agterm-test
+          swift build --build-tests -Xswiftc -enable-incremental-file-hashing
+      - name: Save the SwiftPM build
+        if: steps.spm.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: agtermCore/.build
+          key: ${{ steps.spm.outputs.cache-primary-key }}
+      - name: Report the SwiftPM build cache
+        run: echo "restored '${{ steps.spm.outputs.cache-matched-key }}', $(du -sh agtermCore/.build | cut -f1)"
       - name: swift test
         working-directory: agtermCore
         # the server's real-daemon suite and the fish cases fail rather than skip without zmx or fish
@@ -290,8 +332,28 @@ jobs:
           key: zmx-v2-${{ steps.revisions.outputs.zmx }}-${{ steps.revisions.outputs.zmx_target }}-${{ hashFiles('scripts/zmx-patches/**/*.patch') }}
       - name: Install xcodegen
         run: brew install xcodegen
+      - name: Read the Xcode build
+        id: xcode
+        run: |
+          echo "build=$(xcodebuild -version | awk '/Build version/ {print $3}')" >> "$GITHUB_OUTPUT"
+          xcodebuild -version && echo "SDK $(xcrun --show-sdk-build-version), image $ImageOS $ImageVersion"
+      - name: Restore the compilation cache
+        id: cas
+        uses: actions/cache/restore@v6
+        with:
+          path: build/cas
+          key: xcode-cas-v1-arm64-${{ steps.xcode.outputs.build }}-Release-${{ github.sha }}
+          restore-keys: xcode-cas-v1-arm64-${{ steps.xcode.outputs.build }}-Release-
       - name: Build libghostty + app (Release)
-        run: scripts/with-helper-prebuild.sh scripts/build.sh
+        run: scripts/with-helper-prebuild.sh scripts/build.sh COMPILATION_CACHE_ENABLE_CACHING=YES COMPILATION_CACHE_CAS_PATH="$GITHUB_WORKSPACE/build/cas" COMPILATION_CACHE_ENABLE_DIAGNOSTIC_REMARKS=YES
+      - name: Save the compilation cache
+        if: steps.cas.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: build/cas
+          key: ${{ steps.cas.outputs.cache-primary-key }}
+      - name: Report the compilation cache
+        run: echo "restored '${{ steps.cas.outputs.cache-matched-key }}', $(du -sh build/cas | cut -f1)"
       - name: Surface teardown under mailbox pressure
         run: python3 scripts/test-surface-teardown.py build/DerivedData/Build/Products/Release/agterm.app --evidence surface-teardown
       - name: Upload surface teardown diagnostics
@@ -378,11 +440,23 @@ jobs:
           fi
 
   hosted:
-    name: App-hosted tests
+    name: App-hosted tests (${{ matrix.shard }})
     needs: changes
     if: needs.changes.outputs.swift == 'true' && needs.changes.outputs.full == 'true'
     runs-on: macos-26
     timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    # two lists balanced by measured class time; shard 3 runs every class not named here, so a new one
+    # always runs. The fish login seam step needs SessionHostFishSeamTests' shard.
+    env:
+      HOSTED_SHARD1: TextPageRenderingTests AskDialogViewTests CustomCommandRunnerTests
+      HOSTED_SHARD2: >-
+        SessionHostFishSeamTests HtmlOverlayRegistryTests SessionHostClientTests TextPageBridgeTests
+        MarkdownPageRenderingTests GhosttySurfaceViewInputTests ControlServerRemotePresentationTests
+        AppActionsRemoteCatalogTests
     steps:
       - uses: actions/checkout@v7
       - name: Read pinned helper revisions
@@ -424,6 +498,18 @@ jobs:
       # staged and compiled outside the watchdog so a cache miss or a slow build cannot spend its budget
       - name: Stage libghostty and zmx
         run: scripts/setup.sh
+      - name: Read the Xcode build
+        id: xcode
+        run: |
+          echo "build=$(xcodebuild -version | awk '/Build version/ {print $3}')" >> "$GITHUB_OUTPUT"
+          xcodebuild -version && echo "SDK $(xcrun --show-sdk-build-version), image $ImageOS $ImageVersion"
+      - name: Restore the compilation cache
+        id: cas
+        uses: actions/cache/restore@v6
+        with:
+          path: build/cas
+          key: xcode-cas-v1-arm64-${{ steps.xcode.outputs.build }}-Debug-${{ github.sha }}
+          restore-keys: xcode-cas-v1-arm64-${{ steps.xcode.outputs.build }}-Debug-
       - name: Build hosted tests
         run: |
           xcodegen generate
@@ -431,7 +517,16 @@ jobs:
             -project agterm.xcodeproj \
             -scheme agtermTests \
             -destination 'platform=macOS' \
-            -derivedDataPath build/DerivedData
+            -derivedDataPath build/DerivedData \
+            COMPILATION_CACHE_ENABLE_CACHING=YES COMPILATION_CACHE_CAS_PATH="$GITHUB_WORKSPACE/build/cas" COMPILATION_CACHE_ENABLE_DIAGNOSTIC_REMARKS=YES
+      - name: Save the compilation cache
+        if: steps.cas.outputs.cache-hit != 'true' && matrix.shard == 1
+        uses: actions/cache/save@v6
+        with:
+          path: build/cas
+          key: ${{ steps.cas.outputs.cache-primary-key }}
+      - name: Report the compilation cache
+        run: echo "restored '${{ steps.cas.outputs.cache-matched-key }}', $(du -sh build/cas | cut -f1)"
       # xcodebuild hands the test host only TEST_RUNNER_-prefixed variables, prefix stripped.
       - name: Application-hosted unit tests
         env:
@@ -440,21 +535,29 @@ jobs:
           WATCHDOG_RUNNER: '^${{ github.workspace }}/build/DerivedData/Build/Products/Debug/agterm\.app/Contents/MacOS/agterm( |$)'
           DIAG_DIR: ${{ github.workspace }}/hosted-test-hang
         run: |
+          selection=()
+          case "${{ matrix.shard }}" in
+            1) for c in $HOSTED_SHARD1; do selection+=("-only-testing:agtermTests/$c"); done ;;
+            2) for c in $HOSTED_SHARD2; do selection+=("-only-testing:agtermTests/$c"); done ;;
+            *) for c in $HOSTED_SHARD1 $HOSTED_SHARD2; do selection+=("-skip-testing:agtermTests/$c"); done ;;
+          esac
           scripts/watchdog.sh xcodebuild test-without-building \
             -project agterm.xcodeproj \
             -scheme agtermTests \
             -destination 'platform=macOS' \
-            -derivedDataPath build/DerivedData
+            -derivedDataPath build/DerivedData \
+            "${selection[@]}"
       - name: upload hosted hang diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: hosted-test-hang
+          name: hosted-test-hang-${{ matrix.shard }}
           path: |
             hosted-test-hang
             build/DerivedData/Logs/Test
           if-no-files-found: ignore
       - name: Plain fish login shell seam
+        if: matrix.shard == 2
         env:
           TEST_RUNNER_AGTERM_REQUIRE_FISH_LOGIN_SHELL: "1"
           TEST_RUNNER_AGTERM_REQUIRE_FISH: "1"
