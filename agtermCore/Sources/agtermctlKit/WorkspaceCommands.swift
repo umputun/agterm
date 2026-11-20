@@ -92,7 +92,7 @@ struct Workspace: ParsableCommand {
     /// `validNamesList`/`helpPhrase`/`validNamesPhrase`), so a new case reaches each and cannot drift from it.
     struct Focus: RequestCommand {
         static let configuration = CommandConfiguration(
-            abstract: "Mark a workspace in the sidebar focus set (\(ControlWorkspaceFocusMode.validNamesList))."
+            abstract: "Mark a workspace in the sidebar focus set (\(ControlWorkspaceFocusMode.validNamesList)); use --target root for the top-level sessions."
         )
         @Argument(help: "Mode: \(ControlWorkspaceFocusMode.helpPhrase).")
         var mode: String = ControlWorkspaceFocusMode.toggle.rawValue
@@ -139,7 +139,7 @@ struct Workspace: ParsableCommand {
     /// invert; the read-back is each session's `flagged` in `tree`.
     struct FlagCommand: RequestCommand {
         static let configuration = CommandConfiguration(
-            commandName: "flag", abstract: "Flag or unflag every session in a workspace (on|off|toggle)."
+            commandName: "flag", abstract: "Flag or unflag every session in a workspace (on|off|toggle); use --target root for the top-level sessions."
         )
         @Argument(help: "Mode: on, off, or toggle (default; unflags only when every session is flagged).")
         var mode: String = "toggle"

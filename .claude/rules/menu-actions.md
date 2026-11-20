@@ -75,6 +75,11 @@ paths:
   Mac with several windows which one, then calls `RemoteAttaching.createRemoteSession`, the creator
   `session.remote.new` runs, with failures in the Attach Remote HUD.
 
+- File ▸ New Top-Level Session (`new_root_session`, keyless) follows New Session, with a palette row, through
+  `AppActions.newRootSession`, which shares New Session's path into the root. `PaletteContext.hasRootWorkspace` disables it
+  in a server window whose owner has no root. Focus items read `PaletteContext.focusNoun`, "Top-Level Sessions" while the
+  active container is the root, and the focus editor lists a disabled root row for a rootless owner.
+
 - New Companion (`new_companion`, keyless) sits beside Duplicate Session in the row menu and the Session
   menu, with a palette row. On a remote row it asks the origin through `RemoteAttaching.createRemoteCompanion`,
   showing the two ssh waits in the Attach Remote HUD.
@@ -93,7 +98,7 @@ paths:
 - `applicationDockMenu` exposes New Session, New Window, Quick Terminal, Dashboard, captured-window MRU
   sessions, and attention ordering.
 - New Window alone is app-scoped (Discussion #313): capture nothing, call
-  `newWindow(ignoringModals: true)`, enable only when `actions != nil`, and explicitly unhide/activate.
+  `newWindowFromDock()`, enable only when `actions != nil`, and explicitly unhide/activate.
   Do not mark it always enabled before the action hub is wired. Require `openWindow` before persisting an
   open entry. Menu and palette New Window retain modal gating.
 - Other items capture store and window ID at build time. Recheck per-window modal/controller state, raise
@@ -246,7 +251,7 @@ paths:
   close/reopen/filter tests in `AppStoreCloseReselectionTests` pin these scopes.
 - Delete Workspace centralizes confirmation in `AppActions.deleteWorkspace(_:in:)`, then removes surfaces,
   recency, and reselection. Row menus pass their own store because right-clicking a background window does
-  not raise it. Menu/palette target active workspace and enforce `uiActionsEnabled`. Keep at least one workspace.
+  not raise it. Menu/palette target active workspace and enforce `uiActionsEnabled`. The last named workspace may go; the root stays.
 
 ## Navigation
 
@@ -255,8 +260,8 @@ paths:
   Option-Command-Left/Right remains pane focus.
 - `navigateSession` uses `navigableSessions`, wraps previous/next, selects ends for first/last, chooses
   first on nil/invalid selection, and no-ops when empty. Menu, palette, and `session.go` share it.
-- Previous/Next Workspace are the level above: `navigateWorkspace` steps `currentWorkspaceID` through
-  `visibleWorkspaces` and lands on the target's FIRST session, so the keybind, the palette row and
+- Previous/Next Workspace are the level above: `navigateWorkspace` steps `currentWorkspaceID` through the
+  named `visibleWorkspaces`, never the root, and lands on the target's FIRST session, so the keybind, the palette row and
   `workspace.go` mean one thing. Keyless, tree mode only, and it reveals a landed pane off the step's
   captured indicator exactly as plain session nav does. **Collapse is not a navigation filter** —
   `navigableSessions` and `navigateWorkspace` both ignore `isExpanded`, and adding a term to either would

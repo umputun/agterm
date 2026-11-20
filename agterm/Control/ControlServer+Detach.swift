@@ -25,7 +25,7 @@ extension ControlServer {
     }
 
     func detachWorkspace(_ target: String?, window: String?) -> ControlResponse {
-        resolver.resolveWorkspace(target, window: window) { store, id in
+        resolver.resolveNamedWorkspace(target, window: window) { store, id in
             guard let mirror = store.remoteActions?.mirror else { return ControlActionsDefaultsRefusal.detach("workspace.detach") }
             mirror.detach(workspace: id)
             return ControlResponse(ok: true)

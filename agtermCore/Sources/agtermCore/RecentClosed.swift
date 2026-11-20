@@ -56,15 +56,19 @@ public struct RecentClosedSession: Codable, Equatable, Sendable {
     public let snapshot: SessionSnapshot
     /// companions are reopened under the parent; optional so an older `recent-closed.json` still decodes.
     public let companions: [SessionSnapshot]?
+    /// root marks a session that sat among the top-level sessions when it closed; standing alone, it reopens among the
+    /// restoring window's own, while a companion still follows its parent. nil is a named workspace's.
+    public let root: Bool?
 
     public init(workspaceID: UUID, workspaceName: String, workspaceIndex: Int, sessionIndex: Int,
-                snapshot: SessionSnapshot, companions: [SessionSnapshot]? = nil) {
+                snapshot: SessionSnapshot, companions: [SessionSnapshot]? = nil, root: Bool? = nil) {
         self.workspaceID = workspaceID
         self.workspaceName = workspaceName
         self.workspaceIndex = workspaceIndex
         self.sessionIndex = sessionIndex
         self.snapshot = snapshot
         self.companions = companions
+        self.root = root
     }
 }
 
@@ -112,13 +116,23 @@ public struct RemoteRecentClosedItem: Codable, Identifiable, Equatable, Sendable
         public let workspaceIndex: Int
         public let sessionIndex: Int
         public let parentID: UUID?
+        /// root marks a row that sat among the top-level sessions when it closed; standing alone, it reattaches among
+        /// the destination window's own, while a companion still follows its parent.
+        public let root: Bool?
 
-        public init(workspaceID: UUID, workspaceName: String, workspaceIndex: Int, sessionIndex: Int, parentID: UUID?) {
+        public init(workspaceID: UUID, workspaceName: String, workspaceIndex: Int, sessionIndex: Int, parentID: UUID?,
+                    root: Bool? = nil) {
             self.workspaceID = workspaceID
             self.workspaceName = workspaceName
             self.workspaceIndex = workspaceIndex
             self.sessionIndex = sessionIndex
             self.parentID = parentID
+            self.root = root
+        }
+
+        func marking(root: Bool) -> Placement {
+            Placement(workspaceID: workspaceID, workspaceName: workspaceName, workspaceIndex: workspaceIndex,
+                      sessionIndex: sessionIndex, parentID: parentID, root: root ? true : nil)
         }
     }
 

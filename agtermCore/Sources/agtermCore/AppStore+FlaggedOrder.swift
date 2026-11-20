@@ -10,7 +10,7 @@ extension AppStore {
     /// flaggedSessions is every flagged session in tree order: the flagged tree's rows and what membership
     /// readers count.
     public var flaggedSessions: [Session] {
-        workspaces.flatMap(\.sessions).filter(\.flagged)
+        displayWorkspaces.flatMap(\.sessions).filter(\.flagged)
     }
 
     /// orderedFlaggedSessions is the flat and plain layouts' rows: saved ids still flagged and in the tree,

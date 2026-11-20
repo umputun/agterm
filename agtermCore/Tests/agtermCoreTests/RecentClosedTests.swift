@@ -16,6 +16,139 @@ final class RecentClosedTests {
 
     private var fileURL: URL { directory.appendingPathComponent("recent-closed.json") }
 
+    // MARK: - top-level sessions
+
+    @MainActor
+    @Test func aClosedTopLevelSessionIsMarkedRootAndNamesNoWorkspace() throws {
+        let (store, recentClosed, _) = makeStoreWithRecentClosed()
+        let named = store.addWorkspace(name: "work")
+        store.ensureRoot()
+        let root = try #require(store.rootWorkspace)
+        let top = try #require(store.addSession(toWorkspace: root.id, cwd: "/a"))
+        let inNamed = try #require(store.addSession(toWorkspace: named.id, cwd: "/b"))
+
+        store.closeSession(top.id)
+        store.closeSession(inNamed.id)
+
+        let entries = recentClosed.load()
+        let topEntry = try #require(entries.first { $0.session?.snapshot.id == top.id })
+        let namedEntry = try #require(entries.first { $0.session?.snapshot.id == inNamed.id })
+        #expect(topEntry.session?.root == true)
+        #expect(topEntry.subtitle == nil)
+        #expect(namedEntry.session?.root == nil)
+        #expect(namedEntry.subtitle == "work")
+    }
+
+    @MainActor
+    @Test func aSessionEntryWithoutTheRootFieldDecodesAsNamed() throws {
+        let data = try JSONEncoder().encode(RecentClosedState(items: [sessionItem(title: "api")]))
+        #expect(!String(decoding: data, as: UTF8.self).contains("\"root\""))
+        try data.write(to: fileURL)
+
+        let loaded = RecentClosedStore(directory: directory).load()
+        #expect(loaded.count == 1)
+        #expect(loaded[0].session?.root == nil)
+    }
+
+    @MainActor
+    @Test func aReopenedTopLevelSessionReturnsAmongTheTopLevelSessions() throws {
+        let (store, recentClosed, _) = makeStoreWithRecentClosed()
+        store.addWorkspace(name: "work")
+        store.ensureRoot()
+        let root = try #require(store.rootWorkspace)
+        let top = try #require(store.addSession(toWorkspace: root.id, cwd: "/a"))
+        store.closeSession(top.id)
+        let entry = try #require(recentClosed.load().first)
+
+        #expect(store.restoreRecentClosed(entry))
+
+        #expect(store.workspace(forSession: top.id)?.id == root.id)
+        #expect(store.namedWorkspaces.map(\.name) == ["work"])
+    }
+
+    @MainActor
+    @Test func aTopLevelEntryReopensAtAnotherStoresRootAndNeverAsANamedWorkspace() throws {
+        let (source, recentClosed, _) = makeStoreWithRecentClosed()
+        source.ensureRoot()
+        let sourceRoot = try #require(source.rootWorkspace)
+        let top = try #require(source.addSession(toWorkspace: sourceRoot.id, cwd: "/a"))
+        source.closeSession(top.id)
+        let entry = try #require(recentClosed.load().first)
+        let (destination, _, _) = makeStoreWithRecentClosed()
+        destination.addWorkspace(name: "work")
+        destination.ensureRoot()
+
+        #expect(destination.restoreRecentClosed(entry))
+
+        #expect(destination.workspace(forSession: top.id)?.id == destination.rootWorkspace?.id)
+        #expect(destination.namedWorkspaces.map(\.name) == ["work"])
+    }
+
+    @MainActor
+    @Test func aTopLevelEntryRestoresNothingInAStoreWithoutARoot() throws {
+        let (source, recentClosed, _) = makeStoreWithRecentClosed()
+        source.ensureRoot()
+        let sourceRoot = try #require(source.rootWorkspace)
+        let top = try #require(source.addSession(toWorkspace: sourceRoot.id, cwd: "/a"))
+        source.closeSession(top.id)
+        let entry = try #require(recentClosed.load().first)
+        let (rootless, _, _) = makeStoreWithRecentClosed()
+        rootless.addWorkspace(name: "work")
+
+        #expect(!rootless.restoreRecentClosed(entry))
+
+        #expect(rootless.workspaces.map(\.name) == ["work"])
+        #expect(rootless.session(withID: top.id) == nil)
+    }
+
+    @MainActor
+    @Test func aBatchCloseOfTopLevelSessionsRecordsRootEntries() throws {
+        let (store, recentClosed, _) = makeStoreWithRecentClosed()
+        store.ensureRoot()
+        let root = try #require(store.rootWorkspace)
+        let first = try #require(store.addSession(toWorkspace: root.id, cwd: "/a"))
+        let second = try #require(store.addSession(toWorkspace: root.id, cwd: "/b"))
+
+        #expect(store.softCloseSessions([first.id, second.id], grace: 3600))
+        store.finalizeAllPendingCloses()
+
+        let entries = recentClosed.load()
+        #expect(entries.count == 2)
+        #expect(entries.allSatisfy { $0.session?.root == true && $0.subtitle == nil })
+    }
+
+    @MainActor
+    @Test func aSoftClosedTopLevelSessionUndoesBackIntoTheRoot() throws {
+        let (store, recentClosed, _) = makeStoreWithRecentClosed()
+        store.addWorkspace(name: "work")
+        store.ensureRoot()
+        let root = try #require(store.rootWorkspace)
+        let top = try #require(store.addSession(toWorkspace: root.id, cwd: "/a"))
+
+        #expect(store.softCloseSession(top.id, grace: 3600))
+        #expect(recentClosed.load().first?.session?.root == true)
+        #expect(store.undoPendingClose())
+
+        #expect(store.workspace(forSession: top.id)?.id == root.id)
+        #expect(store.namedWorkspaces.map(\.name) == ["work"])
+    }
+
+    @MainActor
+    @Test func aRemoteEntryOfATopLevelRowIsMarkedRoot() throws {
+        let (store, recentClosed, _) = makeStoreWithRecentClosed()
+        store.ensureRoot()
+        let root = try #require(store.rootWorkspace)
+        let row = try #require(store.addSession(toWorkspace: root.id, cwd: "/a", remoteHost: "buildbox"))
+        store.bindRemote(RemoteBinding(remoteSessionID: "o1", daemonsByLocalPane: [:], presentationVersion: 1,
+                                       origin: RemoteBinding.Origin(host: "buildbox", endpoint: ControlZmxEndpoint(executable: "/z", socketDirectory: "/s"),
+                                                                    sessionName: "c")),
+                         forSession: row.id)
+
+        store.closeSession(row.id)
+
+        #expect(recentClosed.loadRemote().map(\.placement.root) == [true])
+    }
+
     // MARK: - remote sessions are never written to disk
 
     @MainActor

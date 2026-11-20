@@ -54,6 +54,16 @@ struct ServerActionsSessionsTests {
         #expect(harness.store.workspaces.flatMap(\.sessions).count == before)
     }
 
+    @Test func aNewSessionGoesToTheRootByTheRootTarget() throws {
+        let reply = harness.actions.createSession(ControlSessionCreateOptions(window: nil, cwd: nil, workspace: "root",
+                                                                              workspaceName: nil, createWorkspace: nil, command: nil,
+                                                                              wait: nil, name: nil, after: nil, before: nil,
+                                                                              noSelect: false))
+
+        let session = try harness.session(reply)
+        #expect(harness.store.workspace(forSession: session.id)?.isRoot == true)
+    }
+
     @Test func anUnsupportedLoginShellIsRefused() throws {
         let harness = try ServerHarness(shell: "/bin/tcsh")
 

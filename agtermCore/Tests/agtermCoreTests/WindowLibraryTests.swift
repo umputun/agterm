@@ -97,7 +97,7 @@ final class WindowLibraryTests {
         #expect(library.windows.count == 1)
         #expect(library.windows[0].name == "window 1")
         let store = try! #require(library.store(for: library.windows[0].id))
-        #expect(store.workspaces.count == 1)
+        #expect(store.namedWorkspaces.count == 1)
         #expect(store.workspaces[0].name == "workspace 1")
         #expect(store.workspaces[0].sessions.count == 1)
         #expect(library.openIDs() == [library.windows[0].id])
@@ -173,8 +173,60 @@ final class WindowLibraryTests {
         #expect(library.windows.map(\.name).contains("work"))
         #expect(library.isOpen(info.id))
         let store = try! #require(library.store(for: info.id))
-        #expect(store.workspaces.count == 1)
+        #expect(store.namedWorkspaces.count == 1)
         #expect(store.workspaces[0].sessions.count == 1)
+    }
+
+    @Test func aNewWindowFromATopLevelSessionSeedsItsShellAtTheRoot() throws {
+        let library = WindowLibrary(directory: directory)
+        let source = try #require(library.activeStore)
+        let root = try #require(source.rootWorkspace)
+        let top = try #require(source.addSession(toWorkspace: root.id, cwd: "/top"))
+        _ = source.selectSession(top.id)
+
+        let store = try #require(library.store(for: library.newWindow(source: source).id))
+
+        #expect(store.namedWorkspaces.isEmpty)
+        #expect(store.rootWorkspace?.sessions.count == 1)
+    }
+
+    @Test func aNewWindowFromANamedSessionOrNoSourceSeedsWorkspaceOne() throws {
+        let library = WindowLibrary(directory: directory)
+        let source = try #require(library.activeStore)
+
+        let fromNamed = try #require(library.store(for: library.newWindow(source: source).id))
+        let fromNothing = try #require(library.store(for: library.newWindow().id))
+
+        #expect(fromNamed.namedWorkspaces.map(\.name) == ["workspace 1"])
+        #expect(fromNothing.namedWorkspaces.map(\.name) == ["workspace 1"])
+    }
+
+    @Test func aNewWindowFromARemoteWindowSeedsWorkspaceOne() throws {
+        let library = WindowLibrary(directory: directory)
+        let remote = try #require(library.store(for: library.newRemoteWindow(host: "box").id))
+        remote.catalogState = .connected
+        _ = remote.ensureRoot()
+        let root = try #require(remote.rootWorkspace)
+        let top = try #require(remote.addSession(toWorkspace: root.id, cwd: "/top"))
+        _ = remote.selectSession(top.id)
+
+        let store = try #require(library.store(for: library.newWindow(source: remote).id))
+
+        #expect(store.namedWorkspaces.map(\.name) == ["workspace 1"])
+    }
+
+    @Test func aWindowHoldingOnlyTopLevelSessionsReopensAsSaved() throws {
+        let library = WindowLibrary(directory: directory)
+        let source = try #require(library.activeStore)
+        let root = try #require(source.rootWorkspace)
+        _ = source.selectSession(try #require(source.addSession(toWorkspace: root.id, cwd: "/top")).id)
+        let id = library.newWindow(source: source).id
+        library.closeWindow(id)
+
+        let reopened = try #require(library.loadStore(for: id))
+
+        #expect(reopened.namedWorkspaces.isEmpty)
+        #expect(reopened.rootWorkspace?.sessions.count == 1)
     }
 
     @Test func newWindowBecomesFrontmostAndActive() {
@@ -564,7 +616,7 @@ final class WindowLibraryTests {
         library.closeWindow(extra.id)
         let store = try! #require(library.loadStore(for: extra.id))
         #expect(library.isOpen(extra.id))
-        #expect(store.workspaces.count == 1)
+        #expect(store.namedWorkspaces.count == 1)
     }
 
     @Test func bootstrapLoadArmsRestoreOverridesButAMidProcessReloadDoesNot() throws {
@@ -1142,7 +1194,7 @@ final class WindowLibraryTests {
         #expect(library.windows[0].name == "window 1")
         #expect(library.frontmostWindowID == library.windows[0].id)
         let store = try #require(library.store(for: library.windows[0].id))
-        #expect(store.workspaces.map(\.name) == ["legacy"])
+        #expect(store.namedWorkspaces.map(\.name) == ["legacy"])
         #expect(store.workspaces[0].sessions[0].displayName == "build")
         #expect(FileManager.default.fileExists(atPath: windowFileURL(library.windows[0].id).path))
         #expect(FileManager.default.fileExists(atPath: indexURL.path))
@@ -1200,7 +1252,7 @@ final class WindowLibraryTests {
         let library = WindowLibrary(directory: directory)
         #expect(library.windows.map(\.name) == ["indexed-win"])
         let store = try #require(library.store(for: indexedID))
-        #expect(store.workspaces.map(\.name) == ["indexed"])
+        #expect(store.namedWorkspaces.map(\.name) == ["indexed"])
     }
 
     // MARK: - Recovery matrix
@@ -1221,7 +1273,7 @@ final class WindowLibraryTests {
         ]))
         let library = WindowLibrary(directory: directory)
         let store = try #require(library.store(for: library.windows[0].id))
-        #expect(store.workspaces.map(\.name) == ["legacy"])
+        #expect(store.namedWorkspaces.map(\.name) == ["legacy"])
     }
 
     @Test func versionMismatchIndexTreatedAsAbsent() throws {
@@ -1245,7 +1297,7 @@ final class WindowLibraryTests {
         let library = WindowLibrary(directory: directory)
         #expect(library.windows.map(\.name) == ["orphan"])
         let store = try #require(library.store(for: id))
-        #expect(store.workspaces.isEmpty)
+        #expect(store.namedWorkspaces.isEmpty && store.rootWorkspace?.sessions.isEmpty == true)
         #expect(library.isOpen(id))
     }
 
@@ -1256,7 +1308,7 @@ final class WindowLibraryTests {
         try writeIndex(WindowsIndex(frontmost: id, windows: [WindowEntry(id: id, name: "corrupt", isOpen: true)]))
         let library = WindowLibrary(directory: directory)
         let store = try #require(library.store(for: id))
-        #expect(store.workspaces.isEmpty)
+        #expect(store.namedWorkspaces.isEmpty && store.rootWorkspace?.sessions.isEmpty == true)
     }
 
     // MARK: - Orphan recovery (index lost, per-window files survive)
@@ -1287,9 +1339,9 @@ final class WindowLibraryTests {
         #expect(library.windows.allSatisfy { WindowInfo.isAutoName($0.name) })
         let storeA = try #require(library.store(for: aID))
         let storeB = try #require(library.store(for: bID))
-        #expect(storeA.workspaces.map(\.name) == ["alpha"])
+        #expect(storeA.namedWorkspaces.map(\.name) == ["alpha"])
         #expect(storeA.workspaces[0].sessions[0].displayName == "a-sess")
-        #expect(storeB.workspaces.map(\.name) == ["beta"])
+        #expect(storeB.namedWorkspaces.map(\.name) == ["beta"])
         #expect(storeB.workspaces[0].sessions[0].displayName == "b-sess")
         // a frontmost was picked from the recovered set, and the healed index round-trips.
         let frontmost = try #require(library.frontmostWindowID)
@@ -1314,7 +1366,7 @@ final class WindowLibraryTests {
         #expect(library.windows.map(\.id) == [id])
         #expect(library.windows[0].name == "window 1")
         let store = try #require(library.store(for: id))
-        #expect(store.workspaces.map(\.name) == ["kept"])
+        #expect(store.namedWorkspaces.map(\.name) == ["kept"])
         #expect(store.workspaces[0].sessions[0].displayName == "survivor")
     }
 
@@ -1333,7 +1385,7 @@ final class WindowLibraryTests {
         #expect(library.windows.count == 1)
         #expect(library.windows[0].name == "window 1")
         let store = try #require(library.store(for: library.windows[0].id))
-        #expect(store.workspaces.map(\.name) == ["legacy"])
+        #expect(store.namedWorkspaces.map(\.name) == ["legacy"])
     }
 
     // nothing present (no index, no orphan files, no legacy) → seed exactly one default window.
@@ -1342,7 +1394,7 @@ final class WindowLibraryTests {
         #expect(library.windows.count == 1)
         #expect(library.windows[0].name == "window 1")
         let store = try #require(library.store(for: library.windows[0].id))
-        #expect(store.workspaces.count == 1)
+        #expect(store.namedWorkspaces.count == 1)
         #expect(store.workspaces[0].sessions.count == 1)
     }
 
@@ -1608,6 +1660,20 @@ final class WindowLibraryTests {
         #expect(library.attentionSubtitle(entry) == "workspace 1 · \(session.subtitleDetail)")
     }
 
+    @Test func attentionSubtitleOfATopLevelSessionNamesNoWorkspace() throws {
+        let library = WindowLibrary(directory: directory)
+        let store = try #require(library.activeStore)
+        let root = try #require(store.rootWorkspace)
+        let session = try #require(store.addSession(toWorkspace: root.id, cwd: "/tmp"))
+        store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: session.id)
+        let single = try #require(library.attentionAcrossWindows.first)
+        #expect(library.attentionSubtitle(single) == session.subtitleDetail)
+
+        _ = library.newWindow(name: "second")
+        let entry = try #require(library.attentionAcrossWindows.first { $0.session.id == session.id })
+        #expect(library.attentionSubtitle(entry) == "\(entry.window.name) · \(session.subtitleDetail)")
+    }
+
     @Test func attentionSubtitleNamesTheHostOfARemoteSession() throws {
         let library = WindowLibrary(directory: directory)
         let store = try #require(library.activeStore)
@@ -1621,4 +1687,56 @@ final class WindowLibraryTests {
         private(set) var isSet = false
         func set() { isSet = true }
     }
+
+    // MARK: - Root container
+
+    @Test func aPreRootWindowFileGainsARootPersistedAtLoad() throws {
+        let id = UUID()
+        let session = SessionSnapshot(id: UUID(), customName: nil, cwd: "/a", foregroundCommand: ["vim"])
+        try writeWindowFile(id, Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: "work", sessions: [session])]))
+        try writeIndex(WindowsIndex(frontmost: id, windows: [WindowEntry(id: id, name: "work", isOpen: true)]))
+
+        let library = WindowLibrary(directory: directory)
+
+        let root = try #require(library.store(for: id)?.rootWorkspace)
+        let onDisk = try PersistenceStore(directory: directory.appendingPathComponent("windows"), fileName: "\(id.uuidString).json").loadChecked()
+        #expect(onDisk.workspaces.map(\.root) == [nil, true])
+        #expect(onDisk.workspaces.last?.id == root.id)
+        #expect(onDisk.workspaces.flatMap(\.sessions).allSatisfy { $0.foregroundCommand == nil })
+        let relaunched = WindowLibrary(directory: directory)
+        #expect(relaunched.store(for: id)?.rootWorkspace?.id == root.id)
+    }
+
+    @Test func anUndecodableWindowFileSurvivesTheLoadByteForByte() throws {
+        let id = UUID()
+        let garbage = Data("{ not a snapshot".utf8)
+        try FileManager.default.createDirectory(at: directory.appendingPathComponent("windows"), withIntermediateDirectories: true)
+        try garbage.write(to: windowFileURL(id))
+        try writeIndex(WindowsIndex(frontmost: id, windows: [WindowEntry(id: id, name: "work", isOpen: true)]))
+
+        let library = WindowLibrary(directory: directory)
+
+        #expect(library.store(for: id)?.rootWorkspace != nil)
+        #expect(try Data(contentsOf: windowFileURL(id)) == garbage)
+    }
+
+    @Test func aNewWindowAndAMigratedLegacyTreeEachGetOneRoot() throws {
+        try PersistenceStore(directory: directory).save(Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: "legacy", sessions: [])]))
+        let library = WindowLibrary(directory: directory)
+        let migrated = try #require(library.activeStore)
+        #expect(migrated.workspaces.map(\.isRoot) == [false, true])
+
+        let window = library.newWindow(name: "second")
+
+        let store = try #require(library.store(for: window.id))
+        #expect(store.workspaces.map(\.isRoot) == [false, true])
+        #expect(store.namedWorkspaces.map(\.name) == ["workspace 1"])
+    }
+
+    @Test func aRemoteWindowStoreHasNoRoot() {
+        let library = WindowLibrary(directory: directory)
+        let remote = library.newRemoteWindow(host: "buildbox")
+        #expect(library.store(for: remote.id)?.rootWorkspace == nil)
+    }
+
 }

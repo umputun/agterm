@@ -196,6 +196,21 @@ final class AppActionsTests: XCTestCase {
         XCTAssertEqual(sessions[1].id, store.selectedSessionID)
     }
 
+    func testNewTopLevelSessionLandsSelectedInTheRootWithTheNewSessionDirectory() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let root = try XCTUnwrap(store.rootWorkspace).id
+        let named = try XCTUnwrap(store.activeSession)
+        let cwd = actions.resolvedNewSessionCwd(in: root, store: store)
+
+        actions.newRootSession()
+
+        let created = try XCTUnwrap(store.rootWorkspace?.sessions.first)
+        XCTAssertEqual(store.rootWorkspace?.sessions.count, 1)
+        XCTAssertEqual(store.selectedSessionID, created.id)
+        XCTAssertEqual(created.cwd(for: .left), cwd)
+        XCTAssertEqual(store.workspace(forSession: named.id)?.isRoot, false)
+    }
+
     func testOpenedDirectoryAppendsUnderAfterCurrent() throws {
         settings.setNewSessionPlacement(AppSettings.NewSessionPlacement.afterCurrent.rawValue)
         let store = try XCTUnwrap(library.activeStore)

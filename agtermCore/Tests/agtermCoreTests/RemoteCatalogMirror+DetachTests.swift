@@ -569,7 +569,7 @@ final class RemoteCatalogMirrorDetachTests {
         #expect(store.workspaces.count == 1)
         #expect(lastShown)
         #expect(withDetachedSibling)
-        #expect(!local.canCloseWorkspace)
+        #expect(local.canCloseWorkspace)
     }
 
     @Test func theServersOnlyWorkspaceCannotBeTerminated() {
@@ -636,4 +636,49 @@ final class RemoteCatalogMirrorDetachTests {
         #expect(!rows.contains(first.id))
         #expect(store.catalogDetachedSessions == [first.id])
     }
+
+    @Test func aSavedDetachOfTheRootIsPrunedAndSessionDetachesStay() {
+        let rootID = UUID()
+        let kept = session()
+        mirror = RemoteCatalogMirror(host: "box", store: store, effects: effects,
+                                     viewState: RemoteWindowViewState(detachedSessions: [kept.id], detachedWorkspaces: [rootID]))
+        let snapshot = CatalogSnapshot(epoch: "e1", rev: 0, catalogID: catalogID, versions: Self.versions,
+                                       workspaces: [CatalogWorkspace(id: workspaceID, name: "w", sessions: [kept]),
+                                                    CatalogWorkspace(id: rootID, name: "", root: true, sessions: [session()])])
+        _ = mirror.receive(.hello(CatalogHello(version: 1, epoch: "e1", versions: Self.versions)))
+        _ = mirror.receive(.snapshot(snapshot))
+
+        #expect(store.catalogDetachedWorkspaces.isEmpty)
+        #expect(store.catalogDetachedSessions == [kept.id])
+        #expect(store.rootWorkspace?.id == rootID)
+    }
+
+    @Test func theRootIsNeverDetachedAsAWorkspace() {
+        let rootID = UUID()
+        let snapshot = CatalogSnapshot(epoch: "e1", rev: 0, catalogID: catalogID, versions: Self.versions,
+                                       workspaces: [CatalogWorkspace(id: workspaceID, name: "w", sessions: []),
+                                                    CatalogWorkspace(id: rootID, name: "", root: true, sessions: [])])
+        _ = mirror.receive(.hello(CatalogHello(version: 1, epoch: "e1", versions: Self.versions)))
+        _ = mirror.receive(.snapshot(snapshot))
+
+        mirror.detach(workspace: rootID)
+
+        #expect(store.catalogDetachedWorkspaces.isEmpty)
+    }
+
+    @Test func aServerWithARootTerminatesItsOnlyNamedWorkspaceAndNeverCountsTheRoot() {
+        let rootID = UUID()
+        let root = CatalogWorkspace(id: rootID, name: "", root: true, sessions: [])
+        let snapshot = CatalogSnapshot(epoch: "e1", rev: 0, catalogID: catalogID, versions: Self.versions,
+                                       workspaces: [CatalogWorkspace(id: workspaceID, name: "w", sessions: []), root])
+        _ = mirror.receive(.hello(CatalogHello(version: 1, epoch: "e1", versions: Self.versions)))
+        _ = mirror.receive(.snapshot(snapshot))
+        let withNamed = mirror.canTerminateWorkspace
+        _ = mirror.receive(.snapshot(CatalogSnapshot(epoch: "e1", rev: 1, catalogID: catalogID, versions: Self.versions,
+                                                     workspaces: [root])))
+
+        #expect(withNamed)
+        #expect(!mirror.canTerminateWorkspace)
+    }
+
 }

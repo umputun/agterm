@@ -50,12 +50,12 @@ final class SidebarOutlineView: NSOutlineView {
         return frame
     }
 
-    /// frameOfOutlineCell hides level-0 triangles with an empty frame. `shouldShowOutlineCellForItem`
+    /// frameOfOutlineCell hides workspace triangles with an empty frame. `shouldShowOutlineCellForItem`
     /// would hide them too, but AppKit then refuses to collapse the item.
     override func frameOfOutlineCell(atRow row: Int) -> NSRect {
         var frame = super.frameOfOutlineCell(atRow: row)
         guard !reservesDisclosureColumn, !frame.isEmpty, let target = contentMinX(atRow: row) else { return frame }
-        guard level(forRow: row) > 0 else { return .zero }
+        guard level(forRow: row) + rootBlockShift(atRow: row) > 0 else { return .zero }
         frame.origin.x = target - frame.width
         return frame
     }
@@ -67,9 +67,19 @@ final class SidebarOutlineView: NSOutlineView {
         guard level >= 0 else { return nil }
         let indent = CGFloat(level) * indentationPerLevel
         if listsSessionsFlat { return Self.flatContentX + indent }
-        guard reservesDisclosureColumn else { return max(0, Self.contentX - indentationPerLevel) + indent }
+        guard reservesDisclosureColumn else {
+            return max(0, Self.contentX - indentationPerLevel) + indent + CGFloat(rootBlockShift(atRow: row)) * indentationPerLevel
+        }
         guard #available(macOS 27.0, *) else { return nil }
         return Self.contentX + indent
+    }
+
+    /// rootBlockShift is 1 for a row of the root block: without the strip a level-0 session parent has no room
+    /// for its triangle, so the block starts one step in, where a workspace's own sessions start.
+    private func rootBlockShift(atRow row: Int) -> Int {
+        var top = item(atRow: row)
+        while let up = parent(forItem: top) { top = up }
+        return (top as? SidebarNode)?.kind == .session ? 1 : 0
     }
 
     override func draggingExited(_ sender: NSDraggingInfo?) {

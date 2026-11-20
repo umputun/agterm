@@ -42,9 +42,8 @@ extension AppStore {
     /// are the server's.
     public var clearableFlagCount: Int { marksOnServer ? remoteActions?.mirror.flaggedCount ?? 0 : flaggedSessions.count }
 
-    /// canCloseWorkspace is whether Delete Workspace can run: a remote window can detach any shown workspace, its last
-    /// included; a local window keeps its last workspace.
-    public var canCloseWorkspace: Bool { isRemoteWindow ? !workspaces.isEmpty : canRemoveWorkspace }
+    /// canCloseWorkspace is whether Delete Workspace can run: on any named workspace, the last included.
+    public var canCloseWorkspace: Bool { canRemoveWorkspace }
 
     /// prepareCatalogWorkspaces removes the rows of sessions the catalog no longer has and adds or renames its
     /// workspaces. Workspaces it no longer has leave in `finishCatalogWorkspaces`, once their surviving rows
@@ -71,7 +70,8 @@ extension AppStore {
                 }
                 continue
             }
-            workspaces.insert(Workspace(id: entry.id, name: name, isExpanded: !collapsed.contains(entry.id), tint: tint),
+            workspaces.insert(Workspace(id: entry.id, name: name, isExpanded: !collapsed.contains(entry.id), tint: tint,
+                                        isRoot: entry.root == true),
                               at: min(index, workspaces.count))
             changed = true
         }
@@ -95,6 +95,7 @@ extension AppStore {
         guard current != index else { return }
         for workspace in workspaces.indices { workspaces[workspace].sessions.removeAll { $0.id == session.id } }
         workspaces[destination].sessions.insert(session, at: min(index, workspaces[destination].sessions.count))
+        if current == nil, selectedSessionID == session.id { disableFocusIfSelectionOutsideSet(session.id) }
         scheduleTreeChanged()
     }
 

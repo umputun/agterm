@@ -28,6 +28,18 @@ struct OriginCatalogScopeTests {
         #expect(refusal(cmd, target: row.id.uuidString) == nil)
     }
 
+    @Test func theWindowsOwnRootIsInScopeAndAnotherWindowsIsNot() throws {
+        store.ensureRoot()
+        other.ensureRoot()
+        var own = ControlArgs()
+        own.workspace = try #require(store.rootWorkspace).id.uuidString
+        var foreign = ControlArgs()
+        foreign.workspace = try #require(other.rootWorkspace).id.uuidString
+
+        #expect(refusal(.sessionMove, target: row.id.uuidString, args: own) == nil)
+        #expect(refusal(.sessionMove, target: row.id.uuidString, args: foreign) == "no workspace \(foreign.workspace ?? "") in this window")
+    }
+
     @Test func aRowOfAnotherWindowIsRefused() {
         #expect(refusal(.sessionRename, target: elsewhere.id.uuidString) == "no session \(elsewhere.id.uuidString) in this window")
     }

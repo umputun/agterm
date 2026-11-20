@@ -56,12 +56,11 @@ extension WindowLibrary {
         stores[entry.window.id]?.listLabel(for: entry.session) ?? entry.session.displayName
     }
 
-    /// The row subtitle every attention surface shares: "`workspace` · detail" as the per-window lists
-    /// read, led by the window name once more than one window is open, since only then does a row need
-    /// to say where it lives.
+    /// The row subtitle every attention surface shares: the per-window lists' `listSubtitle`, led by the
+    /// window name once more than one window is open, since only then does a row need to say where it lives.
     public func attentionSubtitle(_ entry: AttentionEntry) -> String {
-        let workspace = stores[entry.window.id]?.workspace(forSession: entry.session.id)?.name ?? ""
-        let detail = "\(workspace) · \(entry.session.switcherDetail)"
-        return openIDs().count > 1 ? "\(entry.window.name) · \(detail)" : detail
+        let detail = entry.session.switcherDetail
+        let line = stores[entry.window.id]?.listSubtitle(forSession: entry.session.id, detail: detail) ?? detail
+        return openIDs().count > 1 ? "\(entry.window.name) · \(line)" : line
     }
 }

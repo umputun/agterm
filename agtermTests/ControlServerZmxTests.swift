@@ -560,6 +560,17 @@ final class ControlServerZmxTests: XCTestCase {
         XCTAssertEqual(store.workspaces.flatMap(\.sessions).filter { $0.remoteHost != nil }.count, 1)
     }
 
+    func testAttachByTheRootTargetLandsAmongTheTopLevelSessions() async throws {
+        let server = makeServer(list: "", remoteRunner: FakeRemoteRunner(result: Self.groupProjection))
+        let store = try XCTUnwrap(library.activeStore)
+
+        let reply = await server.attachRemoteSession(host: "buildbox", session: "s1", window: nil, workspace: .id("root"))
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        let row = try XCTUnwrap(reply.result?.id.flatMap(UUID.init(uuidString:)))
+        XCTAssertEqual(store.workspace(forSession: row)?.id, store.rootWorkspace?.id)
+    }
+
     func testACompanionJoiningItsParentStaysInTheParentsWorkspaceWhateverWorkspaceIsNamed() async throws {
         let server = makeServer(list: "", remoteRunner: FakeRemoteRunner(result: Self.groupProjection))
         let store = try XCTUnwrap(library.activeStore)

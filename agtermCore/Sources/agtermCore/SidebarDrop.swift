@@ -234,6 +234,12 @@ public enum SidebarDrop {
         return visibleIndices[max(0, slot)]
     }
 
+    /// isRootGap answers whether a gap among the outline's top-level rows, which list the root's rows first, drops
+    /// into the root: the gap above the first workspace row ends that block. False while the root block is not shown.
+    public static func isRootGap(childIndex: Int, rootRows: Int, rootShown: Bool) -> Bool {
+        rootShown && (0...rootRows).contains(childIndex)
+    }
+
     /// companionChildIndex maps a gap among a parent's nested companion rows to the workspace child index
     /// `resolveSessions` takes.
     public static func companionChildIndex(parentIndex: Int, slot: Int) -> Int {

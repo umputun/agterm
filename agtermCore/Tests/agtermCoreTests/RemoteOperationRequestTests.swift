@@ -27,6 +27,27 @@ struct RemoteOperationRequestTests {
         return response.error
     }
 
+    @Test func aNewSessionByTheRootTargetGoesToTheOwnersRoot() throws {
+        let rootless = refusal(parse(.sessionNew) { $0.workspace = "root" })
+        _ = store.ensureRoot()
+        let root = try #require(store.rootWorkspace)
+
+        #expect(rootless == "no such workspace: root")
+        #expect(parse(.sessionNew) { $0.workspace = "root" } == .operation(.newSession(workspace: root.id), select: true))
+    }
+
+    @Test func namedOnlyWorkspaceCommandsRefuseTheOwnersRootAndAFlagTakesIt() throws {
+        _ = store.ensureRoot()
+        let root = try #require(store.rootWorkspace).id
+        let expected = "top-level sessions are not a workspace"
+
+        #expect(refusal(parse(.workspaceRename, target: "root") { $0.name = "x" }) == expected)
+        #expect(refusal(parse(.workspaceDelete, target: root.uuidString)) == expected)
+        #expect(refusal(parse(.workspaceMove, target: "root") { $0.to = "top" }) == expected)
+        #expect(refusal(parse(.workspaceTint, target: "root") { $0.mode = "set"; $0.tint = "red" }) == expected)
+        #expect(parse(.workspaceFlag, target: "root") { $0.mode = "on" } == .operation(.setWorkspaceFlag(root, on: true), select: false))
+    }
+
     @Test func aNewSessionLandsInTheNamedWorkspaceWithItsShellOptions() {
         let parsed = parse(.sessionNew) { $0.workspace = String(workspace.id.uuidString.prefix(8)); $0.name = "-x"; $0.cwd = "/srv" }
 

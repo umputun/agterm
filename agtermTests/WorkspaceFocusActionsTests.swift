@@ -186,4 +186,16 @@ final class WorkspaceFocusActionsTests: XCTestCase {
         XCTAssertFalse(frontStore === otherStore, "the two windows must own distinct stores")
         return (frontStore, otherStore)
     }
+
+    func testDeleteWorkspaceRefusesTheRoot() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        store.addWorkspace(name: "second")
+        let root = try XCTUnwrap(store.rootWorkspace)
+
+        actions.deleteWorkspace(root.id, in: store)
+
+        XCTAssertEqual(store.rootWorkspace?.id, root.id)
+        XCTAssertEqual(store.workspaces.last?.id, root.id)
+    }
+
 }

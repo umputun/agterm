@@ -58,7 +58,7 @@ final class OriginCatalogTests {
 
         #expect(response.ok)
         let file = saved.load()
-        #expect(file.workspaces.map(\.name) == ["work", "edited after reopen"])
+        #expect(file.workspaces.filter { $0.root != true }.map(\.name) == ["work", "edited after reopen"])
         #expect(file.catalogOperations?.receipt("op-1") == response.result?.receipt)
         #expect(reopened.catalogOperations?.receipt("op-1") == response.result?.receipt)
     }

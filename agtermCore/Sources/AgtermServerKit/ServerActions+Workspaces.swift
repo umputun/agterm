@@ -15,25 +15,28 @@ extension ServerActions {
     }
 
     public func renameWorkspace(_ target: String?, window: String?, name: String) -> ControlResponse {
-        withWorkspace(target, window: window) { id in
+        withNamedWorkspace(target, window: window) { id in
             store.renameWorkspace(id, to: name)
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
     }
 
     public func deleteWorkspace(_ target: String?, window: String?) -> ControlResponse {
-        withWorkspace(target, window: window) { id in
-            guard store.canRemoveWorkspace else { return ControlResponse(ok: false, error: "cannot delete last workspace") }
+        withNamedWorkspace(target, window: window) { id in
             store.removeWorkspace(id)
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
     }
 
     public func moveWorkspace(_ target: String?, window: String?, direction: ReorderDirection) -> ControlResponse {
-        withWorkspace(target, window: window) { id in
+        withNamedWorkspace(target, window: window) { id in
             store.reorderWorkspace(id, direction)
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
+    }
+
+    func withNamedWorkspace(_ target: String?, window: String?, _ body: (UUID) -> ControlResponse) -> ControlResponse {
+        withWorkspace(target, window: window) { id in store.rootRefusal(id) ?? body(id) }
     }
 
     func withWorkspace(_ target: String?, window: String?, _ body: (UUID) -> ControlResponse) -> ControlResponse {
@@ -47,7 +50,7 @@ extension ServerActions {
     /// resolveWorkspace resolves a workspace id, prefix or `active`, the store's current workspace.
     func resolveWorkspace(_ target: String?) -> Result<UUID, ActionRefusal> {
         let target = target ?? "active"
-        let resolution = ControlResolve.resolve(target, candidates: store.workspaces.map(\.id), active: store.currentWorkspaceID)
+        let resolution = store.resolveWorkspaceTarget(target)
         guard case .resolved(let id) = resolution else {
             return .refused(ControlResponse(ok: false, error: ControlResolve.errorMessage(noun: "workspace", target: target,
                                                                                           resolution: resolution)))

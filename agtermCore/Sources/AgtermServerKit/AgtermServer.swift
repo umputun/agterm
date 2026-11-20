@@ -70,7 +70,8 @@ public final class AgtermServer {
                              controlEventSink: { events.receive($0) }, paneFinalizer: { identities in
             MainActor.assumeIsolated { panes.end(identities) }
         }, headless: true)
-        if FileManager.default.fileExists(atPath: directory.appendingPathComponent("workspaces.json").path) {
+        let fresh = !FileManager.default.fileExists(atPath: directory.appendingPathComponent("workspaces.json").path)
+        if !fresh {
             do {
                 store.restore(from: try persistence.loadChecked())
             } catch {
@@ -83,7 +84,7 @@ public final class AgtermServer {
         } catch {
             throw Failure.unrecoveredPendingCloses("\(error)")
         }
-        CatalogRoot.seedWorkspace(in: store)
+        CatalogRoot.provision(store, fresh: fresh)
         store.save()
 
         let server = AgtermServer(configuration: configuration, store: store, catalog: catalog, identity: identity,

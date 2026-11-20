@@ -117,6 +117,7 @@ struct KeymapFormatterTests {
             rename_workspace            -
             delete_workspace            -
             new_session                 cmd+n
+            new_root_session            -
             open_directory              cmd+o
             rename_session              -
             duplicate_session           -

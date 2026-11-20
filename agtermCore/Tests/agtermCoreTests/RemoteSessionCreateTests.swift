@@ -93,6 +93,13 @@ struct RemoteSessionCreateTests {
             == ["session", "new", "--window=6f1c", "--workspace-name=dev", "--create-workspace", "--no-select"])
     }
 
+    @Test func argumentsWithNoWorkspaceNameCreateInTheOriginsRoot() {
+        let create = RemoteSessionCreate(host: "mac")
+
+        #expect(create.arguments(origin: .mac(window: "6f1c"), workspaceName: nil)
+            == ["session", "new", "--window=6f1c", "--workspace=root", "--no-select"])
+    }
+
     @Test func argumentsForAServerNameNoWindowAndCarryCwdAndCommand() {
         let create = RemoteSessionCreate(host: "srv", cwd: "/srv/app", command: "make run")
 

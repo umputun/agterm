@@ -238,7 +238,7 @@ extension ControlServer {
             }
             return .success(.existing(id))
         case .id(let raw):
-            let resolution = ControlResolve.resolve(raw, candidates: store.workspaces.map(\.id), active: store.currentWorkspaceID)
+            let resolution = store.resolveWorkspaceTarget(raw)
             guard case .resolved(let id) = resolution else {
                 let message = ControlResolve.errorMessage(noun: "workspace", target: raw, resolution: resolution)
                 return .failure(ControlResponse(ok: false, error: message))

@@ -992,6 +992,15 @@ struct SocketClientTests {
         #expect(run.out == Data((line + "\n").utf8))
     }
 
+    @Test func formatTreePrintsTheRootBlockFirstUnderItsLabel() throws {
+        let data = Data(#"{"id":"s","name":"shell","cwd":"/top","active":true,"split":false,"overlay":false,"scratch":false,"flagged":false}"#.utf8)
+        let session = try JSONDecoder().decode(ControlSessionNode.self, from: data)
+        let tree = ControlTree(workspaces: [ControlWorkspaceNode(id: "w", name: "work", active: false, sessions: []),
+                                            ControlWorkspaceNode(id: "r", name: "", active: true, root: true, sessions: [session])])
+        let output = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(tree: tree)))
+        #expect(output == "* Top-Level Sessions  [r]\n  * shell  [s]  /top\n  work  [w]")
+    }
+
     @Test(arguments: [("/other", "/main  split cwd: /other"), ("/main", "/main")])
     func formatTreeIncludesOnlyADifferingSplitDirectory(_ splitCwd: String, _ expected: String) throws {
         let data = Data(#"{"id":"s","name":"shell","cwd":"/main","splitCwd":"\#(splitCwd)","active":true,"split":true,"overlay":false,"scratch":false,"flagged":false}"#.utf8)

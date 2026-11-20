@@ -49,10 +49,12 @@ extension AppStore {
     /// adjacent row there may live elsewhere; a same-workspace scope collapses it back.
     private func nearestInScopeTarget(after location: (workspaceIndex: Int, sessionIndex: Int),
                                       scope: Set<UUID>) -> UUID? {
-        let sessions = workspaces[location.workspaceIndex].sessions
-        let before = workspaces[..<location.workspaceIndex].reduce(0) { $0 + $1.sessions.count }
-        let removedSlot = before + min(location.sessionIndex, sessions.count)
-        let flattened = workspaces.flatMap(\.sessions)
+        let display = displayWorkspaces
+        let owner = workspaces[location.workspaceIndex].id
+        let position = display.firstIndex { $0.id == owner } ?? location.workspaceIndex
+        let before = display[..<position].reduce(0) { $0 + $1.sessions.count }
+        let removedSlot = before + min(location.sessionIndex, display[position].sessions.count)
+        let flattened = display.flatMap(\.sessions)
         if let next = flattened[removedSlot...].first(where: { scope.contains($0.id) }) { return next.id }
         return flattened[..<removedSlot].last { scope.contains($0.id) }?.id
     }

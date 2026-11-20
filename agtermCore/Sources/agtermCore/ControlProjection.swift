@@ -723,10 +723,20 @@ public struct ControlWorkspaceNode: Codable, Sendable, Equatable {
     public let tint: String?
     /// The workspace row parts the tint colors; present exactly when `tint` is.
     public let tintOn: [String]?
+    /// true for the window's root container, omitted for a named workspace. The root has an empty `name` and no row,
+    /// so the formula above does not apply: its sessions show at the top level of the ordinary tree while
+    /// `!tree.workspaceFilter || focused`, and in every flagged layout by each session's own `flagged`.
+    public let root: Bool?
     public let sessions: [ControlSessionNode]
 
+    /// The root container's label in the CLI tree listing and the focus editor.
+    public static let rootLabel = "Top-Level Sessions"
+
+    /// The workspace target that names the root container.
+    public static let rootTarget = "root"
+
     public init(id: String, name: String, active: Bool, focused: Bool? = nil,
-                collapsed: Bool? = nil, tint: String? = nil, tintOn: [String]? = nil,
+                collapsed: Bool? = nil, tint: String? = nil, tintOn: [String]? = nil, root: Bool? = nil,
                 sessions: [ControlSessionNode]) {
         self.id = id
         self.name = name
@@ -735,6 +745,7 @@ public struct ControlWorkspaceNode: Codable, Sendable, Equatable {
         self.collapsed = collapsed
         self.tint = tint
         self.tintOn = tintOn
+        self.root = root
         self.sessions = sessions
     }
 }

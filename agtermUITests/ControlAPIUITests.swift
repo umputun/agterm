@@ -14,15 +14,12 @@ final class ControlAPIUITests: ControlAPITestCase {
     }
 
     func testTreeReturnsSeededWorkspaceAndSession() throws {
-        let response = try sendCommand(#"{"cmd":"tree"}"#)
-        XCTAssertEqual(response["ok"] as? Bool, true, "tree should succeed: \(response)")
+        let workspaces = try treeWorkspaceNodes()
+        let named = workspaces.filter { ($0["root"] as? Bool) != true }
+        XCTAssertEqual(named.count, 1, "one seeded workspace expected: \(workspaces)")
+        XCTAssertEqual(workspaces.filter { ($0["root"] as? Bool) == true }.count, 1, "one marked root expected: \(workspaces)")
 
-        let result = try XCTUnwrap(response["result"] as? [String: Any], "tree should carry a result")
-        let tree = try XCTUnwrap(result["tree"] as? [String: Any], "result should carry a tree")
-        let workspaces = try XCTUnwrap(tree["workspaces"] as? [[String: Any]], "tree should list workspaces")
-        XCTAssertEqual(workspaces.count, 1, "one seeded workspace expected")
-
-        let workspace = workspaces[0]
+        let workspace = try XCTUnwrap(named.first)
         XCTAssertFalse((workspace["id"] as? String ?? "").isEmpty, "workspace should have an id")
         let sessions = try XCTUnwrap(workspace["sessions"] as? [[String: Any]], "workspace should list sessions")
         XCTAssertEqual(sessions.count, 1, "one seeded session expected")
@@ -865,14 +862,14 @@ final class ControlAPIUITests: ControlAPITestCase {
                       "the rename should be reflected in workspaces.json")
     }
 
-    func testWorkspaceDeleteLastErrors() throws {
+    func testWorkspaceDeleteLastLeavesOnlyTheTopLevelSessions() throws {
         XCTAssertTrue(pollWorkspaceNames(["workspace 1"], timeout: 10), "should start with the one seeded workspace")
 
         let response = try sendCommand(#"{"cmd":"workspace.delete","target":"active"}"#)
-        XCTAssertEqual(response["ok"] as? Bool, false, "deleting the last workspace should fail")
-        XCTAssertEqual(response["error"] as? String, "cannot delete last workspace",
-                       "should return the keep-one error: \(response)")
-        XCTAssertTrue(pollWorkspaceNames(["workspace 1"], timeout: 5), "the workspace should still be present")
+        XCTAssertEqual(response["ok"] as? Bool, true, "deleting the last named workspace should succeed: \(response)")
+        XCTAssertTrue(pollWorkspaceNames([], timeout: 5), "no named workspace should remain")
+        let workspaces = try treeWorkspaceNodes()
+        XCTAssertEqual(workspaces.map { $0["root"] as? Bool }, [true], "only the root should remain: \(workspaces)")
     }
 
     func testUnknownTargetErrors() throws {

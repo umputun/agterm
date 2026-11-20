@@ -486,10 +486,10 @@ command &quot;Session here&quot; ctrl+a&gt;n agtermctl session new --cwd &quot;$
           <!-- WORKSPACES -->
           <section id="workspaces" class="doc-v2" style="scroll-margin-top: 88px; padding-top: 56px">
 <h2>Workspaces &amp; sessions</h2>
-<p>A <strong>session</strong> is one running shell with a name, a working directory and its own scrollback: the unit you work in, and a row in the sidebar. A <strong>workspace</strong> is a named group of sessions for one project or context. A session can move between workspaces while it runs, keeping its shell and scrollback.</p>
+<p>A <strong>session</strong> is one running shell with a name, a working directory and its own scrollback: the unit you work in, and a row in the sidebar. A <strong>workspace</strong> is a named group of sessions for one project or context. A session can move between workspaces while it runs, keeping its shell and scrollback. A session can also sit outside any workspace, among the window's <a href="#workspaces-top-level">top-level sessions</a>.</p>
 <h3 id="workspaces-sidebar">The sidebar</h3>
 <ul>
-<li>The sidebar is a two-level tree: workspaces, each holding sessions. A workspace row has a filled folder icon, a session row an outlined terminal.</li>
+<li>The sidebar is a two-level tree: the top-level sessions first, with no row above them, then the workspaces, each holding sessions. A workspace row has a filled folder icon, a session row an outlined terminal.</li>
 <li>A session is named after its working directory's last folder. Renaming pins a name of your own; clearing it restores automatic naming. Rename inline by double-clicking a row's name.</li>
 <li>The four icons at the bottom of the sidebar add a workspace, add a session, and toggle the workspace filter and the flagged view.</li>
 <li>A click on a workspace's icon folds it at once.</li>
@@ -504,6 +504,17 @@ A session's right-click context menu.
 </figcaption>
 </figure>
 <p><strong>Several rows at once.</strong> Shift-click and ⌘-click select several sessions. Right-clicking inside the selection keeps it, so <strong>Flag</strong>, <strong>Tint</strong>, <strong>Close</strong> and <strong>Move to</strong> act on all of them; right-clicking a row outside it narrows the menu to that row. Dragging moves the selection, and dragged sessions keep running.</p>
+<h3 id="workspaces-top-level">Top-Level Sessions</h3>
+<p>The top-level sessions are the sessions outside any workspace, for a shell that belongs to no project. Menus name the group <strong>Top-Level Sessions</strong>.</p>
+<ul>
+<li><strong>File ▸ New Top-Level Session</strong> (the <code>new_root_session</code> action, no default key, also in the action palette) opens a shell there in the usual new-session directory.</li>
+<li>By default every other new session, from New Session, Open Directory or a script that names no destination, goes where the selected session is, the top-level sessions included, unless you just created a workspace or the focus filter shows exactly one group without it; <a href="#agtermctl-addressing">Addressing</a> has the full rule. A script can name the top-level sessions as <code>root</code>.</li>
+<li>Drag a session among the top-level sessions to put it there, or into a workspace to move it out. <strong>Move to ▸ Top-Level Sessions</strong> does the same from the context menu.</li>
+<li>Deleting the last workspace is allowed; the window keeps its top-level sessions.</li>
+<li>A new window opened while a session among the top-level sessions is selected starts its first shell among its own top-level sessions; otherwise, and from the Dock menu or a remote window, it starts in <code>workspace 1</code>.</li>
+<li>A session among the top-level sessions shows no workspace name: the title bar, Recent Closed and the Attach Remote picker leave it out, and <code>{AGT_WORKSPACE_NAME}</code> expands empty. Reopening one puts it back among the top-level sessions.</li>
+<li>A server window whose server predates top-level sessions shows these items disabled.</li>
+</ul>
 <h3 id="companions">Companions</h3>
 <p>A companion keeps a related shell or program next to a session: a log tail, a watcher, a second shell for the same task. It is an ordinary session pinned to its parent, listed right after it and indented under it.</p>
 <figure>
@@ -514,7 +525,7 @@ Two parents, each with its companions indented under it; the blocked <code>logs<
 </figure>
 <ul>
 <li>The parent's disclosure triangle folds its companions away. A folded parent shows a small stack marker while a hidden companion has an agent status, in that status's color; blocked wins over working, working over completed, and the marker's tooltip lists each companion's status. A hidden companion's unread notifications count in its workspace's badge.</li>
-<li>Drag a companion among its siblings to reorder it, or onto another top-level session, or into that session's companions, to move it under that session, in any workspace of the window. <strong>Move to</strong> in a companion's context menu lists the window's other top-level sessions. From a script: <code>agtermctl session move --parent SID [--index N]</code>. In the flagged view a drag never changes a companion's parent; use Move to there.</li>
+<li>Drag a companion among its siblings to reorder it, or onto another top-level session, or into that session's companions, to move it under that session, in any workspace of the window or among its top-level sessions. <strong>Move to</strong> in a companion's context menu lists the window's other top-level sessions. From a script: <code>agtermctl session move --parent SID [--index N]</code>. In the flagged view a drag never changes a companion's parent; use Move to there.</li>
 <li>Moving the parent carries its companions.</li>
 <li>Closing a companion closes only it. Closing the parent closes the group, and one Reopen Closed Item brings it all back.</li>
 <li>While a parent has companions, its shell exiting starts a fresh shell in the same directory instead of closing the session; one that exits again within 2 seconds closes the group. A Mac viewing that session attaches to the new shell.</li>
@@ -566,7 +577,7 @@ agtermctl session overlay open --html report.html --page</code></pre>
 </ul>
 <h3 id="workspaces-finder">Opening sessions from Finder</h3>
 <ul>
-<li>Drag up to 20 folders from Finder onto the tree to open sessions there. A drop on a row lands in that row's workspace; a drop on empty sidebar space uses the current workspace, or the focused one when the workspace filter narrows the tree to exactly one. Folded workspaces spring open while you hover and close again if you cancel.</li>
+<li>Drag up to 20 folders from Finder onto the tree to open sessions there. A drop on a row lands in that row's workspace, or among the top-level sessions for one of theirs; a drop on empty sidebar space uses the current workspace, or the focused one when the workspace filter narrows the tree to exactly one. Folded workspaces spring open while you hover and close again if you cancel.</li>
 <li><code>open -a agterm &lt;path&gt;</code>, or Open With ▸ agterm on a folder in Finder, adds a session in that directory to the last-active window, starting agterm first when it is not running. A remote window shows only its server's sessions, so it refuses the folder, with a notification when banners are on. To place the session precisely, use <code>agtermctl session new --cwd &lt;path&gt;</code>.</li>
 <li>Folder-picking panels (<strong>Open Directory…</strong> and the Settings directory choosers) open in the focused pane's directory, or in the directory already configured where there is one, else in your home directory.</li>
 </ul>
@@ -583,6 +594,7 @@ agtermctl session overlay open --html report.html --page</code></pre>
 <ul>
 <li>Focus one workspace to zoom to it, or mark several from their row menus and apply the filter once with the sidebar's grid button. Marking never narrows the tree on its own, and suspending the filter keeps the set for one click back.</li>
 <li><strong>View ▸ Edit Focused Workspaces…</strong> marks and unmarks workspaces the same way.</li>
+<li>The top-level sessions take part like a workspace: the context menu of a session among them offers <strong>Focus Top-Level Sessions</strong> and <strong>Add Top-Level Sessions to Focus</strong>, View ▸ Focus reads the same while the top-level sessions are current, and the focus editor lists them first. While the filter is on and they are not focused, the ordinary tree hides them; the flagged view ignores the filter, as for workspaces.</li>
 <li>Creating a workspace while the filter is on adds it to the set. Selecting a session outside the set suspends the filter rather than discarding it.</li>
 <li>The set is per window and remembered across restarts.</li>
 </ul>
@@ -841,7 +853,7 @@ s=$(agtermctl zmx tree studio.local --json \
 <p><strong>File ▸ New Remote Session…</strong> (the <code>new_remote_session</code> action, no default key) starts a shell on a host in <code>remotes.conf</code> and attaches it here, at the end of the workspace that was current when you chose the item.</p>
 <ul>
 <li>With more than one host listed, the picker asks which. A Mac with several open windows is asked which window gets the session there.</li>
-<li>On the host the session goes into the workspace with your workspace's name, the first one when several share it, created when there is none. Nothing is selected there.</li>
+<li>On the host the session goes into the workspace with your workspace's name, the first one when several share it, created when there is none. Nothing is selected there. Started from the top-level sessions, it goes among the host's top-level sessions, and a host too old for them refuses before creating anything.</li>
 <li>The host must be a Mac in Live sessions mode or an agterm-server. A host that does not answer, or runs an agterm too old to tell, gets nothing created and the panel says why.</li>
 <li>A session created but not attached is named in the panel with its id; <code>agtermctl zmx attach HOST ID</code> attaches it later. When the host's reply is lost, the panel says it is unknown whether a session was created. Either way nothing is sent again.</li>
 <li>The item is greyed out while <code>remotes.conf</code> lists no host, and in a <a href="#remote-window">remote window</a>, whose new sessions come from its server.</li>
@@ -1278,7 +1290,7 @@ map cmd+opt+down|ctrl+a&gt;ctrl+l --repeat next_session</code></pre>
 <h3 id="keymap-actions">Built-in actions</h3>
 <pre><code>new_window   rename_window   delete_window
 new_workspace   rename_workspace   delete_workspace
-new_session   open_directory   rename_session   duplicate_session
+new_session   new_root_session   open_directory   rename_session   duplicate_session
 new_companion   duplicate_companion   convert_companion
 close_session   reopen_recent   undo_close   clear_status
 increase_font_size   decrease_font_size   reset_font_size
@@ -1582,7 +1594,7 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
 <ul>
 <li><code>--target</code> and <code>--workspace</code> take a session or workspace UUID, a unique prefix of it (git-style), or <code>active</code>. Never a name.</li>
 <li><code>--target</code> defaults to <code>active</code>, so the current session rarely needs naming.</li>
-<li>For a session, <code>active</code> is the selected one. For a workspace, it is the one a new session lands in: a workspace you just created in the foreground, else the selected session's, else the last one.</li>
+<li>For a session, <code>active</code> is the selected one. For a workspace, it is the one a new session lands in: a workspace you just created in the foreground, else the one the focus filter shows alone in the sidebar tree when it hides the selected session or nothing is selected, else the selected session's (the top-level sessions for one of them), else the last named workspace, else the top-level sessions. <code>root</code> names the top-level sessions; see <a href="/commands#workspace">the workspace commands</a> for which take it.</li>
 <li>A new workspace stays the target until the selection changes (to another session or to none), or until you delete it or hide it with the workspace filter. <code>workspace select</code> moves the target to the one you name, an empty one included. So <code>session new</code> right after <code>workspace new</code> lands in the new workspace.</li>
 <li><code>--window</code> addresses another window's tree; see <a href="#agtermctl-windows">Windows</a>.</li>
 </ul>

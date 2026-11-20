@@ -14,6 +14,7 @@ final class ControlServerRemoteActionsTests: XCTestCase {
     private var remoteStore: AppStore!
     private let workspaceID = UUID()
     private let otherWorkspaceID = UUID()
+    private let rootID = UUID()
     private static let endpoint = ControlZmxEndpoint(executable: "/srv/zmx", socketDirectory: "/run/zmx")
 
     private struct Timeout: Error {}
@@ -144,11 +145,13 @@ final class ControlServerRemoteActionsTests: XCTestCase {
                               panes: panes)
     }
 
-    private func open(_ sessions: [CatalogSession], tint: String? = nil) throws {
+    private func open(_ sessions: [CatalogSession], tint: String? = nil, root: [CatalogSession]? = nil) throws {
+        let workspaces = [CatalogWorkspace(id: workspaceID, name: "main", tint: tint, sessions: sessions),
+                          CatalogWorkspace(id: otherWorkspaceID, name: "spare", tint: tint, sessions: [])]
+            + (root.map { [CatalogWorkspace(id: rootID, name: "", root: true, sessions: $0)] } ?? [])
         try feed(.snapshot(CatalogSnapshot(epoch: "e1", rev: 0, catalogID: UUID(),
                                            versions: CatalogVersions(server: "1", protocolVersion: 1, catalog: 1),
-                                           workspaces: [CatalogWorkspace(id: workspaceID, name: "main", tint: tint, sessions: sessions),
-                                                        CatalogWorkspace(id: otherWorkspaceID, name: "spare", tint: tint, sessions: [])])))
+                                           workspaces: workspaces)))
         XCTAssertEqual(remoteStore.remoteActions?.mirror.state, .connected)
     }
 
@@ -232,6 +235,44 @@ final class ControlServerRemoteActionsTests: XCTestCase {
         let row = try XCTUnwrap(remoteStore.session(withID: entry.id))
         XCTAssertFalse(row.flagged)
         XCTAssertNil(row.tint)
+    }
+
+    func testAWorkspaceFlagOfTheRootInANamedWindowGoesToTheServerByTheOwnersRootID() async throws {
+        try open([catalogSession()], tint: "", root: [catalogSession()])
+        var args = ControlArgs(mode: "on")
+        args.window = remoteWindow.uuidString
+        _ = library.newWindow()
+
+        let reply = try await send(.workspaceFlag, target: "root", args: args)
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        XCTAssertEqual(runner.operations.count, 1)
+        XCTAssertTrue(runner.operations[0].contains("workspace flag on --target \(rootID.uuidString)"), runner.operations[0])
+    }
+
+    func testAWorkspaceFlagOfTheRootInTheFrontmostWindowGoesToTheServerByTheOwnersRootID() async throws {
+        try open([catalogSession()], tint: "", root: [catalogSession()])
+        library.frontmostWindowID = remoteWindow
+
+        let reply = try await send(.workspaceFlag, target: "root", args: ControlArgs(mode: "on"))
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        XCTAssertEqual(runner.operations.count, 1)
+        XCTAssertTrue(runner.operations[0].contains("workspace flag on --target \(rootID.uuidString)"), runner.operations[0])
+    }
+
+    func testNamedOnlyWorkspaceCommandsRefuseTheServersRootBeforeAskingIt() async throws {
+        try open([catalogSession()], tint: "", root: [])
+        library.frontmostWindowID = remoteWindow
+        var rename = ControlArgs(name: "x")
+        rename.window = remoteWindow.uuidString
+
+        let renamed = try await send(.workspaceRename, target: "root", args: rename)
+        let deleted = try await send(.workspaceDelete, target: rootID.uuidString)
+
+        XCTAssertEqual(renamed.error, "top-level sessions are not a workspace")
+        XCTAssertEqual(deleted.error, "top-level sessions are not a workspace")
+        XCTAssertTrue(runner.operations.isEmpty, "\(runner.operations)")
     }
 
     func testFlagAndTintOfACatalogRowStayHereWithAServerThatDoesNotKeepThem() async throws {

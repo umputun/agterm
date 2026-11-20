@@ -118,6 +118,24 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
         XCTAssertTrue(pollRowOrder(["gamma", "alpha", "beta"], timeout: 10), "the flat rows should follow the moved order")
     }
 
+    func testARootSessionPlacedByIDShowsUnindentedAboveTheFirstWorkspaceRow() throws {
+        let tree = try XCTUnwrap((try sendCommand(#"{"cmd":"tree"}"#)["result"] as? [String: Any])?["tree"] as? [String: Any])
+        let workspaces = try XCTUnwrap(tree["workspaces"] as? [[String: Any]])
+        let root = try XCTUnwrap(workspaces.first { $0["root"] as? Bool == true }?["id"] as? String, "a window has a root: \(workspaces)")
+
+        let made = try sendCommand(#"{"cmd":"session.new","args":{"workspace":"\#(root)","name":"toplevel"}}"#)
+        XCTAssertEqual(made["ok"] as? Bool, true, "session.new by the root id should succeed: \(made)")
+        XCTAssertTrue(pollSessionRowCount(2, timeout: 10), "the root session row should land")
+
+        let rows = app.staticTexts.matching(identifier: "session-row").allElementsBoundByIndex
+        let top = try XCTUnwrap(rows.first { ($0.value as? String) == "toplevel" }, "root row")
+        let seeded = try XCTUnwrap(rows.first { ($0.value as? String) != "toplevel" }, "seeded row")
+        let header = app.descendants(matching: .any).matching(identifier: "workspace-row").firstMatch
+        XCTAssertTrue(header.waitForExistence(timeout: 5), "workspace row")
+        XCTAssertLessThan(top.frame.minY, header.frame.minY, "the root block sits above the first workspace row")
+        XCTAssertLessThan(top.frame.minX, seeded.frame.minX, "a root row is not indented under a workspace")
+    }
+
     private func pollRowOrder(_ names: [String], timeout: TimeInterval) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {

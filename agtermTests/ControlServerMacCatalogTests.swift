@@ -260,7 +260,7 @@ final class ControlServerMacCatalogTests: XCTestCase {
 
         XCTAssertTrue(response.ok, response.error ?? "")
         XCTAssertEqual(response.result?.receipt?.outcome, .applied)
-        XCTAssertEqual(library.store(for: window)?.workspaces.last?.name, "fresh")
+        XCTAssertEqual(library.store(for: window)?.namedWorkspaces.last?.name, "fresh")
     }
 
     private func operation(_ cmd: String, target: String? = nil, args: String = "", opID: String, window: UUID) throws -> ControlResponse {

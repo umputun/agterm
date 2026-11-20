@@ -1222,12 +1222,13 @@ struct AppStoreTests {
         #expect(store.selectedSessionID == active.id)
     }
 
-    @Test func removeWorkspaceKeepsAtLeastOne() {
+    @Test func removeWorkspaceDeletesTheLastNamedWorkspace() {
         let store = makeStore()
         let only = store.addWorkspace(name: "only")
-        #expect(store.canRemoveWorkspace == false)
+        #expect(store.canRemoveWorkspace)
         store.removeWorkspace(only.id)
-        #expect(store.workspaces.map(\.id) == [only.id])
+        #expect(store.namedWorkspaces.isEmpty)
+        #expect(!store.canRemoveWorkspace)
     }
 
     @Test func selectionUpdatesRecencyMostRecentFirst() {

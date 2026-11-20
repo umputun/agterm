@@ -38,7 +38,8 @@ session drag are out of scope.
   Use `WindowInfo`, not `Window`, to avoid framework name collisions. `WindowsIndex` has its own version,
   independent of `Snapshot.version`; `WindowEntry` stores ID, name, and open state.
 - A window is open when its store is loaded. `loadStore` lazily caches `windows/<id>.json`; `newWindow`
-  seeds workspace 1 and a `$HOME` session. Keep at least one library entry. `openIDs` drives relaunch.
+  seeds a root and a `$HOME` session, in the root when the source window's selected session is a root session and in
+  workspace 1 otherwise; the Dock menu passes no source and a remote source counts as none. Keep at least one library entry. `openIDs` drives relaunch.
   `applyInactiveWindowSidebarHiding` shows the active sidebar and hides other windows' sidebars.
 - `closeWindow` that empties the open set pins `frontmostWindowID` to the closing window.
   The persisted index then has no open entries, so the next launch takes reopen's never-windowless

@@ -630,7 +630,7 @@ final class SidebarUITests: XCTestCase {
             if let data = try? Data(contentsOf: file),
                let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let workspaces = obj["workspaces"] as? [[String: Any]],
-               workspaces.compactMap({ $0["name"] as? String }) == expected {
+               workspaces.filter({ $0["root"] as? Bool != true }).compactMap({ $0["name"] as? String }) == expected {
                 return true
             }
             usleep(200_000)

@@ -47,6 +47,15 @@ struct ServerActionsFlagsTests {
         #expect(first.flagged && second.flagged)
     }
 
+    @Test func aRootWorkspaceFlagSetsItsSessionsAndTheirCompanions() throws {
+        let top = try newSession(workspace: "root")
+        let companion = try harness.store.addCompanion(to: top.id, options: CompanionOptions(cwd: "/c")).get()
+
+        #expect(harness.actions.setWorkspaceFlag("root", window: nil, mode: .on).ok)
+
+        #expect(top.flagged && companion.flagged)
+    }
+
     @Test func aTintSetKeepsTheRowsPartsAndClearRemovesIt() throws {
         let session = try newSession()
         let workspace = harness.store.workspaces[0].id

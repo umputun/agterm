@@ -99,7 +99,7 @@ struct Zmx: ParsableCommand {
         var window: String?
         @Flag(help: "Also attach every companion of the session, under it; the session must not itself be a companion.")
         var companions = false
-        @Option(help: "Workspace id, unique prefix, or active (default: the window's current workspace).")
+        @Option(help: "Workspace id, unique prefix, active, or root for the top-level sessions (default: the window's current workspace).")
         var workspace: String?
         @Option(help: "Workspace by name; errors if not found unless --create-workspace. Mutually exclusive with --workspace.")
         var workspaceName: String?

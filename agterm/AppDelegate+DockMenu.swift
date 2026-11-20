@@ -79,7 +79,7 @@ extension AppDelegate {
             guard let self else { return }
             NSApp.unhide(nil)
             NSApp.activate()
-            actions?.newWindow(ignoringModals: true)
+            actions?.newWindowFromDock()
         }
 
         // the quick terminal is app-level, so unlike its neighbours here there is no per-window controller to

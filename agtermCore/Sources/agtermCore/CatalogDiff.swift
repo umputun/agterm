@@ -69,7 +69,7 @@ extension CatalogSnapshot {
         for (index, workspace) in next.workspaces.enumerated() {
             guard let current = state.workspaces.first(where: { $0.id == workspace.id }) else {
                 emit(.workspaceAdded(CatalogWorkspace(id: workspace.id, name: workspace.name, tint: workspace.tint,
-                                                      tintOn: workspace.tintOn, sessions: []), index: index))
+                                                      tintOn: workspace.tintOn, root: workspace.root, sessions: []), index: index))
                 continue
             }
             if current.name != workspace.name || current.tint != workspace.tint || current.tintOn != workspace.tintOn {

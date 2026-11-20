@@ -141,6 +141,17 @@ final class CustomCommandRunnerTests: XCTestCase {
         XCTAssertEqual(scratchContext.paneID, scratch.uuidString)
     }
 
+    func testATopLevelSessionNamesNoWorkspaceButKeepsTheRootsID() throws {
+        let fixture = try fixture()
+        let root = try XCTUnwrap(fixture.store.rootWorkspace).id
+        let session = try XCTUnwrap(fixture.store.addSession(toWorkspace: root, cwd: "/tmp"))
+
+        let context = fixture.runner.context(for: session, in: fixture.store, selectionSurface: nil, pane: .left)
+
+        XCTAssertEqual(context.workspaceName, "")
+        XCTAssertEqual(context.workspaceID, root.uuidString)
+    }
+
     func testAScratchCommandOnAnAttachedSessionNamesTheLocalScratchShell() throws {
         let fixture = try fixture()
         let workspace = try XCTUnwrap(fixture.store.workspaces.first?.id)

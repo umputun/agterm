@@ -142,7 +142,7 @@ extension RemoteOperation {
             switch ControlDispatcher.tintUpdate(args, command: request.cmd.rawValue) {
             case .failure(let rejection): return refuse(rejection.message)
             case .success(let update) where request.cmd == .workspaceTint:
-                return workspace(request.target, in: store) { .operation(.setWorkspaceTint($0, update), select: false) }
+                return namedWorkspace(request.target, in: store) { .operation(.setWorkspaceTint($0, update), select: false) }
             case .success(let update):
                 return session(request.target, in: store) { .operation(.setTint($0, update), select: false) }
             }
@@ -155,14 +155,14 @@ extension RemoteOperation {
             return .operation(.newWorkspace(name: args.name, collapsed: args.collapsed == true, tint: shell.tint), select: false)
         case .workspaceRename:
             guard let name = args.name?.trimmedOrNil else { return refuse("workspace.rename requires a name") }
-            return workspace(request.target, in: store) { .operation(.renameWorkspace($0, name: name), select: false) }
+            return namedWorkspace(request.target, in: store) { .operation(.renameWorkspace($0, name: name), select: false) }
         case .workspaceDelete:
-            return workspace(request.target, in: store) { .operation(.deleteWorkspace($0), select: false) }
+            return namedWorkspace(request.target, in: store) { .operation(.deleteWorkspace($0), select: false) }
         case .workspaceMove:
             guard let to = args.to, ReorderDirection(rawValue: to) != nil else {
                 return refuse("workspace.move --to must be up|down|top|bottom")
             }
-            return workspace(request.target, in: store) { .operation(.moveWorkspace($0, to: to), select: false) }
+            return namedWorkspace(request.target, in: store) { .operation(.moveWorkspace($0, to: to), select: false) }
         default:
             return refuse("\(request.cmd.rawValue) is not sent to a remote window's server")
         }
@@ -324,11 +324,17 @@ extension RemoteOperation {
     @MainActor
     private static func workspace(_ target: String?, in store: AppStore, _ body: (UUID) -> RemoteOperationParse) -> RemoteOperationParse {
         let target = target ?? "active"
-        let resolution = ControlResolve.resolve(target, candidates: store.workspaces.map(\.id), active: store.currentWorkspaceID)
+        let resolution = store.resolveWorkspaceTarget(target)
         guard case .resolved(let id) = resolution else {
             return refuse(ControlResolve.errorMessage(noun: "workspace", target: target, resolution: resolution))
         }
         return body(id)
+    }
+
+    /// namedWorkspace is `workspace` for a workspace-only command, refusing a root the catalog marks before forwarding.
+    @MainActor
+    private static func namedWorkspace(_ target: String?, in store: AppStore, _ body: (UUID) -> RemoteOperationParse) -> RemoteOperationParse {
+        workspace(target, in: store) { id in store.rootRefusal(id).map { .refused($0) } ?? body(id) }
     }
 
     private static func refuse(_ error: String) -> RemoteOperationParse {

@@ -274,10 +274,8 @@ extension ControlServer: ControlActions {
                 }
                 return makeSessionResponse(in: store, workspaceID: workspace.id, options: options, tint: tint)
             }
-            // id addressing (default `active`): the canonical prefix/active resolver.
-            let target = options.workspace ?? "active"
-            return resolver.resolve(target, candidates: store.workspaces.map(\.id),
-                           active: store.currentWorkspaceID, noun: "workspace") { workspaceID in
+            // id addressing (default `active`): the canonical prefix/active resolver, `root` included.
+            return resolver.resolveWorkspace(options.workspace ?? "active", in: store) { workspaceID in
                 makeSessionResponse(in: store, workspaceID: workspaceID, options: options, tint: tint)
             }
         }
@@ -686,8 +684,7 @@ extension ControlServer: ControlActions {
         case .workspace(let workspace):
             // both must live in the same store: resolve the session first (fixing it), then the workspace.
             return resolver.resolveSession(target, window: window) { store, sessionID in
-                resolver.resolve(workspace, candidates: store.workspaces.map(\.id),
-                        active: store.currentWorkspaceID, noun: "workspace") { workspaceID in
+                resolver.resolveWorkspace(workspace, in: store) { workspaceID in
                     guard store.moveSession(sessionID, toWorkspace: workspaceID) else {
                         return ControlResponse(ok: false, error: Self.companionMoveError)
                     }
@@ -705,8 +702,7 @@ extension ControlServer: ControlActions {
             return ControlResponse(ok: false, error: "session.move --target can be repeated only with a workspace or --after/--before")
         case .workspace(let workspace):
             return resolveBatchSessions(targets, window: window) { store, ids in
-                resolver.resolve(workspace, candidates: store.workspaces.map(\.id),
-                        active: store.currentWorkspaceID, noun: "workspace") { workspaceID in
+                resolver.resolveWorkspace(workspace, in: store) { workspaceID in
                     let affected = store.moveSessions(ids, toWorkspace: workspaceID)
                     if affected == 0, refusesCompanionMove(ids, in: store) {
                         return ControlResponse(ok: false, error: Self.companionMoveError)

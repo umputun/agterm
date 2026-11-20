@@ -599,9 +599,13 @@ struct WorkspaceSidebar: NSViewRepresentable {
             var seen = Set<UUID>()
             var newRoots: [SidebarNode] = []
             for (workspace, sessions) in workspaceProjection {
+                seen.formUnion(sessions.map(\.id))
+                guard !workspace.isRoot else {
+                    newRoots.append(contentsOf: sessionNodes(for: sessions))
+                    continue
+                }
                 let wsNode = node(for: workspace.id, kind: .workspace)
                 seen.insert(workspace.id)
-                seen.formUnion(sessions.map(\.id))
                 wsNode.children = sessionNodes(for: sessions)
                 newRoots.append(wsNode)
             }
@@ -612,8 +616,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
             // then pick up any the model reports expanded — a runtime-added workspace defaults
             // `isExpanded == true`, so it renders open, while a user-collapsed one and a reveal's
             // already-present id are undisturbed (formUnion only adds).
-            expandedWorkspaceIDs.formIntersection(Set(store.workspaces.map(\.id)))
-            expandedWorkspaceIDs.formUnion(store.workspaces.filter(\.isExpanded).map(\.id))
+            expandedWorkspaceIDs.formIntersection(Set(store.namedWorkspaces.map(\.id)))
+            expandedWorkspaceIDs.formUnion(store.namedWorkspaces.filter(\.isExpanded).map(\.id))
             let sessions = store.workspaces.flatMap(\.sessions)
             expandedParentIDs.formIntersection(Set(sessions.map(\.id)))
             expandedParentIDs.formUnion(sessions.filter(\.isExpanded).map(\.id))
@@ -633,7 +637,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
                 outline.expandItem(node)
             }
             suppressExpansionPersist = false
-            roots.forEach(applyParentExpansion(under:))
+            applyExpansion(ofParents: roots.filter { $0.kind == .session })
+            roots.filter { $0.kind == .workspace }.forEach(applyParentExpansion(under:))
             updateEmptyState()
         }
 
@@ -682,16 +687,16 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// Seeds the tracked expansion set from the persisted `Workspace.isExpanded`. Sets only the tracked
         /// set — `rebuildAndReload` applies it to the outline. Called once from `makeNSView`.
         func seedExpansionFromModel() {
-            expandedWorkspaceIDs = Set(store.workspaces.filter(\.isExpanded).map(\.id))
+            expandedWorkspaceIDs = Set(store.namedWorkspaces.filter(\.isExpanded).map(\.id))
         }
 
         /// Expands every workspace row — the "Expand Workspaces" user action. Seeds the tracked expansion
-        /// from the live `store.workspaces`, NOT `roots` (only the marked subtrees while the focus filter is
+        /// from the live `store.namedWorkspaces`, NOT `roots` (only the marked subtrees while the focus filter is
         /// on), so turning the filter off remembers every workspace as expanded. Per-item callbacks are
         /// suppressed; the whole-tree state is persisted once via `setWorkspacesExpanded`.
         func expandAll() {
             guard let outline = outlineView else { return }
-            for workspace in store.workspaces { expandedWorkspaceIDs.insert(workspace.id) }
+            for workspace in store.namedWorkspaces { expandedWorkspaceIDs.insert(workspace.id) }
             suppressExpansionPersist = true
             for node in roots where node.kind == .workspace { outline.expandItem(node) }
             suppressExpansionPersist = false
@@ -699,10 +704,11 @@ struct WorkspaceSidebar: NSViewRepresentable {
         }
 
         /// Collapses every workspace except the current one (`store.currentWorkspaceID`), keeping that
-        /// one expanded and scrolled into view. Needs workspace rows, which the flat flagged list lacks.
+        /// one expanded and scrolled into view; with the root current every named workspace folds. Needs
+        /// workspace rows, which the flat flagged list lacks.
         func collapseOthers() {
             guard let outline = outlineView, rendersWorkspaceRows else { return }
-            let keepID = store.currentWorkspaceID
+            let keepID = store.isCurrentWorkspaceRoot ? nil : store.currentWorkspaceID
             // this command targets ALL workspaces, not just the visible `roots`: reduce the tracked set to
             // exactly the active workspace, so a focus filter hiding some can't leave them in the set for
             // the batch write below to persist as expanded. The outline only touches on-screen rows.
@@ -919,7 +925,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
         func rowLabel(for session: Session, workspaceName: String) -> String {
             guard let flaggedLayout else { return session.displayName }
             let label = store.listLabel(for: session)
-            return flaggedLayout == .flat ? "\(label) : \(workspaceName)" : label
+            return flaggedLayout == .flat && !workspaceName.isEmpty ? "\(label) : \(workspaceName)" : label
         }
 
         func workspaceNode(forID id: UUID) -> SidebarNode? {

@@ -159,6 +159,14 @@ paths:
   A command that reuses `count` for something else must carry its own `result.text`, which the shared
   formatter prefers over every count spelling; `restore.capture` does, or its pane total would print as
   "N diagnostic(s)".
+- A window's top-level sessions live in its root container (`Workspace.isRoot`), stored last and shown first;
+  `AppStore+Root` owns the helpers. `root` (`ControlWorkspaceNode.rootTarget`) addresses it wherever a workspace is
+  expected, and `active` resolves to it through `currentWorkspaceID` like any container. Workspace-only commands resolve
+  through `ControlTargetResolver.resolveNamedWorkspace` and refuse it with `AppStore.rootRefusal`, by literal, id,
+  prefix or `active`, never substituting a named workspace; `workspace.focus` and `workspace.flag` act on it. A remote
+  window refuses a catalog-marked root for those commands before forwarding (`RemoteOperation.namedWorkspace`).
+  `zmx.tree` marks a root session `workspaceRoot`, so a viewer places it with `--workspace root`, and
+  `session.remote.new` from a root destination asks the origin for `--workspace=root`, which an older origin refuses.
 - Targets accept active, case-insensitive UUID, or unique prefix. Batch targets resolve within the first
   target's store, deduplicate, and fail atomically. Preserve the first target in the legacy top-level field
   so old servers degrade to it rather than active.
@@ -242,7 +250,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 
 ## Organization commands
 
-- `workspace.delete` enforces at least one workspace and errors instead of showing the GUI alert.
+- `workspace.delete` deletes the last named workspace too, leaving the root, and never shows the GUI alert.
 - `session.close` keeps legacy one-target hard close. Repeated targets are atomic and deduplicated; one
   unique target remains the legacy hard path. Multi-target close follows `closeGraceUndoEnabled`, creates
   one grouped undo/reopen record, and returns actual `affected`; selecting any recent group member restores
@@ -273,16 +281,16 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   ends every pane's. Mark for Attention is `session.status
   completed` on the targets `tree` reports idle; it skips the rest, so it is not an unconditional write.
 - `workspace.move --to up|down|top|bottom` reorders relative to the target. Drag remains the precise
-  between-row surface. `active` resolves through `currentWorkspaceID` — a foreground-created workspace
-  first, then the selected session's, then `workspaces.last` — so repeated moves may target a different
-  workspace; use an ID to keep one target.
-- `workspace.go --to next|prev` steps the CURRENT workspace through `visibleWorkspaces`, wrapping, and
+  between-row surface. `active` resolves through `currentWorkspaceID` (reference.md Addressing owns the
+  order), so repeated moves may target a different workspace; use an ID to keep one target.
+- `workspace.go --to next|prev` steps the CURRENT workspace through the named `visibleWorkspaces`, wrapping, and
   routes through `selectWorkspace`, so it lands on the target's FIRST session and inherits the
   empty-workspace reveal. Relative like `session.go`, so it takes no target; `workspace.move` is the
   neighbouring verb that reorders instead. Returns the workspace id it landed on. Collapse state is NOT a
   term — a folded workspace is stepped into like any other, and issue #435 assumed otherwise. Errors with
-  `no other workspace to navigate to` where there is nowhere to step: flagged mode, or one visible
-  workspace. Read back through `tree` selection; the GUI twins are `previous_workspace`/`next_workspace`.
+  `no other workspace to navigate to` where there is nowhere to step: flagged mode, no visible workspace, or
+  one already current (a sole focused workspace is still entered while it has a session and the selection is elsewhere
+  or absent; `canStepWorkspaces` owns the rule). Read back through `tree` selection; the GUI twins are `previous_workspace`/`next_workspace`.
 - `session.split` drives the addressed session, not active-only `AppActions.toggleSplit`. `--axis
   vertical|horizontal` selects left/right or top/bottom; omitting it preserves an existing split's axis
   and defaults a new split to left/right. Off hides and retains the shell; `session.split.close` and the

@@ -49,6 +49,21 @@ final class KeymapUITests: XCTestCase {
                       "running the custom command from the palette should touch the marker file")
     }
 
+    func testNewTopLevelSessionRunsFromTheFileMenuAndItsMappedChord() throws {
+        seedKeymap("map cmd+ctrl+t new_root_session\n")
+        app.launchForUITest()
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 20), "seeded session should exist")
+
+        app.menuBars.menuBarItems["File"].click()
+        let item = app.menuBars.menuItems["New Top-Level Session"]
+        XCTAssertTrue(item.waitForExistence(timeout: 5), "File should offer New Top-Level Session")
+        item.click()
+        XCTAssertTrue(poll { self.rootSessionCount() == 1 }, "the File item should add a top-level session: \(String(describing: rootSessionCount()))")
+
+        app.typeKey("t", modifierFlags: [.command, .control])
+        XCTAssertTrue(poll { self.rootSessionCount() == 2 }, "the mapped chord should add another: \(String(describing: rootSessionCount()))")
+    }
+
     // the Custom Commands palette (Navigate ▸ Custom Commands, ⌃⇧O) drops the `custom` badge — every row
     // in it is already custom.
     func testCustomCommandsPaletteShowsCustomOnlyWithoutBadge() throws {
@@ -355,6 +370,14 @@ final class KeymapUITests: XCTestCase {
         let item = app.menuItems["Reload Keymap"]
         XCTAssertTrue(item.waitForExistence(timeout: 5), "File menu should offer Reload Keymap")
         item.click()
+    }
+
+    private func rootSessionCount() -> Int? {
+        guard let data = try? Data(contentsOf: stateDir.windowSnapshotFile()),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let root = (obj["workspaces"] as? [[String: Any]])?.first(where: { $0["root"] as? Bool == true })
+        else { return nil }
+        return (root["sessions"] as? [[String: Any]])?.count ?? 0
     }
 
     private func seedKeymap(_ contents: String) {

@@ -160,13 +160,18 @@ public struct CatalogWorkspace: Codable, Equatable, Sendable {
     /// tint is the server's, as on a session: `""` for none, nil only from a server predating it.
     public var tint: String?
     public var tintOn: [String]?
+    /// root marks the origin's root container, the one a viewer adopts as its own; nil for a named workspace and from
+    /// an origin predating it, which a viewer then shows as a named workspace.
+    public var root: Bool?
     public var sessions: [CatalogSession]
 
-    public init(id: UUID, name: String, tint: String? = nil, tintOn: [String]? = nil, sessions: [CatalogSession]) {
+    public init(id: UUID, name: String, tint: String? = nil, tintOn: [String]? = nil, root: Bool? = nil,
+                sessions: [CatalogSession]) {
         self.id = id
         self.name = name
         self.tint = tint
         self.tintOn = tintOn
+        self.root = root
         self.sessions = sessions
     }
 }

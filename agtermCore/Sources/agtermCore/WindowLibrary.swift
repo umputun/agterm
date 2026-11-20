@@ -377,15 +377,18 @@ public final class WindowLibrary {
 
     // MARK: - Mutation
 
-    /// Creates a window seeded with "workspace 1" and one $HOME session, opens it, and persists the index.
-    /// Defaults the name to "window N".
+    /// Creates a window named "window N" unless named, seeded with one $HOME session, opens it, and persists the
+    /// index. The session is a top-level one when `source` is a window of this Mac whose active session is, else it
+    /// opens in "workspace 1".
     @discardableResult
-    public func newWindow(name: String? = nil) -> WindowInfo {
+    public func newWindow(name: String? = nil, source: AppStore? = nil) -> WindowInfo {
         // the name feeds {AGT_WINDOW_NAME}; see TerminalText.
         let info = WindowInfo(name: name.map(TerminalText.sanitized)?.trimmedOrNil ?? defaultWindowName)
         let store = makeStore(for: info.id, persistence: persistenceStore(for: info.id))
-        let workspace = store.addWorkspace(name: "workspace 1")
-        store.addSession(toWorkspace: workspace.id, cwd: FileManager.default.homeDirectoryForCurrentUser.path)
+        store.ensureRoot()
+        let atRoot = source.map { !$0.isRemoteWindow && $0.selectedSessionID.flatMap($0.workspace(forSession:))?.isRoot == true } ?? false
+        let destination = (atRoot ? store.rootWorkspace : nil) ?? store.addWorkspace(name: "workspace 1")
+        store.addSession(toWorkspace: destination.id, cwd: FileManager.default.homeDirectoryForCurrentUser.path)
         windows.append(info)
         stores[info.id] = store
         openSetVersion += 1
@@ -414,8 +417,9 @@ public final class WindowLibrary {
         }
         let persistence = persistenceStore(for: id)
         let store = makeStore(for: id, persistence: persistence)
-        let snapshot = loadSnapshotForStore(persistence)
+        let (snapshot, readable) = loadSnapshotForStore(persistence)
         store.restore(from: snapshot, launchRestore: launchRestore)
+        let minted = store.ensureRoot()
         stores[id] = store
         openSetVersion += 1
         let carriedCaptures = snapshot.workspaces.contains { workspace in
@@ -444,6 +448,7 @@ public final class WindowLibrary {
             }
             store.scheduleTreeChanged()
         }
+        if minted, readable { store.save() }
         saveIndex()
         return store
     }
@@ -693,6 +698,7 @@ public final class WindowLibrary {
         let info = WindowInfo(name: defaultWindowName)
         let store = makeStore(for: info.id, persistence: persistenceStore(for: info.id))
         store.restore(from: snapshot, launchRestore: true)
+        store.ensureRoot()
         store.save()
         windows = [info]
         stores[info.id] = store
@@ -743,16 +749,20 @@ public final class WindowLibrary {
         return store
     }
 
-    private func loadSnapshotForStore(_ persistence: PersistenceStore) -> Snapshot {
-        guard launchInventorySink != nil else { return persistence.load() }
+    /// The window's persisted tree, and whether its file may be rewritten: it decoded or does not exist yet.
+    /// An unreadable file loads as an empty tree, and the load does not write over it.
+    private func loadSnapshotForStore(_ persistence: PersistenceStore) -> (snapshot: Snapshot, readable: Bool) {
         var snapshot: Snapshot
         do {
             snapshot = try persistence.loadChecked()
         } catch {
-            launchInventoryComplete = false
-            log("pane inventory could not read an open window snapshot: \(error)")
-            return persistence.load()
+            if launchInventorySink != nil {
+                launchInventoryComplete = false
+                log("pane inventory could not read an open window snapshot: \(error)")
+            }
+            return (Snapshot(), !FileManager.default.fileExists(atPath: persistence.fileURL.path))
         }
+        guard launchInventorySink != nil else { return (snapshot, true) }
         let upgrade = PaneIdentityInventory.upgrade(&snapshot)
         if upgrade.changed {
             do {
@@ -762,7 +772,7 @@ public final class WindowLibrary {
                 log("pane inventory could not persist an open window upgrade: \(error)")
             }
         }
-        return snapshot
+        return (snapshot, true)
     }
 
     private func prepareLaunchPaneInventory() -> Set<UUID>? {

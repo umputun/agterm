@@ -415,7 +415,7 @@ struct SocketClient {
             let detail = [session.context, running.isEmpty ? nil : running.joined(separator: " | ")]
                 .compactMap { $0 }.joined(separator: "  ")
             let tail = detail.isEmpty ? "" : "  \(detail)"
-            let at = "\(session.windowName)/\(session.workspaceName)/\(session.name)"
+            let at = "\(session.placeLabel)/\(session.name)"
             return "  \(at)\(split)  [\(session.id)]  \(session.cwd)\(tail)"
         }.joined(separator: "\n")
     }
@@ -520,9 +520,12 @@ struct SocketClient {
     /// Render a tree as an indented workspace → session listing (no trailing newline).
     private static func formatTree(_ tree: ControlTree) -> String {
         var lines: [String] = []
-        for workspace in tree.workspaces {
+        // the sidebar shows the root's sessions above every workspace, so the listing does too
+        let ordered = tree.workspaces.filter { $0.root == true } + tree.workspaces.filter { $0.root != true }
+        for workspace in ordered {
             let mark = workspace.active ? "*" : " "
-            lines.append("\(mark) \(workspace.name)  [\(workspace.id)]")
+            let label = workspace.root == true ? ControlWorkspaceNode.rootLabel : workspace.name
+            lines.append("\(mark) \(label)  [\(workspace.id)]")
             for session in workspace.sessions {
                 let smark = session.active ? "*" : " "
                 // a hidden split still owns a live pane, so it needs a tag of its own: without one it

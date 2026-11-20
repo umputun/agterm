@@ -123,9 +123,8 @@ extension AppActions {
     /// current when the action ran, whatever is selected by the time the picks and ssh waits end.
     func newRemoteSession() {
         guard let windowID = library.activeWindowID, let store = library.store(for: windowID),
-              let workspace = store.currentWorkspaceID,
-              let name = store.workspaces.first(where: { $0.id == workspace })?.name else { return }
-        let destination = RemoteSessionDestination(store: store, workspace: workspace, name: name)
+              let workspace = store.workspaces.first(where: { $0.id == store.currentWorkspaceID }) else { return }
+        let destination = RemoteSessionDestination(store: store, workspace: workspace)
         pickRemote(prompt: "New session on which host?", in: windowID) { [weak self] host in
             self?.newRemoteSession(on: host, into: destination, in: windowID)
         }
@@ -239,7 +238,7 @@ extension AppActions {
     /// parent is not in the listing.
     static func remotePickItem(_ session: ControlRemoteSession, parentName: String?) -> ControlPickItem {
         let programs = session.panes.compactMap { $0.foreground?.first.map { ($0 as NSString).lastPathComponent } }
-        let parts = ["\(session.windowName)/\(session.workspaceName)", session.context ?? "", session.cwd,
+        let parts = [session.placeLabel, session.context ?? "", session.cwd,
                      programs.joined(separator: " | ")]
         return ControlPickItem(id: session.id, label: parentName.map { "\($0) › \(session.name)" } ?? session.name,
                                subtitle: parts.filter { !$0.isEmpty }.joined(separator: "  ·  "),

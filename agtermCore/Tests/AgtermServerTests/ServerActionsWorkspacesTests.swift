@@ -26,13 +26,16 @@ struct ServerActionsWorkspacesTests {
         #expect(harness.actions.moveWorkspace(second, window: nil, direction: .top).ok)
 
         #expect(harness.store.workspaces.map(\.name).first == "bee")
-        #expect(harness.store.workspaces.map(\.id).last == first)
+        #expect(harness.store.namedWorkspaces.map(\.id).last == first)
     }
 
-    @Test func theLastWorkspaceCannotBeDeleted() {
-        let only = harness.store.workspaces[0].id.uuidString
+    @Test func theLastNamedWorkspaceIsDeletedLeavingTheRoot() throws {
+        let only = try #require(harness.store.namedWorkspaces.first).id
 
-        #expect(harness.actions.deleteWorkspace(only, window: nil) == ControlResponse(ok: false, error: "cannot delete last workspace"))
+        #expect(harness.actions.deleteWorkspace(only.uuidString, window: nil).ok)
+
+        #expect(harness.store.namedWorkspaces.isEmpty)
+        #expect(harness.store.rootWorkspace != nil)
     }
 
     @Test func deletingAWorkspaceEndsItsSessionsDaemons() throws {
@@ -58,4 +61,39 @@ struct ServerActionsWorkspacesTests {
         let workspace = try #require(harness.store.workspace(named: "agents"))
         #expect(workspace.sessions.map(\.id) == [session.id])
     }
+
+    private func rootTargets() throws -> [String] {
+        let root = try #require(harness.store.rootWorkspace)
+        let session = try #require(harness.store.addSession(toWorkspace: root.id, cwd: "/top"))
+        _ = harness.store.selectSession(session.id)
+        return [root.id.uuidString, String(root.id.uuidString.prefix(8)), "active", "root"]
+    }
+
+    @Test func workspaceOnlyCommandsRefuseTheRootByIdPrefixAndActive() throws {
+        let refusal = ControlResponse(ok: false, error: "top-level sessions are not a workspace")
+        _ = harness.actions.createWorkspace(window: nil, name: "second", collapsed: false)
+        for target in try rootTargets() {
+            #expect(harness.actions.renameWorkspace(target, window: nil, name: "x") == refusal, "\(target)")
+            #expect(harness.actions.deleteWorkspace(target, window: nil) == refusal, "\(target)")
+            #expect(harness.actions.moveWorkspace(target, window: nil, direction: .top) == refusal, "\(target)")
+            #expect(harness.actions.setWorkspaceTint(target, window: nil, update: .set(.red, parts: nil)) == refusal, "\(target)")
+        }
+        #expect(harness.store.rootWorkspace?.name.isEmpty == true)
+        #expect(harness.store.workspaces.last?.isRoot == true)
+    }
+
+    @Test func aSessionIsCreatedInAndMovedIntoTheRootByItsId() throws {
+        let root = try #require(harness.store.rootWorkspace).id
+        let created = harness.actions.createSession(ControlSessionCreateOptions(
+            window: nil, cwd: nil, workspace: root.uuidString, workspaceName: nil, createWorkspace: nil, command: nil, wait: nil,
+            name: nil, after: nil, before: nil, noSelect: true))
+        let id = try #require(created.result?.id.flatMap(UUID.init(uuidString:)))
+        #expect(harness.store.workspace(forSession: id)?.id == root)
+
+        let named = try #require(harness.store.namedWorkspaces.first).id
+        let other = try #require(harness.store.addSession(toWorkspace: named, cwd: "/n"))
+        #expect(harness.actions.moveSession(other.id.uuidString, window: nil, move: .workspace(root.uuidString)).ok)
+        #expect(harness.store.workspace(forSession: other.id)?.id == root)
+    }
+
 }

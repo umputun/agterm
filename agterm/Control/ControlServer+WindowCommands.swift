@@ -14,7 +14,7 @@ extension ControlServer {
     /// resolves the store and runs a second render pass. Fire-and-forget like the other polls — a window that
     /// never renders times out and the command still replies ok.
     func windowNew(name: String?, minimized: Bool) async -> ControlResponse {
-        let info = library.newWindow(name: trimmed(name))
+        let info = library.newWindow(name: trimmed(name), source: library.activeStore)
         actions.openWindow?(info.id)
         await pollUntil { WindowRegistry.shared.isRegistered(info.id) }
         if minimized { await park(info.id) }

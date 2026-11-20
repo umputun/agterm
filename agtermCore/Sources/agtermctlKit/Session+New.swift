@@ -5,7 +5,7 @@ extension Session {
     struct New: RequestCommand {
         static let configuration = CommandConfiguration(abstract: "Create a session.")
         @Option(name: .long, help: "Working directory (defaults to $HOME).") var cwd: String?
-        @Option(name: .long, help: "Target workspace by id/prefix/active (defaults to the current one). Mutually exclusive with --workspace-name.") var workspace: String?
+        @Option(name: .long, help: "Target workspace by id/prefix/active, or 'root' for top-level sessions (defaults to the current one). Excludes --workspace-name.") var workspace: String?
         @Option(name: .long, help: "Target workspace by name; errors if not found unless --create-workspace. Mutually exclusive with --workspace.") var workspaceName: String?
         @Flag(name: .long, help: "With --workspace-name, create the workspace when it does not exist (reuse it otherwise).") var createWorkspace = false
         @Option(name: .long, help: "Run this command as the session's process instead of the login shell (no echoed command line; the session closes when it exits).") var command: String?

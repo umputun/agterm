@@ -113,12 +113,18 @@ final class AppActions {
     }
 
     func newSession() {
-        guard uiActionsEnabled else { return }
-        if let store, store.remoteActions != nil, let workspaceID = store.currentWorkspaceID {
-            return newRemoteSession(inWorkspace: workspaceID, of: store)
-        }
-        guard let store, let workspaceID = store.currentWorkspaceID,
-              let session = store.addSession(toWorkspace: workspaceID, cwd: resolvedNewSessionCwd(in: workspaceID, store: store),
+        guard uiActionsEnabled, let store, let workspaceID = store.currentWorkspaceID else { return }
+        newSession(inWorkspace: workspaceID, of: store)
+    }
+
+    func newRootSession() {
+        guard uiActionsEnabled, let store, let root = store.rootWorkspace?.id else { return }
+        newSession(inWorkspace: root, of: store)
+    }
+
+    private func newSession(inWorkspace workspaceID: UUID, of store: AppStore) {
+        if store.remoteActions != nil { return newRemoteSession(inWorkspace: workspaceID, of: store) }
+        guard let session = store.addSession(toWorkspace: workspaceID, cwd: resolvedNewSessionCwd(in: workspaceID, store: store),
                                              at: resolvedNewSessionIndex(in: workspaceID, store: store))
         else { return }
         // note activity so the new session buys the full idle grace before auto-follow moves the selection.
@@ -484,12 +490,13 @@ final class AppActions {
     }
 
     /// Delete a workspace and all its sessions from `store`'s window. Confirms while it still has sessions
-    /// (the delete ends their shells), no prompt when empty, no-op when only one workspace remains — one is
-    /// always kept. The row's "Delete Workspace" passes its OWN window-local store: the frontmost one would
+    /// (the delete ends their shells), no prompt when empty; the last named one goes too, leaving the root. The
+    /// row's "Delete Workspace" passes its OWN window-local store: the frontmost one would
     /// find no such id and silently do nothing. Ungated like the other store-scoped row actions — a window
     /// renders no sidebar while its zoom or dashboard is up, so the row menu is unreachable in exactly the
     /// state the gate covers, and a frontmost modal must not block a background window's row.
     func deleteWorkspace(_ workspaceID: UUID, in store: AppStore) {
+        guard store.rootRefusal(workspaceID) == nil else { return }
         if closeRemoteWorkspace(workspaceID, in: store) { return }
         guard store.canRemoveWorkspace,
               let workspace = store.workspaces.first(where: { $0.id == workspaceID }) else { return }
@@ -591,19 +598,27 @@ final class AppActions {
 
     // MARK: - Windows
 
-    /// Create a fresh window (one default workspace + session) and open it via the scene's window opener,
-    /// the seam the control channel uses. No-op before the scene `.task` wires the opener.
-    ///
-    /// `ignoringModals` skips the frontmost-window modal gate. Creating a window touches no existing
-    /// window's state, so the Dock item passes true — a dashboard or zoom in whatever window happened to be
-    /// last active must not make it inert. Menu bar and palette keep the gate (`.disabled(modalActive)`).
-    func newWindow(ignoringModals: Bool = false) {
-        guard ignoringModals || uiActionsEnabled else { return }
+    /// Create a fresh window (one HOME session, at its root when the frontmost window's active session is a
+    /// top-level one) for the menu bar and palette, which keep the frontmost-window modal gate.
+    func newWindow() {
+        guard uiActionsEnabled else { return }
+        openNewWindow(source: library.activeStore)
+    }
+
+    /// newWindowFromDock skips the modal gate: creating a window touches no existing window's state, so a
+    /// dashboard or zoom in whatever window was last active must not make the Dock item inert. It has no
+    /// source window, so the first shell starts in `workspace 1`.
+    func newWindowFromDock() {
+        openNewWindow(source: nil)
+    }
+
+    /// openNewWindow opens the new window via the scene's window opener, the seam the control channel uses.
+    /// No-op before the scene `.task` wires the opener.
+    private func openNewWindow(source: AppStore?) {
         // `library.newWindow()` persists an open entry, so with no opener the app counts a window that has
         // no NSWindow behind it.
         guard let openWindow else { return }
-        let info = library.newWindow()
-        openWindow(info.id)
+        openWindow(library.newWindow(source: source).id)
     }
 
     /// Surface a window: raise it if already open, else open it. Used by File ▸ Open Window and the palette.
