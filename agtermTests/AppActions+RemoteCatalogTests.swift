@@ -597,6 +597,52 @@ final class AppActionsRemoteCatalogTests: XCTestCase {
         XCTAssertEqual(shownIDs(), [entry.id])
     }
 
+    func testNewTopLevelSessionInARemoteWindowAsksTheServerForItsRoot() throws {
+        let entry = catalogSession()
+        let rootID = UUID()
+        openWithRoot(rootID, main: [entry], root: [])
+        _ = store.selectSession(entry.id)
+
+        actions.newRootSession()
+        try sent(1)
+
+        XCTAssertTrue(runner.lines[0].contains("session new --workspace \(rootID.uuidString)"), runner.lines[0])
+        XCTAssertEqual(shownIDs(), [entry.id])
+    }
+
+    func testNewTopLevelSessionAsksNothingOfAServerWithoutARoot() throws {
+        let entry = catalogSession()
+        open([entry])
+        _ = store.selectSession(entry.id)
+
+        actions.newRootSession()
+        settle()
+
+        XCTAssertTrue(runner.lines.isEmpty, "\(runner.lines)")
+        XCTAssertEqual(shownIDs(), [entry.id])
+    }
+
+    func testTheFocusEditorListsTheTopLevelSessionsDisabledForAServerWithoutARoot() throws {
+        open([catalogSession()])
+
+        let rows = actions.paletteFocusEditor()
+
+        XCTAssertEqual(rows.first?.title, "Top-Level Sessions")
+        XCTAssertEqual(rows.first?.isEnabled(), false)
+        XCTAssertEqual(rows.first?.runIfEnabled(), false)
+        XCTAssertEqual(rows.dropFirst().map(\.id), [workspaceID.uuidString])
+    }
+
+    func testTheFocusEditorListsTheServersRootLikeAnyContainer() throws {
+        let rootID = UUID()
+        openWithRoot(rootID, main: [catalogSession()], root: [])
+
+        let rows = actions.paletteFocusEditor()
+
+        XCTAssertEqual(rows.map(\.id), [rootID.uuidString, workspaceID.uuidString])
+        XCTAssertEqual(rows.first?.isEnabled(), true)
+    }
+
     func testNewSessionInAnotherRemoteWorkspaceTakesThatWorkspacesFolder() throws {
         let selected = catalogSession(cwd: "/srv/selected")
         let other = catalogSession(cwd: "/srv/other")

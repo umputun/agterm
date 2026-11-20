@@ -362,17 +362,21 @@
 - Modify: `agtermCore/Tests/agtermCoreTests/BuiltinActionTests.swift`, `PaletteCatalogTests.swift`, `CustomCommandTests.swift`,
   `agtermUITests/SidebarUITests.swift` (File menu item, targeted)
 
-- [ ] tests first: `new_root_session` built-in and palette entry resolve, are enabled in a root-only window and disabled
+- [x] tests first: `new_root_session` built-in and palette entry resolve, are enabled in a root-only window and disabled
   in a remote window whose owner has no root
-- [ ] tests first: Focus Workspace label reads "Focus Top-Level Sessions" when the active container is the root, in menu
+- [x] tests first: Focus Workspace label reads "Focus Top-Level Sessions" when the active container is the root, in menu
   and palette
-- [ ] tests first: Edit Focused Workspaces lists "Top-Level Sessions" with the same membership mark and toggle, present
+- [x] tests first: Edit Focused Workspaces lists "Top-Level Sessions" with the same membership mark and toggle, present
   when root is empty or filtered out
-- [ ] tests first: `{AGT_WORKSPACE_NAME}` expands empty for a root session
-- [ ] implement File ▸ New Top-Level Session next to New Session through the existing GUI creation path with the root
+- [x] tests first: `{AGT_WORKSPACE_NAME}` expands empty for a root session
+- [x] implement File ▸ New Top-Level Session next to New Session through the existing GUI creation path with the root
   ID (directory and placement settings, selection, remote dispatch unchanged), the palette entry, the built-in, the
   labels and the focus-editor entry
-- [ ] targeted UI test for the File menu item; targeted tests green before Task 7
+- [x] ➕ from review: View menu and palette "Add Workspace to Focus" read "Add Top-Level Sessions to Focus" when the
+  active container is the root; the File item carries the built-in's key equivalent so a mapped chord fires it; the
+  focus editor shows a disabled "Top-Level Sessions" entry for a server window whose owner has no root;
+  `PaletteUITests` arrow and ⌃J walks count the rows to New Workspace instead of a fixed step count
+- [x] targeted UI test for the File menu item and a mapped chord; targeted tests green before Task 7
 
 ### Task 7: Docs, skill and final gates
 

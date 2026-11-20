@@ -55,7 +55,8 @@ extension AppActions {
             remoteConnected: activeStore?.catalogState == .connected,
             remoteHasDetached: activeStore?.remoteActions?.mirror.detachedItems.isEmpty == false,
             marksBlocked: activeStore?.marksBlocked == true,
-            activeWorkspaceIsRoot: activeStore?.isCurrentWorkspaceRoot == true
+            activeWorkspaceIsRoot: activeStore?.isCurrentWorkspaceRoot == true,
+            hasRootWorkspace: activeStore?.rootWorkspace != nil
         )
     }
 
@@ -82,6 +83,7 @@ extension AppActions {
     private func dispatch(_ command: PaletteCommand) {
         switch command {
         case .newSession: newSession()
+        case .newRootSession: newRootSession()
         case .newWorkspace: newWorkspace()
         case .openDirectory: openDirectory()
         case .renameSession: renameActiveSession()
@@ -401,7 +403,7 @@ extension AppActions {
 
     func paletteFocusEditor() -> [PaletteItem] {
         guard let store else { return [] }
-        return store.displayWorkspaces.map { workspace in
+        let rows = store.displayWorkspaces.map { workspace in
             let id = workspace.id
             let count = workspace.sessions.count
             return PaletteItem(id: id.uuidString, title: workspace.label,
@@ -415,6 +417,9 @@ extension AppActions {
                                    store.setFocusMembership(id, member: !store.focusedWorkspaceIDs.contains(id))
                                })
         }
+        // an owner predating top-level sessions has no root to focus
+        guard store.isRemoteWindow, store.rootWorkspace == nil else { return rows }
+        return [PaletteItem(id: "root-unavailable", title: ControlWorkspaceNode.rootLabel, isEnabled: { false }, run: {})] + rows
     }
 
     // MARK: - Theme picker

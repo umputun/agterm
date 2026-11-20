@@ -33,15 +33,15 @@ final class PaletteUITests: XCTestCase {
         XCTAssertTrue(poll { self.sessionCount() == before + 1 }, "running New Session should add a session")
     }
 
-    func testActionPaletteArrowNavigationRunsSecondItem() throws {
-        // "new" matches [New Session, New Window, New Workspace] alphabetically; ↓↓ selects New Workspace.
+    func testActionPaletteArrowNavigationRunsTheRowItReaches() throws {
         let beforeWs = workspaceCount(), beforeSessions = sessionCount()
         openPalette("Command Palette")
         typeIntoPalette("new")
-        app.typeKey(.downArrow, modifierFlags: [])
-        app.typeKey(.downArrow, modifierFlags: [])
+        let steps = try XCTUnwrap(paletteRowIndex(of: "New Workspace"), "\"new\" should list New Workspace")
+        XCTAssertGreaterThan(steps, 1, "New Workspace should sit below at least two other matches")
+        for _ in 0..<steps { app.typeKey(.downArrow, modifierFlags: []) }
         app.typeKey(.return, modifierFlags: [])
-        XCTAssertTrue(poll { self.workspaceCount() == beforeWs + 1 }, "↓↓ then Enter should run the third match (New Workspace)")
+        XCTAssertTrue(poll { self.workspaceCount() == beforeWs + 1 }, "↓ to New Workspace then Enter should run it")
         XCTAssertEqual(sessionCount(), beforeSessions, "New Session should not have run")
     }
 
@@ -49,23 +49,27 @@ final class PaletteUITests: XCTestCase {
         let beforeWs = workspaceCount(), beforeSessions = sessionCount()
         openPalette("Command Palette")
         typeIntoPalette("new")
-        app.typeKey("j", modifierFlags: [.control])
-        app.typeKey("j", modifierFlags: [.control])
+        let steps = try XCTUnwrap(paletteRowIndex(of: "New Workspace"), "\"new\" should list New Workspace")
+        XCTAssertGreaterThan(steps, 1, "New Workspace should sit below at least two other matches")
+        for _ in 0..<steps { app.typeKey("j", modifierFlags: [.control]) }
         app.typeKey(.return, modifierFlags: [])
-        XCTAssertTrue(poll { self.workspaceCount() == beforeWs + 1 }, "⌃J⌃J then Enter should run the third match (New Workspace)")
+        XCTAssertTrue(poll { self.workspaceCount() == beforeWs + 1 }, "⌃J to New Workspace then Enter should run it")
         XCTAssertEqual(sessionCount(), beforeSessions, "New Session should not have run")
     }
 
     func testActionPaletteControlKMovesUpLikeTheArrow() throws {
         let beforeWs = workspaceCount(), beforeSessions = sessionCount()
+        let original = try XCTUnwrap(firstSessionID())
         openPalette("Command Palette")
         typeIntoPalette("new")
+        XCTAssertEqual(paletteRowIndex(of: "New Companion"), 0, "\"new\" should list New Companion first")
         app.typeKey(.downArrow, modifierFlags: [])
         app.typeKey(.downArrow, modifierFlags: [])
         app.typeKey("k", modifierFlags: [.control])
         app.typeKey("k", modifierFlags: [.control])
         app.typeKey(.return, modifierFlags: [])
-        XCTAssertTrue(poll { self.sessionCount() == beforeSessions + 1 }, "↓↓⌃K⌃K then Enter should run the first match (New Session)")
+        XCTAssertTrue(poll { self.sessionCount() == beforeSessions + 1 }, "↓↓⌃K⌃K then Enter should run the first match, which adds a session")
+        XCTAssertTrue(sessions().contains { $0["parentID"] as? String == original }, "the first match is New Companion, so the new session is a companion")
         XCTAssertEqual(workspaceCount(), beforeWs, "New Workspace should not have run")
     }
 
@@ -402,6 +406,15 @@ final class PaletteUITests: XCTestCase {
     }
 
     private func workspaces() -> [[String: Any]] { snapshot()?["workspaces"] as? [[String: Any]] ?? [] }
+    /// The open palette's row position of `title`, counting each item once although its shortcut text repeats the id.
+    private func paletteRowIndex(of title: String) -> Int? {
+        let rows = app.descendants(matching: .staticText).matching(NSPredicate(format: "identifier BEGINSWITH 'palette-item-'"))
+        guard rows.matching(identifier: "palette-item-\(title)").firstMatch.waitForExistence(timeout: 5) else { return nil }
+        var ids: [String] = []
+        for row in rows.allElementsBoundByIndex where !ids.contains(row.identifier) { ids.append(row.identifier) }
+        return ids.firstIndex(of: "palette-item-\(title)")
+    }
+
     private func workspaceCount() -> Int { workspaces().count }
     private func sessionCount() -> Int { sessions().count }
     private func selectedID() -> String? { snapshot()?["selectedSessionID"] as? String }

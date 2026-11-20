@@ -443,6 +443,35 @@ final class AppActionsPaletteTests: XCTestCase {
         XCTAssertFalse(row.runIfEnabled())
     }
 
+    func testTheFocusEditorListsAnEmptyRootAndOneTheFilterHides() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let root = try XCTUnwrap(store.rootWorkspace).id
+        let named = try XCTUnwrap(store.namedWorkspaces.first).id
+        XCTAssertEqual(actions.paletteFocusEditor().first?.title, "Top-Level Sessions")
+
+        store.setFocusMembership(named, member: true)
+        store.setFocusEnabled(true)
+        let row = try XCTUnwrap(actions.paletteFocusEditor().first)
+
+        XCTAssertEqual(row.id, root.uuidString)
+        XCTAssertEqual(row.title, "Top-Level Sessions")
+        XCTAssertEqual(row.mark?(), .focus(false))
+        XCTAssertTrue(row.runIfEnabled())
+        XCTAssertEqual(store.focusedWorkspaceIDs, [named, root])
+    }
+
+    func testFocusRowsNameTheTopLevelSessionsWhileOneIsSelected() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let top = try XCTUnwrap(store.addSession(toWorkspace: try XCTUnwrap(store.rootWorkspace).id, cwd: NSHomeDirectory()))
+        store.selectSession(top.id)
+
+        let titles = actions.paletteActions().map(\.title)
+
+        XCTAssertTrue(titles.contains("Focus Top-Level Sessions"), "\(titles)")
+        XCTAssertTrue(titles.contains("Add Top-Level Sessions to Focus"), "\(titles)")
+        XCTAssertTrue(titles.contains("New Top-Level Session"), "\(titles)")
+    }
+
     func testRootListsAsTopLevelSessionsFirstInMoveFlaggedAndFocusRows() throws {
         let store = try XCTUnwrap(library.activeStore)
         let root = try XCTUnwrap(store.rootWorkspace)

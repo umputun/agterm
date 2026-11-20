@@ -113,12 +113,18 @@ final class AppActions {
     }
 
     func newSession() {
-        guard uiActionsEnabled else { return }
-        if let store, store.remoteActions != nil, let workspaceID = store.currentWorkspaceID {
-            return newRemoteSession(inWorkspace: workspaceID, of: store)
-        }
-        guard let store, let workspaceID = store.currentWorkspaceID,
-              let session = store.addSession(toWorkspace: workspaceID, cwd: resolvedNewSessionCwd(in: workspaceID, store: store),
+        guard uiActionsEnabled, let store, let workspaceID = store.currentWorkspaceID else { return }
+        newSession(inWorkspace: workspaceID, of: store)
+    }
+
+    func newRootSession() {
+        guard uiActionsEnabled, let store, let root = store.rootWorkspace?.id else { return }
+        newSession(inWorkspace: root, of: store)
+    }
+
+    private func newSession(inWorkspace workspaceID: UUID, of store: AppStore) {
+        if store.remoteActions != nil { return newRemoteSession(inWorkspace: workspaceID, of: store) }
+        guard let session = store.addSession(toWorkspace: workspaceID, cwd: resolvedNewSessionCwd(in: workspaceID, store: store),
                                              at: resolvedNewSessionIndex(in: workspaceID, store: store))
         else { return }
         // note activity so the new session buys the full idle grace before auto-follow moves the selection.
