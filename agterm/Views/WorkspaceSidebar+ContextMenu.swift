@@ -317,7 +317,10 @@ extension WorkspaceSidebar.Coordinator {
     @objc private func menuMove(_ sender: NSMenuItem) {
         guard let request = sender.representedObject as? SessionBatchRequest, let targetID = request.targetID else { return }
         if store.remoteActions != nil {
-            for id in request.sessionIDs { actions.performRemote(.moveSession(id, to: .workspace(targetID)), in: store) }
+            let ids = request.sessionIDs
+            let operation: RemoteOperation = ids.count == 1 ? .moveSession(ids[0], to: .workspace(targetID))
+                : .moveSessions(ids, to: .workspace(targetID))
+            actions.performRemote(operation, in: store)
             return
         }
         store.moveSessions(request.sessionIDs, toWorkspace: targetID)

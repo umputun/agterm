@@ -58,7 +58,7 @@ extension ControlServer {
     }
 
     /// `workspace.move`: reorder a workspace among its siblings (`up`|`down`|`top`|`bottom`); `to` is required
-    /// and an invalid direction errors. Resolved via `resolveWorkspace`, honoring the `--window` selector.
+    /// and an invalid direction errors. Resolved via `resolveNamedWorkspace`, honoring the `--window` selector.
     func moveWorkspace(_ target: String?, window: String?, direction dir: ReorderDirection) -> ControlResponse {
         return resolver.resolveNamedWorkspace(target, window: window) { store, id in
             store.reorderWorkspace(id, dir)
@@ -94,7 +94,7 @@ extension ControlServer {
     }
 
     /// Collapse (`expanded: false`) or expand (`expanded: true`) a SINGLE workspace in a window's sidebar tree
-    /// — the per-workspace analogue of `sidebar.expand`/`sidebar.collapse`. Resolved via `resolveWorkspace`
+    /// — the per-workspace analogue of `sidebar.expand`/`sidebar.collapse`. Resolved via `resolveNamedWorkspace`
     /// (honoring `--window`), then `AppActions.setWorkspaceExpanded(_:expanded:in:)` persists
     /// `Workspace.isExpanded` on the store directly — the source of truth for the `collapsed` read-back, so it
     /// works with that window's sidebar hidden — and posts a store-scoped notification for the live outline

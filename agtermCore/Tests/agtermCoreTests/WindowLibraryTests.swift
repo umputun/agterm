@@ -1660,6 +1660,20 @@ final class WindowLibraryTests {
         #expect(library.attentionSubtitle(entry) == "workspace 1 · \(session.subtitleDetail)")
     }
 
+    @Test func attentionSubtitleOfATopLevelSessionNamesNoWorkspace() throws {
+        let library = WindowLibrary(directory: directory)
+        let store = try #require(library.activeStore)
+        let root = try #require(store.rootWorkspace)
+        let session = try #require(store.addSession(toWorkspace: root.id, cwd: "/tmp"))
+        store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: session.id)
+        let single = try #require(library.attentionAcrossWindows.first)
+        #expect(library.attentionSubtitle(single) == session.subtitleDetail)
+
+        _ = library.newWindow(name: "second")
+        let entry = try #require(library.attentionAcrossWindows.first { $0.session.id == session.id })
+        #expect(library.attentionSubtitle(entry) == "\(entry.window.name) · \(session.subtitleDetail)")
+    }
+
     @Test func attentionSubtitleNamesTheHostOfARemoteSession() throws {
         let library = WindowLibrary(directory: directory)
         let store = try #require(library.activeStore)

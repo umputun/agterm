@@ -202,6 +202,27 @@ final class AppActionsRemoteCatalogTests: XCTestCase {
         XCTAssertFalse(submenu.items[0].isEnabled)
     }
 
+    func testABatchMoveToGoesToTheServerAsOneRequestWithEveryTarget() throws {
+        let rootID = UUID()
+        let resident = catalogSession(), other = catalogSession(), named = catalogSession()
+        openWithRoot(rootID, main: [named], root: [resident, other])
+        let (outline, coordinator) = mountSidebar()
+        store.setSidebarSelection([resident.id, named.id])
+        let row = try XCTUnwrap((0..<outline.numberOfRows).first { (outline.item(atRow: $0) as? SidebarNode)?.id == resident.id })
+        let menu = try XCTUnwrap(coordinator.menu(forRow: row))
+        let submenu = try XCTUnwrap(menu.items.first { $0.title == "Move to" }?.submenu, "\(menu.items.map(\.title))")
+        let item = try XCTUnwrap(submenu.items.first { $0.title == ControlWorkspaceNode.rootLabel })
+
+        _ = (item.target as AnyObject?)?.perform(item.action, with: item)
+        try sent(1)
+        settle()
+
+        XCTAssertEqual(runner.lines.count, 1, "\(runner.lines)")
+        XCTAssertTrue(runner.lines[0].contains("session move --target \(resident.id.uuidString) --target \(named.id.uuidString) "),
+                      runner.lines[0])
+        XCTAssertTrue(runner.lines[0].hasSuffix("-- \(rootID.uuidString)"), runner.lines[0])
+    }
+
     func testALoneCompanionInARootlessOwnerGetsNoMoveTo() throws {
         let parent = catalogSession()
         let companion = catalogSession(parent: parent.id)

@@ -598,21 +598,27 @@ final class AppActions {
 
     // MARK: - Windows
 
-    /// Create a fresh window (one HOME session, at its root when the frontmost window's active session is a top-level
-    /// one) and open it via the scene's window opener, the seam the control channel uses. No-op before the scene
-    /// `.task` wires the opener.
-    ///
-    /// `ignoringModals` skips the frontmost-window modal gate. Creating a window touches no existing
-    /// window's state, so the Dock item passes true — a dashboard or zoom in whatever window happened to be
-    /// last active must not make it inert, and it has no source window either. Menu bar and palette keep the gate
-    /// (`.disabled(modalActive)`).
-    func newWindow(ignoringModals: Bool = false) {
-        guard ignoringModals || uiActionsEnabled else { return }
+    /// Create a fresh window (one HOME session, at its root when the frontmost window's active session is a
+    /// top-level one) for the menu bar and palette, which keep the frontmost-window modal gate.
+    func newWindow() {
+        guard uiActionsEnabled else { return }
+        openNewWindow(source: library.activeStore)
+    }
+
+    /// newWindowFromDock skips the modal gate: creating a window touches no existing window's state, so a
+    /// dashboard or zoom in whatever window was last active must not make the Dock item inert. It has no
+    /// source window, so the first shell starts in `workspace 1`.
+    func newWindowFromDock() {
+        openNewWindow(source: nil)
+    }
+
+    /// openNewWindow opens the new window via the scene's window opener, the seam the control channel uses.
+    /// No-op before the scene `.task` wires the opener.
+    private func openNewWindow(source: AppStore?) {
         // `library.newWindow()` persists an open entry, so with no opener the app counts a window that has
         // no NSWindow behind it.
         guard let openWindow else { return }
-        let info = library.newWindow(source: ignoringModals ? nil : library.activeStore)
-        openWindow(info.id)
+        openWindow(library.newWindow(source: source).id)
     }
 
     /// Surface a window: raise it if already open, else open it. Used by File ▸ Open Window and the palette.

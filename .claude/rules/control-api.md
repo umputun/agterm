@@ -281,16 +281,16 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   ends every pane's. Mark for Attention is `session.status
   completed` on the targets `tree` reports idle; it skips the rest, so it is not an unconditional write.
 - `workspace.move --to up|down|top|bottom` reorders relative to the target. Drag remains the precise
-  between-row surface. `active` resolves through `currentWorkspaceID` — a foreground-created workspace
-  first, then the selected session's, then `workspaces.last` — so repeated moves may target a different
-  workspace; use an ID to keep one target.
-- `workspace.go --to next|prev` steps the CURRENT workspace through `visibleWorkspaces`, wrapping, and
+  between-row surface. `active` resolves through `currentWorkspaceID` (reference.md Addressing owns the
+  order), so repeated moves may target a different workspace; use an ID to keep one target.
+- `workspace.go --to next|prev` steps the CURRENT workspace through the named `visibleWorkspaces`, wrapping, and
   routes through `selectWorkspace`, so it lands on the target's FIRST session and inherits the
   empty-workspace reveal. Relative like `session.go`, so it takes no target; `workspace.move` is the
   neighbouring verb that reorders instead. Returns the workspace id it landed on. Collapse state is NOT a
   term — a folded workspace is stepped into like any other, and issue #435 assumed otherwise. Errors with
-  `no other workspace to navigate to` where there is nowhere to step: flagged mode, or one visible
-  workspace. Read back through `tree` selection; the GUI twins are `previous_workspace`/`next_workspace`.
+  `no other workspace to navigate to` where there is nowhere to step: flagged mode, no visible workspace, or
+  one already current (a sole focused workspace is still entered while it has a session and the selection is elsewhere
+  or absent; `canStepWorkspaces` owns the rule). Read back through `tree` selection; the GUI twins are `previous_workspace`/`next_workspace`.
 - `session.split` drives the addressed session, not active-only `AppActions.toggleSplit`. `--axis
   vertical|horizontal` selects left/right or top/bottom; omitting it preserves an existing split's axis
   and defaults a new split to left/right. Off hides and retains the shell; `session.split.close` and the

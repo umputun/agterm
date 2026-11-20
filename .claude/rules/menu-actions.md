@@ -98,7 +98,7 @@ paths:
 - `applicationDockMenu` exposes New Session, New Window, Quick Terminal, Dashboard, captured-window MRU
   sessions, and attention ordering.
 - New Window alone is app-scoped (Discussion #313): capture nothing, call
-  `newWindow(ignoringModals: true)`, enable only when `actions != nil`, and explicitly unhide/activate.
+  `newWindowFromDock()`, enable only when `actions != nil`, and explicitly unhide/activate.
   Do not mark it always enabled before the action hub is wired. Require `openWindow` before persisting an
   open entry. Menu and palette New Window retain modal gating.
 - Other items capture store and window ID at build time. Recheck per-window modal/controller state, raise
@@ -260,8 +260,8 @@ paths:
   Option-Command-Left/Right remains pane focus.
 - `navigateSession` uses `navigableSessions`, wraps previous/next, selects ends for first/last, chooses
   first on nil/invalid selection, and no-ops when empty. Menu, palette, and `session.go` share it.
-- Previous/Next Workspace are the level above: `navigateWorkspace` steps `currentWorkspaceID` through
-  `visibleWorkspaces` and lands on the target's FIRST session, so the keybind, the palette row and
+- Previous/Next Workspace are the level above: `navigateWorkspace` steps `currentWorkspaceID` through the
+  named `visibleWorkspaces`, never the root, and lands on the target's FIRST session, so the keybind, the palette row and
   `workspace.go` mean one thing. Keyless, tree mode only, and it reveals a landed pane off the step's
   captured indicator exactly as plain session nav does. **Collapse is not a navigation filter** —
   `navigableSessions` and `navigateWorkspace` both ignore `isExpanded`, and adding a term to either would

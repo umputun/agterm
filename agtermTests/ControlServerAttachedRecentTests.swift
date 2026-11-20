@@ -96,6 +96,27 @@ final class ControlServerAttachedRecentTests: XCTestCase {
         XCTAssertEqual(destination.workspace(forSession: shown)?.id, destination.rootWorkspace?.id)
     }
 
+    func testABareTopLevelReopenStaysInTheWindowItResolvedWhenFrontmostChangesDuringTheFirstLookup() async throws {
+        let listed = tree(sessions: session("origin-1"))
+        let runner = ScriptedRunner([ok(ControlResult(closed: ["origin-1"])), listed, listed, listed])
+        let (server, store) = try makeServer(runner)
+        try await terminate(try attachedRow(in: store, workspace: try XCTUnwrap(store.rootWorkspace).id), server)
+        let entry = try XCTUnwrap(library.remoteRecentClosedItems.first)
+        let destinationID = library.newWindow().id
+        let destination = try XCTUnwrap(library.store(for: destinationID))
+        let third = library.newWindow().id
+        library.closeWindow(try XCTUnwrap(library.windowID(for: store)))
+        library.frontmostWindowID = destinationID
+        let library = library!
+        runner.beforeCall = { index in if index == 1 { await MainActor.run { library.frontmostWindowID = third } } }
+
+        let reply = await server.reopenAttached(entry.id, window: nil)
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        let shown = try XCTUnwrap(reply.result?.id.flatMap(UUID.init(uuidString:)))
+        XCTAssertEqual(destination.workspace(forSession: shown)?.id, destination.rootWorkspace?.id)
+    }
+
     func testATopLevelRowReopenedInAnotherWindowTakesItsSavedPlaceAmongThatWindowsTopLevelSessions() async throws {
         let listed = tree(sessions: session("origin-1"))
         let runner = ScriptedRunner([ok(ControlResult(closed: ["origin-1"])), listed, listed, listed])

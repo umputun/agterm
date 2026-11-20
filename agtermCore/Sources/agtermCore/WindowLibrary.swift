@@ -750,7 +750,7 @@ public final class WindowLibrary {
     }
 
     /// The window's persisted tree, and whether its file may be rewritten: it decoded or does not exist yet.
-    /// An unreadable file loads as an empty tree and is left on disk for the user to recover.
+    /// An unreadable file loads as an empty tree, and the load does not write over it.
     private func loadSnapshotForStore(_ persistence: PersistenceStore) -> (snapshot: Snapshot, readable: Bool) {
         var snapshot: Snapshot
         do {

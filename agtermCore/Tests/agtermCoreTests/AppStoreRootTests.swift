@@ -144,6 +144,17 @@ struct AppStoreRootTests {
         #expect(store.namedWorkspaces[1].sessions.map(\.id) == [top.id, named.id])
     }
 
+    @Test func aBatchMoveIntoTheRootKeepsItsResidentsInPlace() throws {
+        let store = rooted("one")
+        let root = try #require(store.rootWorkspace)
+        let resident = try #require(store.addSession(toWorkspace: root.id, cwd: "/a"))
+        let other = try #require(store.addSession(toWorkspace: root.id, cwd: "/b"))
+        let named = try #require(store.addSession(toWorkspace: store.namedWorkspaces[0].id, cwd: "/c"))
+
+        #expect(store.moveSessions([resident.id, named.id], toWorkspace: root.id) == 1)
+        #expect(store.rootWorkspace?.sessions.map(\.id) == [resident.id, other.id, named.id])
+    }
+
     @Test func closingAWorkspacesLastSessionReselectsInDisplayOrder() throws {
         let store = rooted("one", "two")
         let root = try #require(store.rootWorkspace)

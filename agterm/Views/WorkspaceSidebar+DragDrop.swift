@@ -239,8 +239,8 @@ extension WorkspaceSidebar.Coordinator {
         guard let root = store.rootWorkspace, let outline = outlineView else { return nil }
         let rootRows = (0..<outline.numberOfChildren(ofItem: nil))
             .filter { (outline.child($0, ofItem: nil) as? SidebarNode)?.kind == .session }.count
-        guard SidebarDrop.rootGapSlot(childIndex: index, rootRows: rootRows,
-                                      rootShown: workspaceProjection.contains { $0.workspace.id == root.id }) != nil
+        guard SidebarDrop.isRootGap(childIndex: index, rootRows: rootRows,
+                                    rootShown: workspaceProjection.contains { $0.workspace.id == root.id })
         else { return nil }
         return (root.id, .workspace)
     }

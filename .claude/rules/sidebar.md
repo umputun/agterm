@@ -289,7 +289,7 @@ paths:
   level-0 rows ahead of the workspace rows. Without the disclosure strip a root parent's triangle has no room, so
   `SidebarOutlineView.rootBlockShift` indents the root block one step instead of reserving the strip.
 - A gap among the level-0 session rows, the one above the first workspace row included, drops into the root
-  (`SidebarDrop.rootGapSlot`); workspace drags count only named workspace rows (`namedWorkspaces`), offset by the
+  (`SidebarDrop.isRootGap`); workspace drags count only named workspace rows (`namedWorkspaces`), offset by the
   root block's row count for the highlight.
 - The root is a focus member like a workspace: hidden under an applied filter unless marked, marked from a root
   session's row menu, the View menu or the focus editor.

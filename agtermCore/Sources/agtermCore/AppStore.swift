@@ -301,8 +301,8 @@ public final class AppStore {
     /// Makes `workspaceID` the current one and selects its first session when it has one. Both halves are
     /// needed: the first session may already BE the selection, and a same-value write leaves the target
     /// alone; an empty workspace has nothing to select at all, and reporting success while targeting
-    /// somewhere else is what made `workspace.select --target <empty>` a lie. Nil for an unknown id, the only
-    /// failure. Backs `workspace.select` and `navigateWorkspace`.
+    /// somewhere else is what made `workspace.select --target <empty>` a lie. Nil for an unknown id or the root,
+    /// which is not a workspace. Backs `workspace.select` and `navigateWorkspace`.
     @discardableResult
     public func selectWorkspace(_ workspaceID: UUID) -> WorkspaceStep? {
         guard let workspace = namedWorkspaceIndex(of: workspaceID).map({ workspaces[$0] }) else { return nil }
@@ -816,11 +816,11 @@ public final class AppStore {
         return "no session at position \(position): \(count) navigable"
     }
 
-    /// Steps the CURRENT workspace one place through `visibleWorkspaces`, WRAPPING, via `selectWorkspace`, so
-    /// a focus filter confines it as it does session nav. Collapse state is deliberately NOT a term: skipping
-    /// a folded workspace would let the sidebar's fold silently rewrite where a keystroke lands. Nil with
-    /// nowhere to step — flagged mode (`canStepWorkspaces` owns why), and a lone workspace would only
-    /// reselect itself. Backs `next_workspace`/`previous_workspace` and `workspace.go`.
+    /// Steps the CURRENT workspace one place through the named `visibleWorkspaces`, WRAPPING, via
+    /// `selectWorkspace`, so a focus filter confines it as it does session nav; the root is never a step.
+    /// Collapse state is deliberately NOT a term: skipping a folded workspace would let the sidebar's fold
+    /// silently rewrite where a keystroke lands. Nil with nowhere to step, which `canStepWorkspaces`
+    /// decides. Backs `next_workspace`/`previous_workspace` and `workspace.go`.
     @discardableResult
     public func navigateWorkspace(_ direction: WorkspaceNavigation) -> WorkspaceStep? {
         guard canStepWorkspaces else { return nil }

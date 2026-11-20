@@ -486,16 +486,16 @@ struct SidebarDropTests {
     // MARK: - Root block
 
     @Test(arguments: [
-        (childIndex: 0, rootRows: 2, rootShown: true, expected: Optional(0)),
-        (childIndex: 2, rootRows: 2, rootShown: true, expected: Optional(2)),
-        (childIndex: 3, rootRows: 2, rootShown: true, expected: nil),
-        (childIndex: 0, rootRows: 0, rootShown: true, expected: Optional(0)),
-        (childIndex: 0, rootRows: 0, rootShown: false, expected: nil),
-        (childIndex: 1, rootRows: 2, rootShown: false, expected: nil),
-        (childIndex: SidebarDrop.onItemIndex, rootRows: 2, rootShown: true, expected: nil),
+        (childIndex: 0, rootRows: 2, rootShown: true, expected: true),
+        (childIndex: 2, rootRows: 2, rootShown: true, expected: true),
+        (childIndex: 3, rootRows: 2, rootShown: true, expected: false),
+        (childIndex: 0, rootRows: 0, rootShown: true, expected: true),
+        (childIndex: 0, rootRows: 0, rootShown: false, expected: false),
+        (childIndex: 1, rootRows: 2, rootShown: false, expected: false),
+        (childIndex: SidebarDrop.onItemIndex, rootRows: 2, rootShown: true, expected: false),
     ])
-    func aTopLevelGapResolvesToARootSlotOnlyWithinAShownRootBlock(childIndex: Int, rootRows: Int, rootShown: Bool, expected: Int?) {
-        #expect(SidebarDrop.rootGapSlot(childIndex: childIndex, rootRows: rootRows, rootShown: rootShown) == expected)
+    func aTopLevelGapDropsIntoTheRootOnlyWithinAShownRootBlock(childIndex: Int, rootRows: Int, rootShown: Bool, expected: Bool) {
+        #expect(SidebarDrop.isRootGap(childIndex: childIndex, rootRows: rootRows, rootShown: rootShown) == expected)
     }
 
     @Test func aSessionDroppedIntoTheRootBlockLandsAtItsSlot() {

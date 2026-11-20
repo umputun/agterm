@@ -24,7 +24,12 @@ extension ControlServer {
         guard let item = library.remoteRecentClosedItems.first(where: { $0.id == id }) else {
             return ControlResponse(ok: false, error: "no recent item \(id.uuidString)")
         }
-        if case .failure(let refusal) = resolveOpenWindow(window) { return refusal }
+        // pinned before the first ssh wait, so a frontmost change during it cannot move the reopen
+        let pinned: String
+        switch resolveOpenWindow(window) {
+        case .failure(let refusal): return refusal
+        case .success(let (id, _)): pinned = id.uuidString
+        }
         let current = await remoteTree(host: item.host)
         guard let tree = current.result?.remote else { return current }
         var sessions = [item.originSessionID]
@@ -34,7 +39,7 @@ extension ControlServer {
             case .reopened(let reopened): sessions = reopened
             }
         }
-        return await reattach(sessions, item: item, window: window)
+        return await reattach(sessions, item: item, window: pinned)
     }
 
     /// undoOriginClose undoes a terminate of attached rows on their origin, then attaches the sessions it brought back

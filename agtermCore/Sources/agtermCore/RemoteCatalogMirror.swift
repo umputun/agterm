@@ -350,6 +350,7 @@ public final class RemoteCatalogMirror {
         collapsed.formUnion(pendingCollapse)
         pendingCollapse.subtract(shown.map(\.id))
         let flaggedOrder = store.flaggedOrder
+        let filtering = store.focusEnabled
         store.prepareCatalogWorkspaces(shown, collapsed: collapsed) { removed in
             effects.catalogRowRemoved(removed)
         }
@@ -358,7 +359,10 @@ public final class RemoteCatalogMirror {
             store.catalogHiddenCollapsed[workspace.id] = nil
             if store.catalogHiddenFocus.remove(workspace.id) != nil { store.markFocusMember(workspace.id) }
         }
-        defer { store.finishCatalogWorkspaces(shown) }
+        defer {
+            store.finishCatalogWorkspaces(shown)
+            if store.focusEnabled != filtering { effects.catalogViewStateChanged() }
+        }
         let context = CatalogRowContext(host: host, protocolVersion: catalog.versions.protocolVersion, effects: effects,
                                         headless: !originIsMac)
         for workspace in shown {

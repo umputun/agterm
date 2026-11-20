@@ -511,8 +511,8 @@ A session's right-click context menu.
 <li>By default every other new session, from New Session, Open Directory or a script that names no destination, goes where the selected session is, the top-level sessions included, unless you just created a workspace or the focus filter shows exactly one group without it; <a href="#agtermctl-addressing">Addressing</a> has the full rule. A script can name the top-level sessions as <code>root</code>.</li>
 <li>Drag a session among the top-level sessions to put it there, or into a workspace to move it out. <strong>Move to ▸ Top-Level Sessions</strong> does the same from the context menu.</li>
 <li>Deleting the last workspace is allowed; the window keeps its top-level sessions.</li>
-<li>A new window opened while a top-level session is selected starts its first shell among its own top-level sessions; otherwise, and from the Dock menu or a remote window, it starts in <code>workspace 1</code>.</li>
-<li>A top-level session shows no workspace name: the title bar, Recent Closed and the Attach Remote picker leave it out, and <code>{AGT_WORKSPACE_NAME}</code> expands empty. Reopening one puts it back among the top-level sessions.</li>
+<li>A new window opened while a session among the top-level sessions is selected starts its first shell among its own top-level sessions; otherwise, and from the Dock menu or a remote window, it starts in <code>workspace 1</code>.</li>
+<li>A session among the top-level sessions shows no workspace name: the title bar, Recent Closed and the Attach Remote picker leave it out, and <code>{AGT_WORKSPACE_NAME}</code> expands empty. Reopening one puts it back among the top-level sessions.</li>
 <li>A server window whose server predates top-level sessions shows these items disabled.</li>
 </ul>
 <h3 id="companions">Companions</h3>
@@ -594,7 +594,7 @@ agtermctl session overlay open --html report.html --page</code></pre>
 <ul>
 <li>Focus one workspace to zoom to it, or mark several from their row menus and apply the filter once with the sidebar's grid button. Marking never narrows the tree on its own, and suspending the filter keeps the set for one click back.</li>
 <li><strong>View ▸ Edit Focused Workspaces…</strong> marks and unmarks workspaces the same way.</li>
-<li>The top-level sessions take part like a workspace: a top-level session's context menu offers <strong>Focus Top-Level Sessions</strong> and <strong>Add Top-Level Sessions to Focus</strong>, View ▸ Focus reads the same while the top-level sessions are current, and the focus editor lists them first. While the filter is on and they are not focused, the ordinary tree hides them; the flagged view ignores the filter, as for workspaces.</li>
+<li>The top-level sessions take part like a workspace: the context menu of a session among them offers <strong>Focus Top-Level Sessions</strong> and <strong>Add Top-Level Sessions to Focus</strong>, View ▸ Focus reads the same while the top-level sessions are current, and the focus editor lists them first. While the filter is on and they are not focused, the ordinary tree hides them; the flagged view ignores the filter, as for workspaces.</li>
 <li>Creating a workspace while the filter is on adds it to the set. Selecting a session outside the set suspends the filter rather than discarding it.</li>
 <li>The set is per window and remembered across restarts.</li>
 </ul>

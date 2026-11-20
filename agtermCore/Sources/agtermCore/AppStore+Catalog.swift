@@ -95,6 +95,7 @@ extension AppStore {
         guard current != index else { return }
         for workspace in workspaces.indices { workspaces[workspace].sessions.removeAll { $0.id == session.id } }
         workspaces[destination].sessions.insert(session, at: min(index, workspaces[destination].sessions.count))
+        if current == nil, selectedSessionID == session.id { disableFocusIfSelectionOutsideSet(session.id) }
         scheduleTreeChanged()
     }
 
