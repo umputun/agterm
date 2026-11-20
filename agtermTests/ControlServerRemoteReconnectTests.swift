@@ -147,6 +147,23 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
                        "an origin that never reports a role would leave it covered for good")
     }
 
+    func testAReattachNamesTheAttachItTakesTheLeadBackFrom() throws {
+        let (session, view) = try replica()
+        let endpoint = ControlZmxEndpoint(executable: "/Applications/agterm.app/zmx", socketDirectory: "/tmp/agterm-zmx-t")
+        store.bindRemote(RemoteBinding(remoteSessionID: "origin", daemonsByLocalPane: [
+            session.paneIdentity: ZmxSupport.daemonName(for: UUID()),
+        ], presentationVersion: 1, origin: RemoteBinding.Origin(host: "mini", endpoint: endpoint, sessionName: "build")),
+                         forSession: session.id)
+        defer { ZmxLeadBook.shared.forget(pane: session.paneIdentity) }
+        let services = agtermApp.SurfaceServices(library: library, actions: AppActions(library: library),
+                                                 zmxForegroundResolver: nil, spawnRegistry: nil,
+                                                 launchContext: agtermApp.LaunchSpawnContext())
+
+        XCTAssertTrue(agtermApp.reattachPane(view, claim: false, reclaim: "n1", services: services))
+
+        XCTAssertEqual(ZmxLeadBook.shared.states[session.paneIdentity]?.attachment.reclaim, "n1")
+    }
+
     func testAnAttachThatDidNotStartKeepsThePaneWaitingAndHeld() async throws {
         let (session, view) = try replica()
         let server = server(probe: 0)
@@ -157,11 +174,12 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
         }
         store.remotePaneHeld(session.paneIdentity, forSession: session.id)
 
-        server.waitToReconnect(view, cover: false, reclaim: nil)
+        server.waitToReconnect(view, cover: false, reclaim: "n1")
         server.tickReconnects()
         await fulfillment(of: [attempted], timeout: 2)
 
         XCTAssertTrue(RemoteReconnectBook.shared.waiting(pane: session.paneIdentity))
+        XCTAssertEqual(RemoteReconnectBook.shared.entries[session.paneIdentity]?.reclaim, "n1")
         XCTAssertTrue(store.remotePaneIsHeld(session.paneIdentity, forSession: session.id))
         XCTAssertEqual(RemoteReconnectBook.shared.entries[session.paneIdentity]?.failures, 1)
     }

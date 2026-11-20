@@ -95,10 +95,11 @@ public struct ZmxLeadState: Equatable, Sendable {
     public var covered: Bool { reattaching || role == .follower || role == .unowned }
 
     /// The nonce a reconnect after this attachment's link dropped takes the lead back from: its own when
-    /// it led, or the one it was taking back itself when no report arrived before the drop.
+    /// it led or claimed, or the one it was taking back itself when no report arrived before the drop.
     public var reclaimAfterDrop: String? {
         if role == .leader { return attachment.nonce }
-        return role == nil ? attachment.reclaim : nil
+        guard role == nil else { return nil }
+        return attachment.claim ? attachment.nonce : attachment.reclaim
     }
 
     /// Applies `notice` and says whether the role changed. A report for another attachment's nonce is

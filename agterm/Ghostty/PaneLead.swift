@@ -19,7 +19,7 @@ enum PaneLead {
     /// that led when it dropped. Installed by the app.
     static var waitToReconnect: ((_ view: GhosttySurfaceView, _ cover: Bool, _ reclaim: String?) -> Void)?
     /// Attaches a parked pane again without the claim, covered until its first report when `cover`, taking back
-    /// the lead `reclaim` names while nobody else took it. False when nothing was attached.
+    /// the lead `reclaim` names while nobody used it since. False when nothing was attached.
     static var reconnect: ((_ old: GhosttySurfaceView, _ cover: Bool, _ reclaim: String?) -> Bool)?
     /// scratchStopped parks a remote window's scratch whose attach lost its link or ended; false for any other view.
     /// Installed by the app.
@@ -58,9 +58,8 @@ enum PaneLead {
     static func linkLost(_ notice: RemoteLinkNotice, from view: GhosttySurfaceView) {
         if !view.isDestroyed, scratchStopped?(view) == true { return }
         guard !view.isDestroyed, let pane = UUID(uuidString: view.paneToken),
-              ZmxLeadBook.shared.states[pane]?.attachment.nonce == notice.nonce else { return }
-        let state = ZmxLeadBook.shared.states[pane]
-        waitToReconnect?(view, state?.role != nil || state?.reattaching == true, state?.reclaimAfterDrop)
+              let state = ZmxLeadBook.shared.states[pane], state.attachment.nonce == notice.nonce else { return }
+        waitToReconnect?(view, state.role != nil || state.reattaching, state.reclaimAfterDrop)
     }
 
     /// True when `event` belongs to a takeover or a pane waiting to reconnect, and must not reach the terminal.

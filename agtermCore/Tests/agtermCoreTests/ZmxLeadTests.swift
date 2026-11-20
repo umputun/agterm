@@ -20,10 +20,13 @@ struct ZmxLeadTests {
     }
 
     @Test func aDropReclaimsFromALeadingAttachOrTheOneAnUnreportedReconnectWasReclaiming() throws {
-        var leading = ZmxLeadState(attachment: ZmxLeadAttachment(nonce: "n1", claim: true))
+        var leading = ZmxLeadState(attachment: ZmxLeadAttachment(nonce: "n1", claim: false))
         #expect(leading.reclaimAfterDrop == nil)
         _ = leading.apply(try #require(ZmxLeadNotice(title: "zmx-role;n1:leader:2")))
         #expect(leading.reclaimAfterDrop == "n1")
+
+        let claiming = ZmxLeadState(attachment: ZmxLeadAttachment(nonce: "n3", claim: true))
+        #expect(claiming.reclaimAfterDrop == "n3")
 
         var following = ZmxLeadState(attachment: ZmxLeadAttachment(nonce: "n2", claim: false, reclaim: "n1"))
         #expect(following.reclaimAfterDrop == "n1")

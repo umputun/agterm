@@ -147,10 +147,10 @@ def main():
         time.sleep(1.0)
         _, used = joined("rc-origin-3")
         ok &= check("the pane is vacant again for the next attach", role_of(used, "rc-origin-3") == b"leader")
-        os.write(used, b"echo USED\r")
+        os.write(used, b"\x03")
         time.sleep(0.7)
         _, v4 = joined("rc-v4", reclaim="rc-v3")
-        ok &= check("an attach that was typed into keeps the lead", role_of(v4, "rc-v4") == b"follower")
+        ok &= check("an attach that only got a Ctrl-C keeps the lead", role_of(v4, "rc-v4") == b"follower")
 
         missing = cli("screen", "no-such-session")
         ok &= check("screen on a missing session fails", missing.returncode != 0)

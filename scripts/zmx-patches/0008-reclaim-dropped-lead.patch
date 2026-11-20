@@ -119,7 +119,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
  
          // client is leader, send entire payload (ansi escape codes + text)
          if (self.leader_client_fd == client.socket_fd) {
-+            if (self.leader_idle and (util.isUserInput(payload) or util.isPointerPress(payload))) self.leader_idle = false;
++            if (self.leader_idle and util.isLeaderUse(payload)) self.leader_idle = false;
              self.queuePtyInput(gpa, payload);
              return;
          }
@@ -278,49 +278,104 @@ diff -ruN zmx-orig/src/role.zig zmx/src/role.zig
 diff -ruN zmx-orig/src/util.zig zmx/src/util.zig
 --- zmx-orig/src/util.zig
 +++ zmx/src/util.zig
-@@ -749,6 +749,26 @@
+@@ -749,6 +749,70 @@
      return false;
  }
  
-+/// Detect a mouse button press or wheel step in a terminal's mouse report, SGR (`CSI < b;x;y M`) or
-+/// X10 (`CSI M` and three bytes). A release, motion and a focus report are not a press.
-+pub fn isPointerPress(payload: []const u8) bool {
++/// Detect input a person at the leading terminal produced: a key, Esc and control keys included, a paste,
++/// or a mouse press or wheel step. A terminal's replies (device attributes, mode and cursor reports, focus,
++/// OSC and DCS answers, the kitty keyboard flags) and mouse motion or release are not. A sequence cut off
++/// at the end of the read counts, so an unreadable tail never hands the lead away.
++pub fn isLeaderUse(payload: []const u8) bool {
 +    var i: usize = 0;
-+    while (i + 2 < payload.len) : (i += 1) {
-+        if (payload[i] != 0x1b or payload[i + 1] != '[') continue;
-+        if (payload[i + 2] == 'M' and i + 3 < payload.len) {
-+            const cb = payload[i + 3] -% 32;
-+            if (cb & 32 == 0 and cb & 3 != 3) return true;
-+            continue;
++    while (i < payload.len) {
++        if (payload[i] != 0x1b or i + 1 == payload.len) return true;
++        switch (payload[i + 1]) {
++            '[' => {
++                if (parseKittyCsiU(payload[i + 2 ..])) |kitty| {
++                    if (kitty.event_type != 3) return true;
++                    i += 2 + kitty.consumed;
++                    continue;
++                }
++                const used = csiUse(payload[i + 2 ..]) orelse return true;
++                if (used.use) return true;
++                i += 2 + used.consumed;
++            },
++            ']', 'P', '_', '^', 'X' => i = stringEnd(payload, i + 2) orelse return false,
++            else => return true, // SS3 keys, Alt-modified keys, Esc pressed twice
 +        }
-+        if (payload[i + 2] != '<') continue;
-+        var pos = i + 3;
-+        const button = parseDecimal(payload, &pos) orelse continue;
-+        while (pos < payload.len and (std.ascii.isDigit(payload[pos]) or payload[pos] == ';')) pos += 1;
-+        if (pos < payload.len and payload[pos] == 'M' and button & 32 == 0) return true;
 +    }
 +    return false;
++}
++
++const CsiUse = struct { use: bool, consumed: usize };
++
++/// csiUse reads one CSI body, the bytes after `ESC [`; null when it is cut off.
++fn csiUse(buf: []const u8) ?CsiUse {
++    if (buf.len > 0 and buf[0] == 'M') {
++        if (buf.len < 4) return null;
++        const cb = buf[1] -% 32;
++        return .{ .use = cb & 32 == 0 and cb & 3 != 3, .consumed = 4 };
++    }
++    var end: usize = 0;
++    var intermediate = false;
++    while (end < buf.len and buf[end] >= 0x20 and buf[end] <= 0x3f) : (end += 1) {
++        if (buf[end] <= 0x2f) intermediate = true;
++    }
++    if (end == buf.len or buf[end] < 0x40 or buf[end] > 0x7e) return null;
++    const final = buf[end];
++    const consumed = end + 1;
++    if (end > 0 and buf[0] == '<') {
++        var pos: usize = 1;
++        const button = parseDecimal(buf, &pos) orelse 32;
++        return .{ .use = final == 'M' and button & 32 == 0, .consumed = consumed };
++    }
++    // a private marker or an intermediate byte only appears in replies; a bare R is a cursor report
++    if (intermediate or (end > 0 and buf[0] >= 0x3c)) return .{ .use = false, .consumed = consumed };
++    const key = std.mem.indexOfScalar(u8, "ABCDEFHPQSZ~", final) != null;
++    return .{ .use = key, .consumed = consumed };
++}
++
++/// stringEnd answers the index after the BEL or ST closing a string sequence that starts at `from`.
++fn stringEnd(payload: []const u8, from: usize) ?usize {
++    var i = from;
++    while (i < payload.len) : (i += 1) {
++        if (payload[i] == 0x07) return i + 1;
++        if (payload[i] == 0x1b and i + 1 < payload.len and payload[i + 1] == '\\') return i + 2;
++    }
++    return null;
 +}
 +
  /// Emit the terminal's pwd as OSC 7.
  ///
  /// This replaces the formatter's own `extra.pwd`, which writes
-@@ -2181,6 +2201,20 @@
+@@ -2181,6 +2245,31 @@
      try testing.expect(!isUserInput("\x1b[O")); // focus out
  }
  
-+test "isPointerPress: presses and wheel steps, never releases, motion or focus" {
-+    try testing.expect(isPointerPress("\x1b[<0;10;5M"));
-+    try testing.expect(isPointerPress("\x1b[<64;10;5M"));
-+    try testing.expect(isPointerPress("ab\x1b[<2;1;1M"));
-+    try testing.expect(!isPointerPress("\x1b[<0;10;5m"));
-+    try testing.expect(!isPointerPress("\x1b[<35;10;5M"));
-+    try testing.expect(isPointerPress("\x1b[M !!"));
-+    try testing.expect(isPointerPress("\x1b[M`!!"));
-+    try testing.expect(!isPointerPress("\x1b[M#!!"));
-+    try testing.expect(!isPointerPress("\x1b[MC!!"));
-+    try testing.expect(!isPointerPress("\x1b[I\x1b[O"));
-+    try testing.expect(!isPointerPress("plain text"));
++test "isLeaderUse: keys, paste and presses, never a terminal's replies, motion or release" {
++    const used = [_][]const u8{
++        "a",              "\x03",                "\x04",          "\x7f",            "\x1b",
++        "\x1bx",          "\x1b\x1b",            "\x1b[A",        "\x1bOA",          "\x1b[H",
++        "\x1b[F",         "\x1b[Z",              "\x1b[3~",       "\x1b[1;5P",       "\x1b[99;5u",
++        "\x1b[200~x",     "\x1b[<0;10;5M",       "\x1b[<64;1;1M", "\x1b[M !!",       "\x1b[I\x03",
++        "\x1b[?1u\x1b[A", "\x1b]11;rgb:0/0/0\x07q", "\x1b[12",       "\x1b[102;1:1u",
++    };
++    for (used) |input| {
++        if (!isLeaderUse(input)) std.debug.print("not counted as use: {any}\n", .{input});
++        try testing.expect(isLeaderUse(input));
++    }
++    const replies = [_][]const u8{
++        "",                     "\x1b[?62;22c",         "\x1b[>1;10;0c",          "\x1b[12;40R",
++        "\x1b[0n",              "\x1b[?1u",             "\x1b[?2004;2$y",         "\x1b[I",
++        "\x1b[O",               "\x1b[8;24;80t",        "\x1b]11;rgb:0/0/0\x07",  "\x1b]10;rgb:f/f/f\x1b\\",
++        "\x1bP>|ghostty\x1b\\", "\x1b[<0;10;5m",        "\x1b[<35;10;5M",         "\x1b[MC!!",
++        "\x1b[M#!!",            "\x1b[102;1:3u",        "\x1b[?997;1n",
++    };
++    for (replies) |input| {
++        if (isLeaderUse(input)) std.debug.print("counted as use: {any}\n", .{input});
++        try testing.expect(!isLeaderUse(input));
++    }
 +}
 +
  test "isUserInput: bracketed paste included" {

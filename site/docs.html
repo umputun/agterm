@@ -969,7 +969,7 @@ agtermctl session new --remote srv --window &quot;$win&quot;                   #
 <li>If ssh itself failed (exit 255, which a refused login also gives), the panel reads <strong>Connection to HOST lost</strong> and says it is reconnecting. agterm attaches again once the host answers, on the stream's schedule; any key, waking the Mac or a network change retries at once and restarts the schedule. ⌘W still closes the session.</li>
 <li>While the host keeps refusing, the panel adds what ssh said last, such as a changed host key or a rejected login.</li>
 <li>When the host answers, the last screen is replaced before the new connection is up, so a link that drops again right away leaves an empty pane with only the panel.</li>
-<li>The pane comes back without taking the lead: if the other Mac leads by then, it arrives covered. It also arrives covered while the other Mac still counts this Mac's dropped connection as leader, which clears once that connection times out.</li>
+<li>The pane takes the lead back only as <a href="#remote-sessions-lead">Who leads a pane</a> describes; otherwise it arrives covered.</li>
 <li>Any other exit shows <strong>SESSION on HOST ended</strong>; any key closes the pane.</li>
 <li>If the other Mac closes the session, the row here closes by itself with no panel, whether it is open now or comes back at the next launch. A session closed there with undo keeps its row here until the undo window passes; undo there leaves it as it was.</li>
 </ul>
