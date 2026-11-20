@@ -27,14 +27,18 @@ enum RemoteCompanionRequest {
             return ["session", "duplicate", "--companion", "--target", originSession, "--no-select"]
         case .terminal(let options):
             var arguments = ["session", "new", "--parent", originSession, "--no-select"]
-            if let cwd = options.cwd { arguments += ["--cwd", cwd] }
-            if let command = options.command { arguments += ["--command", command] }
+            arguments += Self.valueArguments("--cwd", options.cwd) + Self.valueArguments("--command", options.command)
             if options.wait { arguments.append("--wait") }
-            if let name = options.name { arguments += ["--name", name] }
-            return arguments
+            return arguments + Self.valueArguments("--name", options.name)
         case .page(let options):
             return Self.pageArguments(options, originSession: originSession)
         }
+    }
+
+    // swift-argument-parser reads a following word that starts with `-` as an option and a bare `--flag=` as a missing value
+    private static func valueArguments(_ flag: String, _ value: String?) -> [String] {
+        guard let value else { return [] }
+        return value.isEmpty ? [flag, value] : [flag + "=" + value]
     }
 
     // a file path is the origin's own: the page is that Mac's and is served from there
