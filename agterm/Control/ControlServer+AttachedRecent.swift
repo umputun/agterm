@@ -30,6 +30,10 @@ extension ControlServer {
         case .failure(let refusal): return refusal
         case .success(let (id, _)): pinned = id.uuidString
         }
+        // a server window's catalog does not own the row and would drop it at the next reconcile
+        if library.windows.first(where: { $0.id.uuidString == pinned })?.isRemote == true {
+            return ControlResponse(ok: false, error: "recent.open is not available in a remote window")
+        }
         let current = await remoteTree(host: item.host)
         guard let tree = current.result?.remote else { return current }
         var sessions = [item.originSessionID]

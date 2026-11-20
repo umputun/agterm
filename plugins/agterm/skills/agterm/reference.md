@@ -2804,7 +2804,8 @@ unless another window already holds its session or workspace; the window is not 
 `result.recentOpen`: `item` (the entry, as `list` shows it), `window` (where it went) and `complete`,
 false when the entry is still in the list afterwards; a Mac answering a remote window adds `restored`, every row
 the open brought back. An unknown or closed `--window` fails before
-anything is restored. Errors: `no recently closed items`, `no such recent item: ID`, ambiguous prefix.
+anything is restored. Without `--window`, a server window frontmost refuses it with
+`recent.open is not available in a remote window`. Errors: `no recently closed items`, `no such recent item: ID`, ambiguous prefix.
 A lone companion comes back under its parent, reopening the parent's entry (or the removed workspace
 holding the parent) first when the parent is not open; when the parent is neither open nor in Recent
 Closed it errors `parent session is not open or in Recent Closed`.
