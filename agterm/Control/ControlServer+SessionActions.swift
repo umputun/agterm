@@ -274,10 +274,8 @@ extension ControlServer: ControlActions {
                 }
                 return makeSessionResponse(in: store, workspaceID: workspace.id, options: options, tint: tint)
             }
-            // id addressing (default `active`): the canonical prefix/active resolver.
-            let target = options.workspace ?? "active"
-            return resolver.resolve(target, candidates: store.workspaces.map(\.id),
-                           active: store.currentWorkspaceID, noun: "workspace") { workspaceID in
+            // id addressing (default `active`): the canonical prefix/active resolver, `root` included.
+            return resolver.resolveWorkspace(options.workspace ?? "active", in: store) { workspaceID in
                 makeSessionResponse(in: store, workspaceID: workspaceID, options: options, tint: tint)
             }
         }

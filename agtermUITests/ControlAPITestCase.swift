@@ -131,6 +131,13 @@ class ControlAPITestCase: XCTestCase {
         try sessionNodes()?.first { matchesID($0, id) }
     }
 
+    /// The workspace nodes of a FRESH `tree`, the root included.
+    func treeWorkspaceNodes() throws -> [[String: Any]] {
+        let response = try sendCommand(#"{"cmd":"tree"}"#)
+        let tree = try XCTUnwrap((response["result"] as? [String: Any])?["tree"] as? [String: Any], "tree should carry a tree: \(response)")
+        return try XCTUnwrap(tree["workspaces"] as? [[String: Any]], "tree should list workspaces")
+    }
+
     /// Every session node from a FRESH `tree`, flattened across all workspaces; nil when the response
     /// carries no readable tree.
     private func sessionNodes() throws -> [[String: Any]]? {
@@ -350,7 +357,7 @@ class ControlAPITestCase: XCTestCase {
     func pollSessionCounts(_ expected: [Int], timeout: TimeInterval) -> Bool {
         stateDir.pollSnapshot(equals: expected, timeout: timeout) { obj in
             guard let workspaces = obj["workspaces"] as? [[String: Any]] else { return nil }
-            return workspaces.map { ($0["sessions"] as? [[String: Any]])?.count ?? -1 }
+            return workspaces.filter { $0["root"] as? Bool != true }.map { ($0["sessions"] as? [[String: Any]])?.count ?? -1 }
         }
     }
 
@@ -447,7 +454,7 @@ class ControlAPITestCase: XCTestCase {
     func pollWorkspaceNames(_ expected: [String], timeout: TimeInterval) -> Bool {
         stateDir.pollSnapshot(equals: expected, timeout: timeout) { obj in
             guard let workspaces = obj["workspaces"] as? [[String: Any]] else { return nil }
-            return workspaces.compactMap { $0["name"] as? String }
+            return workspaces.filter { $0["root"] as? Bool != true }.compactMap { $0["name"] as? String }
         }
     }
 

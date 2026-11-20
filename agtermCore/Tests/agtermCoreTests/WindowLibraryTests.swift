@@ -177,6 +177,58 @@ final class WindowLibraryTests {
         #expect(store.workspaces[0].sessions.count == 1)
     }
 
+    @Test func aNewWindowFromATopLevelSessionSeedsItsShellAtTheRoot() throws {
+        let library = WindowLibrary(directory: directory)
+        let source = try #require(library.activeStore)
+        let root = try #require(source.rootWorkspace)
+        let top = try #require(source.addSession(toWorkspace: root.id, cwd: "/top"))
+        _ = source.selectSession(top.id)
+
+        let store = try #require(library.store(for: library.newWindow(source: source).id))
+
+        #expect(store.namedWorkspaces.isEmpty)
+        #expect(store.rootWorkspace?.sessions.count == 1)
+    }
+
+    @Test func aNewWindowFromANamedSessionOrNoSourceSeedsWorkspaceOne() throws {
+        let library = WindowLibrary(directory: directory)
+        let source = try #require(library.activeStore)
+
+        let fromNamed = try #require(library.store(for: library.newWindow(source: source).id))
+        let fromNothing = try #require(library.store(for: library.newWindow().id))
+
+        #expect(fromNamed.namedWorkspaces.map(\.name) == ["workspace 1"])
+        #expect(fromNothing.namedWorkspaces.map(\.name) == ["workspace 1"])
+    }
+
+    @Test func aNewWindowFromARemoteWindowSeedsWorkspaceOne() throws {
+        let library = WindowLibrary(directory: directory)
+        let remote = try #require(library.store(for: library.newRemoteWindow(host: "box").id))
+        remote.catalogState = .connected
+        _ = remote.ensureRoot()
+        let root = try #require(remote.rootWorkspace)
+        let top = try #require(remote.addSession(toWorkspace: root.id, cwd: "/top"))
+        _ = remote.selectSession(top.id)
+
+        let store = try #require(library.store(for: library.newWindow(source: remote).id))
+
+        #expect(store.namedWorkspaces.map(\.name) == ["workspace 1"])
+    }
+
+    @Test func aWindowHoldingOnlyTopLevelSessionsReopensAsSaved() throws {
+        let library = WindowLibrary(directory: directory)
+        let source = try #require(library.activeStore)
+        let root = try #require(source.rootWorkspace)
+        _ = source.selectSession(try #require(source.addSession(toWorkspace: root.id, cwd: "/top")).id)
+        let id = library.newWindow(source: source).id
+        library.closeWindow(id)
+
+        let reopened = try #require(library.loadStore(for: id))
+
+        #expect(reopened.namedWorkspaces.isEmpty)
+        #expect(reopened.rootWorkspace?.sessions.count == 1)
+    }
+
     @Test func newWindowBecomesFrontmostAndActive() {
         let library = WindowLibrary(directory: directory)
         let first = library.windows[0].id

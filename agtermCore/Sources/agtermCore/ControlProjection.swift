@@ -732,6 +732,9 @@ public struct ControlWorkspaceNode: Codable, Sendable, Equatable {
     /// The root container's label in the CLI tree listing and the focus editor.
     public static let rootLabel = "Top-Level Sessions"
 
+    /// The workspace target that names the root container.
+    public static let rootTarget = "root"
+
     public init(id: String, name: String, active: Bool, focused: Bool? = nil,
                 collapsed: Bool? = nil, tint: String? = nil, tintOn: [String]? = nil, root: Bool? = nil,
                 sessions: [ControlSessionNode]) {

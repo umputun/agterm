@@ -290,24 +290,26 @@
   the :35 refusal case); `agtermTests/ControlServerRemoteSessionNewTests.swift`; `agtermUITests/ControlWindowUITests.swift` (one
   targeted `window.new` case), `ControlAPIUITests.swift` (rewrite `testWorkspaceDeleteLastErrors` at :872)
 
-- [ ] tests first: destination order (fresh, sole visible focused container with hidden selection, selected session's
+- [x] tests first: destination order (fresh, sole visible focused container with hidden selection, selected session's
   container, last named, root), for root and for an empty named workspace
-- [ ] tests first: when `currentWorkspaceID` resolves to the root, New Session goes there and named-workspace actions
+- [x] tests first: when `currentWorkspaceID` resolves to the root, New Session goes there and named-workspace actions
   report disabled through `PaletteContext` while their store methods refuse the root; the last-named fallback applies
   only with no fresh workspace, no focused-container override and no selected session; with no named workspace, root
-- [ ] tests first: deleting the last named workspace succeeds locally, in a remote window and on agterm-server
+- [x] tests first: deleting the last named workspace succeeds locally, in a remote window and on agterm-server
   (`canRemoveWorkspace`, `canCloseWorkspace`, `canTerminateWorkspace`, the server refusal), with the GUI message updated
-- [ ] tests first: `session.new --workspace root` resolves on the Mac and on agterm-server, so an origin of the same
+- [x] tests first: `session.new --workspace root` resolves on the Mac and on agterm-server, so an origin of the same
   revision accepts what the next item sends
-- [ ] tests first: `session.remote.new` and GUI New Remote Session from a root destination send the origin
+- [x] tests first: `session.remote.new` and GUI New Remote Session from a root destination send the origin
   `--workspace root` without `--create-workspace`, an explicit `--workspace-name` keeps today's argv, and the row
   attaches locally into the root; an origin without root support refuses before creating
-- [ ] tests first: root focus through `commitFocus` restore pruning, empty-set rule and selection outside the set
-- [ ] tests first: workspace navigation from a root session (next to first visible named, previous to last, root never
+- [x] tests first: root focus through `commitFocus` restore pruning, empty-set rule and selection outside the set
+- [x] tests first: workspace navigation from a root session (next to first visible named, previous to last, root never
   a stop, the existing error with no visible named workspace)
-- [ ] tests first: new window per caller (File menu/palette and `window.new` follow the frontmost window's active
+- [x] tests first: new window per caller (File menu/palette and `window.new` follow the frontmost window's active
   session; Dock and a remote source seed Workspace 1); a saved zero-named-workspace window reopens as saved
-- [ ] implement (labels stay in Task 6); targeted tests green before Task 4
+- [x] ➕ from review: the `root` alias resolves in all three `session.new` paths (Mac receiver, mirrored-window
+  request, agterm-server); the shared snapshot helpers in the UI suites skip the root entry
+- [x] implement (labels stay in Task 6); targeted tests green before Task 4
 
 ### Task 4: Close, undo and Recent Closed with the root
 

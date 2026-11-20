@@ -29,10 +29,13 @@ struct ServerActionsWorkspacesTests {
         #expect(harness.store.namedWorkspaces.map(\.id).last == first)
     }
 
-    @Test func theLastWorkspaceCannotBeDeleted() {
-        let only = harness.store.workspaces[0].id.uuidString
+    @Test func theLastNamedWorkspaceIsDeletedLeavingTheRoot() throws {
+        let only = try #require(harness.store.namedWorkspaces.first).id
 
-        #expect(harness.actions.deleteWorkspace(only, window: nil) == ControlResponse(ok: false, error: "cannot delete last workspace"))
+        #expect(harness.actions.deleteWorkspace(only.uuidString, window: nil).ok)
+
+        #expect(harness.store.namedWorkspaces.isEmpty)
+        #expect(harness.store.rootWorkspace != nil)
     }
 
     @Test func deletingAWorkspaceEndsItsSessionsDaemons() throws {

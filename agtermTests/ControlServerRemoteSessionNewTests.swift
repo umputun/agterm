@@ -56,6 +56,56 @@ final class ControlServerRemoteSessionNewTests: XCTestCase {
         XCTAssertEqual(events.last?.payload.remoteSessionID, created)
     }
 
+    func testARootDestinationCreatesInTheOriginsRootAndTheRowLandsInTheRoot() async throws {
+        let runner = ScriptedRunner([mac(), windows([build]), reply(id: created), tree(session(created))])
+        let server = makeServer(runner)
+        let store = try XCTUnwrap(library.activeStore)
+        let root = try XCTUnwrap(store.rootWorkspace)
+        store.selectSession(try XCTUnwrap(store.addSession(toWorkspace: root.id, cwd: "/tmp")).id)
+
+        let reply = await server.newRemoteSession(RemoteSessionCreate(host: "mac"))
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        let rowID = try XCTUnwrap(reply.result?.id.flatMap(UUID.init(uuidString:)))
+        XCTAssertEqual(store.workspace(forSession: rowID)?.id, root.id)
+        let create = try XCTUnwrap(creates(runner).first)
+        XCTAssertTrue(create.contains("--workspace=root"), create)
+        XCTAssertFalse(create.contains("--workspace-name"), create)
+        XCTAssertFalse(create.contains("--create-workspace"), create)
+    }
+
+    func testANamedOriginWorkspaceFromARootDestinationKeepsTodaysArgvAndLandsInTheRoot() async throws {
+        let runner = ScriptedRunner([mac(), windows([build]), reply(id: created), tree(session(created))])
+        let server = makeServer(runner)
+        let store = try XCTUnwrap(library.activeStore)
+        let root = try XCTUnwrap(store.rootWorkspace)
+        store.selectSession(try XCTUnwrap(store.addSession(toWorkspace: root.id, cwd: "/tmp")).id)
+
+        let reply = await server.newRemoteSession(RemoteSessionCreate(host: "mac", workspaceName: "ops"))
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        let rowID = try XCTUnwrap(reply.result?.id.flatMap(UUID.init(uuidString:)))
+        XCTAssertEqual(store.workspace(forSession: rowID)?.id, root.id)
+        let create = try XCTUnwrap(creates(runner).first)
+        XCTAssertTrue(create.contains("--workspace-name=ops"), create)
+        XCTAssertTrue(create.contains("--create-workspace"), create)
+    }
+
+    func testAnOriginWithoutTopLevelSessionsRefusesARootDestinationAndNothingAttaches() async throws {
+        let refusal = RemoteCommandResult(status: 1, stdout: #"{"ok":false,"error":"no such workspace: root"}"#, stderr: "")
+        let runner = ScriptedRunner([mac(), windows([build]), refusal])
+        let server = makeServer(runner)
+        let store = try XCTUnwrap(library.activeStore)
+        let root = try XCTUnwrap(store.rootWorkspace)
+        store.selectSession(try XCTUnwrap(store.addSession(toWorkspace: root.id, cwd: "/tmp")).id)
+        let before = store.workspaces.flatMap(\.sessions).count
+
+        let reply = await server.newRemoteSession(RemoteSessionCreate(host: "mac"))
+
+        XCTAssertEqual(reply.error, "no such workspace: root")
+        XCTAssertEqual(store.workspaces.flatMap(\.sessions).count, before)
+    }
+
     func testAMacWithSeveralWindowsAndNoneNamedCreatesNothing() async throws {
         let runner = ScriptedRunner([mac(), windows([build, notes])])
         let server = makeServer(runner)

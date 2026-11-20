@@ -77,9 +77,13 @@ extension RemoteCatalogMirror {
         return items
     }
 
-    /// canTerminateWorkspace is whether the server would delete a workspace: it keeps at least one named workspace,
-    /// counting the ones this window detached.
-    public var canTerminateWorkspace: Bool { (catalog?.workspaces.filter { $0.root != true }.count ?? 0) > 1 }
+    /// canTerminateWorkspace is whether the server would delete a workspace, counting the ones this window detached:
+    /// an owner with top-level sessions deletes its last named one, an older owner keeps one.
+    public var canTerminateWorkspace: Bool {
+        let workspaces = catalog?.workspaces ?? []
+        let named = workspaces.filter { $0.root != true }.count
+        return named > (workspaces.contains { $0.root == true } ? 0 : 1)
+    }
 
     /// closeScope is what closing row `id` reaches on the server, nil for a row the catalog does not hold.
     public func closeScope(session id: UUID) -> RemoteCloseScope? {

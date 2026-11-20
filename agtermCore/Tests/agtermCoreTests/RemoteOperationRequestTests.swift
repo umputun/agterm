@@ -27,6 +27,15 @@ struct RemoteOperationRequestTests {
         return response.error
     }
 
+    @Test func aNewSessionByTheRootTargetGoesToTheOwnersRoot() throws {
+        let rootless = refusal(parse(.sessionNew) { $0.workspace = "root" })
+        _ = store.ensureRoot()
+        let root = try #require(store.rootWorkspace)
+
+        #expect(rootless == "no such workspace: root")
+        #expect(parse(.sessionNew) { $0.workspace = "root" } == .operation(.newSession(workspace: root.id), select: true))
+    }
+
     @Test func aNewSessionLandsInTheNamedWorkspaceWithItsShellOptions() {
         let parsed = parse(.sessionNew) { $0.workspace = String(workspace.id.uuidString.prefix(8)); $0.name = "-x"; $0.cwd = "/srv" }
 

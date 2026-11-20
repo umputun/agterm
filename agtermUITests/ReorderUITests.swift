@@ -537,7 +537,7 @@ final class ReorderUITests: XCTestCase {
     private func pollWorkspaceNames(_ expected: [String], timeout: TimeInterval) -> Bool {
         stateDir.pollSnapshot(equals: expected, timeout: timeout) { obj in
             guard let workspaces = obj["workspaces"] as? [[String: Any]] else { return nil }
-            return workspaces.compactMap { $0["name"] as? String }
+            return workspaces.filter { $0["root"] as? Bool != true }.compactMap { $0["name"] as? String }
         }
     }
 }

@@ -104,16 +104,21 @@ final class ControlTargetResolver {
             return response
         case .success(let scoped):
             // a window was named, or `active`/placement defaults to the frontmost store.
-            if trimmed(window) != nil || (target ?? "active") == "active" {
-                return resolve(target ?? "active", candidates: scoped.workspaces.map(\.id),
-                               active: scoped.currentWorkspaceID, noun: "workspace") { id in
-                    body(scoped, id)
-                }
+            // `root` names the frontmost window's root, like `active` its current workspace
+            if trimmed(window) != nil || [nil, "active", ControlWorkspaceNode.rootTarget].contains(target) {
+                return resolveWorkspace(target ?? "active", in: scoped) { body(scoped, $0) }
             }
             // no window arg + an id/prefix: match across all open stores, mapping back to the owner.
             return resolveAcrossWindows(target ?? "active", noun: "workspace",
                                         candidates: { $0.workspaces.map(\.id) }, body)
         }
+    }
+
+    /// resolveWorkspace resolves `target` among `store`'s workspaces, `root` included.
+    func resolveWorkspace(_ target: String, in store: AppStore, _ body: (UUID) -> ControlResponse) -> ControlResponse {
+        let resolution = store.resolveWorkspaceTarget(target)
+        if case .resolved(let id) = resolution { return body(id) }
+        return resolutionError("workspace", target: target, resolution)
     }
 
     /// resolveWorkspace for a workspace-only command, which refuses the root container.

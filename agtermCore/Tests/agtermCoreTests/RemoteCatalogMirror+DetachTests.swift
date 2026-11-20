@@ -569,7 +569,7 @@ final class RemoteCatalogMirrorDetachTests {
         #expect(store.workspaces.count == 1)
         #expect(lastShown)
         #expect(withDetachedSibling)
-        #expect(!local.canCloseWorkspace)
+        #expect(local.canCloseWorkspace)
     }
 
     @Test func theServersOnlyWorkspaceCannotBeTerminated() {
@@ -653,14 +653,18 @@ final class RemoteCatalogMirrorDetachTests {
         #expect(store.rootWorkspace?.id == rootID)
     }
 
-    @Test func terminatingWorkspacesCountsNamedOnes() {
+    @Test func aServerWithARootTerminatesItsOnlyNamedWorkspaceAndNeverCountsTheRoot() {
         let rootID = UUID()
+        let root = CatalogWorkspace(id: rootID, name: "", root: true, sessions: [])
         let snapshot = CatalogSnapshot(epoch: "e1", rev: 0, catalogID: catalogID, versions: Self.versions,
-                                       workspaces: [CatalogWorkspace(id: workspaceID, name: "w", sessions: []),
-                                                    CatalogWorkspace(id: rootID, name: "", root: true, sessions: [])])
+                                       workspaces: [CatalogWorkspace(id: workspaceID, name: "w", sessions: []), root])
         _ = mirror.receive(.hello(CatalogHello(version: 1, epoch: "e1", versions: Self.versions)))
         _ = mirror.receive(.snapshot(snapshot))
+        let withNamed = mirror.canTerminateWorkspace
+        _ = mirror.receive(.snapshot(CatalogSnapshot(epoch: "e1", rev: 1, catalogID: catalogID, versions: Self.versions,
+                                                     workspaces: [root])))
 
+        #expect(withNamed)
         #expect(!mirror.canTerminateWorkspace)
     }
 

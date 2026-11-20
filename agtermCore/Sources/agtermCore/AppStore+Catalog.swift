@@ -42,9 +42,8 @@ extension AppStore {
     /// are the server's.
     public var clearableFlagCount: Int { marksOnServer ? remoteActions?.mirror.flaggedCount ?? 0 : flaggedSessions.count }
 
-    /// canCloseWorkspace is whether Delete Workspace can run: a remote window can detach any shown workspace, its last
-    /// included; a local window keeps its last workspace.
-    public var canCloseWorkspace: Bool { isRemoteWindow ? !namedWorkspaces.isEmpty : canRemoveWorkspace }
+    /// canCloseWorkspace is whether Delete Workspace can run: on any named workspace, the last included.
+    public var canCloseWorkspace: Bool { canRemoveWorkspace }
 
     /// prepareCatalogWorkspaces removes the rows of sessions the catalog no longer has and adds or renames its
     /// workspaces. Workspaces it no longer has leave in `finishCatalogWorkspaces`, once their surviving rows

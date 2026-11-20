@@ -260,6 +260,20 @@ final class ControlWindowUITests: ControlAPITestCase {
                       "the restored window should be interactive again")
     }
 
+    func testWindowNewFromATopLevelSessionSeedsItsShellAtTheRoot() throws {
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 20), "seeded session")
+        let top = try sendCommand(#"{"cmd":"session.new","args":{"workspace":"root"}}"#)
+        XCTAssertEqual(top["ok"] as? Bool, true, "session.new into the root should succeed: \(top)")
+
+        let created = try sendCommand(#"{"cmd":"window.new","args":{"name":"from-root"}}"#)
+        let newID = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String, "window.new should return an id: \(created)")
+
+        let workspaces = try windowTreeWorkspaces(window: newID)
+        XCTAssertFalse(workspaces.contains { ($0["root"] as? Bool) != true }, "no named workspace: \(workspaces)")
+        let root = try XCTUnwrap(workspaces.first { ($0["root"] as? Bool) == true }, "the root node: \(workspaces)")
+        XCTAssertEqual((root["sessions"] as? [[String: Any]])?.count, 1, "one HOME shell at the root: \(root)")
+    }
+
     // window.new must not reply until its NSWindow has attached: the store loads synchronously (so the
     // library reports open:true at once) while the NSWindow lands two SwiftUI render passes later.
     func testWindowNewIsUsableImmediately() throws {

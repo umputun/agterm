@@ -13,7 +13,15 @@ enum RemoteSessionOrigin {
 struct RemoteSessionDestination {
     let store: AppStore
     let workspace: UUID
-    let name: String
+    /// name is the workspace the origin creates in by default; nil for the root, which the origin's root takes.
+    let name: String?
+}
+
+extension RemoteSessionDestination {
+    @MainActor
+    init(store: AppStore, workspace: Workspace) {
+        self.init(store: store, workspace: workspace.id, name: workspace.isRoot ? nil : workspace.name)
+    }
 }
 
 extension ControlServer {
@@ -51,7 +59,7 @@ extension ControlServer {
         guard let id = store.currentWorkspaceID, let workspace = store.workspaces.first(where: { $0.id == id }) else {
             return .failure(ControlResponse(ok: false, error: "no workspace to attach into"))
         }
-        return .success(RemoteSessionDestination(store: store, workspace: id, name: workspace.name))
+        return .success(RemoteSessionDestination(store: store, workspace: workspace))
     }
 
     /// remoteSessionOrigin asks `host` what it is. Nothing here retries or treats silence as a server: a host that

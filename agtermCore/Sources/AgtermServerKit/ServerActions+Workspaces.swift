@@ -23,7 +23,6 @@ extension ServerActions {
 
     public func deleteWorkspace(_ target: String?, window: String?) -> ControlResponse {
         withNamedWorkspace(target, window: window) { id in
-            guard store.canRemoveWorkspace else { return ControlResponse(ok: false, error: "cannot delete last workspace") }
             store.removeWorkspace(id)
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
@@ -51,7 +50,7 @@ extension ServerActions {
     /// resolveWorkspace resolves a workspace id, prefix or `active`, the store's current workspace.
     func resolveWorkspace(_ target: String?) -> Result<UUID, ActionRefusal> {
         let target = target ?? "active"
-        let resolution = ControlResolve.resolve(target, candidates: store.workspaces.map(\.id), active: store.currentWorkspaceID)
+        let resolution = store.resolveWorkspaceTarget(target)
         guard case .resolved(let id) = resolution else {
             return .refused(ControlResponse(ok: false, error: ControlResolve.errorMessage(noun: "workspace", target: target,
                                                                                           resolution: resolution)))

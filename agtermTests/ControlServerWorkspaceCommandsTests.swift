@@ -141,7 +141,7 @@ final class ControlServerWorkspaceCommandsTests: XCTestCase {
         store.selectSession(top.id)
         let refusal = "top-level sessions are not a workspace"
 
-        for target in [root.id.uuidString, String(root.id.uuidString.prefix(8)), "active"] {
+        for target in [root.id.uuidString, String(root.id.uuidString.prefix(8)), "active", "root"] {
             XCTAssertEqual(server.selectWorkspace(target, window: nil).error, refusal, target)
             XCTAssertEqual(server.renameWorkspace(target, window: nil, name: "x").error, refusal, target)
             XCTAssertEqual(server.deleteWorkspace(target, window: nil).error, refusal, target)
@@ -152,6 +152,28 @@ final class ControlServerWorkspaceCommandsTests: XCTestCase {
         }
         XCTAssertEqual(store.workspaces.last?.id, root.id)
         XCTAssertEqual(store.rootWorkspace?.name, "")
+    }
+
+    func testTheRootTargetCreatesASessionInTheRootOfTheFrontmostWindow() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let root = try XCTUnwrap(store.rootWorkspace).id
+
+        let created = server.createSession(ControlSessionCreateOptions(
+            window: nil, cwd: "/tmp", workspace: "root", workspaceName: nil, createWorkspace: nil, command: nil, wait: nil,
+            name: nil, after: nil, before: nil, noSelect: true))
+
+        let id = try XCTUnwrap(created.result?.id.flatMap(UUID.init(uuidString:)), created.error ?? "")
+        XCTAssertEqual(store.workspace(forSession: id)?.id, root)
+    }
+
+    func testTheLastNamedWorkspaceIsDeletedLeavingTheRoot() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let only = try XCTUnwrap(store.namedWorkspaces.first).id
+
+        XCTAssertTrue(server.deleteWorkspace(only.uuidString, window: nil).ok)
+
+        XCTAssertTrue(store.namedWorkspaces.isEmpty)
+        XCTAssertNotNil(store.rootWorkspace)
     }
 
     func testASessionIsCreatedInAndMovedIntoTheRootByItsId() throws {

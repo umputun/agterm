@@ -484,8 +484,8 @@ final class AppActions {
     }
 
     /// Delete a workspace and all its sessions from `store`'s window. Confirms while it still has sessions
-    /// (the delete ends their shells), no prompt when empty, no-op when only one workspace remains — one is
-    /// always kept. The row's "Delete Workspace" passes its OWN window-local store: the frontmost one would
+    /// (the delete ends their shells), no prompt when empty; the last named one goes too, leaving the root. The
+    /// row's "Delete Workspace" passes its OWN window-local store: the frontmost one would
     /// find no such id and silently do nothing. Ungated like the other store-scoped row actions — a window
     /// renders no sidebar while its zoom or dashboard is up, so the row menu is unreachable in exactly the
     /// state the gate covers, and a frontmost modal must not block a background window's row.
@@ -592,18 +592,20 @@ final class AppActions {
 
     // MARK: - Windows
 
-    /// Create a fresh window (one default workspace + session) and open it via the scene's window opener,
-    /// the seam the control channel uses. No-op before the scene `.task` wires the opener.
+    /// Create a fresh window (one HOME session, at its root when the frontmost window's active session is a top-level
+    /// one) and open it via the scene's window opener, the seam the control channel uses. No-op before the scene
+    /// `.task` wires the opener.
     ///
     /// `ignoringModals` skips the frontmost-window modal gate. Creating a window touches no existing
     /// window's state, so the Dock item passes true — a dashboard or zoom in whatever window happened to be
-    /// last active must not make it inert. Menu bar and palette keep the gate (`.disabled(modalActive)`).
+    /// last active must not make it inert, and it has no source window either. Menu bar and palette keep the gate
+    /// (`.disabled(modalActive)`).
     func newWindow(ignoringModals: Bool = false) {
         guard ignoringModals || uiActionsEnabled else { return }
         // `library.newWindow()` persists an open entry, so with no opener the app counts a window that has
         // no NSWindow behind it.
         guard let openWindow else { return }
-        let info = library.newWindow()
+        let info = library.newWindow(source: ignoringModals ? nil : library.activeStore)
         openWindow(info.id)
     }
 

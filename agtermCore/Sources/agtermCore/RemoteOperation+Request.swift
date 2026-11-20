@@ -324,7 +324,7 @@ extension RemoteOperation {
     @MainActor
     private static func workspace(_ target: String?, in store: AppStore, _ body: (UUID) -> RemoteOperationParse) -> RemoteOperationParse {
         let target = target ?? "active"
-        let resolution = ControlResolve.resolve(target, candidates: store.workspaces.map(\.id), active: store.currentWorkspaceID)
+        let resolution = store.resolveWorkspaceTarget(target)
         guard case .resolved(let id) = resolution else {
             return refuse(ControlResolve.errorMessage(noun: "workspace", target: target, resolution: resolution))
         }

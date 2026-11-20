@@ -50,11 +50,8 @@ extension ControlServer {
     }
 
     func deleteWorkspace(_ target: String?, window: String?) -> ControlResponse {
-        // honors keep-at-least-one; returns an error rather than the GUI confirm alert.
+        // no GUI confirm alert; the last named workspace goes too, leaving the root.
         resolver.resolveNamedWorkspace(target, window: window) { store, id in
-            guard store.canRemoveWorkspace else {
-                return ControlResponse(ok: false, error: "cannot delete last workspace")
-            }
             store.removeWorkspace(id)
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }

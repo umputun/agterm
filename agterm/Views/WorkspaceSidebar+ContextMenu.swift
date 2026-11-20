@@ -75,7 +75,7 @@ extension WorkspaceSidebar.Coordinator {
     func menu(forRow row: Int) -> NSMenu? {
         guard let outline = outlineView, row >= 0, let node = outline.item(atRow: row) as? SidebarNode else { return nil }
         let menu = NSMenu()
-        // explicit enabled state (Delete is disabled at the last workspace), not responder-chain auto-enabling.
+        // explicit enabled state (a remote window's server-blocked items), not responder-chain auto-enabling.
         menu.autoenablesItems = false
         let sessionTargets = node.kind == .session ? store.sidebarSelectionTargets(forContextSession: node.id) : []
         let sessionCount = sessionTargets.count

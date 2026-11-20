@@ -95,7 +95,8 @@ struct AppStoreRootTests {
     @Test func workspaceCountsReadNamedWorkspacesOnly() {
         let store = rooted("one")
         #expect(store.defaultWorkspaceName == "workspace 2")
-        #expect(!store.canRemoveWorkspace)
+        #expect(store.canRemoveWorkspace)
+        #expect(!rooted().canRemoveWorkspace)
     }
 
     @Test func currentWorkspaceFallsBackToTheLastNamedThenTheRoot() throws {
@@ -178,6 +179,95 @@ struct AppStoreRootTests {
         #expect(store.visibleWorkspaces.map(\.id) == [root.id, one.id])
         store.setFocusMembership(one.id, member: false)
         #expect(store.visibleWorkspaces.map(\.id) == [root.id])
+    }
+
+    @Test func theLastNamedWorkspaceIsRemovedAndARootSessionTakesTheSelection() throws {
+        let store = rooted("one")
+        let root = try #require(store.rootWorkspace)
+        let top = try #require(store.addSession(toWorkspace: root.id, cwd: "/top"))
+        let inner = try #require(store.addSession(toWorkspace: store.namedWorkspaces[0].id, cwd: "/one"))
+        _ = store.selectSession(inner.id)
+        #expect(store.canRemoveWorkspace)
+        #expect(store.canCloseWorkspace)
+
+        store.removeWorkspace(store.namedWorkspaces[0].id)
+
+        #expect(store.namedWorkspaces.isEmpty)
+        #expect(store.selectedSessionID == top.id)
+        #expect(!store.canRemoveWorkspace)
+    }
+
+    @Test func theLastNamedWorkspaceSoftClosesIntoAnEmptyWindow() throws {
+        let store = rooted("one")
+        let inner = try #require(store.addSession(toWorkspace: store.namedWorkspaces[0].id, cwd: "/one"))
+        _ = store.selectSession(inner.id)
+
+        #expect(store.softRemoveWorkspace(store.namedWorkspaces[0].id))
+
+        #expect(store.namedWorkspaces.isEmpty)
+        #expect(store.selectedSessionID == nil)
+    }
+
+    @Test func theRootTargetNamesTheRootAndOtherTargetsResolveAsBefore() throws {
+        let store = rooted("one")
+        let root = try #require(store.rootWorkspace)
+
+        #expect(store.resolveWorkspaceTarget("root") == .resolved(root.id))
+        #expect(store.resolveWorkspaceTarget("active") == .resolved(store.namedWorkspaces[0].id))
+        #expect(store.resolveWorkspaceTarget(root.id.uuidString) == .resolved(root.id))
+        #expect(makeStore().resolveWorkspaceTarget("root") == .notFound)
+    }
+
+    @Test func theRootJoinsTheFocusSetAndSurvivesRestorePruning() throws {
+        let store = rooted("one")
+        let root = try #require(store.rootWorkspace)
+        store.setFocusedWorkspace(root.id)
+        #expect(store.focusedWorkspaceIDs == [root.id])
+        #expect(store.focusEnabled)
+
+        store.restoreFocus(ids: [root.id, UUID()], enabled: true)
+        #expect(store.focusedWorkspaceIDs == [root.id])
+        #expect(store.focusEnabled)
+
+        store.setFocusMembership(root.id, member: false)
+        #expect(store.focusedWorkspaceIDs.isEmpty)
+        #expect(!store.focusEnabled)
+    }
+
+    @Test func selectingANamedSessionOutsideAFocusedRootTurnsTheFilterOff() throws {
+        let store = rooted("one")
+        let root = try #require(store.rootWorkspace)
+        let top = try #require(store.addSession(toWorkspace: root.id, cwd: "/top"))
+        let inner = try #require(store.addSession(toWorkspace: store.namedWorkspaces[0].id, cwd: "/one"))
+        _ = store.selectSession(top.id)
+        store.setFocusedWorkspace(root.id)
+
+        _ = store.selectSession(inner.id)
+
+        #expect(!store.focusEnabled)
+        #expect(store.focusedWorkspaceIDs == [root.id])
+    }
+
+    @Test func workspaceNavigationFromARootSessionEntersTheNamedWorkspaces() throws {
+        let store = rooted("one", "two")
+        let root = try #require(store.rootWorkspace)
+        let top = try #require(store.addSession(toWorkspace: root.id, cwd: "/top"))
+        _ = store.selectSession(top.id)
+        #expect(store.navigateWorkspace(.next)?.workspaceID == store.namedWorkspaces[0].id)
+
+        _ = store.selectSession(top.id)
+        #expect(store.navigateWorkspace(.previous)?.workspaceID == store.namedWorkspaces[1].id)
+    }
+
+    @Test func workspaceNavigationGoesNowhereWithNoVisibleNamedWorkspace() throws {
+        let store = rooted("one")
+        let root = try #require(store.rootWorkspace)
+        let top = try #require(store.addSession(toWorkspace: root.id, cwd: "/top"))
+        _ = store.selectSession(top.id)
+        store.setFocusedWorkspace(root.id)
+
+        #expect(!store.canStepWorkspaces)
+        #expect(store.navigateWorkspace(.next) == nil)
     }
 
     @Test func workspaceNavigationStepsNamedWorkspacesOnly() throws {

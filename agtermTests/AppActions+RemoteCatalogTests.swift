@@ -505,6 +505,16 @@ final class AppActionsRemoteCatalogTests: XCTestCase {
         assertClosedNothingLocally()
     }
 
+    func testTheOnlyNamedWorkspaceOfAnOwnerWithARootOffersTerminate() {
+        openWithRoot(UUID(), main: [catalogSession()], root: [])
+
+        let asked = closeWorkspace(workspaceID, answering: .cancel)
+        settle()
+
+        XCTAssertEqual(asked.calls.count, 1)
+        XCTAssertNil(asked.calls.first?.blocked)
+    }
+
     func testTheOnlyWorkspaceOffersDetachButNotTerminate() {
         let entry = catalogSession()
         open([entry])

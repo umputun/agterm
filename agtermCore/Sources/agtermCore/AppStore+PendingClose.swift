@@ -261,10 +261,9 @@ extension AppStore {
     }
 
     /// Hide a workspace from the visible tree but keep all of its sessions alive for a short undo window.
-    /// The last workspace cannot be soft-closed, matching `removeWorkspace`.
     @discardableResult
     public func softRemoveWorkspace(_ workspaceID: UUID, grace: TimeInterval = AppStore.pendingCloseGraceInterval) -> Bool {
-        guard canRemoveWorkspace, let index = namedWorkspaceIndex(of: workspaceID) else { return false }
+        guard let index = namedWorkspaceIndex(of: workspaceID) else { return false }
         for session in workspaces[index].sessions {
             releaseLeavingSession(session)
             closeTimedHud(session)

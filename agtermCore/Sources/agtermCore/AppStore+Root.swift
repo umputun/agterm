@@ -44,6 +44,15 @@ extension AppStore {
         return ControlResponse(ok: false, error: "top-level sessions are not a workspace")
     }
 
+    /// resolveWorkspaceTarget resolves a workspace target in this store: `root` names the root, anything else is an
+    /// id, a unique prefix or `active` (`currentWorkspaceID`).
+    public func resolveWorkspaceTarget(_ target: String) -> TargetResolution {
+        guard target == ControlWorkspaceNode.rootTarget else {
+            return ControlResolve.resolve(target, candidates: workspaces.map(\.id), active: currentWorkspaceID)
+        }
+        return rootWorkspace.map { .resolved($0.id) } ?? .notFound
+    }
+
     /// Mints an empty root when there is none and stores it last. Returns whether the tree changed, so the load
     /// boundary knows to persist a minted id. A second root in a snapshot is folded by `restore(from:)`.
     @discardableResult

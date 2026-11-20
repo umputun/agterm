@@ -328,17 +328,15 @@ public final class AppStore {
         if !visibleWorkspaces.contains(where: { $0.id == freshWorkspaceID }) { self.freshWorkspaceID = nil }
     }
 
-    /// The workspace a new session lands in: a freshly created one, else the selected session's (the root
-    /// included), else the last named one, else the root (nil when there are none). Drives the bottom bar's add actions, File ▸ New Session / Open
+    /// The workspace a new session lands in: a freshly created one, else the one container the tree is focused on
+    /// while the selection lies outside it, else the selected session's (the root included), else the last named
+    /// one, else the root (nil when there are none). Drives the bottom bar's add actions, File ▸ New Session / Open
     /// Directory / Rename Workspace, and resolves `active` for control-channel workspace targets.
     public var currentWorkspaceID: UUID? {
-        if let freshWorkspaceID, workspaces.contains(where: { $0.id == freshWorkspaceID }) {
-            return freshWorkspaceID
-        }
-        if let selectedSessionID, let workspace = workspace(forSession: selectedSessionID) {
-            return workspace.id
-        }
-        return namedWorkspaces.last?.id ?? rootWorkspace?.id
+        if let freshWorkspaceID, workspaces.contains(where: { $0.id == freshWorkspaceID }) { return freshWorkspaceID }
+        let selected = selectedSessionID.flatMap { workspace(forSession: $0)?.id }
+        if sidebarMode == .tree, let sole = soleFocusedWorkspaceID, sole != selected { return sole }
+        return selected ?? namedWorkspaces.last?.id ?? rootWorkspace?.id
     }
 
     /// The auto-generated name for the next new workspace (`workspace 1`, `workspace 2`, …).
@@ -700,15 +698,15 @@ public final class AppStore {
         return recent
     }
 
-    /// Whether a workspace may be removed: one is always kept, so only when more than one exists.
-    public var canRemoveWorkspace: Bool { namedWorkspaces.count > 1 }
+    /// Whether a workspace may be removed: any named one, the last included, which leaves the root.
+    public var canRemoveWorkspace: Bool { !namedWorkspaces.isEmpty }
 
     /// Removes a workspace and every session in it, tearing down their surfaces and pruning the recency
-    /// stack. No-ops unless more than one workspace exists (the last is kept). If the active session lived
+    /// stack. No-op for the root or an unknown id. If the active session lived
     /// there, `workspaceRemovalTarget(at:)` reselects the most recent still VISIBLE session, falling back to
     /// the positional walk only when nothing is visible, nil when none remain.
     public func removeWorkspace(_ workspaceID: UUID) {
-        guard canRemoveWorkspace, let index = namedWorkspaceIndex(of: workspaceID) else { return }
+        guard let index = namedWorkspaceIndex(of: workspaceID) else { return }
         let workspace = workspaces[index]
         let removingActive = selectedSessionID.map { id in workspace.sessions.contains { $0.id == id } } ?? false
         // record the membership BEFORE `dropFocusMember` below prunes it, so Reopen Closed Item can re-mark it

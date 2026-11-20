@@ -32,6 +32,68 @@ struct AppStoreCurrentWorkspaceTests {
         #expect(store.currentWorkspaceID == fresh.id)
     }
 
+    @Test func aSoleFocusedContainerTakesNewSessionsWhileTheSelectionIsHidden() throws {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let empty = store.addWorkspace(name: "empty")
+        let session = try #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
+        _ = store.selectSession(session.id)
+        store.setFocusedWorkspace(empty.id)
+
+        #expect(store.selectedSessionID == session.id)
+        #expect(store.currentWorkspaceID == empty.id)
+    }
+
+    @Test func aSoleFocusedContainerTakesNewSessionsWithNoSelection() throws {
+        let store = makeStore()
+        let first = store.addWorkspace(name: "first")
+        let work = store.addWorkspace(name: "work")
+        try #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
+        _ = store.selectSession(nil)
+        store.setFocusMembership(first.id, member: true)
+        store.setFocusEnabled(true)
+
+        #expect(store.currentWorkspaceID == first.id)
+    }
+
+    @Test func aSoleFocusedRootTakesNewSessionsWhileTheSelectionIsHidden() throws {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
+        _ = store.ensureRoot()
+        let root = try #require(store.rootWorkspace)
+        _ = store.selectSession(session.id)
+        store.setFocusedWorkspace(root.id)
+
+        #expect(store.currentWorkspaceID == root.id)
+    }
+
+    @Test func theFocusedContainerRungIsDormantInTheFlaggedView() throws {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let empty = store.addWorkspace(name: "empty")
+        let session = try #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
+        _ = store.selectSession(session.id)
+        store.setFocusedWorkspace(empty.id)
+        store.setSidebarMode(.flagged)
+
+        #expect(store.currentWorkspaceID == work.id)
+    }
+
+    @Test func aFilterOfSeveralContainersLeavesTheSelectedSessionsContainerCurrent() throws {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let one = store.addWorkspace(name: "one")
+        let two = store.addWorkspace(name: "two")
+        let session = try #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
+        _ = store.selectSession(session.id)
+        store.setFocusMembership(one.id, member: true)
+        store.setFocusMembership(two.id, member: true)
+        store.setFocusEnabled(true)
+
+        #expect(store.currentWorkspaceID == work.id)
+    }
+
     @Test func selectingASessionDropsTheFreshWorkspaceAsCurrent() {
         let store = makeStore()
         let work = store.addWorkspace(name: "work")

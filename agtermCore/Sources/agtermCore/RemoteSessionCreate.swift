@@ -5,7 +5,8 @@ public struct RemoteSessionCreate: Equatable, Sendable {
     public let host: String
     /// originWindow names the Mac host's window to create in; nil uses its one window. Refused for a server.
     public let originWindow: String?
-    /// workspaceName is the origin workspace, reused or created; nil takes the local workspace's name.
+    /// workspaceName is the origin workspace, reused or created; nil takes the local workspace's name, or the origin's
+    /// root when the local destination is the root.
     public let workspaceName: String?
     public let cwd: String?
     public let command: String?
@@ -81,12 +82,14 @@ public struct RemoteSessionCreate: Equatable, Sendable {
                                             command: args?.command, window: args?.window?.trimmedOrNil))
     }
 
-    /// arguments is the origin's `agtermctl` command line. The origin keeps its own selection: the session is
-    /// wanted here, not there.
-    public func arguments(origin: Origin, workspaceName: String) -> [String] {
+    /// arguments is the origin's `agtermctl` command line, in the named workspace or, with no name, in the origin's
+    /// root, which an origin predating top-level sessions refuses before creating anything. The origin keeps its own
+    /// selection: the session is wanted here, not there.
+    public func arguments(origin: Origin, workspaceName: String?) -> [String] {
         var arguments = ["session", "new"]
         if case .mac(let window) = origin { arguments.append("--window=" + window) }
-        arguments += ["--workspace-name=" + workspaceName, "--create-workspace", "--no-select"]
+        arguments += workspaceName.map { ["--workspace-name=" + $0, "--create-workspace"] } ?? ["--workspace=" + ControlWorkspaceNode.rootTarget]
+        arguments.append("--no-select")
         return arguments + RemoteSession.optionArgument("--cwd", cwd) + RemoteSession.optionArgument("--command", command)
     }
 }
