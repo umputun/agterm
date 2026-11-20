@@ -97,24 +97,41 @@ extension ControlServer {
             order.insert(parent, at: 0)
         }
         var shown: UUID?
+        var reopened = false
         for session in order {
             if let row = shownRow(session, host: host) {
                 if session == item.originSessionID { shown = row }
                 continue
             }
-            let reply = await attachRemoteSession(host: host, session: session, window: destination(for: session, tree: tree, host: host) ?? window)
+            let target = destination(for: session, tree: tree, host: host) ?? window
+            let root = session == item.originSessionID ? rootPlacement(item, window: target) : nil
+            let reply = await attachRemoteSession(host: host, session: session, window: root?.window ?? target, workspace: root?.workspace)
             guard reply.ok else { return reply }
-            if session == item.originSessionID { shown = reply.result?.id.flatMap(UUID.init(uuidString:)) ?? shownRow(session, host: host) }
+            if session == item.originSessionID {
+                shown = reply.result?.id.flatMap(UUID.init(uuidString:)) ?? shownRow(session, host: host)
+                reopened = true
+            }
         }
         guard let shown, let store = library.store(forSession: shown), let windowID = library.windowID(for: store) else {
             return ControlResponse(ok: false, error: "\(item.name) did not attach")
         }
-        if store.session(withID: shown)?.parentID == nil, store.workspaces.contains(where: { $0.id == item.placement.workspaceID }) {
-            store.moveSession(shown, toWorkspace: item.placement.workspaceID, at: item.placement.sessionIndex)
+        // a row already shown stays where it is unless this window still has its saved workspace
+        let home = store.workspaces.first { $0.id == item.placement.workspaceID }?.id
+            ?? (reopened && item.placement.root == true ? store.rootWorkspace?.id : nil)
+        if store.session(withID: shown)?.parentID == nil, let home {
+            store.moveSession(shown, toWorkspace: home, at: item.placement.sessionIndex)
         }
         library.removeRemoteRecentClosed(item.id)
         let open = ControlRecentOpen(item: ControlRecentItem(item), window: windowID.uuidString, complete: true)
         return ControlResponse(ok: true, result: ControlResult(id: shown.uuidString, recentOpen: open))
+    }
+
+    /// rootPlacement pins a top-level row's reopen to one window and that window's top-level sessions, resolved together:
+    /// the attach resolves its window again after an ssh wait, and a frontmost change there would pair two windows.
+    private func rootPlacement(_ item: RemoteRecentClosedItem, window: String?) -> (window: String, workspace: ControlAttachWorkspace)? {
+        guard item.placement.root == true, case .success(let (id, store)) = resolveOpenWindow(window),
+              let root = store.rootWorkspace else { return nil }
+        return (id.uuidString, .id(root.id.uuidString))
     }
 
     /// destination is the window showing `session`'s parent, where a companion must attach; nil for a top-level session or

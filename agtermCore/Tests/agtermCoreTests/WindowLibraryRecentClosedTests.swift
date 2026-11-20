@@ -87,6 +87,25 @@ final class WindowLibraryRecentClosedTests {
         #expect(destination.session(withID: session.id) == nil)
     }
 
+    @Test func aTopLevelSessionFromAClosedWindowReopensAmongTheRequestedWindowsTopLevelSessions() throws {
+        let library = WindowLibrary(directory: directory)
+        let source = try #require(library.activeStore)
+        let sourceID = try #require(library.activeWindowID)
+        let sourceRoot = try #require(source.rootWorkspace)
+        let top = try #require(source.addSession(toWorkspace: sourceRoot.id, cwd: "/a"))
+        let destination = try #require(library.store(for: library.newWindow().id))
+        let named = destination.namedWorkspaces.map(\.name)
+        source.closeSession(top.id)
+        let recent = try #require(library.recentClosedItems.first)
+        library.closeWindow(sourceID)
+
+        let outcome = library.reopenRecentClosedOutcome(recent.id, into: destination)
+
+        #expect(outcome?.complete == true)
+        #expect(destination.workspace(forSession: top.id)?.id == destination.rootWorkspace?.id)
+        #expect(destination.namedWorkspaces.map(\.name) == named)
+    }
+
     @Test func anEntryWhoseRemovalCannotBeWrittenReportsIncomplete() throws {
         let library = WindowLibrary(directory: directory)
         let store = try #require(library.activeStore)

@@ -318,14 +318,16 @@
   (`RemoteRecentClosedItem.Placement`), `agterm/Control/ControlServer+AttachedRecent.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/RecentClosedTests.swift`, `WindowLibraryRecentClosedTests.swift`, `AppStorePendingCloseTests.swift`
 
-- [ ] tests first: hard and undoable close of root sessions and groups; reopen into the same window's root; reopen into
+- [x] tests first: hard and undoable close of root sessions and groups; reopen into the same window's root; reopen into
   another window lands in that window's root; the root is never rebuilt as a named shell; legacy recent entries decode
-- [ ] tests first: the Recent Closed subtitle omits the workspace name for a root session
-- [ ] tests first: an attached session closed at root reopens at the destination window's root, companion parent
+- [x] tests first: the Recent Closed subtitle omits the workspace name for a root session
+- [x] tests first: an attached session closed at root reopens at the destination window's root, companion parent
   preserved; forwarded undo through the shared reattach helper lands the same way
-- [ ] guard the root at the store boundary for workspace close, detach and reattach; record container role on closed
+- [x] guard the root at the store boundary for workspace close, detach and reattach; record container role on closed
   root sessions, local and attached, and route the missing-owner fallback to the destination root
-- [ ] targeted tests green before Task 5
+- [x] ➕ from review: a reopened attached row attaches straight into its saved workspace or the destination's root, so
+  its creation never names another workspace; a root entry in a store without a root restores nothing
+- [x] targeted tests green before Task 5
 
 ### Task 5: Control API and CLI
 

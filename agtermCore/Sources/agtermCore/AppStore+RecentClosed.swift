@@ -27,6 +27,10 @@ extension AppStore {
                 // a lone companion goes under its parent wherever the parent lives now, never on its own
                 guard let parent = location(ofSession: parentID) else { return .failed }
                 index = parent.workspaceIndex
+            } else if recent.root == true {
+                // the destination's own top-level sessions, whatever window the entry came from
+                guard let root = workspaces.firstIndex(where: \.isRoot) else { return .failed }
+                index = root
             } else if let existing = workspaces.firstIndex(where: { $0.id == recent.workspaceID }) {
                 index = existing
             } else {
@@ -222,6 +226,7 @@ extension AppStore {
         // a session its origin removed for good has nothing left to reattach to
         guard let recentClosedStore, let origin = session.attachedOrigin, session.remotePresentation?.originEnded != true
         else { return }
+        let placement = placement.marking(root: rootWorkspace?.id == placement.workspaceID)
         recentClosedStore.recordRemote(RemoteRecentClosedItem(id: id, host: origin.host, originSessionID: origin.sessionID,
                                                               name: session.displayName, placement: placement, closeID: closeID))
         recentClosedDidChange?()
@@ -236,17 +241,19 @@ extension AppStore {
                                    id: UUID = UUID(),
                                    companions companionSnapshots: [SessionSnapshot] = []) -> UUID? {
         guard let recentClosedStore, session.isPersistable else { return nil }
+        let root = rootWorkspace?.id == workspaceID
         recentClosedStore.record(RecentClosedItem(
             id: id,
             kind: .session,
             title: session.displayName,
-            subtitle: workspaceName,
+            subtitle: root ? nil : workspaceName,
             session: RecentClosedSession(workspaceID: workspaceID,
                                          workspaceName: workspaceName,
                                          workspaceIndex: workspaceIndex,
                                          sessionIndex: sessionIndex,
                                          snapshot: sessionSnapshot(session),
-                                         companions: companionSnapshots.isEmpty ? nil : companionSnapshots),
+                                         companions: companionSnapshots.isEmpty ? nil : companionSnapshots,
+                                         root: root ? true : nil),
             window: recentClosedWindow
         ))
         recentClosedDidChange?()
