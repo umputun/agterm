@@ -169,6 +169,15 @@ struct PaletteCatalogTests {
         }
     }
 
+    @Test(arguments: [PaletteCommand.deleteWorkspace, .renameWorkspace, .toggleWorkspaceCollapse])
+    func workspaceOnlyCommandsDisableOnTheRoot(_ command: PaletteCommand) {
+        let named = PaletteContext(canRemoveWorkspace: true, sidebarShowsWorkspaceTree: true, hasCurrentWorkspace: true)
+        let root = PaletteContext(canRemoveWorkspace: true, sidebarShowsWorkspaceTree: true, hasCurrentWorkspace: true,
+                                  activeWorkspaceIsRoot: true)
+        #expect(command.isEnabled(in: named))
+        #expect(!command.isEnabled(in: root))
+    }
+
     @Test func workspaceAndSplitCommandsFollowTheirPredicates() {
         #expect(!PaletteCommand.deleteWorkspace.isVisible(in: PaletteContext(canRemoveWorkspace: false)))
         #expect(PaletteCommand.deleteWorkspace.isVisible(in: PaletteContext(canRemoveWorkspace: true)))

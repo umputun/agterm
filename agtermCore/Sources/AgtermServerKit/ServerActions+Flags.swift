@@ -39,7 +39,7 @@ extension ServerActions {
     }
 
     public func setWorkspaceTint(_ target: String?, window: String?, update: ControlTintUpdate) -> ControlResponse {
-        withWorkspace(target, window: window) { id in
+        withNamedWorkspace(target, window: window) { id in
             store.setTint(update.resolved(over: store.workspaces.first { $0.id == id }?.tint), forWorkspace: id)
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }

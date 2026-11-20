@@ -239,7 +239,7 @@ extension AppActions {
     /// parent is not in the listing.
     static func remotePickItem(_ session: ControlRemoteSession, parentName: String?) -> ControlPickItem {
         let programs = session.panes.compactMap { $0.foreground?.first.map { ($0 as NSString).lastPathComponent } }
-        let parts = ["\(session.windowName)/\(session.workspaceName)", session.context ?? "", session.cwd,
+        let parts = [session.placeLabel, session.context ?? "", session.cwd,
                      programs.joined(separator: " | ")]
         return ControlPickItem(id: session.id, label: parentName.map { "\($0) › \(session.name)" } ?? session.name,
                                subtitle: parts.filter { !$0.isEmpty }.joined(separator: "  ·  "),

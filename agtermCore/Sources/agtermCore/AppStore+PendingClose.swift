@@ -264,7 +264,7 @@ extension AppStore {
     /// The last workspace cannot be soft-closed, matching `removeWorkspace`.
     @discardableResult
     public func softRemoveWorkspace(_ workspaceID: UUID, grace: TimeInterval = AppStore.pendingCloseGraceInterval) -> Bool {
-        guard canRemoveWorkspace, let index = workspaces.firstIndex(where: { $0.id == workspaceID }) else { return false }
+        guard canRemoveWorkspace, let index = namedWorkspaceIndex(of: workspaceID) else { return false }
         for session in workspaces[index].sessions {
             releaseLeavingSession(session)
             closeTimedHud(session)
@@ -543,7 +543,7 @@ extension AppStore {
         } else if let existing = workspaces.firstIndex(where: { $0.id == close.workspaceID }) {
             workspaceIndex = existing
         } else {
-            let insertAt = max(0, min(close.workspaceIndex, workspaces.count))
+            let insertAt = max(0, min(close.workspaceIndex, namedEndIndex))
             workspaces.insert(rebuiltWorkspaceShell(id: close.workspaceID, name: close.workspaceName), at: insertAt)
             workspaceIndex = insertAt
         }
@@ -599,7 +599,7 @@ extension AppStore {
                 emitSessionCreated(session, workspace: workspaces[existing].id)
             }
         } else {
-            let insertAt = max(0, min(close.workspaceIndex, workspaces.count))
+            let insertAt = max(0, min(close.workspaceIndex, namedEndIndex))
             workspaces.insert(close.workspace, at: insertAt)
             for session in close.workspace.sessions {
                 session.dropUnrealizedPaneOverlays() // as above

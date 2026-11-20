@@ -18,7 +18,7 @@ extension AppStore {
     public func renameWorkspace(_ workspaceID: UUID, to name: String) {
         // the name feeds {AGT_WORKSPACE_NAME}; see TerminalText.
         guard let trimmed = TerminalText.sanitized(name).trimmedOrNil,
-              let index = workspaces.firstIndex(where: { $0.id == workspaceID }),
+              let index = namedWorkspaceIndex(of: workspaceID),
               workspaces[index].name != trimmed else { return }
         workspaces[index].name = trimmed
         scheduleTreeChanged()
@@ -30,6 +30,13 @@ extension AppStore {
     public func listLabel(for session: Session) -> String {
         guard let parent = parent(of: session) else { return session.displayName }
         return "\(parent.displayName) › \(session.displayName)"
+    }
+
+    /// listSubtitle is a flat list's "`workspace` · `detail`" line, the detail alone when the owner has no name, as
+    /// the root has none.
+    public func listSubtitle(forSession id: UUID, detail: String) -> String {
+        let name = workspace(forSession: id)?.name ?? ""
+        return name.isEmpty ? detail : "\(name) · \(detail)"
     }
 
     /// listOrdered sorts `sessions` A-Z by label for a flat list, each parent followed by its companions in

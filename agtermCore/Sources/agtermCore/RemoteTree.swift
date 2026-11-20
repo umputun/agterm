@@ -134,7 +134,8 @@ public enum RemoteTreeMerger {
                     guard attachable.contains(parent) else { return nil }
                     return ControlRemoteSession(id: node.id, name: node.name, windowID: window.id, windowName: window.name,
                                                 workspaceID: workspace.id, workspaceName: workspace.name, cwd: node.cwd,
-                                                splitAxis: nil, panes: [], parent: parent, content: "page")
+                                                splitAxis: nil, panes: [], parent: parent, content: "page",
+                                                workspaceRoot: workspace.root)
                 }
             }
         }
@@ -177,7 +178,8 @@ public enum RemoteTreeMerger {
                                     status: node.status, statusColor: node.statusColor,
                                     statusShape: node.statusShape, parent: node.parent,
                                     companions: node.parent == nil ? members(of: node, in: workspace) : nil,
-                                    scratch: daemons["scratch"].map { ControlRemotePane(pane: "scratch", daemon: $0) })
+                                    scratch: daemons["scratch"].map { ControlRemotePane(pane: "scratch", daemon: $0) },
+                                    workspaceRoot: workspace.root)
     }
 
     private static func remotePageRoot(_ node: ControlSessionNode, window: RemoteWindowProjection,
@@ -185,7 +187,8 @@ public enum RemoteTreeMerger {
         ControlRemoteSession(id: node.id, name: node.name, windowID: window.id, windowName: window.name,
                              workspaceID: workspace.id, workspaceName: workspace.name, context: node.context,
                              cwd: node.cwd, splitAxis: nil, panes: [], status: node.status, statusColor: node.statusColor,
-                             statusShape: node.statusShape, content: "page", companions: members(of: node, in: workspace))
+                             statusShape: node.statusShape, content: "page", companions: members(of: node, in: workspace),
+                             workspaceRoot: workspace.root)
     }
 
     // from the unfiltered workspace, so a companion this listing drops is still named as a member

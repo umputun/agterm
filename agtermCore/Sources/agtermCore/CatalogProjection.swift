@@ -16,7 +16,7 @@ public struct CatalogProjection {
 
     public func workspace(_ workspace: Workspace, sessions: [CatalogSession]) -> CatalogWorkspace {
         CatalogWorkspace(id: workspace.id, name: workspace.name, tint: workspace.tint?.color.rawValue ?? "",
-                         tintOn: workspace.tint?.parts.map(\.rawValue), sessions: sessions)
+                         tintOn: workspace.tint?.parts.map(\.rawValue), root: workspace.isRoot ? true : nil, sessions: sessions)
     }
 
     public func pane(_ identity: UUID) -> CatalogPane {

@@ -44,7 +44,7 @@ extension AppStore {
 
     /// canCloseWorkspace is whether Delete Workspace can run: a remote window can detach any shown workspace, its last
     /// included; a local window keeps its last workspace.
-    public var canCloseWorkspace: Bool { isRemoteWindow ? !workspaces.isEmpty : canRemoveWorkspace }
+    public var canCloseWorkspace: Bool { isRemoteWindow ? !namedWorkspaces.isEmpty : canRemoveWorkspace }
 
     /// prepareCatalogWorkspaces removes the rows of sessions the catalog no longer has and adds or renames its
     /// workspaces. Workspaces it no longer has leave in `finishCatalogWorkspaces`, once their surviving rows
@@ -71,7 +71,8 @@ extension AppStore {
                 }
                 continue
             }
-            workspaces.insert(Workspace(id: entry.id, name: name, isExpanded: !collapsed.contains(entry.id), tint: tint),
+            workspaces.insert(Workspace(id: entry.id, name: name, isExpanded: !collapsed.contains(entry.id), tint: tint,
+                                        isRoot: entry.root == true),
                               at: min(index, workspaces.count))
             changed = true
         }

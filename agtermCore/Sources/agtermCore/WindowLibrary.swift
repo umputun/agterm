@@ -384,6 +384,7 @@ public final class WindowLibrary {
         // the name feeds {AGT_WINDOW_NAME}; see TerminalText.
         let info = WindowInfo(name: name.map(TerminalText.sanitized)?.trimmedOrNil ?? defaultWindowName)
         let store = makeStore(for: info.id, persistence: persistenceStore(for: info.id))
+        store.ensureRoot()
         let workspace = store.addWorkspace(name: "workspace 1")
         store.addSession(toWorkspace: workspace.id, cwd: FileManager.default.homeDirectoryForCurrentUser.path)
         windows.append(info)
@@ -414,8 +415,9 @@ public final class WindowLibrary {
         }
         let persistence = persistenceStore(for: id)
         let store = makeStore(for: id, persistence: persistence)
-        let snapshot = loadSnapshotForStore(persistence)
+        let (snapshot, readable) = loadSnapshotForStore(persistence)
         store.restore(from: snapshot, launchRestore: launchRestore)
+        let minted = store.ensureRoot()
         stores[id] = store
         openSetVersion += 1
         let carriedCaptures = snapshot.workspaces.contains { workspace in
@@ -444,6 +446,7 @@ public final class WindowLibrary {
             }
             store.scheduleTreeChanged()
         }
+        if minted, readable { store.save() }
         saveIndex()
         return store
     }
@@ -693,6 +696,7 @@ public final class WindowLibrary {
         let info = WindowInfo(name: defaultWindowName)
         let store = makeStore(for: info.id, persistence: persistenceStore(for: info.id))
         store.restore(from: snapshot, launchRestore: true)
+        store.ensureRoot()
         store.save()
         windows = [info]
         stores[info.id] = store
@@ -743,16 +747,20 @@ public final class WindowLibrary {
         return store
     }
 
-    private func loadSnapshotForStore(_ persistence: PersistenceStore) -> Snapshot {
-        guard launchInventorySink != nil else { return persistence.load() }
+    /// The window's persisted tree, and whether its file may be rewritten: it decoded or does not exist yet.
+    /// An unreadable file loads as an empty tree and is left on disk for the user to recover.
+    private func loadSnapshotForStore(_ persistence: PersistenceStore) -> (snapshot: Snapshot, readable: Bool) {
         var snapshot: Snapshot
         do {
             snapshot = try persistence.loadChecked()
         } catch {
-            launchInventoryComplete = false
-            log("pane inventory could not read an open window snapshot: \(error)")
-            return persistence.load()
+            if launchInventorySink != nil {
+                launchInventoryComplete = false
+                log("pane inventory could not read an open window snapshot: \(error)")
+            }
+            return (Snapshot(), !FileManager.default.fileExists(atPath: persistence.fileURL.path))
         }
+        guard launchInventorySink != nil else { return (snapshot, true) }
         let upgrade = PaneIdentityInventory.upgrade(&snapshot)
         if upgrade.changed {
             do {
@@ -762,7 +770,7 @@ public final class WindowLibrary {
                 log("pane inventory could not persist an open window upgrade: \(error)")
             }
         }
-        return snapshot
+        return (snapshot, true)
     }
 
     private func prepareLaunchPaneInventory() -> Set<UUID>? {

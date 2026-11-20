@@ -116,6 +116,12 @@ final class ControlTargetResolver {
         }
     }
 
+    /// resolveWorkspace for a workspace-only command, which refuses the root container.
+    func resolveNamedWorkspace(_ target: String?, window: String?,
+                               _ body: (AppStore, UUID) -> ControlResponse) -> ControlResponse {
+        resolveWorkspace(target, window: window) { store, id in store.rootRefusal(id) ?? body(store, id) }
+    }
+
     /// The session target as a `(store, id)` result, used by both `resolveSession` and the async
     /// `session.type` path. See `resolveSession` for the windowed/cross-window rules.
     func resolveSessionTarget(_ target: String?, window: String?) -> Resolution<(AppStore, UUID)> {

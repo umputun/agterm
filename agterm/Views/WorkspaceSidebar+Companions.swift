@@ -45,11 +45,17 @@ extension WorkspaceSidebar.Coordinator {
 
     // a parent under a folded workspace has no row to expand, so this runs again whenever the workspace opens
     func applyParentExpansion(under workspace: SidebarNode) {
-        guard let outline = outlineView, outline.isItemExpanded(workspace) else { return }
+        guard let outlineView, outlineView.isItemExpanded(workspace) else { return }
+        applyExpansion(ofParents: workspace.children)
+    }
+
+    /// Opens or folds each parent among `nodes` to its tracked state, without persisting.
+    func applyExpansion(ofParents nodes: [SidebarNode]) {
+        guard let outline = outlineView else { return }
         let suppressed = suppressExpansionPersist
         suppressExpansionPersist = true
         defer { suppressExpansionPersist = suppressed }
-        for parent in workspace.children where !parent.children.isEmpty {
+        for parent in nodes where !parent.children.isEmpty {
             let open = expandedParentIDs.contains(parent.id)
             if open, !outline.isItemExpanded(parent) { outline.expandItem(parent) }
             if !open, outline.isItemExpanded(parent) { outline.collapseItem(parent) }

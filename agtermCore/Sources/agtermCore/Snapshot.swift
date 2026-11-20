@@ -121,19 +121,23 @@ public struct WorkspaceSnapshot: Codable, Equatable, Sendable {
     public var tint: SidebarTint?
     /// attached holds the workspace's rows attached from another host; nil when it has none.
     public var attached: [AttachedSessionSnapshot]?
+    /// true only for the window's root container; absent for every named workspace, so a tree without top-level
+    /// sessions differs from a legacy snapshot by the root entry alone.
+    public var root: Bool?
 
     public init(id: UUID, name: String, sessions: [SessionSnapshot], collapsed: Bool? = nil,
-                tint: SidebarTint? = nil, attached: [AttachedSessionSnapshot]? = nil) {
+                tint: SidebarTint? = nil, attached: [AttachedSessionSnapshot]? = nil, root: Bool? = nil) {
         self.id = id
         self.name = name
         self.sessions = sessions
         self.collapsed = collapsed
         self.tint = tint
         self.attached = attached
+        self.root = root
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, sessions, collapsed, tint, attached
+        case id, name, sessions, collapsed, tint, attached, root
     }
 
     /// Custom decode so `collapsed` is LOSSY, matching the other two snapshot types: the synthesized
@@ -147,6 +151,7 @@ public struct WorkspaceSnapshot: Codable, Equatable, Sendable {
         collapsed = (try? c.decodeIfPresent(Bool.self, forKey: .collapsed)) ?? nil
         tint = (try? c.decodeIfPresent(SidebarTint.self, forKey: .tint)) ?? nil
         attached = (try? c.decodeIfPresent([AttachedSessionSnapshot].self, forKey: .attached)) ?? nil
+        root = (try? c.decodeIfPresent(Bool.self, forKey: .root)) ?? nil
     }
 }
 

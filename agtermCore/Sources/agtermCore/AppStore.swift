@@ -305,7 +305,7 @@ public final class AppStore {
     /// failure. Backs `workspace.select` and `navigateWorkspace`.
     @discardableResult
     public func selectWorkspace(_ workspaceID: UUID) -> WorkspaceStep? {
-        guard let workspace = workspaces.first(where: { $0.id == workspaceID }) else { return nil }
+        guard let workspace = namedWorkspaceIndex(of: workspaceID).map({ workspaces[$0] }) else { return nil }
         if let first = workspace.sessions.first {
             let indicator = selectSession(first.id)
             freshWorkspaceID = nil
@@ -328,8 +328,8 @@ public final class AppStore {
         if !visibleWorkspaces.contains(where: { $0.id == freshWorkspaceID }) { self.freshWorkspaceID = nil }
     }
 
-    /// The workspace a new session lands in: a freshly created one, else the selected session's, else the
-    /// last (nil when there are none). Drives the bottom bar's add actions, File ▸ New Session / Open
+    /// The workspace a new session lands in: a freshly created one, else the selected session's (the root
+    /// included), else the last named one, else the root (nil when there are none). Drives the bottom bar's add actions, File ▸ New Session / Open
     /// Directory / Rename Workspace, and resolves `active` for control-channel workspace targets.
     public var currentWorkspaceID: UUID? {
         if let freshWorkspaceID, workspaces.contains(where: { $0.id == freshWorkspaceID }) {
@@ -338,12 +338,12 @@ public final class AppStore {
         if let selectedSessionID, let workspace = workspace(forSession: selectedSessionID) {
             return workspace.id
         }
-        return workspaces.last?.id
+        return namedWorkspaces.last?.id ?? rootWorkspace?.id
     }
 
     /// The auto-generated name for the next new workspace (`workspace 1`, `workspace 2`, …).
     public var defaultWorkspaceName: String {
-        "workspace \(workspaces.count + 1)"
+        "workspace \(namedWorkspaces.count + 1)"
     }
 
     /// Projects this store's workspace/session model into the control-channel `tree` payload. Foreground
@@ -477,7 +477,7 @@ public final class AppStore {
                                         focused: focusedWorkspaceIDs.contains(workspace.id) ? true : nil,
                                         collapsed: workspace.isExpanded ? nil : true,
                                         tint: workspace.tint?.color.rawValue,
-                                        tintOn: workspace.tint?.parts.map(\.rawValue), sessions: sessions)
+                                        tintOn: workspace.tint?.parts.map(\.rawValue), root: workspace.isRoot ? true : nil, sessions: sessions)
         }
         return ControlTree(workspaces: nodes, idleMs: idleMs(), autoFollowMs: autoFollowMs,
                            attentionIncludesActive: attentionIncludesActive,
@@ -530,7 +530,7 @@ public final class AppStore {
                              tint: SidebarTint? = nil) -> Workspace {
         // the name feeds {AGT_WORKSPACE_NAME}; see TerminalText.
         let workspace = Workspace(name: TerminalText.sanitized(name), isExpanded: !collapsed, tint: tint)
-        workspaces.append(workspace)
+        workspaces.insert(workspace, at: namedEndIndex)
         if revealNewWorkspace {
             revealNewFocusMember(workspace.id)
             freshWorkspaceID = workspace.id
@@ -701,14 +701,14 @@ public final class AppStore {
     }
 
     /// Whether a workspace may be removed: one is always kept, so only when more than one exists.
-    public var canRemoveWorkspace: Bool { workspaces.count > 1 }
+    public var canRemoveWorkspace: Bool { namedWorkspaces.count > 1 }
 
     /// Removes a workspace and every session in it, tearing down their surfaces and pruning the recency
     /// stack. No-ops unless more than one workspace exists (the last is kept). If the active session lived
     /// there, `workspaceRemovalTarget(at:)` reselects the most recent still VISIBLE session, falling back to
     /// the positional walk only when nothing is visible, nil when none remain.
     public func removeWorkspace(_ workspaceID: UUID) {
-        guard canRemoveWorkspace, let index = workspaces.firstIndex(where: { $0.id == workspaceID }) else { return }
+        guard canRemoveWorkspace, let index = namedWorkspaceIndex(of: workspaceID) else { return }
         let workspace = workspaces[index]
         let removingActive = selectedSessionID.map { id in workspace.sessions.contains { $0.id == id } } ?? false
         // record the membership BEFORE `dropFocusMember` below prunes it, so Reopen Closed Item can re-mark it
@@ -751,10 +751,10 @@ public final class AppStore {
     /// Moves a workspace to `index` among its siblings, mirroring `moveSession`'s remove/clamp/insert/save
     /// shape; `index` is the destination position **after** the move's removal (clamped). No-op on unknown.
     public func moveWorkspace(_ id: UUID, at index: Int) {
-        guard let current = workspaces.firstIndex(where: { $0.id == id }) else { return }
+        guard let current = namedWorkspaceIndex(of: id) else { return }
         let before = workspaces.map(\.id)
         let workspace = workspaces.remove(at: current)
-        let dest = max(0, min(index, workspaces.count))
+        let dest = max(0, min(index, namedEndIndex))
         workspaces.insert(workspace, at: dest)
         if before != workspaces.map(\.id) { scheduleTreeChanged() }
         save()
@@ -763,8 +763,8 @@ public final class AppStore {
     /// Reorders a workspace one step among its siblings (`up`/`down`/`top`/`bottom`) via `moveWorkspace`.
     /// No-op (no write) on an unknown id or when the move would leave order unchanged (already at that end).
     public func reorderWorkspace(_ id: UUID, _ direction: ReorderDirection) {
-        guard let current = workspaces.firstIndex(where: { $0.id == id }) else { return }
-        guard let dest = direction.destinationIndex(from: current, count: workspaces.count) else { return }
+        guard let current = namedWorkspaceIndex(of: id) else { return }
+        guard let dest = direction.destinationIndex(from: current, count: namedWorkspaces.count) else { return }
         moveWorkspace(id, at: dest)
     }
 
@@ -826,7 +826,7 @@ public final class AppStore {
     @discardableResult
     public func navigateWorkspace(_ direction: WorkspaceNavigation) -> WorkspaceStep? {
         guard canStepWorkspaces else { return nil }
-        let ids = visibleWorkspaces.map(\.id)
+        let ids = visibleWorkspaces.filter { !$0.isRoot }.map(\.id)
         let target: UUID
         if let current = currentWorkspaceID, let i = ids.firstIndex(of: current) {
             let step = direction == .next ? 1 : -1
@@ -910,7 +910,7 @@ public final class AppStore {
     /// disclosure triangle), never a programmatic reveal, so a deliberate collapse survives a later reveal of
     /// a session inside it and never touches another workspace's state (unlike `setWorkspacesExpanded`).
     public func setWorkspaceExpanded(_ id: UUID, expanded: Bool) {
-        guard let index = workspaces.firstIndex(where: { $0.id == id }), workspaces[index].isExpanded != expanded else { return }
+        guard let index = namedWorkspaceIndex(of: id), workspaces[index].isExpanded != expanded else { return }
         workspaces[index].isExpanded = expanded
         save()
     }
@@ -942,7 +942,7 @@ public final class AppStore {
     /// per-row toggles use `setWorkspaceExpanded` instead.
     public func setWorkspacesExpanded(_ expandedIDs: Set<UUID>) {
         var changed = false
-        for index in workspaces.indices {
+        for index in workspaces.indices where !workspaces[index].isRoot {
             let expanded = expandedIDs.contains(workspaces[index].id)
             if workspaces[index].isExpanded != expanded {
                 workspaces[index].isExpanded = expanded
@@ -980,7 +980,7 @@ public final class AppStore {
     }
 
     func orderedSessionIDs(matching ids: Set<UUID>) -> [UUID] {
-        workspaces.flatMap(\.sessions).map(\.id).filter { ids.contains($0) }
+        displayWorkspaces.flatMap(\.sessions).map(\.id).filter { ids.contains($0) }
     }
 
     /// Picks the next selection after removing the session at `location`: the session that shifted into the
@@ -991,7 +991,7 @@ public final class AppStore {
         if location.sessionIndex > 0, !sessions.isEmpty {
             return sessions[min(location.sessionIndex - 1, sessions.count - 1)].id
         }
-        for workspace in workspaces {
+        for workspace in displayWorkspaces {
             if let first = workspace.sessions.first { return first.id }
         }
         return nil

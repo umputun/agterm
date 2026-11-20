@@ -15,7 +15,7 @@ extension ControlServer {
     }
 
     func setWorkspaceTint(_ target: String?, window: String?, update: ControlTintUpdate) -> ControlResponse {
-        resolver.resolveWorkspace(target, window: window) { store, id in
+        resolver.resolveNamedWorkspace(target, window: window) { store, id in
             let current = store.workspaces.first { $0.id == id }?.tint
             store.setTint(update.resolved(over: current), forWorkspace: id)
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))

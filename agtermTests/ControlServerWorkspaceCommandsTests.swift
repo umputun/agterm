@@ -132,4 +132,40 @@ final class ControlServerWorkspaceCommandsTests: XCTestCase {
         XCTAssertTrue(store.focusEnabled, "the filter must widen, not switch off")
         XCTAssertFalse(store.focusedWorkspaceIDs.contains(other.id), "an unrelated workspace stays filtered out")
     }
+
+    func testWorkspaceOnlyCommandsRefuseTheRootByIdPrefixAndActive() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        store.addWorkspace(name: "second")
+        let root = try XCTUnwrap(store.rootWorkspace)
+        let top = try XCTUnwrap(store.addSession(toWorkspace: root.id, cwd: "/tmp"))
+        store.selectSession(top.id)
+        let refusal = "top-level sessions are not a workspace"
+
+        for target in [root.id.uuidString, String(root.id.uuidString.prefix(8)), "active"] {
+            XCTAssertEqual(server.selectWorkspace(target, window: nil).error, refusal, target)
+            XCTAssertEqual(server.renameWorkspace(target, window: nil, name: "x").error, refusal, target)
+            XCTAssertEqual(server.deleteWorkspace(target, window: nil).error, refusal, target)
+            XCTAssertEqual(server.moveWorkspace(target, window: nil, direction: .top).error, refusal, target)
+            XCTAssertEqual(server.setWorkspaceExpansion(target, window: nil, expanded: false).error, refusal, target)
+            XCTAssertEqual(server.setWorkspaceTint(target, window: nil, update: .set(.red, parts: nil)).error, refusal, target)
+            XCTAssertEqual(server.detachWorkspace(target, window: nil).error, refusal, target)
+        }
+        XCTAssertEqual(store.workspaces.last?.id, root.id)
+        XCTAssertEqual(store.rootWorkspace?.name, "")
+    }
+
+    func testASessionIsCreatedInAndMovedIntoTheRootByItsId() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let root = try XCTUnwrap(store.rootWorkspace).id
+        let created = server.createSession(ControlSessionCreateOptions(
+            window: nil, cwd: "/tmp", workspace: root.uuidString, workspaceName: nil, createWorkspace: nil, command: nil, wait: nil,
+            name: nil, after: nil, before: nil, noSelect: true))
+        let id = try XCTUnwrap(created.result?.id.flatMap(UUID.init(uuidString:)), created.error ?? "")
+        XCTAssertEqual(store.workspace(forSession: id)?.id, root)
+
+        let named = try XCTUnwrap(store.namedWorkspaces.first?.sessions.first)
+        XCTAssertTrue(server.moveSession(named.id.uuidString, window: nil, move: .workspace(root.uuidString)).ok)
+        XCTAssertEqual(store.workspace(forSession: named.id)?.id, root)
+    }
+
 }

@@ -237,7 +237,7 @@ final class ServerHarness {
                          controlEventSink: { events.receive($0) }, paneFinalizer: { ids in
             MainActor.assumeIsolated { panes.end(ids) }
         }, headless: true, askRegistry: AskRegistry())
-        CatalogRoot.seedWorkspace(in: store)
+        CatalogRoot.provision(store, fresh: true)
         // a launch window or page claim window on the real clock expires under a loaded run before the test claims it
         let jobClock = Date()
         self.jobClock = jobClock

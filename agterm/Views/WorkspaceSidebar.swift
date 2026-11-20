@@ -599,9 +599,13 @@ struct WorkspaceSidebar: NSViewRepresentable {
             var seen = Set<UUID>()
             var newRoots: [SidebarNode] = []
             for (workspace, sessions) in workspaceProjection {
+                seen.formUnion(sessions.map(\.id))
+                guard !workspace.isRoot else {
+                    newRoots.append(contentsOf: sessionNodes(for: sessions))
+                    continue
+                }
                 let wsNode = node(for: workspace.id, kind: .workspace)
                 seen.insert(workspace.id)
-                seen.formUnion(sessions.map(\.id))
                 wsNode.children = sessionNodes(for: sessions)
                 newRoots.append(wsNode)
             }
@@ -633,7 +637,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
                 outline.expandItem(node)
             }
             suppressExpansionPersist = false
-            roots.forEach(applyParentExpansion(under:))
+            applyExpansion(ofParents: roots.filter { $0.kind == .session })
+            roots.filter { $0.kind == .workspace }.forEach(applyParentExpansion(under:))
             updateEmptyState()
         }
 
@@ -919,7 +924,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
         func rowLabel(for session: Session, workspaceName: String) -> String {
             guard let flaggedLayout else { return session.displayName }
             let label = store.listLabel(for: session)
-            return flaggedLayout == .flat ? "\(label) : \(workspaceName)" : label
+            return flaggedLayout == .flat && !workspaceName.isEmpty ? "\(label) : \(workspaceName)" : label
         }
 
         func workspaceNode(forID id: UUID) -> SidebarNode? {

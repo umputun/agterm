@@ -168,35 +168,86 @@
   `AppStore+CloseReselection.swift`, `AppStore+Catalog.swift` (`prepareCatalogWorkspaces`), `Snapshot.swift`, `WindowLibrary.swift`,
   `ControlProjection.swift`, `CatalogFrames.swift`, `CatalogDiff.swift`, `CatalogProjection.swift`, `CatalogRoot.swift`
   (`seedWorkspace`), `RemoteTree.swift`, `RemoteCatalogMirror*.swift`, `RemoteWindowViewState.swift`,
-  `AgtermServerKit/AgtermServer.swift` (seeding order), `agterm/Views/WorkspaceSidebar.swift`, `WorkspaceSidebar+FlaggedLayout.swift`
+  `AgtermServerKit/AgtermServer.swift` (seeding order), `AgtermServerKit/ServerCatalog.swift`, `ServerActions+Workspaces.swift`,
+  `ServerActions+Flags.swift` (tint), `AppStore+RecentClosed.swift`, `AppStore+PendingClose.swift` (named-count clamps),
+  `AppStore+Naming.swift`, `AppStore+Tint.swift`, `RemoteCatalogMirror+Detach.swift`, `agtermctlKit/SocketClient.swift` (`formatTree`),
+  `agterm/Control/ControlServer+Tint.swift`, `agterm/AppActions+Palette.swift` (Move Session to, Edit Flagged Sessions rows),
+  `agterm/SessionSwitcher.swift`, `agterm/Views/WorkspaceSidebar.swift`, `WorkspaceSidebar+FlaggedLayout.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/WorkspaceTests.swift`, `SnapshotRoundTripTests.swift`, `AppStoreTests.swift`,
   `AppStoreFocusTests.swift`, `ControlDispatcherWorkspaceTests.swift`, `CatalogRootTests.swift`, `CatalogFramesTests.swift`, `CatalogDiffTests.swift`,
   `RemoteCatalogMirrorTests.swift`, `WindowLibraryTests.swift`, `ControlProtocolTests.swift`; `AgtermServerTests/ServerActionsTests.swift`;
-  `agtermUITests/SidebarUITests.swift` (targeted rendering case)
+  `agtermUITests/ControlSidebarStatusUITests.swift` (targeted rendering case; it has the control-socket harness
+  `SidebarUITests` lacks)
+- Also modified: `AppStore+Root.swift` (new), `AppStore+Naming.swift` (`listSubtitle`), `PaletteCatalog.swift`,
+  `agterm/AppActions.swift`, `agterm/Control/ControlTargetResolver.swift`, `ControlServer+WorkspaceCommands.swift`,
+  `ControlServer+Detach.swift`, `agterm/Views/WindowContentView+RecentSessions.swift`, `WorkspaceSidebar+Companions.swift`;
+  tests `AppStoreRootTests.swift` (new), `AppStoreCompanionsTests.swift`, `AppStoreNameSanitizeTests.swift`, `RemoteTreeTests.swift`,
+  `OriginCatalogTests.swift`, `PaletteCatalogTests.swift`, hosted `WorkspaceSidebarTests.swift` (new),
+  `ControlServerWorkspaceCommandsTests.swift`, `WorkspaceFocusActionsTests.swift`, `AppActionsPaletteTests.swift`,
+  `SidebarFlaggedLayoutTests.swift`
 
-- [ ] audit every `workspaces` reference by meaning before changing code (lookup/mutation includes root, named operation
-  excludes it even when it resolves by ID); record the result in this plan as a per-file list naming the owning task
-- [ ] tests first: a local store has one root after load and after legacy decode; a remote-window store has none after
+- [x] audit every `workspaces` reference by meaning before changing code (lookup/mutation includes root, named
+  operation excludes it even when it resolves by ID); record the result in this plan as a per-file list naming the
+  owning task
+  - result (501 sites): 196 lookup and 80 by-ID mutation need no change; 28 named-only, 40 projection, 50 persistence,
+    104 remote. Named-only sites by owning task:
+    - Task 1: `AppStore.swift` (`selectWorkspace`, `defaultWorkspaceName`, `addWorkspace` inserts before the root,
+      `workspace(named:)`, `canRemoveWorkspace`, `removeWorkspace`, `moveWorkspace`, `reorderWorkspace`,
+      `setWorkspaceExpanded`, `setWorkspacesExpanded`, the `workspaces.last` fallback), `AppStore+PendingClose`
+      (`softRemoveWorkspace` refusal; the rebuilt-shell inserts at :546 and :602 clamp to the named count),
+      `AppStore+RecentClosed` (rebuilt shell at :33 and reopened workspace at :72 clamp to the named count),
+      `AppStore+Catalog.canCloseWorkspace`, `AppStore+Naming.renameWorkspace`, `AppStore+Tint.setTint(forWorkspace:)`,
+      `RemoteCatalogMirror+Detach.canTerminateWorkspace`, `CatalogRoot.seedWorkspace` (fresh-server signal)
+    - Task 2: `WorkspaceSidebar+DragDrop` remote `workspaceStep` count and `resolveWorkspace` count
+    - Task 1 (moved from Task 3): `AppActions.deleteWorkspace` refuses the root before `closeRemoteWorkspace`'s chooser;
+      Delete, Rename and Collapse/Expand Workspace are disabled through `PaletteContext.activeWorkspaceIsRoot`
+    - Task 4: the root-role reopen paths in `AppStore+RecentClosed` and `AppStore+PendingClose`
+  - projection sites using display order (root first) land in Task 1: `AppStore+Focus` (`visibleWorkspaces`,
+    `navigableSessions`), `AppStore+CloseReselection`, `AppStore+FlaggedOrder`, `AppStore.swift` reselection,
+    `AppStore+PendingClose` reselection, `persistedSelection` and `RemoteCatalogMirror.selectRow` first-session
+    fallbacks; sidebar, palette (`AppActions+Palette` Move Session to and Edit Flagged Sessions rows),
+    `SessionSwitcher` and `agtermctlKit/SocketClient.formatTree` (root printed as a top-level block) also in Task 1
+  - shared workspace resolvers stay root-inclusive (`ControlTargetResolver`, `ServerActions+Workspaces`,
+    `RemoteOperation+Request`); their named callers refuse the root; `ControlServer+Tint`, `ServerActions+Flags` tint
+    and `AgtermServerKit/ServerCatalog` (root marker) join Task 1
+- [x] tests first: a local store has one root after load and after legacy decode; a remote-window store has none after
   load; root stays last on named append and move; root never removed; `defaultWorkspaceName` counts named only
-- [ ] tests first: snapshot round trip with an empty root and with root sessions; legacy file unchanged on decode; root
+- [x] tests first: the root is minted by `ensureRoot()` at the ownership boundary (local window load, legacy migration,
+  new window, agterm-server start), folding duplicates and keeping it last; a store built directly has none
+- [x] tests first: the root is a focus member from Task 1: `workspace.focus` by the root's UUID marks it, the filter hides
+  root sessions unless the root is a member, and root-only focus never falls back to every named workspace
+- [x] tests first: loading a pre-root per-window snapshot persists the minted root, so a reopen from disk with no
+  session or workspace edit returns the same root ID; the one-shot capture strip still runs; the mint is saved only
+  when the file decoded or is missing, so an existing undecodable window file survives the load byte for byte
+- [x] tests first: `navigateWorkspace` steps named workspaces only, so Next from the last named workspace wraps to the
+  first named one and never lands on the root (entry from a current root stays Task 3's)
+- [x] tests first: Delete Workspace is disabled through `PaletteContext` when the active container is the root, and
+  `AppActions.deleteWorkspace` refuses the root before `closeRemoteWorkspace`'s chooser (keep-one change stays Task 3)
+- [x] the focus editor lists the root as "Top-Level Sessions", never a blank entry
+- [x] ➕ tests first: page sessions work in the root as in a workspace: `session.page` anchored on a root session places
+  the page in the root and saves it there with its page snapshot; `session.move` by the root's UUID carries a page in
+  (Mac and agterm-server share `addPageSession`)
+- [x] tests first: snapshot round trip with an empty root and with root sessions; legacy file unchanged on decode; root
   written only for the root
-- [ ] tests first: display order drives `navigableSessions`, MRU candidates, flagged-tree order, mixed-selection moves
+- [x] tests first: display order drives `navigableSessions`, MRU candidates, flagged-tree order, mixed-selection moves
   and close reselection
-- [ ] tests first: agterm-server seeds Workspace 1 only when `workspaces.json` was absent; a restart with only the root
+- [x] tests first: agterm-server seeds Workspace 1 only when `workspaces.json` was absent; a restart with only the root
   reseeds nothing
-- [ ] tests first: `tree` root node (`root: true`, empty name, `focused` and `active` fields, visibility formula); root
+- [x] tests first: `tree` root node (`root: true`, empty name, `focused` and `active` fields, visibility formula); root
   marker in catalog snapshot and `workspace.added` delta; mirror adopts only the origin's marked root and never mints
   one for an older peer; `zmx.tree` discovery; an upgraded viewer prunes a saved root ID from `detachedWorkspaces` and
   keeps session detaches
-- [ ] tests first: every named-only workspace command (rename, tint, delete, move, collapse, expand, detach, reattach,
+- [x] tests first: every named-only workspace command (rename, tint, delete, move, collapse, expand, detach, reattach,
   select) refuses the root's UUID, prefix and `active` on the Mac and on agterm-server; `session.new`/`session.move` by
   the root's UUID place a session in the root; the creation fallback and the keep-one rule count named workspaces only
-- [ ] implement `isRoot`, `namedWorkspaces`, the one-root invariant for stores that own their tree, `WorkspaceSnapshot.root`,
+- [x] implement `isRoot`, `namedWorkspaces`, the one-root invariant for stores that own their tree, `WorkspaceSnapshot.root`,
   the root guards and named-only refusals,
   server seeding order, the tree and catalog root, mirror adoption and detach pruning; render the root block above
   workspace rows in the ordinary and flagged tree (flat/plain lists drop the workspace suffix for root sessions), honoring
   the focus filter
-- [ ] update existing count, tree, snapshot and catalog tests to the new contract; targeted tests green before Task 2
+- [x] show Eugene the rendered block in a Debug instance (a root session placed by UUID), then a targeted rendering
+  UI test
+- [x] update existing count, tree, snapshot and catalog tests to the new contract; targeted tests green before Task 2
 
 ### Task 2: Sidebar drag, Move to and row menus
 
@@ -219,8 +270,7 @@
 - [ ] row menus: Move to lists "Top-Level Sessions" (disabled when a remote owner has no root); root session rows get
   Focus/Unfocus Top-Level Sessions and Add/Remove Top-Level Sessions to Focus; workspace-only items never act on root
 - [ ] the titlebar Workspace name element and the Attach Remote picker omit the name for a root session
-- [ ] show Eugene the rendered block and drag in a Debug instance, then targeted UI tests for drag in/out, Move to and
-  focus; targeted tests green before Task 3
+- [ ] targeted UI tests for drag in/out, Move to and focus; targeted tests green before Task 3
 
 ### Task 3: Creation destination, last-workspace deletion, focus, navigation and new windows
 
@@ -249,8 +299,7 @@
 - [ ] tests first: `session.remote.new` and GUI New Remote Session from a root destination send the origin
   `--workspace root` without `--create-workspace`, an explicit `--workspace-name` keeps today's argv, and the row
   attaches locally into the root; an origin without root support refuses before creating
-- [ ] tests first: root as a focus member through `commitFocus`, restore pruning, empty-set rule, selection outside the
-  set disables filtering; root-only focus never falls back to showing every named workspace
+- [ ] tests first: root focus through `commitFocus` restore pruning, empty-set rule and selection outside the set
 - [ ] tests first: workspace navigation from a root session (next to first visible named, previous to last, root never
   a stop, the existing error with no visible named workspace)
 - [ ] tests first: new window per caller (File menu/palette and `window.new` follow the frontmost window's active

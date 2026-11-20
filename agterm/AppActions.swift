@@ -490,6 +490,7 @@ final class AppActions {
     /// renders no sidebar while its zoom or dashboard is up, so the row menu is unreachable in exactly the
     /// state the gate covers, and a frontmost modal must not block a background window's row.
     func deleteWorkspace(_ workspaceID: UUID, in store: AppStore) {
+        guard store.rootRefusal(workspaceID) == nil else { return }
         if closeRemoteWorkspace(workspaceID, in: store) { return }
         guard store.canRemoveWorkspace,
               let workspace = store.workspaces.first(where: { $0.id == workspaceID }) else { return }

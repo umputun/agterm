@@ -15,14 +15,14 @@ extension ServerActions {
     }
 
     public func renameWorkspace(_ target: String?, window: String?, name: String) -> ControlResponse {
-        withWorkspace(target, window: window) { id in
+        withNamedWorkspace(target, window: window) { id in
             store.renameWorkspace(id, to: name)
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
     }
 
     public func deleteWorkspace(_ target: String?, window: String?) -> ControlResponse {
-        withWorkspace(target, window: window) { id in
+        withNamedWorkspace(target, window: window) { id in
             guard store.canRemoveWorkspace else { return ControlResponse(ok: false, error: "cannot delete last workspace") }
             store.removeWorkspace(id)
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
@@ -30,10 +30,14 @@ extension ServerActions {
     }
 
     public func moveWorkspace(_ target: String?, window: String?, direction: ReorderDirection) -> ControlResponse {
-        withWorkspace(target, window: window) { id in
+        withNamedWorkspace(target, window: window) { id in
             store.reorderWorkspace(id, direction)
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
+    }
+
+    func withNamedWorkspace(_ target: String?, window: String?, _ body: (UUID) -> ControlResponse) -> ControlResponse {
+        withWorkspace(target, window: window) { id in store.rootRefusal(id) ?? body(id) }
     }
 
     func withWorkspace(_ target: String?, window: String?, _ body: (UUID) -> ControlResponse) -> ControlResponse {

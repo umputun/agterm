@@ -39,7 +39,7 @@ extension AppStore {
     private func persistedSelection(among persistable: Set<UUID>, recency: [UUID]) -> UUID? {
         if let selectedSessionID, persistable.contains(selectedSessionID) { return selectedSessionID }
         guard selectedSessionID != nil else { return nil }
-        return recency.first ?? workspaces.flatMap(\.sessions).first { persistable.contains($0.id) }?.id
+        return recency.first ?? displayWorkspaces.flatMap(\.sessions).first { persistable.contains($0.id) }?.id
     }
 
     func sessionSnapshot(_ session: Session) -> SessionSnapshot {
@@ -80,7 +80,8 @@ extension AppStore {
     func workspaceSnapshot(_ workspace: Workspace) -> WorkspaceSnapshot {
         WorkspaceSnapshot(id: workspace.id, name: workspace.name,
                           sessions: workspace.sessions.filter(\.isPersistable).map(sessionSnapshot),
-                          collapsed: workspace.isExpanded ? nil : true, tint: workspace.tint)
+                          collapsed: workspace.isExpanded ? nil : true, tint: workspace.tint,
+                          root: workspace.isRoot ? true : nil)
     }
 
     /// Rebuilds one session from its snapshot. `launchRestore` marks an APP-BOOTSTRAP restore, the only path
@@ -169,7 +170,7 @@ extension AppStore {
     func workspace(from snapshot: WorkspaceSnapshot) -> Workspace {
         Workspace(id: snapshot.id, name: snapshot.name,
                   sessions: Self.regroupedCompanions(snapshot.sessions.map { session(from: $0) }),
-                  isExpanded: !(snapshot.collapsed ?? false), tint: snapshot.tint)
+                  isExpanded: !(snapshot.collapsed ?? false), tint: snapshot.tint, isRoot: snapshot.root == true)
     }
 
     /// Rebuilds the tree from a snapshot: fresh `Session`s (surfaces and shells spawn lazily on first
@@ -187,22 +188,22 @@ extension AppStore {
         defer { restoringSelection = false }
         freshWorkspaceID = nil // live create-time state, never restored from disk
         catalogOperations = snapshot.catalogOperations
-        // fold duplicate workspace ids into the first occurrence and keep only the first snapshot of a
-        // repeated session id, else the rest stay unreachable past the first match and get re-saved.
+        // fold duplicate workspace ids, and a second root, into the first occurrence and keep only the first
+        // snapshot of a repeated session id, else the rest stay unreachable past the first match and get re-saved.
         var seenSessionIDs: Set<UUID> = []
         workspaces = snapshot.workspaces.reduce(into: [Workspace]()) { restored, workspaceSnapshot in
             let local = workspaceSnapshot.sessions
                 .filter { seenSessionIDs.insert($0.id).inserted }
                 .map { session(from: $0, launchRestore: launchRestore) }
             let sessions = placingAttached(workspaceSnapshot.attached, among: local, seen: &seenSessionIDs)
-            if let existing = restored.firstIndex(where: { $0.id == workspaceSnapshot.id }) {
+            if let existing = restored.firstIndex(where: { $0.id == workspaceSnapshot.id || (workspaceSnapshot.root == true && $0.isRoot) }) {
                 restored[existing].sessions.append(contentsOf: sessions)
                 return
             }
             // absent/nil collapsed → expanded (back-compat with snapshots written before the field existed).
             restored.append(Workspace(id: workspaceSnapshot.id, name: workspaceSnapshot.name, sessions: sessions,
                                       isExpanded: !(workspaceSnapshot.collapsed ?? false),
-                                      tint: workspaceSnapshot.tint))
+                                      tint: workspaceSnapshot.tint, isRoot: workspaceSnapshot.root == true))
         }
         for index in workspaces.indices {
             workspaces[index].sessions = Self.regroupedCompanions(workspaces[index].sessions)

@@ -30,7 +30,7 @@ extension AppStore {
             } else if let existing = workspaces.firstIndex(where: { $0.id == recent.workspaceID }) {
                 index = existing
             } else {
-                let insertAt = max(0, min(recent.workspaceIndex, workspaces.count))
+                let insertAt = max(0, min(recent.workspaceIndex, namedEndIndex))
                 workspaces.insert(rebuiltWorkspaceShell(id: recent.workspaceID, name: recent.workspaceName), at: insertAt)
                 index = insertAt
             }
@@ -69,7 +69,7 @@ extension AppStore {
             workspace.sessions.removeAll { taken.contains($0.id) }
             // persistent Open Recent appends, like most editors' recent-project flow: a reopen brings the
             // workspace back without reshuffling current workspaces.
-            workspaces.append(workspace)
+            workspaces.insert(workspace, at: namedEndIndex)
             for session in workspace.sessions { emitSessionCreated(session, workspace: workspace.id) }
             openRestoredPages(recent.snapshot.sessions)
             appendFlaggedArrivals()

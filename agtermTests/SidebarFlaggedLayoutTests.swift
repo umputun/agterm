@@ -358,7 +358,7 @@ final class SidebarFlaggedLayoutTests: XCTestCase {
         actions.collapseOtherWorkspaces(in: store)
 
         XCTAssertEqual(sidebar.rows, ["ws:Alpha", "s:a1", "ws:Gamma"])
-        XCTAssertEqual(store.workspaces.map(\.isExpanded), [true, false, false])
+        XCTAssertEqual(store.namedWorkspaces.map(\.isExpanded), [true, false, false])
     }
 
     func testCollapseOthersStaysANoOpUnderTheFlatList() throws {
@@ -369,12 +369,12 @@ final class SidebarFlaggedLayoutTests: XCTestCase {
         actions.collapseOtherWorkspaces(in: store)
 
         XCTAssertEqual(sidebar.rows, ["s:a1 : Alpha", "s:c1 : Gamma"])
-        XCTAssertEqual(store.workspaces.map(\.isExpanded), [true, true, true])
+        XCTAssertEqual(store.namedWorkspaces.map(\.isExpanded), [true, true, true])
     }
 
     func testFoldMadeInTheTreeLayoutShowsInTheOrdinaryTree() throws {
         let store = try seededStore()
-        let gamma = try XCTUnwrap(store.workspaces.last)
+        let gamma = try XCTUnwrap(store.namedWorkspaces.last)
         store.setSidebarMode(.flagged)
         model.setFlaggedViewLayout(.tree)
         let sidebar = mount(store)

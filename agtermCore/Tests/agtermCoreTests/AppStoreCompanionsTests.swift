@@ -889,6 +889,34 @@ struct AppStoreCompanionsTests {
         #expect(saved?.parentID == nil)
     }
 
+    @Test func aPageAnchoredOnARootSessionLandsInTheRootAndIsSavedThere() throws {
+        let (store, _, persistence) = makeStoreWithRecentClosed()
+        store.ensureRoot()
+        let root = try #require(store.rootWorkspace)
+        let anchor = try #require(store.addSession(toWorkspace: root.id, cwd: "/anchor"))
+        let after = try #require(store.addSession(toWorkspace: root.id, cwd: "/after", select: false))
+
+        let page = try store.addPageSession(after: anchor.id, overlay: HtmlOverlay(source: .file(path: "/tmp/p.html", grantRoot: nil))).get()
+
+        #expect(store.rootWorkspace?.sessions.map(\.id) == [anchor.id, page.id, after.id])
+        let saved = try #require(persistence.load().workspaces.first { $0.root == true })
+        #expect(saved.sessions.first { $0.id == page.id }?.page == PageSnapshot(source: .file(path: "/tmp/p.html", grantRoot: nil)))
+    }
+
+    @Test func aPageSessionMovesIntoTheRootByItsID() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        store.ensureRoot()
+        let root = try #require(store.rootWorkspace)
+        let anchor = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/anchor"))
+        let page = try store.addPageSession(after: anchor.id, overlay: HtmlOverlay(source: .file(path: "/tmp/p.html", grantRoot: nil))).get()
+
+        #expect(store.moveSession(page.id, toWorkspace: root.id))
+
+        #expect(store.rootWorkspace?.sessions.map(\.id) == [page.id])
+        #expect(store.session(withID: page.id)?.content == .page)
+    }
+
     @Test func aRemoteAnchorPlacesALocalPageSessionBesideIt() throws {
         let store = makeStore()
         let workspace = store.addWorkspace(name: "work")

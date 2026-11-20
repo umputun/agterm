@@ -14,6 +14,19 @@ struct CatalogDiffTests {
         #expect(applied.workspaces == next.workspaces, "\(name)")
     }
 
+    @Test func anAddedRootArrivesMarked() throws {
+        let current = CatalogFixture.snapshot([])
+        let next = CatalogFixture.snapshot([CatalogWorkspace(id: UUID(), name: "", root: true, sessions: [])])
+
+        let change = try #require(current.changes(to: next).first)
+
+        guard case .workspaceAdded(let workspace, _) = change else {
+            Issue.record("expected workspace.added, got \(change.kind)")
+            return
+        }
+        #expect(workspace.root == true)
+    }
+
     @Test func eachKindOfChangeIsNamedForWhatChanged() {
         let w = UUID()
         let a = CatalogFixture.session(name: "a")

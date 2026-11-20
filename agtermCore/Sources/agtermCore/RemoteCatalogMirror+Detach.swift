@@ -77,9 +77,9 @@ extension RemoteCatalogMirror {
         return items
     }
 
-    /// canTerminateWorkspace is whether the server would delete a workspace: it keeps at least one, counting the ones
-    /// this window detached.
-    public var canTerminateWorkspace: Bool { (catalog?.workspaces.count ?? 0) > 1 }
+    /// canTerminateWorkspace is whether the server would delete a workspace: it keeps at least one named workspace,
+    /// counting the ones this window detached.
+    public var canTerminateWorkspace: Bool { (catalog?.workspaces.filter { $0.root != true }.count ?? 0) > 1 }
 
     /// closeScope is what closing row `id` reaches on the server, nil for a row the catalog does not hold.
     public func closeScope(session id: UUID) -> RemoteCloseScope? {
@@ -114,7 +114,8 @@ extension RemoteCatalogMirror {
     func shownCatalog(_ catalog: CatalogSnapshot, in store: AppStore) -> [CatalogWorkspace] {
         let all = catalog.workspaces.flatMap(\.sessions)
         let sessions = store.catalogDetachedSessions.intersection(all.map(\.id))
-        let workspaces = store.catalogDetachedWorkspaces.intersection(catalog.workspaces.map(\.id))
+        // the root cannot be detached, so a detach an older build saved for it, as an unnamed workspace, is dropped
+        let workspaces = store.catalogDetachedWorkspaces.intersection(catalog.workspaces.filter { $0.root != true }.map(\.id))
         if sessions != store.catalogDetachedSessions || workspaces != store.catalogDetachedWorkspaces {
             store.catalogDetachedSessions = sessions
             store.catalogDetachedWorkspaces = workspaces

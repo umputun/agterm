@@ -23,7 +23,7 @@ struct ServerActionsTests {
         let reply = actions().controlTree(window: nil)
 
         let tree = try #require(reply.result?.tree)
-        #expect(tree.workspaces.count == 1)
+        #expect(tree.workspaces.map(\.root) == [nil, true])
         #expect(tree.app == AppIdentity(version: "1.2.3"))
     }
 

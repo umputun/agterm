@@ -135,6 +135,9 @@ public struct ControlRemoteSession: Codable, Sendable, Equatable {
     public let windowName: String
     public let workspaceID: String
     public let workspaceName: String
+    /// workspaceRoot is true for a session among the far side's top-level sessions, omitted otherwise and from an
+    /// older origin.
+    public let workspaceRoot: Bool?
     /// The far side's own note of what the session is FOR, when its owner set one.
     public let context: String?
     public let cwd: String
@@ -160,7 +163,9 @@ public struct ControlRemoteSession: Codable, Sendable, Equatable {
                 workspaceName: String, context: String? = nil, cwd: String, splitAxis: String?,
                 panes: [ControlRemotePane], status: String? = nil, statusColor: String? = nil,
                 statusShape: String? = nil, parent: String? = nil, content: String? = nil,
-                companions: [ControlRemoteMember]? = nil, scratch: ControlRemotePane? = nil) {
+                companions: [ControlRemoteMember]? = nil, scratch: ControlRemotePane? = nil,
+                workspaceRoot: Bool? = nil) {
+        self.workspaceRoot = workspaceRoot
         self.scratch = scratch
         self.parent = parent
         self.content = content
@@ -179,6 +184,10 @@ public struct ControlRemoteSession: Codable, Sendable, Equatable {
         self.statusColor = statusColor
         self.statusShape = statusShape
     }
+
+    /// placeLabel names where the session lives on the far side: `window/workspace`, the window alone for a
+    /// top-level session.
+    public var placeLabel: String { workspaceRoot == true ? windowName : "\(windowName)/\(workspaceName)" }
 }
 
 /// ControlRemoteGroup is `zmx.attach.group`'s receipt. `membershipKnown` is false when the origin did not list

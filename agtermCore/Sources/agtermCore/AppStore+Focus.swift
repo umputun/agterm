@@ -168,9 +168,9 @@ extension AppStore {
     /// in-module), since the mutators keep `enabled + empty` out of reach, marking is gated on the id existing
     /// and `restoreFocus` prunes stale ids. Rendering the full tree beats stranding the user with no rows.
     public var visibleWorkspaces: [Workspace] {
-        guard focusEnabled else { return workspaces }
-        let visible = workspaces.filter { focusedWorkspaceIDs.contains($0.id) }
-        return visible.isEmpty ? workspaces : visible
+        guard focusEnabled else { return displayWorkspaces }
+        let visible = displayWorkspaces.filter { focusedWorkspaceIDs.contains($0.id) }
+        return visible.isEmpty ? displayWorkspaces : visible
     }
 
     /// Whether a workspace step has anywhere to go. The predicate `navigateWorkspace` itself turns on, and
@@ -182,7 +182,7 @@ extension AppStore {
     /// that view has no row for and select a session that is not flagged.
     public var canStepWorkspaces: Bool {
         guard sidebarMode == .tree else { return false }
-        let ids = visibleWorkspaces.map(\.id)
+        let ids = visibleWorkspaces.filter { !$0.isRoot }.map(\.id)
         guard !ids.isEmpty else { return false }
         guard let current = currentWorkspaceID, ids.contains(current) else { return true }
         return ids.count > 1

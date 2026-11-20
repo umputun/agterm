@@ -91,6 +91,36 @@ final class RemoteCatalogMirrorTests {
         _ = mirror.receive(.delta(epoch: epoch, rev: rev, change: change))
     }
 
+    @Test func theMirrorAdoptsTheOriginsMarkedRootStoredLast() throws {
+        let rootID = UUID()
+        let top = session(panes: [pane()])
+        var marked = snapshot([session(panes: [pane()])])
+        marked.workspaces.append(CatalogWorkspace(id: rootID, name: "", root: true, sessions: [top]))
+        _ = mirror.receive(.hello(CatalogHello(version: 1, epoch: "e1", versions: Self.versions)))
+        _ = mirror.receive(.snapshot(marked))
+
+        #expect(store.workspaces.map(\.isRoot) == [false, true])
+        #expect(store.rootWorkspace?.id == rootID)
+        #expect(store.rootWorkspace?.sessions.map(\.id) == [top.fields.id])
+    }
+
+    @Test func theMirrorSelectsTheFirstRowInDisplayOrder() throws {
+        let rootID = UUID()
+        let top = session(panes: [pane()])
+        var marked = snapshot([session(panes: [pane()])])
+        marked.workspaces.append(CatalogWorkspace(id: rootID, name: "", root: true, sessions: [top]))
+        _ = mirror.receive(.hello(CatalogHello(version: 1, epoch: "e1", versions: Self.versions)))
+        _ = mirror.receive(.snapshot(marked))
+
+        #expect(store.selectedSessionID == top.fields.id)
+    }
+
+    @Test func anOlderPeersCatalogLeavesTheMirrorWithoutARoot() {
+        open([session(panes: [pane()])])
+
+        #expect(store.rootWorkspace == nil)
+    }
+
     @Test func theSnapshotBuildsEveryRowWithItsCatalogIdentitiesAndAttaches() throws {
         let left = pane(), right = pane()
         let split = session(name: "build", panes: [left, right])

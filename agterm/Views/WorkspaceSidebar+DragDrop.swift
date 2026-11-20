@@ -420,8 +420,7 @@ extension WorkspaceSidebar.Coordinator {
 
     /// remoteWorkspaceStep is a remote window's workspace drop as the one server move step that lands it, nil when none.
     private func remoteWorkspaceStep(_ move: (workspaceID: UUID, dropChildIndex: Int, destination: Int)) -> String? {
-        guard let source = store.workspaces.firstIndex(where: { $0.id == move.workspaceID }) else { return nil }
-        return RemoteOperation.workspaceStep(from: source, to: move.destination, count: store.workspaces.count)
+        store.workspaceStep(moving: move.workspaceID, to: move.destination)
     }
 
     /// Resolves a workspace drop into the TOP-LEVEL reorder it would perform, nil when it is a no-op, so
@@ -437,12 +436,13 @@ extension WorkspaceSidebar.Coordinator {
     /// `SidebarDrop.resolveWorkspace`.
     private func resolveWorkspaceMove(from info: NSDraggingInfo, in outlineView: NSOutlineView)
         -> (workspaceID: UUID, dropChildIndex: Int, destination: Int)? {
+        let named = store.namedWorkspaces
         guard let workspaceID = draggedWorkspaceID(from: info),
-              let sourceIndex = store.workspaces.firstIndex(where: { $0.id == workspaceID }) else { return nil }
+              let sourceIndex = named.firstIndex(where: { $0.id == workspaceID }) else { return nil }
         let point = outlineView.convert(info.draggingLocation, from: nil)
         var visibleIndices: [Int] = []
         var slot = 0
-        for (i, workspace) in store.workspaces.enumerated() {
+        for (i, workspace) in named.enumerated() {
             guard let node = workspaceNode(forID: workspace.id) else { continue }
             let row = outlineView.row(forItem: node)
             guard row >= 0 else { continue }
@@ -451,12 +451,12 @@ extension WorkspaceSidebar.Coordinator {
             if point.y > outlineView.rect(ofRow: row).midY { slot = visibleIndices.count }
         }
         let insertIndex = SidebarDrop.workspaceInsertIndex(visibleIndices: visibleIndices, slot: slot)
-        guard let move = SidebarDrop.resolveWorkspace(sourceIndex: sourceIndex, count: store.workspaces.count,
+        guard let move = SidebarDrop.resolveWorkspace(sourceIndex: sourceIndex, count: named.count,
                                                       childIndex: insertIndex) else { return nil }
-        // the highlight rides the OUTLINE's root children — under the focus filter only the rendered
-        // workspaces — so it takes the VISIBLE-space slot, while the store move takes the full-array
-        // destination. The two index spaces coincide only on an unfiltered tree.
-        return (workspaceID, slot, move.destination)
+        // the highlight is an outline slot among the root block's rows and the rendered workspace rows; the move
+        // is an index among named workspaces
+        let rootBlock = outlineView.numberOfChildren(ofItem: nil) - visibleIndices.count
+        return (workspaceID, rootBlock + slot, move.destination)
     }
 
     /// Reads the dragged workspace id from the pasteboard.

@@ -17,6 +17,18 @@ struct AppStoreNameSanitizeTests {
         #expect(session.effectiveCwd == "/worktouch /tmp/pwned")
     }
 
+    @Test func listSubtitleDropsTheWorkspaceForARootSession() throws {
+        let store = makeStore()
+        store.ensureRoot()
+        let first = store.addWorkspace(name: "dev")
+        let named = try #require(store.addSession(toWorkspace: first.id, cwd: "/a"))
+        let root = try #require(store.rootWorkspace)
+        let top = try #require(store.addSession(toWorkspace: root.id, cwd: "/b"))
+
+        #expect(store.listSubtitle(forSession: named.id, detail: "~/a") == "dev · ~/a")
+        #expect(store.listSubtitle(forSession: top.id, detail: "~/b") == "~/b")
+    }
+
     @Test func listLabelNamesACompanionAfterItsParent() throws {
         let g = try CompanionGroup()
         g.store.renameSession(g.parent.id, to: "api")

@@ -267,4 +267,40 @@ struct AgtermServerTests {
         #expect(lookup.result?.receipt == CatalogReceipt(opID: "crashed", epoch: hub.epoch, outcome: .applied, rev: 0))
         #expect(hub.snapshot().rev == 0)
     }
+
+    @Test func aFreshServerMintsTheRootAndSeedsWorkspaceOne() throws {
+        let scratch = try ServerScratch()
+        defer { scratch.remove() }
+        let server = try AgtermServer.start(configuration: scratch.configuration(), identity: identity)
+        defer { server.stop() }
+
+        #expect(server.store.workspaces.map(\.isRoot) == [false, true])
+        #expect(server.store.namedWorkspaces.map(\.name) == ["workspace 1"])
+    }
+
+    @Test func aSavedCatalogWithOnlyTheRootSeedsNothing() throws {
+        let scratch = try ServerScratch()
+        defer { scratch.remove() }
+        let rootID = UUID()
+        try PersistenceStore(directory: URL(fileURLWithPath: scratch.state))
+            .save(Snapshot(workspaces: [WorkspaceSnapshot(id: rootID, name: "", sessions: [], root: true)]))
+        let server = try AgtermServer.start(configuration: scratch.configuration(), identity: identity)
+        defer { server.stop() }
+
+        #expect(server.store.namedWorkspaces.isEmpty)
+        #expect(server.store.rootWorkspace?.id == rootID)
+    }
+
+    @Test func aPreRootCatalogGainsARootAndKeepsItsWorkspaces() throws {
+        let scratch = try ServerScratch()
+        defer { scratch.remove() }
+        try PersistenceStore(directory: URL(fileURLWithPath: scratch.state))
+            .save(Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: "projects", sessions: [])]))
+        let server = try AgtermServer.start(configuration: scratch.configuration(), identity: identity)
+        defer { server.stop() }
+
+        #expect(server.store.workspaces.map(\.isRoot) == [false, true])
+        #expect(server.store.namedWorkspaces.map(\.name) == ["projects"])
+    }
+
 }

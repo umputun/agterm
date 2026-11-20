@@ -23,6 +23,19 @@ struct CatalogFramesTests {
         #expect(assembled == big)
     }
 
+    @Test func theRootMarkerCrossesTheWireAndANamedWorkspaceCarriesNone() throws {
+        let snapshot = CatalogFixture.snapshot([CatalogWorkspace(id: UUID(), name: "w", sessions: []),
+                                                CatalogWorkspace(id: UUID(), name: "", root: true, sessions: [])])
+        let line = try CatalogCodec.encode(.snapshot(snapshot))
+
+        guard case .snapshot(let decoded) = try CatalogCodec.decode(line.dropLast()) else {
+            Issue.record("expected a snapshot frame")
+            return
+        }
+        #expect(decoded.workspaces.map(\.root) == [nil, true])
+        #expect(String(decoding: line, as: UTF8.self).components(separatedBy: "\"root\"").count == 2)
+    }
+
     @Test func aSmallSnapshotGoesWhole() throws {
         let small = CatalogFixture.snapshot([CatalogWorkspace(id: UUID(), name: "w", sessions: [CatalogFixture.session()])])
 

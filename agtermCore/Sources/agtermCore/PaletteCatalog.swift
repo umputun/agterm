@@ -64,6 +64,8 @@ public struct PaletteContext: Sendable, Equatable {
     public let remoteHasDetached: Bool
     /// marksBlocked is whether flag changes are its server's and it cannot be asked now.
     public let marksBlocked: Bool
+    /// activeWorkspaceIsRoot is whether new sessions land in the root, which no workspace-only command acts on.
+    public let activeWorkspaceIsRoot: Bool
     /// Any cover over the deck. Behind it a keystroke or a menu pick must not mutate what it hides, so all
     /// but a handful of commands go dead; `PaletteCommand.isEnabled(in:)` owns which.
     public var modalActive: Bool { terminalZoomActive || dashboardOpen || pickerActive }
@@ -97,7 +99,8 @@ public struct PaletteContext: Sendable, Equatable {
                 remoteWindow: Bool = false,
                 remoteConnected: Bool = false,
                 remoteHasDetached: Bool = false,
-                marksBlocked: Bool = false) {
+                marksBlocked: Bool = false,
+                activeWorkspaceIsRoot: Bool = false) {
         self.activeSessionIsPage = activeSessionIsPage
         self.activeSessionIsCompanion = activeSessionIsCompanion
         self.activeSessionIsRemote = activeSessionIsRemote
@@ -105,6 +108,7 @@ public struct PaletteContext: Sendable, Equatable {
         self.remoteConnected = remoteConnected
         self.remoteHasDetached = remoteHasDetached
         self.marksBlocked = marksBlocked
+        self.activeWorkspaceIsRoot = activeWorkspaceIsRoot
         self.canRemoveWorkspace = canRemoveWorkspace
         self.hasFlaggedSessions = hasFlaggedSessions
         self.sidebarShowsWorkspaceTree = sidebarShowsWorkspaceTree
@@ -176,7 +180,11 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
             return context.hasActiveSession && context.activeSessionHasSplit
         case .toggleOverlay:
             return context.hasActiveSession && context.activeSessionHasOverlay
-        case .renameWorkspace, .focusWorkspace, .addWorkspaceToFocus, .toggleWorkspaceCollapse, .editFocusedWorkspaces:
+        case .renameWorkspace, .toggleWorkspaceCollapse:
+            return context.hasCurrentWorkspace && !context.activeWorkspaceIsRoot
+        case .deleteWorkspace:
+            return !context.activeWorkspaceIsRoot
+        case .focusWorkspace, .addWorkspaceToFocus, .editFocusedWorkspaces:
             return context.hasCurrentWorkspace
         case .editFlaggedSessions:
             return context.hasSessions

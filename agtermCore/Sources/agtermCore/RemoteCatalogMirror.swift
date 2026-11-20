@@ -327,7 +327,7 @@ public final class RemoteCatalogMirror {
     private func selectRow() {
         guard let store, store.selectedSessionID.flatMap(store.session(withID:)) == nil else { return }
         let saved = viewState.selectedSessionID.flatMap(store.session(withID:))
-        if let target = saved ?? store.workspaces.flatMap(\.sessions).first { store.selectSession(target.id) }
+        if let target = saved ?? store.displayWorkspaces.flatMap(\.sessions).first { store.selectSession(target.id) }
     }
 
     private func setState(_ next: State) {

@@ -26,7 +26,7 @@ extension ControlServer {
     func selectWorkspace(_ target: String?, window: String?) -> ControlResponse {
         // selecting a workspace selects its first session (workspace rows are not selectable on
         // their own); an empty workspace just clears nothing and reports the workspace id.
-        resolver.resolveWorkspace(target, window: window) { store, id in
+        resolver.resolveNamedWorkspace(target, window: window) { store, id in
             store.selectWorkspace(id)
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
@@ -43,7 +43,7 @@ extension ControlServer {
     }
 
     func renameWorkspace(_ target: String?, window: String?, name: String) -> ControlResponse {
-        resolver.resolveWorkspace(target, window: window) { store, id in
+        resolver.resolveNamedWorkspace(target, window: window) { store, id in
             store.renameWorkspace(id, to: name)
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
@@ -51,7 +51,7 @@ extension ControlServer {
 
     func deleteWorkspace(_ target: String?, window: String?) -> ControlResponse {
         // honors keep-at-least-one; returns an error rather than the GUI confirm alert.
-        resolver.resolveWorkspace(target, window: window) { store, id in
+        resolver.resolveNamedWorkspace(target, window: window) { store, id in
             guard store.canRemoveWorkspace else {
                 return ControlResponse(ok: false, error: "cannot delete last workspace")
             }
@@ -63,7 +63,7 @@ extension ControlServer {
     /// `workspace.move`: reorder a workspace among its siblings (`up`|`down`|`top`|`bottom`); `to` is required
     /// and an invalid direction errors. Resolved via `resolveWorkspace`, honoring the `--window` selector.
     func moveWorkspace(_ target: String?, window: String?, direction dir: ReorderDirection) -> ControlResponse {
-        return resolver.resolveWorkspace(target, window: window) { store, id in
+        return resolver.resolveNamedWorkspace(target, window: window) { store, id in
             store.reorderWorkspace(id, dir)
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
@@ -103,7 +103,7 @@ extension ControlServer {
     /// works with that window's sidebar hidden — and posts a store-scoped notification for the live outline
     /// sync. Idempotent (the store mutator is delta-guarded); returns the workspace id.
     func setWorkspaceExpansion(_ target: String?, window: String?, expanded: Bool) -> ControlResponse {
-        resolver.resolveWorkspace(target, window: window) { store, id in
+        resolver.resolveNamedWorkspace(target, window: window) { store, id in
             actions.setWorkspaceExpanded(id, expanded: expanded, in: store)
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }

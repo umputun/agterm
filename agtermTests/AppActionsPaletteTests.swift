@@ -62,7 +62,8 @@ final class AppActionsPaletteTests: XCTestCase {
 
         let destinations = moveDestinationIDs()
 
-        XCTAssertEqual(destinations, ["move-\(fresh.id)"], "the fresh workspace is the only other destination")
+        let root = try XCTUnwrap(store.rootWorkspace)
+        XCTAssertEqual(destinations, ["move-\(root.id)", "move-\(fresh.id)"], "the root and the fresh workspace are the other destinations")
         XCTAssertFalse(destinations.contains("move-\(owner)"), "moving a session into its own workspace is a no-op")
     }
 
@@ -312,7 +313,7 @@ final class AppActionsPaletteTests: XCTestCase {
         let first = try XCTUnwrap(store.currentWorkspaceID)
         let other = store.addWorkspace(name: "other")
         let rows = actions.paletteFocusEditor()
-        XCTAssertEqual(rows.map(\.id), store.workspaces.map(\.id.uuidString))
+        XCTAssertEqual(rows.map(\.id), store.displayWorkspaces.map(\.id.uuidString))
         let firstRow = try XCTUnwrap(rows.first { $0.id == first.uuidString })
         let otherRow = try XCTUnwrap(rows.first { $0.id == other.id.uuidString })
 
@@ -441,4 +442,29 @@ final class AppActionsPaletteTests: XCTestCase {
         XCTAssertFalse(row.isEnabled())
         XCTAssertFalse(row.runIfEnabled())
     }
+
+    func testRootListsAsTopLevelSessionsFirstInMoveFlaggedAndFocusRows() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let root = try XCTUnwrap(store.rootWorkspace)
+        let owner = try XCTUnwrap(store.namedWorkspaces.first)
+        let named = try XCTUnwrap(store.addSession(toWorkspace: owner.id, cwd: NSHomeDirectory()))
+        let top = try XCTUnwrap(store.addSession(toWorkspace: root.id, cwd: NSHomeDirectory()))
+        store.selectSession(named.id)
+
+        let move = try XCTUnwrap(actions.paletteActions().first { $0.id == "move-\(root.id)" })
+        XCTAssertEqual(move.title, "Move Session to Top-Level Sessions")
+        XCTAssertEqual(moveDestinationIDs().first, "move-\(root.id)")
+
+        let flagged = actions.paletteFlaggedEditor()
+        XCTAssertEqual(flagged.first?.id, top.id.uuidString)
+        XCTAssertEqual(flagged.first?.subtitle ?? "", "")
+
+        let row = try XCTUnwrap(actions.paletteSessions().first { $0.id == top.id.uuidString })
+        XCTAssertEqual(row.subtitle, top.subtitleDetail)
+
+        let focus = actions.paletteFocusEditor()
+        XCTAssertEqual(focus.first?.id, root.id.uuidString)
+        XCTAssertEqual(focus.first?.title, "Top-Level Sessions")
+    }
+
 }
