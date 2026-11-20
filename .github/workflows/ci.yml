@@ -345,10 +345,23 @@ jobs:
           path: agtermCore/.build/helpers
           key: swiftpm-helpers-v1-macos-arm64-release-${{ steps.xcode.outputs.build }}-${{ hashFiles('agtermCore/Package.resolved') }}-${{ github.sha }}
           restore-keys: swiftpm-helpers-v1-macos-arm64-release-${{ steps.xcode.outputs.build }}-${{ hashFiles('agtermCore/Package.resolved') }}-
+      # keyed on the dependency declarations; restoring them lets Xcode reuse its checkouts
+      - name: Restore the package checkouts
+        id: packages
+        uses: actions/cache/restore@v6
+        with:
+          path: build/DerivedData/SourcePackages
+          key: source-packages-v1-${{ hashFiles('project.yml', 'agtermCore/Package.swift', 'agtermCore/Package.resolved') }}
       - name: Build libghostty + app (Release)
         env:
           AGTERM_HELPER_HASHING: "1"
         run: scripts/with-helper-prebuild.sh scripts/build.sh COMPILATION_CACHE_ENABLE_CACHING=YES COMPILATION_CACHE_CAS_PATH="$GITHUB_WORKSPACE/build/cas" COMPILATION_CACHE_ENABLE_DIAGNOSTIC_REMARKS=YES AGTERM_HELPER_HASHING=1
+      - name: Save the package checkouts
+        if: steps.packages.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: build/DerivedData/SourcePackages
+          key: ${{ steps.packages.outputs.cache-primary-key }}
       - name: Save the helper build
         if: steps.helpers.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
@@ -526,6 +539,13 @@ jobs:
           path: agtermCore/.build/helpers
           key: swiftpm-helpers-v1-macos-arm64-debug-${{ steps.xcode.outputs.build }}-${{ hashFiles('agtermCore/Package.resolved') }}-${{ github.sha }}
           restore-keys: swiftpm-helpers-v1-macos-arm64-debug-${{ steps.xcode.outputs.build }}-${{ hashFiles('agtermCore/Package.resolved') }}-
+      # keyed on the dependency declarations; restoring them lets Xcode reuse its checkouts
+      - name: Restore the package checkouts
+        id: packages
+        uses: actions/cache/restore@v6
+        with:
+          path: build/DerivedData/SourcePackages
+          key: source-packages-v1-${{ hashFiles('project.yml', 'agtermCore/Package.swift', 'agtermCore/Package.resolved') }}
       - name: Build hosted tests
         env:
           AGTERM_HELPER_CONFIG: debug
