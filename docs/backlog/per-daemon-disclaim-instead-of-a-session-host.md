@@ -35,5 +35,7 @@ entry that carries the published socket, command, environment, cwd and size acro
 `unknown` today; logout detection needs a per-pane record, since the endpoint key is gone; host-rooted
 daemons still need the per-build host classification, `stop` and Reset reason until they end.
 
-It does not address #985: a re-exec with disclaim keeps the daemon in its inherited coalition, so every
-daemon still shares the coalition of the agterm that created it.
+On macOS 27 and later, replacing the launchd host with direct attach and re-exec would give up #987's separate
+coalition for new daemons. Disclaim changes responsibility and leaves the daemon in agterm's coalition, so those
+daemons would again be exposed to the background force-quit in #985. Existing host-owned daemons keep their
+current coalition.

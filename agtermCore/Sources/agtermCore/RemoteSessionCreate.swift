@@ -82,13 +82,11 @@ public struct RemoteSessionCreate: Equatable, Sendable {
     }
 
     /// arguments is the origin's `agtermctl` command line. The origin keeps its own selection: the session is
-    /// wanted here, not there. Each value is joined to its flag, so one starting with `-` is never read as an option.
+    /// wanted here, not there.
     public func arguments(origin: Origin, workspaceName: String) -> [String] {
         var arguments = ["session", "new"]
         if case .mac(let window) = origin { arguments.append("--window=" + window) }
         arguments += ["--workspace-name=" + workspaceName, "--create-workspace", "--no-select"]
-        if let cwd { arguments.append("--cwd=" + cwd) }
-        if let command { arguments.append("--command=" + command) }
-        return arguments
+        return arguments + RemoteSession.optionArgument("--cwd", cwd) + RemoteSession.optionArgument("--command", command)
     }
 }

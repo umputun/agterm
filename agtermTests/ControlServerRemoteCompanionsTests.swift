@@ -46,6 +46,15 @@ final class ControlServerRemoteCompanionsTests: XCTestCase {
         }
     }
 
+    // a dash-leading value sent as its own word made the origin exit 64, which read as a too-old agterm
+    func testCompanionValuesReachTheOriginJoinedToTheirFlagsAndAnEmptyOneAsItsOwnWord() {
+        let options = CompanionOptions(cwd: "/srv/-build", command: "-v", name: "-label", wait: true)
+        XCTAssertEqual(RemoteCompanionRequest.terminal(options).arguments(originSession: "origin-1"),
+                       ["session", "new", "--parent", "origin-1", "--no-select", "--cwd=/srv/-build", "--command=-v", "--wait", "--name=-label"])
+        XCTAssertEqual(RemoteCompanionRequest.terminal(CompanionOptions(name: "")).arguments(originSession: "origin-1"),
+                       ["session", "new", "--parent", "origin-1", "--no-select", "--name", ""])
+    }
+
     func testAnExplicitlyCreatedCompanionClaimsTheLeadWhereverTheOriginListsIt() async throws {
         let elsewhere = session(created).replacingOccurrences(of: #""cwd""#, with: #""parent":"origin-9","cwd""#)
         let runner = ScriptedRunner([origin, reply(id: created), tree(sessions: elsewhere)])

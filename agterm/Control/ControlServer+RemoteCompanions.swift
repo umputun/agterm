@@ -27,11 +27,9 @@ enum RemoteCompanionRequest {
             return ["session", "duplicate", "--companion", "--target", originSession, "--no-select"]
         case .terminal(let options):
             var arguments = ["session", "new", "--parent", originSession, "--no-select"]
-            if let cwd = options.cwd { arguments += ["--cwd", cwd] }
-            if let command = options.command { arguments += ["--command", command] }
+            arguments += RemoteSession.optionArgument("--cwd", options.cwd) + RemoteSession.optionArgument("--command", options.command)
             if options.wait { arguments.append("--wait") }
-            if let name = options.name { arguments += ["--name", name] }
-            return arguments
+            return arguments + RemoteSession.optionArgument("--name", options.name)
         case .page(let options):
             return Self.pageArguments(options, originSession: originSession)
         }

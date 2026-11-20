@@ -110,6 +110,13 @@ public enum RemoteSession {
         return Int32(output[start..<end])
     }
 
+    /// optionArgument joins a value to its flag, since ArgumentParser reads a following word starting with `-` as an
+    /// option, but keeps an empty one as its own word, since it reads a bare `--flag=` as a missing value.
+    public static func optionArgument(_ flag: String, _ value: String?) -> [String] {
+        guard let value else { return [] }
+        return value.isEmpty ? [flag, value] : [flag + "=" + value]
+    }
+
     /// One ssh invocation running the far side's `agtermctl` with `arguments` plus `--json`, so the reply is the
     /// server's own response line. Arguments carry user text, so the outer layer is quoted for any login shell.
     /// `operands` follow a `--`, so one starting with `-` is never read as an option.
