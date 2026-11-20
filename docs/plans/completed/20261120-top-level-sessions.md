@@ -395,8 +395,10 @@
   - ➕ full `swift test` found three tests Task 3 and Task 6 missed: the keep-one test rewritten to the delete-last
     contract, the keymap list fixture gained `new_root_session`, and `canStepWorkspaces` keeps a sole focused workspace
     enterable while it holds a session the selection is not in
-- [ ] gates once: `cd agtermCore && swift test`, `make test-app`, `make lint`, Release build
-- [ ] move this plan to `docs/plans/completed/`
+- [x] gates once: `cd agtermCore && swift test`, `make test-app`, `make lint`, Release build
+  - ➕ the hosted suite found three root leaks the host-free tests could not see: the sidebar's expansion mirror carried the
+    root id, Collapse Workspaces kept it open with the root current, and a catalog test read `workspaces.last`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Informational, no checkboxes*
