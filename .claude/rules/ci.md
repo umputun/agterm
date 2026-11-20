@@ -8,10 +8,11 @@ paths:
 - `ci.yml` runs for pushes and PRs to `master`; concurrency cancels the older run for the same PR, while each
   master push keys its group on the sha and completes. All macOS jobs use `macos-26`. Releases are local;
   see `.claude/rules/release.md`.
-- On a same-repo PR by the repository owner, `changes` sets `full` false and `test`, `coverage`, `lint`
-  and `hosted` skip: those PRs arrive after the local gates, and the jobs run on the master push.
-  `linux` and `build` still run under the Swift filter and `cookbook` under its own, and a PR touching
-  `ci.yml` runs everything.
+- On a same-repo PR by the repository owner, `changes` sets `full` false and `test`, `coverage`, `hosted`
+  and `build` skip: those PRs arrive after the local gates, and the jobs run on the master push. The teardown
+  and entitlement checks in `build` have no local equivalent, so a break there first shows on master;
+  `release.md` owns the release precondition on `build`. `linux` still runs under the Swift filter and `cookbook`
+  under its own, and a PR touching `ci.yml` runs everything.
 - `docs/ci-flakes.md` records every investigated intermittent failure by test name and log text; read it
   before investigating a red run, and add an entry after one.
 - Every job carries its own `timeout-minutes`, with generous headroom over observed runtime. A job without
@@ -21,7 +22,7 @@ paths:
   `.claude-plugin/**`, `.agents/**`, `project.yml`, `scripts/**`, both SwiftLint configs, and `ci.yml`.
   Keep all three plugin paths: `SkillInstallTests` checks the bundled `SKILL.md` command count, every
   manifest path, and agreement among the three versions. A skill/manifest-only release preflight commit
-  must run the five Swift jobs, which it does on a master push or a full PR run.
+  must run the Swift jobs, which it does on a master push or a full PR run.
 - `test`, `build` and `hosted` run in parallel and are each mostly compilation; merging any two puts
   both compiles on the critical path.
 - `test` runs `swift test --enable-code-coverage` in `agtermCore`, exports lcov, and uploads it.
@@ -43,7 +44,6 @@ paths:
   slow runner does not count against the 600s; `swift test` with the same flag reuses that build. The
   35-minute job cap leaves room for a slow build plus the watchdog's 600s and 120s.
   `coverage` downloads it for best-effort Coveralls.
-  `lint` installs SwiftLint and runs `swiftlint lint --strict`; every warning fails.
 - `linux` builds and tests `agtermCore` in the `swift:6.3.2-noble` container on ubuntu-24.04, the
   toolchain agterm-server ships on, under the Swift filter. It installs jq, which the Codex status hook reads
   JSON with where `/usr/bin/plutil` is absent, and runs as an unprivileged user because root passes the
@@ -63,26 +63,42 @@ paths:
   build stamp, and install xcodegen. A zmx pin change does not rebuild libghostty. A libghostty cache miss
   also runs the teardown patch's Zig tests inside `setup.sh`, and a zmx miss runs zmx's own `zig build test`;
   bump the `ghosttykit-vN` or `zmx-vN` key when its gate changes, since a hit skips it. `build` runs Release
-  `scripts/build.sh`, the surface teardown script and the entitlement assertions. The teardown script fails
+  `scripts/build.sh`, the surface teardown script and the entitlement assertions. On full runs, build runs
+  SwiftLint (`swiftlint lint --strict`, every warning fails) before compiling. A standalone lint job would
+  exceed the five concurrent macOS jobs on a free account. The teardown script fails
   only on a control call unanswered for 60 s, and has no eight-producer case, removed after sustained runner
   contention. `build.sh` and `release.sh` both pass `ARCHS=arm64`, so CI compiles the same slices the shipped
-  app does. Both app builds run under `scripts/with-helper-prebuild.sh`, which starts the Release helper
-  products before the app compile; the helper phase that otherwise builds them after the app still runs.
+  app does. Both app builds run under `scripts/with-helper-prebuild.sh`, which starts the helper products before
+  the app compile; the helper phase that otherwise builds them after the app still runs. Both build in
+  `agtermCore/.build/helpers`, Debug for a Debug app (`AGTERM_HELPER_CONFIG=debug` in `hosted`) and Release
+  otherwise, and CI saves that directory per configuration. CI sets `AGTERM_HELPER_HASHING=1` in the
+  environment for the prebuild and as a build setting for the phase, which adds
+  `-enable-incremental-file-hashing`; Xcode 26.0's Swift 6.2 lacks the flag, so local builds leave it off.
   `hosted` runs the Debug tests `scripts/test-app.sh` runs and needs nothing from `build`; it builds the
   bundled helpers itself. Staging and `xcodebuild build-for-testing` run in steps of their own, since one
   cache-hit run spent 1412s building and testing, and only `xcodebuild test-without-building` runs under the
   watchdog, at 600s, with `WATCHDOG_RUNNER` naming the DerivedData test host, which xcodebuild launches
-  outside the command's process tree. The `hosted-test-hang` artifact adds the xcresult under
+  outside the command's process tree. Each shard's `hosted-test-hang-<shard>` artifact adds the xcresult under
   `build/DerivedData/Logs/Test`. The 35-minute job cap mirrors `test`'s. Keep both app builds: Release exercises the whole-module optimizer and its SIL-deserializer
   failure. Debug provides `ENABLE_TESTABILITY` for `DockMenuTests`'s `@testable import agterm`. Do not
   enable testability in the notarized Release app.
+- `hosted` runs as three shards, `App-hosted tests (1)` to `(3)`. Shards 1 and 2 run the classes listed in
+  `HOSTED_SHARD1` and `HOSTED_SHARD2` with `-only-testing`; shard 3 skips both lists, so a new class runs there and
+  none is dropped. Rebalance by moving a class between the lists. Each shard builds for itself.
 - `hosted` sets the runner account's login shell to zsh, installs fish, and passes
-  `TEST_RUNNER_AGTERM_REQUIRE_FISH=1` to `scripts/test-app.sh`. Its last step switches the login shell to
-  fish with `dscl` and runs only `SessionHostFishSeamTests/testPlainLoginShellStartsIntegratedFish`, without
-  rebuilding, with
+  `TEST_RUNNER_AGTERM_REQUIRE_FISH=1` to `xcodebuild test-without-building`. Its last step, on shard 2, which holds
+  `SessionHostFishSeamTests`, switches the login shell to fish with `dscl` and runs only
+  `SessionHostFishSeamTests/testPlainLoginShellStartsIntegratedFish`, without rebuilding, with
   `TEST_RUNNER_AGTERM_REQUIRE_FISH_LOGIN_SHELL=1`. Keep that order: switching before the hosted tests
   silently skips the zsh plain-login seam (#574), and the fish seam fails its login-shell check before the
   switch.
+- The compilation, SwiftPM, helper and package-checkout caches save only on a master push; one full run saves
+  about 1.3 GB against the repository's 10 GB quota. All but the package checkouts end their key in the commit SHA
+  and restore by prefix. A PR restores matching entries and writes none, falling back to master's.
+  The Xcode compilation cache (`build/cas`, per configuration) needs reuse, so CI keeps the DerivedData path. The
+  SwiftPM `.build` caches in `test` and `linux` and the helper build pass `-enable-incremental-file-hashing`,
+  since a fresh checkout gives every source a new mtime. `build` alone saves the package checkouts, keyed on
+  `project.yml` and the package manifest and lockfile, and `hosted` saves from shard 1 only.
 - Three entitlement assertions run, all because a wrong entitlement set stays green. The first two read
   the built Release app. The first guards issue #396: `--deep` with `--entitlements` stamps the app's TCC
   entitlements onto bundled helpers. `scripts/release.sh` repeats it after its

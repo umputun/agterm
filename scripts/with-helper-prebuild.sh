@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# run a command while the Release helpers build alongside it; the app build's helper phase stays authoritative
+# run a command while the helpers build alongside it; the app build's helper phase stays authoritative
 set -euo pipefail
 cd "$(dirname "$0")/.."
 mkdir -p build
@@ -7,8 +7,13 @@ log=build/helper-prebuild.log
 
 # keep the two helper commands in their own process group
 set -m
-(swift build --package-path agtermCore -c release --product agtermctl &&
-  swift build --package-path agtermCore -c release --product agterm-session-host) >"$log" 2>&1 &
+# the same invocation as project.yml's helper phase, whose build this prebuild serves; Debug app builds pass
+# AGTERM_HELPER_CONFIG=debug
+scratch="$PWD/agtermCore/.build/helpers"
+helper=(--package-path "$PWD/agtermCore" --scratch-path "$scratch" -c "${AGTERM_HELPER_CONFIG:-release}")
+[ "${AGTERM_HELPER_HASHING:-}" = 1 ] && helper+=(-Xswiftc -enable-incremental-file-hashing)
+(swift build "${helper[@]}" --product agtermctl &&
+  swift build "${helper[@]}" --product agterm-session-host) >"$log" 2>&1 &
 helpers=$!
 set +m
 prebuilt=
@@ -20,7 +25,7 @@ stop_helpers() {
     wait "$helpers" 2>/dev/null || true
   fi
   # swift build starts each compiler job in a group of its own and leaves it running when signalled
-  pkill -f -- "$PWD/agtermCore/.build/" 2>/dev/null || true
+  pkill -f -- "$scratch/" 2>/dev/null || true
 }
 trap stop_helpers EXIT
 trap 'exit 143' TERM
