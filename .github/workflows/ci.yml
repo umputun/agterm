@@ -112,7 +112,7 @@ jobs:
         working-directory: agtermCore
         run: swift build --build-tests --enable-code-coverage -Xswiftc -enable-incremental-file-hashing
       - name: Save the SwiftPM build
-        if: steps.spm.outputs.cache-hit != 'true'
+        if: github.event_name == 'push' && steps.spm.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
         with:
           path: agtermCore/.build
@@ -256,7 +256,7 @@ jobs:
           runuser --user agterm-test -- env HOME=/home/agterm-test
           swift build --build-tests -Xswiftc -enable-incremental-file-hashing
       - name: Save the SwiftPM build
-        if: steps.spm.outputs.cache-hit != 'true'
+        if: github.event_name == 'push' && steps.spm.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
         with:
           path: agtermCore/.build
@@ -356,19 +356,19 @@ jobs:
           AGTERM_HELPER_HASHING: "1"
         run: scripts/with-helper-prebuild.sh scripts/build.sh COMPILATION_CACHE_ENABLE_CACHING=YES COMPILATION_CACHE_CAS_PATH="$GITHUB_WORKSPACE/build/cas" COMPILATION_CACHE_ENABLE_DIAGNOSTIC_REMARKS=YES AGTERM_HELPER_HASHING=1
       - name: Save the package checkouts
-        if: steps.packages.outputs.cache-hit != 'true'
+        if: github.event_name == 'push' && steps.packages.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
         with:
           path: build/DerivedData/SourcePackages
           key: ${{ steps.packages.outputs.cache-primary-key }}
       - name: Save the helper build
-        if: steps.helpers.outputs.cache-hit != 'true'
+        if: github.event_name == 'push' && steps.helpers.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
         with:
           path: agtermCore/.build/helpers
           key: ${{ steps.helpers.outputs.cache-primary-key }}
       - name: Save the compilation cache
-        if: steps.cas.outputs.cache-hit != 'true'
+        if: github.event_name == 'push' && steps.cas.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
         with:
           path: build/cas
@@ -558,13 +558,13 @@ jobs:
             -derivedDataPath build/DerivedData \
             COMPILATION_CACHE_ENABLE_CACHING=YES COMPILATION_CACHE_CAS_PATH="$GITHUB_WORKSPACE/build/cas" COMPILATION_CACHE_ENABLE_DIAGNOSTIC_REMARKS=YES AGTERM_HELPER_HASHING=1
       - name: Save the helper build
-        if: steps.helpers.outputs.cache-hit != 'true' && matrix.shard == 1
+        if: github.event_name == 'push' && steps.helpers.outputs.cache-hit != 'true' && matrix.shard == 1
         uses: actions/cache/save@v6
         with:
           path: agtermCore/.build/helpers
           key: ${{ steps.helpers.outputs.cache-primary-key }}
       - name: Save the compilation cache
-        if: steps.cas.outputs.cache-hit != 'true' && matrix.shard == 1
+        if: github.event_name == 'push' && steps.cas.outputs.cache-hit != 'true' && matrix.shard == 1
         uses: actions/cache/save@v6
         with:
           path: build/cas

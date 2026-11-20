@@ -78,17 +78,27 @@ paths:
   bundled helpers itself. Staging and `xcodebuild build-for-testing` run in steps of their own, since one
   cache-hit run spent 1412s building and testing, and only `xcodebuild test-without-building` runs under the
   watchdog, at 600s, with `WATCHDOG_RUNNER` naming the DerivedData test host, which xcodebuild launches
-  outside the command's process tree. The `hosted-test-hang` artifact adds the xcresult under
+  outside the command's process tree. Each shard's `hosted-test-hang-<shard>` artifact adds the xcresult under
   `build/DerivedData/Logs/Test`. The 35-minute job cap mirrors `test`'s. Keep both app builds: Release exercises the whole-module optimizer and its SIL-deserializer
   failure. Debug provides `ENABLE_TESTABILITY` for `DockMenuTests`'s `@testable import agterm`. Do not
   enable testability in the notarized Release app.
+- `hosted` runs as three shards, `App-hosted tests (1)` to `(3)`. Shards 1 and 2 run the classes listed in
+  `HOSTED_SHARD1` and `HOSTED_SHARD2` with `-only-testing`; shard 3 skips both lists, so a new class runs there and
+  none is dropped. Rebalance by moving a class between the lists. Each shard builds for itself.
 - `hosted` sets the runner account's login shell to zsh, installs fish, and passes
-  `TEST_RUNNER_AGTERM_REQUIRE_FISH=1` to `scripts/test-app.sh`. Its last step switches the login shell to
-  fish with `dscl` and runs only `SessionHostFishSeamTests/testPlainLoginShellStartsIntegratedFish`, without
-  rebuilding, with
+  `TEST_RUNNER_AGTERM_REQUIRE_FISH=1` to `xcodebuild test-without-building`. Its last step, on shard 2, which holds
+  `SessionHostFishSeamTests`, switches the login shell to fish with `dscl` and runs only
+  `SessionHostFishSeamTests/testPlainLoginShellStartsIntegratedFish`, without rebuilding, with
   `TEST_RUNNER_AGTERM_REQUIRE_FISH_LOGIN_SHELL=1`. Keep that order: switching before the hosted tests
   silently skips the zsh plain-login seam (#574), and the fish seam fails its login-shell check before the
   switch.
+- The compilation, SwiftPM, helper and package-checkout caches save only on a master push; one full run saves
+  about 1.3 GB against the repository's 10 GB quota. All but the package checkouts end their key in the commit SHA
+  and restore by prefix. A PR restores matching entries and writes none, falling back to master's.
+  The Xcode compilation cache (`build/cas`, per configuration) needs reuse, so CI keeps the DerivedData path. The
+  SwiftPM `.build` caches in `test` and `linux` and the helper build pass `-enable-incremental-file-hashing`,
+  since a fresh checkout gives every source a new mtime. `build` alone saves the package checkouts, keyed on
+  `project.yml` and the package manifest and lockfile, and `hosted` saves from shard 1 only.
 - Three entitlement assertions run, all because a wrong entitlement set stays green. The first two read
   the built Release app. The first guards issue #396: `--deep` with `--entitlements` stamps the app's TCC
   entitlements onto bundled helpers. `scripts/release.sh` repeats it after its
