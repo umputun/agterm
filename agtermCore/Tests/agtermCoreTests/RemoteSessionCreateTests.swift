@@ -101,6 +101,17 @@ struct RemoteSessionCreateTests {
                 "--cwd=/srv/app", "--command=make run"])
     }
 
+    // a bare `--cwd=` reached the origin as a missing value, and its CLI exited 64
+    @Test func argumentsKeepAnEmptyValueAsItsOwnWordAndJoinADashLeadingOne() {
+        let empty = RemoteSessionCreate(host: "srv", cwd: "", command: "")
+        let dashed = RemoteSessionCreate(host: "srv", cwd: "-dir", command: "-v")
+
+        #expect(empty.arguments(origin: .server, workspaceName: "dev")
+            == ["session", "new", "--workspace-name=dev", "--create-workspace", "--no-select", "--cwd", "", "--command", ""])
+        #expect(dashed.arguments(origin: .server, workspaceName: "dev")
+            == ["session", "new", "--workspace-name=dev", "--create-workspace", "--no-select", "--cwd=-dir", "--command=-v"])
+    }
+
     @Test func originKindTakesOnlyALiveMacOrAServer() {
         var mac = ControlResult()
         mac.macCatalog = CatalogVersions(server: "1", protocolVersion: 1, catalog: 1, live: true)
