@@ -23,8 +23,7 @@ struct PaneLeadCover: View {
                 VStack(spacing: 8) {
                     Image(systemName: "rectangle.on.rectangle.slash")
                         .font(.system(size: 28, weight: .light))
-                    Text(Self.title(role: book.role(pane: identity), reattaching: book.reattaching(pane: identity),
-                                    remote: session.remoteHost != nil))
+                    Text(Self.title(state: identity.flatMap { book.states[$0] }, remote: session.remoteHost != nil))
                         .font(.system(size: 14, weight: .medium))
                     if !book.reattaching(pane: identity) {
                         Text("Press any key to use it here")
@@ -48,9 +47,9 @@ struct PaneLeadCover: View {
         .allowsHitTesting(covered)
     }
 
-    static func title(role: ZmxLeadRole?, reattaching: Bool, remote: Bool) -> String {
-        if reattaching { return "Taking over…" }
-        if role == .unowned { return "Reconnecting…" }
+    static func title(state: ZmxLeadState?, remote: Bool) -> String {
+        if let state, state.reattaching, state.attachment.claim { return "Taking over…" }
+        if state?.reattaching == true || state?.role == .unowned { return "Reconnecting…" }
         return remote ? "In use on the Mac it runs on" : "In use from another Mac"
     }
 

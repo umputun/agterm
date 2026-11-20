@@ -35,6 +35,24 @@ final class PaneLeadCoverTests: XCTestCase {
                        .ended(name: "build", host: "mini", keyCloses: false))
     }
 
+    func testTheCoverTitleSaysTakingOverOnlyForAnAttachThatClaimsTheLead() throws {
+        let reconnect = ZmxLeadState(attachment: ZmxLeadAttachment(claim: false), reattaching: true)
+        XCTAssertEqual(PaneLeadCover.title(state: reconnect, remote: true), "Reconnecting…")
+
+        var takeover = ZmxLeadState(attachment: ZmxLeadAttachment(claim: true), reattaching: true)
+        XCTAssertEqual(PaneLeadCover.title(state: takeover, remote: true), "Taking over…")
+
+        let report = try XCTUnwrap(ZmxLeadNotice(title: "zmx-role;\(takeover.attachment.nonce):follower:1"))
+        XCTAssertTrue(takeover.apply(report))
+        XCTAssertEqual(PaneLeadCover.title(state: takeover, remote: true), "In use on the Mac it runs on")
+        XCTAssertEqual(PaneLeadCover.title(state: takeover, remote: false), "In use from another Mac")
+
+        var unowned = ZmxLeadState(attachment: ZmxLeadAttachment(claim: false))
+        let left = try XCTUnwrap(ZmxLeadNotice(title: "zmx-role;\(unowned.attachment.nonce):unowned:2"))
+        XCTAssertTrue(unowned.apply(left))
+        XCTAssertEqual(PaneLeadCover.title(state: unowned, remote: true), "Reconnecting…")
+    }
+
     func testAPaneWithNothingToSayShowsNoNotice() {
         XCTAssertNil(RemotePaneNotice.Kind(identity: pane, host: "mini", keyCloses: true))
         XCTAssertNil(RemotePaneNotice.Kind(identity: nil, host: "mini", keyCloses: true))
