@@ -166,6 +166,72 @@ final class ControlServerWorkspaceCommandsTests: XCTestCase {
         XCTAssertEqual(store.workspace(forSession: id)?.id, root)
     }
 
+    func testSessionMoveByTheRootTargetRelocatesOneAndSeveralSessions() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let named = try XCTUnwrap(store.namedWorkspaces.first).id
+        let ids = try (0..<3).map { _ in try XCTUnwrap(store.addSession(toWorkspace: named, cwd: "/tmp")).id }
+
+        let single = server.moveSession(ids[0].uuidString, window: nil, move: .workspace("root"))
+        let batch = server.moveSessions(ids[1...].map(\.uuidString), window: nil, move: .workspace("root"))
+
+        XCTAssertTrue(single.ok, single.error ?? "")
+        XCTAssertEqual(batch.result?.affected, 2, batch.error ?? "")
+        XCTAssertEqual(store.rootWorkspace?.sessions.map(\.id), ids)
+    }
+
+    func testAnchoredAndStepMovesStayAmongTheTopLevelSessions() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let root = try XCTUnwrap(store.rootWorkspace).id
+        let first = try XCTUnwrap(store.addSession(toWorkspace: root, cwd: "/tmp")).id
+        let second = try XCTUnwrap(store.addSession(toWorkspace: root, cwd: "/tmp")).id
+        let named = try XCTUnwrap(store.namedWorkspaces.first?.sessions.first).id
+
+        XCTAssertTrue(server.moveSession(named.uuidString, window: nil, move: .place(anchor: first.uuidString, after: true)).ok)
+        XCTAssertEqual(store.rootWorkspace?.sessions.map(\.id), [first, named, second])
+        XCTAssertTrue(server.moveSession(second.uuidString, window: nil, move: .reorder(.top)).ok)
+        XCTAssertTrue(server.moveSession(first.uuidString, window: nil, move: .reorder(.down)).ok)
+        XCTAssertEqual(store.rootWorkspace?.sessions.map(\.id), [second, named, first])
+        XCTAssertTrue(server.moveSession(first.uuidString, window: nil, move: .reorder(.up)).ok)
+        XCTAssertTrue(server.moveSession(second.uuidString, window: nil, move: .reorder(.bottom)).ok)
+        XCTAssertTrue(server.moveSession(named.uuidString, window: nil, move: .place(anchor: first.uuidString, after: false)).ok)
+
+        XCTAssertEqual(store.rootWorkspace?.sessions.map(\.id), [named, first, second])
+    }
+
+    func testWorkspaceFocusAndFlagActOnTheRootByItsTargetAndAsActive() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let root = try XCTUnwrap(store.rootWorkspace).id
+        let top = try XCTUnwrap(store.addSession(toWorkspace: root, cwd: "/tmp"))
+        let companion = try store.addCompanion(to: top.id, options: CompanionOptions(cwd: "/tmp")).get()
+        store.selectSession(top.id)
+
+        XCTAssertEqual(server.focusWorkspace("root", window: nil, mode: .on).result?.id, root.uuidString)
+        XCTAssertEqual(store.soleFocusedWorkspaceID, root)
+        XCTAssertTrue(server.focusWorkspace("root", window: nil, mode: .toggle).ok)
+        XCTAssertTrue(store.focusedWorkspaceIDs.isEmpty)
+        XCTAssertTrue(server.focusWorkspace("active", window: nil, mode: .add).ok)
+        XCTAssertEqual(store.focusedWorkspaceIDs, [root])
+        XCTAssertFalse(store.focusEnabled)
+        XCTAssertTrue(server.focusWorkspace("root", window: nil, mode: .off).ok)
+        XCTAssertTrue(store.focusedWorkspaceIDs.isEmpty)
+
+        XCTAssertEqual(server.setWorkspaceFlag("active", window: nil, mode: .on).result?.id, root.uuidString)
+        XCTAssertTrue(top.flagged && companion.flagged)
+        XCTAssertTrue(server.setWorkspaceFlag("root", window: nil, mode: .toggle).ok)
+        XCTAssertFalse(top.flagged || companion.flagged)
+    }
+
+    func testWorkspaceGoFromATopLevelSessionEntersTheNamedWorkspaces() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let named = try XCTUnwrap(store.namedWorkspaces.first).id
+        let top = try XCTUnwrap(store.addSession(toWorkspace: try XCTUnwrap(store.rootWorkspace).id, cwd: "/tmp"))
+        store.selectSession(top.id)
+
+        let step = server.goWorkspace(window: nil, direction: .next)
+
+        XCTAssertEqual(step.result?.id, named.uuidString, step.error ?? "")
+    }
+
     func testTheLastNamedWorkspaceIsDeletedLeavingTheRoot() throws {
         let store = try XCTUnwrap(library.activeStore)
         let only = try XCTUnwrap(store.namedWorkspaces.first).id

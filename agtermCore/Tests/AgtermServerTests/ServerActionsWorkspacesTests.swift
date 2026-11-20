@@ -66,7 +66,7 @@ struct ServerActionsWorkspacesTests {
         let root = try #require(harness.store.rootWorkspace)
         let session = try #require(harness.store.addSession(toWorkspace: root.id, cwd: "/top"))
         _ = harness.store.selectSession(session.id)
-        return [root.id.uuidString, String(root.id.uuidString.prefix(8)), "active"]
+        return [root.id.uuidString, String(root.id.uuidString.prefix(8)), "active", "root"]
     }
 
     @Test func workspaceOnlyCommandsRefuseTheRootByIdPrefixAndActive() throws {

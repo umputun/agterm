@@ -274,6 +274,19 @@ final class ControlWindowUITests: ControlAPITestCase {
         XCTAssertEqual((root["sessions"] as? [[String: Any]])?.count, 1, "one HOME shell at the root: \(root)")
     }
 
+    func testSessionMoveAndWorkspaceFocusTakeTheRootTargetOverTheSocket() throws {
+        let id = try activeSessionID()
+
+        let moved = try sendCommand(#"{"cmd":"session.move","target":"\#(id)","args":{"workspace":"root"}}"#)
+        let focused = try sendCommand(#"{"cmd":"workspace.focus","target":"root","args":{"mode":"on"}}"#)
+
+        XCTAssertEqual(moved["ok"] as? Bool, true, "session.move into the root should succeed: \(moved)")
+        XCTAssertEqual(focused["ok"] as? Bool, true, "workspace.focus on the root should succeed: \(focused)")
+        let root = try XCTUnwrap(try treeWorkspaceNodes().first { ($0["root"] as? Bool) == true }, "the root node")
+        XCTAssertEqual((root["sessions"] as? [[String: Any]])?.compactMap { $0["id"] as? String }, [id], "the session sits at the root: \(root)")
+        XCTAssertEqual(root["focused"] as? Bool, true, "the root is the focused container: \(root)")
+    }
+
     // window.new must not reply until its NSWindow has attached: the store loads synchronously (so the
     // library reports open:true at once) while the NSWindow lands two SwiftUI render passes later.
     func testWindowNewIsUsableImmediately() throws {

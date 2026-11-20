@@ -130,7 +130,7 @@ struct Session: ParsableCommand {
     struct Move: RequestCommand {
         static let configuration = CommandConfiguration(
             abstract: "Move a session: to another workspace, reorder with --to, place relative to an anchor with --after/--before, or put a companion under another session with --parent.")
-        @Argument(help: "Destination workspace id/prefix (relocate). Omit with --to or --after/--before.") var workspace: String?
+        @Argument(help: "Destination workspace id/prefix, or root for the top-level sessions (relocate). Omit with --to or --after/--before.") var workspace: String?
         @Option(name: .long, help: "Reorder within the workspace: up, down, top, or bottom.") var to: String?
         @Option(name: .long, help: "Place right AFTER this anchor session (id/prefix/active); the anchor carries its own workspace (relocates + positions in one shot).") var after: String?
         @Option(name: .long, help: "Place right BEFORE this anchor session (id/prefix/active); mirror of --after.") var before: String?

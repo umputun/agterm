@@ -340,16 +340,19 @@
   `agtermctlKitTests/EventCommandsTests.swift`; `AgtermServerTests/ServerActionsTests.swift`; `agtermUITests/ControlAPIUITests.swift`
   (targeted new cases)
 
-- [ ] tests first: `session.move` with `--workspace root` and anchors; up/down/top/bottom stay in the source container;
+- [x] tests first: `session.move` with `--workspace root` and anchors; up/down/top/bottom stay in the source container;
   `zmx.attach` and `zmx.attach.group` accept `--workspace root`
-- [ ] tests first: `active` resolving to the root: `workspace.focus` and `workspace.flag` act on it, every named-only
+- [x] tests first: `active` resolving to the root: `workspace.focus` and `workspace.flag` act on it, every named-only
   command refuses; `--target root` for focus in all four modes and for flag with companions (agterm-server included);
   every rejected workspace command refuses the `root` literal (UUID, prefix and `active` refusals land in Task 1);
   `workspace.go` works from root
-- [ ] tests first: `routedStore` resolves `root` to the catalog owner for every routed workspace command, frontmost and
-  explicit-window forms; `EventFormatter.human` names the root
-- [ ] implement dispatch, routing, CLI arguments, help text and event formatting
-- [ ] one end-to-end control test per new argument; targeted tests green before Task 6
+- [x] tests first: `routedStore` resolves `root` to the catalog owner for every routed workspace command, frontmost and
+  explicit-window forms; `EventFormatter.human` names the root (dropped: no human event line prints a workspace,
+  the JSON keeps the UUID)
+- [x] implement dispatch, routing, CLI arguments and help text
+- [x] ➕ from review: a remote window refuses the owner's root for rename/delete/move/tint before forwarding;
+  `zmx.attach.group` through the root alias is covered with a companion
+- [x] one end-to-end control test per new argument; targeted tests green before Task 6
 
 ### Task 6: New Top-Level Session, palette, labels and focus editor
 

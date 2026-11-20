@@ -191,6 +191,18 @@ final class ControlServerRemoteGroupTests: XCTestCase {
         XCTAssertEqual(store.companions(of: row).map { store.workspace(forSession: $0.id)?.id }, [api])
     }
 
+    func testAGroupAttachedByTheRootTargetBringsItsCompanionsAmongTheTopLevelSessions() async throws {
+        let (server, store) = makeServer(ScriptedRunner([tree([parent(members: ["c1"]), terminal("c1", parent: "P")])]))
+        let root = try XCTUnwrap(store.rootWorkspace).id
+
+        let reply = await server.attachRemoteGroup(host: "buildbox", session: "P", window: nil, workspace: .id("root"))
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        let row = try XCTUnwrap(reply.result?.id.flatMap(UUID.init(uuidString:)))
+        XCTAssertEqual(store.workspace(forSession: row)?.id, root)
+        XCTAssertEqual(store.companions(of: row).map { store.workspace(forSession: $0.id)?.id }, [root])
+    }
+
     func testAGroupWithAMissingWorkspaceIsRefusedBeforeAnyRowExists() async throws {
         let (server, store) = makeServer(ScriptedRunner([tree([parent(members: ["c1"]), terminal("c1", parent: "P")])]))
 
