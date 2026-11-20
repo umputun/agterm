@@ -8,8 +8,9 @@ paths:
 - `ci.yml` runs for pushes and PRs to `master`; concurrency cancels the older run for the same PR, while each
   master push keys its group on the sha and completes. All macOS jobs use `macos-26`. Releases are local;
   see `.claude/rules/release.md`.
-- On a same-repo PR by the repository owner, `changes` sets `full` false and `test`, `coverage`, `lint`
-  and `hosted` skip: those PRs arrive after the local gates, and the jobs run on the master push.
+- On a same-repo PR by the repository owner, `changes` sets `full` false and `test`, `coverage`, `hosted`
+  and the swiftlint steps of `build` skip: those PRs arrive after the local gates, and the jobs run on the
+  master push.
   `linux` and `build` still run under the Swift filter and `cookbook` under its own, and a PR touching
   `ci.yml` runs everything.
 - `docs/ci-flakes.md` records every investigated intermittent failure by test name and log text; read it
@@ -21,7 +22,7 @@ paths:
   `.claude-plugin/**`, `.agents/**`, `project.yml`, `scripts/**`, both SwiftLint configs, and `ci.yml`.
   Keep all three plugin paths: `SkillInstallTests` checks the bundled `SKILL.md` command count, every
   manifest path, and agreement among the three versions. A skill/manifest-only release preflight commit
-  must run the five Swift jobs, which it does on a master push or a full PR run.
+  must run the Swift jobs, which it does on a master push or a full PR run.
 - `test`, `build` and `hosted` run in parallel and are each mostly compilation; merging any two puts
   both compiles on the critical path.
 - `test` runs `swift test --enable-code-coverage` in `agtermCore`, exports lcov, and uploads it.
@@ -43,7 +44,6 @@ paths:
   slow runner does not count against the 600s; `swift test` with the same flag reuses that build. The
   35-minute job cap leaves room for a slow build plus the watchdog's 600s and 120s.
   `coverage` downloads it for best-effort Coveralls.
-  `lint` installs SwiftLint and runs `swiftlint lint --strict`; every warning fails.
 - `linux` builds and tests `agtermCore` in the `swift:6.3.2-noble` container on ubuntu-24.04, the
   toolchain agterm-server ships on, under the Swift filter. It installs jq, which the Codex status hook reads
   JSON with where `/usr/bin/plutil` is absent, and runs as an unprivileged user because root passes the
@@ -63,7 +63,9 @@ paths:
   build stamp, and install xcodegen. A zmx pin change does not rebuild libghostty. A libghostty cache miss
   also runs the teardown patch's Zig tests inside `setup.sh`, and a zmx miss runs zmx's own `zig build test`;
   bump the `ghosttykit-vN` or `zmx-vN` key when its gate changes, since a hit skips it. `build` runs Release
-  `scripts/build.sh`, the surface teardown script and the entitlement assertions. The teardown script fails
+  `scripts/build.sh`, the surface teardown script and the entitlement assertions. On full runs, build runs
+  SwiftLint (`swiftlint lint --strict`, every warning fails) before compiling. A standalone lint job would
+  exceed the five concurrent macOS jobs on a free account. The teardown script fails
   only on a control call unanswered for 60 s, and has no eight-producer case, removed after sustained runner
   contention. `build.sh` and `release.sh` both pass `ARCHS=arm64`, so CI compiles the same slices the shipped
   app does. Both app builds run under `scripts/with-helper-prebuild.sh`, which starts the Release helper

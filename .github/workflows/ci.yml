@@ -187,19 +187,6 @@ jobs:
           file: coverage.lcov
           format: lcov
 
-  lint:
-    name: swiftlint
-    needs: changes
-    if: needs.changes.outputs.swift == 'true' && needs.changes.outputs.full == 'true'
-    runs-on: macos-26
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v7
-      - name: Install swiftlint
-        run: brew install swiftlint
-      - name: swiftlint (strict)
-        run: swiftlint lint --strict
-
   linux:
     name: Linux core tests
     needs: changes
@@ -303,6 +290,13 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
+      # a job of its own would be a sixth macOS job in a full run, past the five a free account runs at once
+      - name: Install swiftlint
+        if: needs.changes.outputs.full == 'true'
+        run: brew install swiftlint
+      - name: swiftlint (strict)
+        if: needs.changes.outputs.full == 'true'
+        run: swiftlint lint --strict
       - name: Read pinned helper revisions
         id: revisions
         shell: bash
