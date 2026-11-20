@@ -18,7 +18,7 @@ final class ControlServerRespawnTests: XCTestCase {
     private var stateDir: URL!
     private var library: WindowLibrary!
     private var settings: SettingsModel!
-    private var savedReconnect: ((GhosttySurfaceView, Bool) -> Bool)?
+    private var savedReconnect: ((GhosttySurfaceView, Bool, String?) -> Bool)?
     private var reconnects: [GhosttySurfaceView] = []
 
     override func setUp() async throws {
@@ -27,7 +27,7 @@ final class ControlServerRespawnTests: XCTestCase {
         library = WindowLibrary(directory: stateDir)
         settings = SettingsModel(library: library, settingsStore: SettingsStore(directory: stateDir))
         savedReconnect = PaneLead.reconnect
-        PaneLead.reconnect = { [weak self] old, _ in
+        PaneLead.reconnect = { [weak self] old, _, _ in
             self?.reconnects.append(old)
             if let session = old.session { RemoteRespawnBook.shared.attachStarted(pane: session.paneIdentity, session: session.id) }
             return true

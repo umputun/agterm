@@ -339,8 +339,8 @@ struct agtermApp: App {
                         PaneLead.roleChanged = { [library] view in
                             (view.session ?? view.scratchOwner).flatMap { library.store(forSession: $0.id) }?.leadRoleChanged()
                         }
-                        PaneLead.reconnect = { old, cover in
-                            Self.reattachPane(old, claim: false, cover: cover, services: paneServices)
+                        PaneLead.reconnect = { old, cover, reclaim in
+                            Self.reattachPane(old, claim: false, cover: cover, reclaim: reclaim, services: paneServices)
                         }
                         PaneLead.heldExit = { [weak server = controlServer] view in server?.remotePaneHeld(view) }
                         PaneLead.catalogChannel = { [weak server = controlServer] session, user in
@@ -350,10 +350,10 @@ struct agtermApp: App {
                             let prior = server?.priorLeader(daemon: daemon)
                             return { server?.ownerRespawned(session: session, daemon: daemon, prior: prior) }
                         }
-                        PaneLead.waitToReconnect = { [weak server = controlServer, library] view, cover in
+                        PaneLead.waitToReconnect = { [weak server = controlServer, library] view, cover, reclaim in
                             guard let session = view.session, let store = library.store(holdingSession: session.id) else { return }
                             Self.remotePaneStopped(view, store: store, sessionID: session.id, library: library, attach: server)
-                            server?.waitToReconnect(view, cover: cover)
+                            server?.waitToReconnect(view, cover: cover, reclaim: reclaim)
                         }
                         // drive the Dock badge (via UNUserNotifications) from the app-wide unseen total — the
                         // sidebar pills' Session.unseenCount summed across windows.

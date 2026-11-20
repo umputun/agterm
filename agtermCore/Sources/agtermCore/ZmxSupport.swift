@@ -143,6 +143,7 @@ public enum ZmxSupport {
         // nonce no pane expects
         environment[ZmxLeadAttachment.nonceVariable] = nil
         environment[ZmxLeadAttachment.claimVariable] = nil
+        environment[ZmxLeadAttachment.reclaimVariable] = nil
         environment.merge(inputs.lead?.environment ?? [:]) { _, new in new }
 
         let host = inputs.sessionHostExecutablePath.flatMap { path -> String? in

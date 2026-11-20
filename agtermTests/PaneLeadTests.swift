@@ -147,7 +147,7 @@ final class PaneLeadTests: XCTestCase {
 
     func testALostLinkFromTheCurrentAttachmentParksThePaneCoveredWhenItHadReportedARole() throws {
         var parked: [(GhosttySurfaceView, Bool)] = []
-        PaneLead.waitToReconnect = { parked.append(($0, $1)) }
+        PaneLead.waitToReconnect = { view, cover, _ in parked.append((view, cover)) }
         let (reporting, _) = pane(nonce: "a")
         PaneLead.report(try notice("a:leader:1"), from: reporting)
         let (silent, _) = pane(nonce: "b")
@@ -161,7 +161,7 @@ final class PaneLeadTests: XCTestCase {
 
     func testAReconnectThatLostTheLinkBeforeItsFirstReportStillParksCovered() throws {
         var parked: [Bool] = []
-        PaneLead.waitToReconnect = { parked.append($1) }
+        PaneLead.waitToReconnect = { _, cover, _ in parked.append(cover) }
         let (view, identity) = pane(nonce: "old")
         ZmxLeadBook.shared.begin(ZmxLeadAttachment(nonce: "fresh", claim: false), pane: identity, reattaching: true)
 
@@ -170,9 +170,23 @@ final class PaneLeadTests: XCTestCase {
         XCTAssertEqual(parked, [true])
     }
 
+    func testALostLinkParksWithTheNonceOfTheAttachThatLed() throws {
+        var reclaims: [String?] = []
+        PaneLead.waitToReconnect = { _, _, reclaim in reclaims.append(reclaim) }
+        let (leading, _) = pane(nonce: "a")
+        PaneLead.report(try notice("a:leader:1"), from: leading)
+        let (following, _) = pane(nonce: "b")
+        PaneLead.report(try notice("b:follower:1"), from: following)
+
+        PaneLead.linkLost(try XCTUnwrap(RemoteLinkNotice(title: "agterm-remote;a:lost")), from: leading)
+        PaneLead.linkLost(try XCTUnwrap(RemoteLinkNotice(title: "agterm-remote;b:lost")), from: following)
+
+        XCTAssertEqual(reclaims, ["a", nil])
+    }
+
     func testALostLinkWithAnotherAttachmentsNonceIsDropped() throws {
         var parked = 0
-        PaneLead.waitToReconnect = { _, _ in parked += 1 }
+        PaneLead.waitToReconnect = { _, _, _ in parked += 1 }
         let (view, _) = pane(nonce: "current")
 
         PaneLead.linkLost(try XCTUnwrap(RemoteLinkNotice(title: "agterm-remote;forged:lost")), from: view)

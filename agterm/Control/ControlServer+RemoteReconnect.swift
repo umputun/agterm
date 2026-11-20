@@ -6,11 +6,11 @@ import agtermCore
 extension ControlServer {
     static let reconnectProbeDeadline: TimeInterval = 10
 
-    func waitToReconnect(_ view: GhosttySurfaceView, cover: Bool) {
+    func waitToReconnect(_ view: GhosttySurfaceView, cover: Bool, reclaim: String?) {
         guard let session = view.session, let host = session.remoteHost, heldSession(session.id) === session,
               let pane = session.surface === view ? session.paneIdentity
                   : session.splitSurface === view ? session.splitPaneIdentity : nil else { return }
-        RemoteReconnectBook.shared.wait(pane: pane, session: session.id, host: host, cover: cover, now: hudClock())
+        RemoteReconnectBook.shared.wait(pane: pane, session: session.id, host: host, cover: cover, reclaim: reclaim, now: hudClock())
         startRemoteTick()
     }
 
@@ -66,8 +66,9 @@ extension ControlServer {
                 // row also waits for a fresh catalog, which may have ended it while its host was away
                 guard let store = library.store(forSession: entry.session),
                       view.session?.remotePresentation?.binding.catalogOwned != true || store.catalogState == .connected,
-                      PaneLead.reconnect?(view, entry.cover) == true else {
-                    book.wait(pane: pane, session: entry.session, host: entry.host, cover: entry.cover, now: hudClock())
+                      PaneLead.reconnect?(view, entry.cover, entry.reclaim) == true else {
+                    book.wait(pane: pane, session: entry.session, host: entry.host, cover: entry.cover, reclaim: entry.reclaim,
+                              now: hudClock())
                     return
                 }
                 store.remotePaneResumed(pane, forSession: entry.session)

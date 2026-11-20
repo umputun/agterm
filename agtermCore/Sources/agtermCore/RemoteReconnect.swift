@@ -49,6 +49,8 @@ public final class RemoteReconnectBook {
         public let host: String
         /// The origin reported lead roles, so the fresh attach will too and may be covered until it does.
         public let cover: Bool
+        /// The nonce of the attach that led when the link dropped, which the fresh attach takes the lead back from.
+        public let reclaim: String?
         fileprivate(set) var failures = 0
         /// reason is what the last failed probe's ssh said, nil when it said nothing. It describes that
         /// probe only, never the attach that follows a probe that answered.
@@ -68,9 +70,9 @@ public final class RemoteReconnectBook {
     public func waiting(pane: UUID?) -> Bool { pane.flatMap { entries[$0] } != nil }
 
     /// Registers a pane to be reconnected, unless it is already waiting.
-    public func wait(pane: UUID, session: UUID, host: String, cover: Bool, now: Date) {
+    public func wait(pane: UUID, session: UUID, host: String, cover: Bool, reclaim: String? = nil, now: Date) {
         guard entries[pane] == nil else { return }
-        var entry = Entry(session: session, host: host, cover: cover, retryAt: now)
+        var entry = Entry(session: session, host: host, cover: cover, reclaim: reclaim, retryAt: now)
         if let last = resumed.removeValue(forKey: pane), now.timeIntervalSince(last.at) < Self.settle {
             entry.failures = last.failures + 1
             entry.retryAt = now.addingTimeInterval(RemoteRetryBackoff.delay(afterFailures: entry.failures))

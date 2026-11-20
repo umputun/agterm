@@ -33,6 +33,15 @@ struct RemoteReconnectBookTests {
         return book
     }
 
+    @Test func theAnsweredEntryCarriesTheAttachToReclaimFrom() throws {
+        let book = RemoteReconnectBook()
+        book.wait(pane: pane, session: session, host: "mini", cover: true, reclaim: "n1", now: t0)
+        _ = book.due(now: t0)
+
+        let entry = try #require(book.finished(pane: pane, ok: true, now: t0))
+        #expect(entry.reclaim == "n1")
+    }
+
     @Test func theFirstProbeIsImmediateAndNeverStartedTwice() {
         let book = waiting()
         #expect(book.due(now: t0) == [pane])

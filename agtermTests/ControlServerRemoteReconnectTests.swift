@@ -60,7 +60,7 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
         server.hudClock = { frozen }
         let book = RemoteReconnectBook.shared
 
-        server.waitToReconnect(view, cover: false)
+        server.waitToReconnect(view, cover: false, reclaim: nil)
         server.tickReconnects()
         for _ in 0..<200 where book.entries[session.paneIdentity]?.probing != false {
             try await Task.sleep(for: .milliseconds(10))
@@ -96,7 +96,7 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
         let probe = Probe(status: 0)
         let server = server(runner: probe)
         let reconnected = expectation(description: "reconnected")
-        PaneLead.reconnect = { old, cover in
+        PaneLead.reconnect = { old, cover, _ in
             XCTAssertTrue(old === view)
             XCTAssertTrue(cover)
             reconnected.fulfill()
@@ -105,13 +105,28 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
         store.remotePaneHeld(session.paneIdentity, forSession: session.id)
         XCTAssertTrue(store.remotePaneIsHeld(session.paneIdentity, forSession: session.id))
 
-        server.waitToReconnect(view, cover: true)
+        server.waitToReconnect(view, cover: true, reclaim: nil)
         server.tickReconnects()
         await fulfillment(of: [reconnected], timeout: 2)
 
         XCTAssertFalse(store.remotePaneIsHeld(session.paneIdentity, forSession: session.id))
         XCTAssertFalse(RemoteReconnectBook.shared.waiting(pane: session.paneIdentity))
         XCTAssertEqual(probe.argvs, [try RemoteSession.probeCommand(host: "mini")])
+    }
+
+    func testAReconnectTakesBackTheLeadOfTheAttachThatLedAtTheDrop() async throws {
+        let (_, view) = try replica()
+        let server = server(runner: Probe(status: 0))
+        let reconnected = expectation(description: "reconnected")
+        PaneLead.reconnect = { _, _, reclaim in
+            XCTAssertEqual(reclaim, "n1")
+            reconnected.fulfill()
+            return true
+        }
+
+        server.waitToReconnect(view, cover: true, reclaim: "n1")
+        server.tickReconnects()
+        await fulfillment(of: [reconnected], timeout: 2)
     }
 
     func testAnUncoveredReconnectLeavesThePaneUncovered() throws {
@@ -136,13 +151,13 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
         let (session, view) = try replica()
         let server = server(probe: 0)
         let attempted = expectation(description: "attempted")
-        PaneLead.reconnect = { _, _ in
+        PaneLead.reconnect = { _, _, _ in
             attempted.fulfill()
             return false
         }
         store.remotePaneHeld(session.paneIdentity, forSession: session.id)
 
-        server.waitToReconnect(view, cover: false)
+        server.waitToReconnect(view, cover: false, reclaim: nil)
         server.tickReconnects()
         await fulfillment(of: [attempted], timeout: 2)
 
@@ -155,14 +170,14 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
         let (session, view) = try replica()
         let server = server(probe: 0)
         var attached: [GhosttySurfaceView] = []
-        PaneLead.reconnect = { old, _ in
+        PaneLead.reconnect = { old, _, _ in
             attached.append(old)
             return true
         }
         let book = RemoteReconnectBook.shared
         XCTAssertTrue(store.softCloseSession(session.id, grace: 60))
 
-        server.waitToReconnect(view, cover: false)
+        server.waitToReconnect(view, cover: false, reclaim: nil)
         server.tickReconnects()
         try await settleProbe(session.paneIdentity)
         XCTAssertTrue(book.waiting(pane: session.paneIdentity))
@@ -186,14 +201,14 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
     func testAFailedProbesReasonIsOnThePanesTreeNodeUntilTheWaitEnds() async throws {
         let (session, view) = try replica()
         let server = server(runner: Probe(status: 255, stderr: "Host key verification failed.\r\n"))
-        PaneLead.reconnect = { _, _ in true }
+        PaneLead.reconnect = { _, _, _ in true }
         func leftNode() -> ControlSurfaceNode? {
             store.controlTree(paneForeground: { _ in nil }).workspaces.flatMap(\.sessions)
                 .first { $0.id == session.id.uuidString }?.surfaces?.first { $0.kind == "left" }
         }
         XCTAssertNil(leftNode()?.reconnect)
 
-        server.waitToReconnect(view, cover: false)
+        server.waitToReconnect(view, cover: false, reclaim: nil)
         server.tickReconnects()
         try await settleProbe(session.paneIdentity)
 
@@ -207,12 +222,12 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
     func testAHostThatDoesNotAnswerKeepsThePaneWaiting() async throws {
         let (session, view) = try replica()
         let server = server(probe: 255)
-        PaneLead.reconnect = { _, _ in
+        PaneLead.reconnect = { _, _, _ in
             XCTFail("no attach before the host answers")
             return true
         }
 
-        server.waitToReconnect(view, cover: false)
+        server.waitToReconnect(view, cover: false, reclaim: nil)
         server.tickReconnects()
         let book = RemoteReconnectBook.shared
         for _ in 0..<100 where book.entries[session.paneIdentity]?.probing == true {
@@ -226,11 +241,11 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
     func testAPaneThatClosedWhileWaitingIsDropped() throws {
         let (session, view) = try replica()
         let server = server(probe: 0)
-        PaneLead.reconnect = { _, _ in
+        PaneLead.reconnect = { _, _, _ in
             XCTFail("a closed pane is never attached")
             return true
         }
-        server.waitToReconnect(view, cover: false)
+        server.waitToReconnect(view, cover: false, reclaim: nil)
 
         session.surface = nil
         server.tickReconnects()
@@ -281,15 +296,15 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
     func testAnEndedRowsPanesStopWaitingAndKeepTheirScreens() async throws {
         let (session, view, splitView) = try catalogRow()
         let server = server(probe: 0)
-        PaneLead.reconnect = { _, _ in
+        PaneLead.reconnect = { _, _, _ in
             XCTFail("an ended row's pane is never attached again")
             return true
         }
         let book = RemoteReconnectBook.shared
         let split = try XCTUnwrap(session.splitPaneIdentity)
         defer { book.cancel(pane: split) }
-        server.waitToReconnect(view, cover: false)
-        server.waitToReconnect(splitView, cover: false)
+        server.waitToReconnect(view, cover: false, reclaim: nil)
+        server.waitToReconnect(splitView, cover: false, reclaim: nil)
         XCTAssertTrue(book.waiting(pane: split))
 
         session.ended = true
@@ -322,15 +337,15 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
         let (session, view, splitView) = try catalogRow()
         let server = server(probe: 0)
         var reconnected: [GhosttySurfaceView] = []
-        PaneLead.reconnect = { view, _ in
+        PaneLead.reconnect = { view, _, _ in
             reconnected.append(view)
             return true
         }
         let book = RemoteReconnectBook.shared
         let split = try XCTUnwrap(session.splitPaneIdentity)
         defer { book.cancel(pane: split); book.cancel(pane: session.paneIdentity) }
-        server.waitToReconnect(view, cover: false)
-        server.waitToReconnect(splitView, cover: false)
+        server.waitToReconnect(view, cover: false, reclaim: nil)
+        server.waitToReconnect(splitView, cover: false, reclaim: nil)
 
         session.catalogPanes = [split: heldPane(split)]
         server.tickReconnects()
@@ -345,12 +360,12 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
         let (session, view, _) = try catalogRow()
         let probe = GatedProbe()
         let server = server(runner: probe)
-        PaneLead.reconnect = { _, _ in
+        PaneLead.reconnect = { _, _, _ in
             XCTFail("a row that ended while its probe ran is never attached again")
             return true
         }
         let book = RemoteReconnectBook.shared
-        server.waitToReconnect(view, cover: false)
+        server.waitToReconnect(view, cover: false, reclaim: nil)
         server.tickReconnects()
         for _ in 0..<200 where !probe.inFlight {
             try await Task.sleep(for: .milliseconds(10))
@@ -392,12 +407,12 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
         let (session, view, _) = try catalogRow()
         let server = server(probe: 0)
         var attached: [GhosttySurfaceView] = []
-        PaneLead.reconnect = { old, _ in
+        PaneLead.reconnect = { old, _, _ in
             attached.append(old)
             return true
         }
         let book = RemoteReconnectBook.shared
-        server.waitToReconnect(view, cover: false)
+        server.waitToReconnect(view, cover: false, reclaim: nil)
 
         for state in [RemoteCatalogMirror.State.connecting, .disconnected("lost")] {
             store.catalogState = state
@@ -423,12 +438,12 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
         store.catalogState = .connected
         let probe = GatedProbe()
         let server = server(runner: probe)
-        PaneLead.reconnect = { _, _ in
+        PaneLead.reconnect = { _, _, _ in
             XCTFail("a pane whose catalog dropped during its probe is never attached")
             return true
         }
         let book = RemoteReconnectBook.shared
-        server.waitToReconnect(view, cover: false)
+        server.waitToReconnect(view, cover: false, reclaim: nil)
         server.tickReconnects()
         for _ in 0..<200 where !probe.inFlight {
             try await Task.sleep(for: .milliseconds(10))
@@ -451,7 +466,7 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
         store.catalogState = .disconnected("lost")
         let probe = Probe(status: 0)
         let server = server(runner: probe)
-        PaneLead.reconnect = { _, _ in
+        PaneLead.reconnect = { _, _, _ in
             XCTFail("a scratch reattaches through the mirror")
             return true
         }
@@ -541,13 +556,13 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
     func testAPaneAlreadyClosedWhenParkedIsNeverRegistered() throws {
         let (session, view) = try replica()
         let server = server(probe: 0)
-        PaneLead.reconnect = { _, _ in
+        PaneLead.reconnect = { _, _, _ in
             XCTFail("a pane already closed is never attached")
             return true
         }
         session.surface = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), backedByZmx: false)
 
-        server.waitToReconnect(view, cover: false)
+        server.waitToReconnect(view, cover: false, reclaim: nil)
 
         XCTAssertFalse(RemoteReconnectBook.shared.waiting(pane: session.paneIdentity))
     }

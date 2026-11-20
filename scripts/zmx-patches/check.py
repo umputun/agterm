@@ -18,7 +18,7 @@ NAME = "e2e"
 ROLE = re.compile(rb"\x1b\]2;zmx-role;([A-Za-z0-9-]+):(\w+):(\d+)\x1b\\")
 
 
-def attach(nonce, rows, cols, claim, name=NAME, argv=("/bin/sh",)):
+def attach(nonce, rows, cols, claim, name=NAME, argv=("/bin/sh",), reclaim=None):
     pid, fd = pty.fork()
     if pid == 0:
         env = dict(os.environ, ZMX_DIR=ZDIR, ZMX_NO_DETACH_KEY="1", TERM="xterm-256color")
@@ -28,6 +28,8 @@ def attach(nonce, rows, cols, claim, name=NAME, argv=("/bin/sh",)):
             env["ZMX_MANAGED"] = nonce
         if claim:
             env["ZMX_MANAGED_CLAIM"] = "1"
+        if reclaim:
+            env["ZMX_MANAGED_RECLAIM"] = reclaim
         # before exec, so the client's Init reads this size and not the pty default
         fcntl.ioctl(0, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
         os.execve(ZMX, [ZMX, "attach", name, *argv], env)
@@ -115,6 +117,41 @@ def main():
         orphaned = ROLE.findall(drain(f1, 1.0))
         ok &= check("the leader leaving reports unowned", bool(orphaned) and orphaned[-1][1] == b"unowned", repr(orphaned))
 
+        def role_of(fd, nonce):
+            found = [r for r in ROLE.findall(drain(fd, 1.5)) if r[0] == nonce.encode()]
+            return found[-1][1] if found else None
+
+        def joined(nonce, claim=False, reclaim=None):
+            pid, fd = attach(nonce, 30, 83, claim=claim, name="reclaim", reclaim=reclaim)
+            pids.append(pid)
+            return pid, fd
+
+        _, o1 = joined("rc-origin")
+        role_of(o1, "rc-origin")
+        dropped, _ = joined("rc-v1", claim=True)
+        time.sleep(1.0)
+        _, v2 = joined("rc-v2", reclaim="rc-v1")
+        ok &= check("a reconnect takes back the lead its dropped attach holds", role_of(v2, "rc-v2") == b"leader")
+        _, stranger = joined("rc-x", reclaim="rc-nobody")
+        ok &= check("naming another attach takes nothing", role_of(stranger, "rc-x") == b"follower")
+
+        for pid in (dropped, pids[-2]):
+            os.kill(pid, 15)
+        time.sleep(1.0)
+        _, fallback = joined("rc-origin-2")
+        ok &= check("a vacant pane goes to the next attach", role_of(fallback, "rc-origin-2") == b"leader")
+        _, v3 = joined("rc-v3", reclaim="rc-v2")
+        ok &= check("a reconnect takes back a lead an unused attach filled", role_of(v3, "rc-v3") == b"leader")
+
+        os.kill(pids[-1], 15)
+        time.sleep(1.0)
+        _, used = joined("rc-origin-3")
+        ok &= check("the pane is vacant again for the next attach", role_of(used, "rc-origin-3") == b"leader")
+        os.write(used, b"echo USED\r")
+        time.sleep(0.7)
+        _, v4 = joined("rc-v4", reclaim="rc-v3")
+        ok &= check("an attach that was typed into keeps the lead", role_of(v4, "rc-v4") == b"follower")
+
         missing = cli("screen", "no-such-session")
         ok &= check("screen on a missing session fails", missing.returncode != 0)
 
@@ -192,7 +229,7 @@ def main():
         time.sleep(1.0)
         ok &= check("a killed session writes no record", not listed("killed") and not os.path.exists(killed_record))
     finally:
-        cli("kill", NAME, "detached", "killed", "env-probe", "--force")
+        cli("kill", NAME, "reclaim", "detached", "killed", "env-probe", "--force")
         for pid in pids:
             try:
                 os.kill(pid, 9)

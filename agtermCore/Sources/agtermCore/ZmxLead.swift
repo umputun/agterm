@@ -17,15 +17,21 @@ public struct ZmxLeadAttachment: Equatable, Sendable {
     /// Read by the zmx client, which opts into explicit leadership when it is set.
     public static let nonceVariable = "ZMX_MANAGED"
     public static let claimVariable = "ZMX_MANAGED_CLAIM"
+    public static let reclaimVariable = "ZMX_MANAGED_RECLAIM"
 
     public let nonce: String
     /// False for the automatic re-attach after the leader left: that one leads only if the session is
     /// still unowned when it arrives, so it cannot take a lead someone claimed in the meantime.
     public let claim: Bool
+    /// The nonce of the attach that led when its link dropped. The daemon gives this attach the lead
+    /// only while that attach still holds it, or while the leader took the pane only because it was
+    /// free and has not been typed into or clicked since.
+    public let reclaim: String?
 
-    public init(nonce: String = ZmxLeadAttachment.makeNonce(), claim: Bool) {
+    public init(nonce: String = ZmxLeadAttachment.makeNonce(), claim: Bool, reclaim: String? = nil) {
         self.nonce = nonce
         self.claim = claim
+        self.reclaim = reclaim
     }
 
     public static func makeNonce() -> String {
@@ -35,6 +41,7 @@ public struct ZmxLeadAttachment: Equatable, Sendable {
     public var environment: [String: String] {
         var environment = [Self.nonceVariable: nonce]
         if claim { environment[Self.claimVariable] = "1" }
+        if let reclaim { environment[Self.reclaimVariable] = reclaim }
         return environment
     }
 
@@ -86,6 +93,13 @@ public struct ZmxLeadState: Equatable, Sendable {
     /// True when the pane draws output laid out for another client's grid, or nothing yet, and must be
     /// covered.
     public var covered: Bool { reattaching || role == .follower || role == .unowned }
+
+    /// The nonce a reconnect after this attachment's link dropped takes the lead back from: its own when
+    /// it led, or the one it was taking back itself when no report arrived before the drop.
+    public var reclaimAfterDrop: String? {
+        if role == .leader { return attachment.nonce }
+        return role == nil ? attachment.reclaim : nil
+    }
 
     /// Applies `notice` and says whether the role changed. A report for another attachment's nonce is
     /// forged or left over from a surface this pane replaced; an older generation lost a race.

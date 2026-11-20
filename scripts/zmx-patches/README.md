@@ -62,6 +62,11 @@ longer apply, and re-running `check.py`.
   shell exit the daemon goes on sending what its clients have not read, until none is left or one 2 s
   deadline shared by all of them passes, and takes no new attach, input or command meanwhile. A kill ends
   the daemon at once; its clients write only what they already hold, under their deadline.
+- `0008-reclaim-dropped-lead.patch` lets an attach take back a lead it lost with its link. Every managed
+  client sends its `ZMX_MANAGED` token in a new `Identity` message after `Manage`, followed by the token in
+  `ZMX_MANAGED_RECLAIM` when that is set. At Init such a client leads while the leader is the attach that
+  token names, or one that took a vacant session without claiming and has sent no key, paste or mouse
+  press since; otherwise it attaches as before. A daemon without the patch ignores the unknown tag.
 - `ghostty/0001-formatter-unstyled-blanks.patch` fixes the snapshot a re-attach replays. The formatter
   wrote cells a program skipped with a cursor move as spaces under the previous cell's style, so a gap
   after a colored run came back painted; a skipped cell now closes the style first. Spaces the program
