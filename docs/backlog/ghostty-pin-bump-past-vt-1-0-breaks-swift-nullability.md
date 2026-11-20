@@ -18,7 +18,7 @@ either.
 
 **Why wait.** The app-side patch is not fixed at the tag: `scripts/ghostty-patches/0001` is still needed
 because `Surface.deinit` stops and joins the renderer and io threads with no mailbox drain, and PR 14444 is
-still open. Tracked in `remove-surface-free-backport-after-ghostty-pin-bump.md`.
+still open. `scripts/ghostty-patches/README.md` holds each patch's removal condition and its regressions.
 
 The zmx-side patch is fixed at the tag. `scripts/zmx-patches/ghostty/0001` closes the style before a blank
 cell is buffered; the tag's page formatter instead steps over same-row blanks with CUF and closes the style
@@ -49,5 +49,6 @@ Fields now marked nullable (surface config `nsview`, `userdata`, `working_direct
 `env_vars`, `initial_input`) still accept our assignments. `ghostty_text_s.text` is `_Null_unspecified`, so
 its guards stay valid. The new `GHOSTTY_ACTION_SET_WINDOW_THEME` falls through the action switch's `default`.
 
-Bump when an upstream fix we carry lands (either patch above) or a needed feature appears. The bump then
-also re-runs the font-size-increase scrollback check from CLAUDE.md and `scripts/test-surface-teardown.py`.
+Bump when an upstream fix we carry lands (patch `0001`, or `0002` with ghostty PR 13605) or a needed feature
+appears. The bump then also re-runs the font-size-increase scrollback check from CLAUDE.md and
+`scripts/test-surface-teardown.py`.

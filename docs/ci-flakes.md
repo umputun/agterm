@@ -310,6 +310,13 @@ Each entry separates a demonstrated cause from one that is only consistent with 
   enforced by `ServerStreams.schedulePageClaimExpiry`) would produce these messages, and so would a defect the
   branch fixed before the merge. That real-clock gap is closed: the harness's frozen clock now covers page
   claims (see `aPageWithdrawnFromAStallingViewerIsOwnedByTheViewerItIsOfferedTo` above).
+  Both before #1051 and during runner stalls, run 43831232607 (#1016) failed `everyPageKindOpensInEveryLinkMode`
+  (`.overlay50`, `.overlay`, `.browser`: close answered `no overlay` after the page request arrived) and
+  `textCommandsReachThePresenterAndAnswerWithItsResult` (the text node gone, the viewer received no page command),
+  and run 43866829158 (#1021) failed `everyPageKindOpensInEveryLinkMode` (`.overlay75`, `no overlay`),
+  `aClickReplacesAHiddenClickedPageOnlyOnceTheNewFileChecksOut` (slot job nil) and
+  `aHeldMarkdownPageOffersItsGrantOnlyToAPresenterThatFollowsLinks` (`page not claimable`) after 117.8 s.
+  [Inference] An unclaimed page expiring on the real clock fits both; the page offer time was not measured.
 - **`ServerLifecycleTests.aFishPaneLoadsTheShellIntegration`** (job 129484718181), at
   `ServerLifecycleTests.swift:191`: after 15 s the screen ends at the typed command with no output and no new
   prompt, so fish had not finished the command. One occurrence; cause unresolved. The test is unchanged since
@@ -402,6 +409,8 @@ Causes not found, left as backlog items with their capture steps:
 - `docs/backlog/hosted-tests-hang-in-ci-until-job-timeout.md`
 - `docs/backlog/fish-seam-payload-test-times-out-under-load.md`
 - `docs/backlog/session-host-fixture-start-stalls-before-pidfile.md`
+- `docs/backlog/session-host-sometimes-creates-an-app-rooted-daemon.md`
+- `docs/backlog/overlay-job-cancel-tests-fail-during-ci-stall.md`
 - `docs/backlog/control-calls-stall-under-title-flood-on-ci.md`, the `spam-8` stall, which the retired case no
   longer exercises
 
