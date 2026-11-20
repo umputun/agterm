@@ -73,6 +73,7 @@ final class RecordingAttachLines: RemoteAttachLines {
     var panes: [(daemon: String, local: UUID)] = []
     var scratches: [String] = []
     var scratchLocals: [UUID] = []
+    var scratchReclaims: [String?] = []
 
     func paneAttach(_ origin: RemoteBinding.Origin, daemon: String, local: UUID) -> String {
         panes.append((daemon, local))
@@ -80,8 +81,13 @@ final class RecordingAttachLines: RemoteAttachLines {
     }
 
     func scratchAttach(_ origin: RemoteBinding.Origin, daemon: String, local: UUID) -> String {
+        scratchAttach(origin, daemon: daemon, local: local, reclaim: nil)
+    }
+
+    func scratchAttach(_ origin: RemoteBinding.Origin, daemon: String, local: UUID, reclaim: String?) -> String {
         scratches.append(daemon)
         scratchLocals.append(local)
+        scratchReclaims.append(reclaim)
         return "attach-scratch \(daemon)"
     }
 }

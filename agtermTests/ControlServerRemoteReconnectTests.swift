@@ -523,6 +523,38 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
         XCTAssertTrue(session.scratchActive)
     }
 
+    func testAnOriginScratchThatLedTakesItsLeadBackOnReconnect() async throws {
+        let workspace = try XCTUnwrap(store.currentWorkspaceID)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: "/tmp", remoteHost: "mini"))
+        let primary = UUID()
+        let origin = RemoteBinding.Origin(host: "mini", endpoint: ControlZmxEndpoint(executable: "/a/zmx", socketDirectory: "/tmp/z"),
+                                          sessionName: "c")
+        store.bindRemote(RemoteBinding(remoteSessionID: "origin", daemonsByLocalPane: [session.paneIdentity: ZmxSupport.daemonName(for: primary)],
+                                       presentationVersion: 1, origin: origin), forSession: session.id)
+        let server = server(probe: 0)
+        store.applyRemoteLayout(PresentationLayout(panes: [primary], primary: primary, shown: false, scratch: UUID(), scratchShown: true),
+                                forSession: session.id, attach: server)
+        let client = try XCTUnwrap(session.scratchClientIdentity)
+        pane = client
+        defer { ZmxLeadBook.shared.forget(pane: client) }
+        let nonce = try XCTUnwrap(ZmxLeadBook.shared.states[client]?.attachment.nonce)
+        _ = ZmxLeadBook.shared.apply(try XCTUnwrap(ZmxLeadNotice(title: "zmx-role;\(nonce):leader:1")), pane: client)
+        let view = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), env: ["AGTERM_PANE_ID": client.uuidString],
+                                      backedByZmx: false)
+        view.watermarkSession = session
+        session.scratchSurface = view
+        session.scratchCommand = nil
+        let generation = session.scratchGeneration
+
+        XCTAssertTrue(server.remoteScratchStopped(view))
+        server.tickReconnects()
+        for _ in 0..<200 where session.scratchGeneration == generation {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        XCTAssertTrue(session.scratchCommand?.contains("ZMX_MANAGED_RECLAIM=\(nonce)") == true, session.scratchCommand ?? "")
+    }
+
     func testAnEndedRowClosesItsOriginScratchWhetherParkedOrRunning() throws {
         for parked in [true, false] {
             let workspace = try XCTUnwrap(store.currentWorkspaceID)

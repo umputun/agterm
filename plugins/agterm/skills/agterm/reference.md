@@ -2758,7 +2758,7 @@ daemon to lead, which is every local pane outside Live sessions mode (`agtermctl
 an agterm on either side predates the lead. `agtermctl session lead [--pane left|right]` takes the lead
 for this Mac, as pressing a key on the cover does.
 
-A pane that reconnects after its ssh dropped takes the lead back when this Mac led it at the drop and
+A pane or scratch that reconnects after its ssh dropped takes the lead back when this Mac led it at the drop and
 nobody has used it since: this Mac's lost connection still holds the lead, or another Mac took it only
 because the pane was free and nothing was typed, pasted or clicked there since. Otherwise it comes back
 covered. Text sent with `session type` does not count as use. A session started by an agterm without this

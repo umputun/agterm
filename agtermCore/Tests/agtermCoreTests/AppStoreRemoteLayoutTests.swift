@@ -335,6 +335,19 @@ struct AppStoreRemoteLayoutTests {
         #expect(store.originScratchStopped(session.id) == nil)
     }
 
+    @Test func aStoppedOriginScratchAttachesAgainNamingTheAttachToReclaimFrom() throws {
+        let (store, session) = try attachedAlone()
+        let scratch = UUID()
+        _ = store.applyRemoteLayout(scratchLayout(scratch, shown: true), forSession: session.id, attach: lines)
+        let client = try #require(session.scratchClientIdentity)
+        session.scratchSurface = SpySurface(paneToken: client.uuidString)
+
+        _ = store.originScratchStopped(session.id)
+        #expect(store.replaceOriginScratchAttachment(session.id, identity: scratch, attach: lines, reclaim: "n1"))
+
+        #expect(lines.scratchReclaims == [nil, "n1"])
+    }
+
     private func node(_ store: AppStore, _ session: Session) throws -> ControlSessionNode {
         let tree = store.controlTree(paneForeground: { _ in nil })
         return try #require(tree.workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString })

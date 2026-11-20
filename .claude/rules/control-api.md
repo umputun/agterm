@@ -2613,7 +2613,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   new surface, by the first key on the cover, by `session.lead`, or by itself when the role turns
   `unowned`. The automatic one omits the claim, so it leads only if the daemon is still unowned when it
   arrives and cannot take a lead someone claimed meanwhile.
-  A reconnect after a dropped link also sets `ZMX_MANAGED_RECLAIM` to `ZmxLeadState.reclaimAfterDrop`: the nonce
+  A reconnect after a dropped link, an attached row's origin scratch included, also sets `ZMX_MANAGED_RECLAIM` to
+  `ZmxLeadState.reclaimAfterDrop`: the nonce
   of the attach that led at the drop, or the one an attach that dropped before its first report was reclaiming.
   zmx patch 0008 decides at Init, in one step: the reconnect leads while the leader is that attach, matched by the
   token every managed client sends in `Identity`, or one that filled a vacancy without a claim and has sent no

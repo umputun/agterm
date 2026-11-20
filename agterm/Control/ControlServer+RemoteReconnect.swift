@@ -25,7 +25,9 @@ extension ControlServer {
             ? store?.remoteActions?.mirror.scratchAttachmentStopped(of: session.id)
             : store?.originScratchStopped(session.id)
         guard let host = session.remoteHost, let pane = stopped else { return true }
-        RemoteReconnectBook.shared.wait(pane: pane, session: session.id, host: host, cover: false, now: hudClock())
+        // a server window's scratch attaches with no lead
+        let reclaim = session.catalogScratch == nil ? ZmxLeadBook.shared.states[pane]?.reclaimAfterDrop : nil
+        RemoteReconnectBook.shared.wait(pane: pane, session: session.id, host: host, cover: false, reclaim: reclaim, now: hudClock())
         startRemoteTick()
         return true
     }
@@ -59,7 +61,7 @@ extension ControlServer {
                    row.scratchClientIdentity == pane, let scratch = row.originScratch {
                     _ = row.catalogScratch != nil
                         ? store.remoteActions?.mirror.replaceScratchAttachment(of: entry.session, identity: scratch)
-                        : store.replaceOriginScratchAttachment(entry.session, identity: scratch, attach: self)
+                        : store.replaceOriginScratchAttachment(entry.session, identity: scratch, attach: self, reclaim: entry.reclaim)
                     return
                 }
                 // a row hidden for undo keeps waiting; finalizing its close lets the next due probe drop it. A catalog
