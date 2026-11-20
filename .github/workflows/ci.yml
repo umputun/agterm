@@ -356,6 +356,9 @@ jobs:
         env:
           AGTERM_HELPER_HASHING: "1"
         run: scripts/with-helper-prebuild.sh scripts/build.sh COMPILATION_CACHE_ENABLE_CACHING=YES COMPILATION_CACHE_CAS_PATH="$GITHUB_WORKSPACE/build/cas" COMPILATION_CACHE_ENABLE_DIAGNOSTIC_REMARKS=YES AGTERM_HELPER_HASHING=1
+      - name: Report the helper prebuild
+        if: always()
+        run: grep -E "Build complete|Compiling|Building for" build/helper-prebuild.log || true
       - name: Save the package checkouts
         if: steps.packages.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
@@ -558,6 +561,9 @@ jobs:
             -destination 'platform=macOS' \
             -derivedDataPath build/DerivedData \
             COMPILATION_CACHE_ENABLE_CACHING=YES COMPILATION_CACHE_CAS_PATH="$GITHUB_WORKSPACE/build/cas" COMPILATION_CACHE_ENABLE_DIAGNOSTIC_REMARKS=YES AGTERM_HELPER_HASHING=1
+      - name: Report the helper prebuild
+        if: always()
+        run: grep -E "Build complete|Compiling|Building for" build/helper-prebuild.log || true
       - name: Save the helper build
         if: steps.helpers.outputs.cache-hit != 'true' && matrix.shard == 1
         uses: actions/cache/save@v6
