@@ -482,4 +482,27 @@ struct SidebarDropTests {
         #expect(SidebarDrop.companionReparent(from: Self.a, onto: row, childIndex: SidebarDrop.onItemIndex) == nil)
         #expect(SidebarDrop.companionReparent(from: Self.a, onto: row, childIndex: 1) == nil)
     }
+
+    // MARK: - Root block
+
+    @Test(arguments: [
+        (childIndex: 0, rootRows: 2, rootShown: true, expected: Optional(0)),
+        (childIndex: 2, rootRows: 2, rootShown: true, expected: Optional(2)),
+        (childIndex: 3, rootRows: 2, rootShown: true, expected: nil),
+        (childIndex: 0, rootRows: 0, rootShown: true, expected: Optional(0)),
+        (childIndex: 0, rootRows: 0, rootShown: false, expected: nil),
+        (childIndex: 1, rootRows: 2, rootShown: false, expected: nil),
+        (childIndex: SidebarDrop.onItemIndex, rootRows: 2, rootShown: true, expected: nil),
+    ])
+    func aTopLevelGapResolvesToARootSlotOnlyWithinAShownRootBlock(childIndex: Int, rootRows: Int, rootShown: Bool, expected: Int?) {
+        #expect(SidebarDrop.rootGapSlot(childIndex: childIndex, rootRows: rootRows, rootShown: rootShown) == expected)
+    }
+
+    @Test func aSessionDroppedIntoTheRootBlockLandsAtItsSlot() {
+        let root = UUID()
+        let move = SidebarDrop.resolveSessions(sources: [SidebarDrop.SessionSource(workspace: Self.wsA, index: 1)],
+                                               target: .workspaceRow(id: root, sessionCount: 2), childIndex: 1)
+        #expect(move?.workspace == root)
+        #expect(move?.destination == 1)
+    }
 }

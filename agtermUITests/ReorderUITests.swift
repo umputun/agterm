@@ -214,6 +214,34 @@ final class ReorderUITests: XCTestCase {
 
     // MARK: - Fixture
 
+    func testDraggingASessionOntoARootRowMovesItIntoTheRoot() throws {
+        try relaunchWithWorkspaces([(name: "workspace 1", sessions: ["aaa", "bbb"])], root: ["top"])
+        dragRow(named: "bbb", onto: "top")
+        XCTAssertTrue(pollWorkspaceSessionNames(["": ["top", "bbb"], "workspace 1": ["aaa"]], timeout: 10))
+    }
+
+    func testDraggingARootSessionOntoAWorkspaceRowMovesItOut() throws {
+        try relaunchWithWorkspaces([(name: "workspace 1", sessions: ["aaa", "bbb"])], root: ["top"])
+        dragRow(named: "top", onto: "aaa")
+        XCTAssertTrue(pollWorkspaceSessionNames(["": [], "workspace 1": ["aaa", "top", "bbb"]], timeout: 10))
+    }
+
+    func testMoveToTopLevelSessionsFromTheRowMenu() throws {
+        try relaunchWithWorkspaces([(name: "workspace 1", sessions: ["aaa", "bbb"])], root: ["top"])
+        sessionRow(named: "bbb").rightClick()
+        presentedMenuItem("Move to").hover()
+        presentedMenuItem("Top-Level Sessions").click()
+        XCTAssertTrue(pollWorkspaceSessionNames(["": ["top", "bbb"], "workspace 1": ["aaa"]], timeout: 10))
+    }
+
+    func testFocusTopLevelSessionsFromARootRowHidesTheWorkspaceRows() throws {
+        try relaunchWithWorkspaces([(name: "workspace 1", sessions: ["aaa"])], root: ["top"])
+        sessionRow(named: "top").rightClick()
+        presentedMenuItem("Focus Top-Level Sessions").click()
+        XCTAssertTrue(workspaceRow(named: "workspace 1").waitForNonExistence(timeout: 10), "the filter shows the root alone")
+        XCTAssertTrue(sessionRow(named: "top").exists)
+    }
+
     private func relaunchFlagged(_ fixtures: [(name: String, sessions: [(String, Bool)], collapsed: Bool)],
                                  layout: String) throws {
         let snapshotFile = stateDir.windowSnapshotFile()
@@ -255,19 +283,21 @@ final class ReorderUITests: XCTestCase {
 
     /// Relaunches with named workspaces and sessions. `confirmClose` opts one focused test back into the
     /// close modal that ordinary XCUITest launches suppress to avoid hanging unrelated close flows.
-    private func relaunchWithWorkspaces(_ fixtures: [(name: String, sessions: [String])], confirmClose: Bool = false) throws {
+    private func relaunchWithWorkspaces(_ fixtures: [(name: String, sessions: [String])], root: [String]? = nil,
+                                        confirmClose: Bool = false) throws {
         let snapshotFile = stateDir.windowSnapshotFile()
         app.terminate()
 
         var firstSessionID: String?
-        let workspaces = fixtures.map { fixture -> [String: Any] in
-            let sessions = fixture.sessions.map { name -> [String: Any] in
+        let sessions = { (names: [String]) -> [[String: Any]] in
+            names.map { name in
                 let id = UUID().uuidString
                 if firstSessionID == nil { firstSessionID = id }
                 return ["id": id, "customName": name, "cwd": NSHomeDirectory()]
             }
-            return ["id": UUID().uuidString, "name": fixture.name, "sessions": sessions]
         }
+        var workspaces = fixtures.map { ["id": UUID().uuidString, "name": $0.name, "sessions": sessions($0.sessions)] as [String: Any] }
+        if let root { workspaces.append(["id": UUID().uuidString, "name": "", "root": true, "sessions": sessions(root)]) }
         let selectedSessionID = try XCTUnwrap(firstSessionID, "the fixture must contain at least one session")
         let snapshot: [String: Any] = [
             "version": 1,
@@ -286,7 +316,7 @@ final class ReorderUITests: XCTestCase {
         app.launchEnvironment["AGTERM_STATE_DIR"] = stateDir.path
         if confirmClose { app.launchEnvironment["AGTERM_UITEST_ALLOW_CLOSE_CONFIRMATION"] = "1" }
         app.launchForUITest()
-        for name in fixtures.flatMap(\.sessions) {
+        for name in fixtures.flatMap(\.sessions) + (root ?? []) {
             XCTAssertTrue(sessionRow(named: name).waitForExistence(timeout: 10), "seeded session \(name) should be visible")
         }
     }

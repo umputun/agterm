@@ -109,6 +109,172 @@ final class WorkspaceSidebarTests: XCTestCase {
         XCTAssertEqual(rows.store.workspaces.last?.id, rows.root.id)
     }
 
+    func testASessionDroppedInTheGapAboveTheFirstWorkspaceRowLandsLastInTheRoot() throws {
+        let rows = try seed()
+        buildSidebar(for: rows.store)
+        let info = sessionDrag([rows.named.id])
+
+        XCTAssertEqual(coordinator.outlineView(outline, validateDrop: info, proposedItem: nil, proposedChildIndex: 2), .move)
+        XCTAssertNil(outline.dropItem)
+        XCTAssertEqual(outline.dropChildIndex, 2)
+        XCTAssertTrue(coordinator.outlineView(outline, acceptDrop: info, item: nil, childIndex: 2))
+        XCTAssertEqual(rows.store.rootWorkspace?.sessions.map(\.id), [rows.top.id, rows.companion.id, rows.second.id, rows.named.id])
+        XCTAssertFalse(rows.store.workspaces.first { $0.id == rows.workspace.id }?.sessions.contains { $0.id == rows.named.id } ?? true)
+    }
+
+    func testASessionDroppedOnARootRowJoinsTheRoot() throws {
+        let rows = try seed()
+        buildSidebar(for: rows.store)
+        let info = sessionDrag([rows.named.id])
+
+        XCTAssertEqual(coordinator.outlineView(outline, validateDrop: info, proposedItem: try node(rows.second.id),
+                                               proposedChildIndex: SidebarDrop.onItemIndex), .move)
+        XCTAssertTrue(coordinator.outlineView(outline, acceptDrop: info, item: outline.dropItem, childIndex: outline.dropChildIndex))
+        XCTAssertEqual(rows.store.workspace(forSession: rows.named.id)?.id, rows.root.id)
+    }
+
+    func testARootParentDraggedToTheEndOfTheRootMovesWithItsCompanions() throws {
+        let rows = try seed()
+        buildSidebar(for: rows.store)
+        let info = sessionDrag([rows.top.id])
+
+        XCTAssertEqual(coordinator.outlineView(outline, validateDrop: info, proposedItem: nil, proposedChildIndex: 2), .move)
+        XCTAssertTrue(coordinator.outlineView(outline, acceptDrop: info, item: nil, childIndex: 2))
+        XCTAssertEqual(rows.store.rootWorkspace?.sessions.map(\.id), [rows.second.id, rows.top.id, rows.companion.id])
+    }
+
+    func testARootSessionDroppedIntoAWorkspaceLeavesTheRoot() throws {
+        let rows = try seed()
+        buildSidebar(for: rows.store)
+        let info = sessionDrag([rows.second.id])
+
+        XCTAssertEqual(coordinator.outlineView(outline, validateDrop: info, proposedItem: try node(rows.workspace.id),
+                                               proposedChildIndex: 0), .move)
+        XCTAssertTrue(coordinator.outlineView(outline, acceptDrop: info, item: outline.dropItem, childIndex: outline.dropChildIndex))
+        XCTAssertEqual(rows.store.workspace(forSession: rows.second.id)?.id, rows.workspace.id)
+    }
+
+    func testTheTopLevelGapIsNoDropWhileTheFocusFilterHidesTheRoot() throws {
+        let rows = try seed()
+        rows.store.setFocusMembership(rows.workspace.id, member: true)
+        rows.store.setFocusEnabled(true)
+        buildSidebar(for: rows.store)
+
+        XCTAssertEqual(coordinator.outlineView(outline, validateDrop: sessionDrag([rows.named.id]), proposedItem: nil,
+                                               proposedChildIndex: 0), [])
+    }
+
+    func testAnEmptyRootTakesADropInTheGapAboveTheFirstWorkspaceRow() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let workspace = try XCTUnwrap(store.namedWorkspaces.first)
+        let session = try XCTUnwrap(workspace.sessions.first ?? store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        buildSidebar(for: store)
+        let info = sessionDrag([session.id])
+
+        XCTAssertEqual(coordinator.outlineView(outline, validateDrop: info, proposedItem: nil, proposedChildIndex: 0), .move)
+        XCTAssertTrue(coordinator.outlineView(outline, acceptDrop: info, item: nil, childIndex: 0))
+        XCTAssertEqual(store.rootWorkspace?.sessions.map(\.id), [session.id])
+    }
+
+    func testAFolderDroppedOnARootRowOpensInTheRootWhileANamedWorkspaceIsCurrent() throws {
+        let rows = try seed()
+        rows.store.selectSession(rows.named.id)
+        buildSidebar(for: rows.store)
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-drop-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: folder) }
+        let pasteboard = NSPasteboard(name: NSPasteboard.Name("agterm-sidebar-\(UUID().uuidString)"))
+        addTeardownBlock { pasteboard.releaseGlobally() }
+        pasteboard.clearContents()
+        pasteboard.writeObjects([folder as NSURL])
+        let info = SidebarDrag(pasteboard, over: outline)
+        let before = rows.store.rootWorkspace?.sessions.count ?? 0
+
+        XCTAssertEqual(coordinator.outlineView(outline, validateDrop: info, proposedItem: try node(rows.second.id),
+                                               proposedChildIndex: SidebarDrop.onItemIndex), .copy)
+        XCTAssertTrue(coordinator.outlineView(outline, acceptDrop: info, item: outline.dropItem, childIndex: outline.dropChildIndex))
+        XCTAssertEqual(rows.store.rootWorkspace?.sessions.count, before + 1)
+    }
+
+    func testMoveToListsTopLevelSessionsFirstAndMovesANamedSessionIntoTheRoot() throws {
+        let rows = try seed()
+        buildSidebar(for: rows.store)
+        rows.store.setSidebarSelection([rows.named.id])
+
+        let submenu = try moveToMenu(rows.named.id)
+        XCTAssertEqual(submenu.items.first?.title, ControlWorkspaceNode.rootLabel)
+        let item = try XCTUnwrap(submenu.items.first)
+        coordinator.perform(item.action, with: item)
+
+        XCTAssertEqual(rows.store.workspace(forSession: rows.named.id)?.id, rows.root.id)
+    }
+
+    func testMoveToOnARootSessionOffersTheNamedWorkspacesOnly() throws {
+        let rows = try seed()
+        buildSidebar(for: rows.store)
+        rows.store.setSidebarSelection([rows.second.id])
+
+        XCTAssertEqual(try moveToMenu(rows.second.id).items.map(\.title), [rows.workspace.name])
+    }
+
+    func testTheCompanionMoveMenuHeadsTheRootsParentsTopLevelSessions() throws {
+        let rows = try seed()
+        let helper = try rows.store.addCompanion(to: rows.named.id).get()
+        buildSidebar(for: rows.store)
+        rows.store.setSidebarSelection([helper.id])
+
+        let submenu = try moveToMenu(helper.id)
+        XCTAssertEqual(Array(submenu.items.prefix(3).map(\.title)), [ControlWorkspaceNode.rootLabel, "top", "second"])
+        XCTAssertTrue(submenu.items[0].isSectionHeader)
+    }
+
+    func testARootRowFocusesTheRootAndTogglesItsMembership() throws {
+        let rows = try seed()
+        buildSidebar(for: rows.store)
+        rows.store.setSidebarSelection([rows.second.id])
+
+        try perform("Focus Top-Level Sessions", onRow: rows.second.id)
+        XCTAssertEqual(rows.store.focusedWorkspaceIDs, [rows.root.id])
+        XCTAssertTrue(rows.store.focusEnabled)
+        XCTAssertNotNil(try menuItem("Unfocus Top-Level Sessions", onRow: rows.second.id))
+        try perform("Remove Top-Level Sessions from Focus", onRow: rows.second.id)
+        XCTAssertTrue(rows.store.focusedWorkspaceIDs.isEmpty)
+        try perform("Add Top-Level Sessions to Focus", onRow: rows.second.id)
+        XCTAssertEqual(rows.store.focusedWorkspaceIDs, [rows.root.id])
+        XCTAssertFalse(rows.store.focusEnabled)
+    }
+
+    func testANamedSessionRowOffersNoTopLevelSessionsFocusItems() throws {
+        let rows = try seed()
+        buildSidebar(for: rows.store)
+        rows.store.setSidebarSelection([rows.named.id])
+
+        let menu = try XCTUnwrap(coordinator.menu(forRow: try row(rows.named.id)))
+        XCTAssertFalse(menu.items.contains { $0.title.contains(ControlWorkspaceNode.rootLabel) }, "\(menu.items.map(\.title))")
+    }
+
+    private func moveToMenu(_ id: UUID) throws -> NSMenu {
+        let menu = try XCTUnwrap(coordinator.menu(forRow: try row(id)))
+        return try XCTUnwrap(menu.items.first { $0.title == "Move to" }?.submenu, "\(menu.items.map(\.title))")
+    }
+
+    private func menuItem(_ title: String, onRow id: UUID) throws -> NSMenuItem? {
+        try XCTUnwrap(coordinator.menu(forRow: try row(id))).items.first { $0.title == title }
+    }
+
+    private func perform(_ title: String, onRow id: UUID) throws {
+        let item = try XCTUnwrap(try menuItem(title, onRow: id), title)
+        coordinator.perform(item.action, with: item)
+    }
+
+    private func sessionDrag(_ ids: [UUID]) -> SidebarDrag {
+        let pasteboard = NSPasteboard(name: NSPasteboard.Name("agterm-sidebar-\(UUID().uuidString)"))
+        addTeardownBlock { pasteboard.releaseGlobally() }
+        pasteboard.clearContents()
+        pasteboard.setString(ids.map(\.uuidString).joined(separator: "\n"), forType: sessionPasteboardType)
+        return SidebarDrag(pasteboard, over: outline)
+    }
+
     private func workspaceDrag(_ id: UUID, at point: NSPoint) -> SidebarDrag {
         let pasteboard = NSPasteboard(name: NSPasteboard.Name("agterm-sidebar-\(UUID().uuidString)"))
         addTeardownBlock { pasteboard.releaseGlobally() }

@@ -162,6 +162,111 @@ final class AppActionsRemoteCatalogTests: XCTestCase {
         XCTAssertEqual(store.companions(of: second.id).map(\.id), [companion.id, resident.id])
     }
 
+    func testASessionDroppedIntoAnAllDetachedRootGoesToTheOwnersRootByID() throws {
+        let rootID = UUID()
+        let moving = catalogSession(), detached = catalogSession()
+        openWithRoot(rootID, main: [moving], root: [detached])
+        mirror.detach(sessions: [detached.id])
+        XCTAssertEqual(store.rootWorkspace?.id, rootID)
+
+        XCTAssertTrue(dropIntoRootGap(moving.id, at: 0))
+        try sent(1)
+
+        XCTAssertTrue(runner.lines[0].contains("session move --target \(moving.id.uuidString) "), runner.lines[0])
+        XCTAssertTrue(runner.lines[0].hasSuffix("-- \(rootID.uuidString)"), runner.lines[0])
+    }
+
+    func testASessionDroppedAfterAVisibleRootRowIsPlacedAfterItPastDetachedRows() throws {
+        let rootID = UUID()
+        let moving = catalogSession(), detached = catalogSession(), visible = catalogSession()
+        openWithRoot(rootID, main: [moving], root: [detached, visible])
+        mirror.detach(sessions: [detached.id])
+
+        XCTAssertTrue(dropIntoRootGap(moving.id, at: 1))
+        try sent(1)
+
+        XCTAssertTrue(runner.lines[0].contains("session move --target \(moving.id.uuidString) --after \(visible.id.uuidString)"),
+                      runner.lines[0])
+    }
+
+    func testMoveToShowsTopLevelSessionsDisabledForAnOwnerWithOneWorkspaceAndNoRoot() throws {
+        let entry = catalogSession()
+        open([entry])
+        let (outline, coordinator) = mountSidebar()
+        store.setSidebarSelection([entry.id])
+        let row = try XCTUnwrap((0..<outline.numberOfRows).first { (outline.item(atRow: $0) as? SidebarNode)?.id == entry.id })
+
+        let menu = try XCTUnwrap(coordinator.menu(forRow: row))
+        let submenu = try XCTUnwrap(menu.items.first { $0.title == "Move to" }?.submenu, "\(menu.items.map(\.title))")
+        XCTAssertEqual(submenu.items.map(\.title), [ControlWorkspaceNode.rootLabel])
+        XCTAssertFalse(submenu.items[0].isEnabled)
+    }
+
+    func testALoneCompanionInARootlessOwnerGetsNoMoveTo() throws {
+        let parent = catalogSession()
+        let companion = catalogSession(parent: parent.id)
+        open([parent, companion])
+        let (outline, coordinator) = mountSidebar()
+        outline.expandItem(nil, expandChildren: true)
+        store.setSidebarSelection([companion.id])
+        let row = try XCTUnwrap((0..<outline.numberOfRows).first { (outline.item(atRow: $0) as? SidebarNode)?.id == companion.id })
+
+        let menu = try XCTUnwrap(coordinator.menu(forRow: row))
+        XCTAssertFalse(menu.items.contains { $0.title == "Move to" }, "\(menu.items.map(\.title))")
+    }
+
+    func testMoveToShowsTopLevelSessionsDisabledForAnOwnerWithoutARoot() throws {
+        let entry = catalogSession()
+        open([entry], withEmptyWorkspace: true)
+        let (outline, coordinator) = mountSidebar()
+        store.setSidebarSelection([entry.id])
+        let row = try XCTUnwrap((0..<outline.numberOfRows).first { (outline.item(atRow: $0) as? SidebarNode)?.id == entry.id })
+
+        let menu = try XCTUnwrap(coordinator.menu(forRow: row))
+        let submenu = try XCTUnwrap(menu.items.first { $0.title == "Move to" }?.submenu, "\(menu.items.map(\.title))")
+        XCTAssertEqual(submenu.items.map(\.title), [ControlWorkspaceNode.rootLabel, "spare"])
+        XCTAssertFalse(submenu.items[0].isEnabled)
+        XCTAssertTrue(submenu.items[1].isEnabled)
+    }
+
+    private func openWithRoot(_ rootID: UUID, main: [CatalogSession], root: [CatalogSession]) {
+        let workspaces = [CatalogWorkspace(id: workspaceID, name: "main", sessions: main),
+                          CatalogWorkspace(id: rootID, name: "", root: true, sessions: root)]
+        _ = mirror.receive(.snapshot(CatalogSnapshot(epoch: "e1", rev: 0, catalogID: UUID(),
+                                                     versions: CatalogVersions(server: "1", protocolVersion: 1, catalog: 1),
+                                                     workspaces: workspaces)))
+    }
+
+    private func mountSidebar() -> (NSOutlineView, WorkspaceSidebar.Coordinator) {
+        let outline = NSOutlineView()
+        let coordinator = WorkspaceSidebar.Coordinator(store: store, actions: actions)
+        outline.dataSource = coordinator
+        outline.delegate = coordinator
+        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("main"))
+        outline.addTableColumn(column)
+        outline.outlineTableColumn = column
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 240, height: 400), styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 240, height: 400))
+        scroll.documentView = outline
+        window.contentView = scroll
+        addTeardownBlock { window.orderOut(nil) }
+        coordinator.outlineView = outline
+        coordinator.rebuildAndReload()
+        return (outline, coordinator)
+    }
+
+    private func dropIntoRootGap(_ id: UUID, at slot: Int) -> Bool {
+        let (outline, coordinator) = mountSidebar()
+        let pasteboard = NSPasteboard(name: NSPasteboard.Name("agterm-remote-drop-\(UUID().uuidString)"))
+        defer { pasteboard.releaseGlobally() }
+        pasteboard.clearContents()
+        pasteboard.setString(id.uuidString, forType: sessionPasteboardType)
+        let info = SidebarDrag(pasteboard, over: outline)
+        guard coordinator.outlineView(outline, validateDrop: info, proposedItem: nil, proposedChildIndex: slot) == .move else { return false }
+        return coordinator.outlineView(outline, acceptDrop: info, item: nil, childIndex: slot)
+    }
+
     func testDetachingASessionHidesItAndSendsNothing() {
         let entry = catalogSession()
         open([entry])

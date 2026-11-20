@@ -259,18 +259,21 @@
 - Modify: `agtermCore/Tests/agtermCoreTests/SidebarDropTests.swift`, `RemoteOperationRequestTests.swift`, `OriginCatalogScopeTests.swift`;
   `AgtermServerTests/ServerActionsTests.swift`; `agtermUITests/SidebarUITests.swift`, `ReorderUITests.swift`, `FocusWorkspaceUITests.swift`
 
-- [ ] tests first (`SidebarDropTests`): gap above the first workspace row resolves to root while the root is in the
+- [x] tests first (`SidebarDropTests`): gap above the first workspace row resolves to root while the root is in the
   displayed scope, empty root and empty outline included, and does not exist while the filter hides the root; reorder
   within root; drag in and out; a parent moves with its companions; workspace drag index counts named workspaces only,
   with the highlight offset by rendered root rows (root parents counted once); validate and accept agree on the gap at
   the end of the root block
-- [ ] tests first: remote move to and from root by the owner's root container ID, empty root included, detached
+- [x] tests first: remote move to and from root by the owner's root container ID, empty root included, detached
   sessions counted; a host without root support refuses before mutation; no fallback to a named workspace
-- [ ] session drops accept the root slots; remote windows drag a single session into, out of and within the root
-- [ ] row menus: Move to lists "Top-Level Sessions" (disabled when a remote owner has no root); root session rows get
+- [x] session drops accept the root slots; remote windows drag a single session into, out of and within the root
+- [x] row menus: Move to lists "Top-Level Sessions" (disabled when a remote owner has no root); root session rows get
   Focus/Unfocus Top-Level Sessions and Add/Remove Top-Level Sessions to Focus; workspace-only items never act on root
-- [ ] the titlebar Workspace name element and the Attach Remote picker omit the name for a root session
-- [ ] targeted UI tests for drag in/out, Move to and focus; targeted tests green before Task 3
+- [x] the titlebar Workspace name element and the Attach Remote picker omit the name for a root session
+- [x] ➕ from review: a Finder folder dropped on a root session row opens in the root; a viewer drop into an
+  all-detached root goes to the owner's root ID; both Move to menus use display order and `Workspace.label`
+- [x] targeted UI tests for drag in/out, Move to and focus (in `ReorderUITests`, which has the fixture seeding);
+  targeted tests green before Task 3
 
 ### Task 3: Creation destination, last-workspace deletion, focus, navigation and new windows
 
