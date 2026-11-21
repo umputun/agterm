@@ -674,6 +674,17 @@ struct Session: ParsableCommand {
 
             private var rowFlag: String? { companion ? "--companion" : page ? "--page" : nil }
 
+            // the app opens a page path in its own process, where a `<(...)` path names its own descriptor;
+            // matched as typed, so parsing never touches the caller's filesystem
+            private func validateNoDescriptorPath() throws {
+                let pages = [("--html", html), ("--image", image), ("--markdown", markdown), ("--text", text)]
+                for (flag, path) in pages {
+                    guard let path, path.wholeMatch(of: /\/dev\/fd\/[0-9]+/) != nil else { continue }
+                    let hint = flag == "--html" ? ", or use zsh =(...) with --block for self-contained HTML" : ""
+                    throw ValidationError("\(flag) \(path) names a process-local file descriptor. Pass a named file\(hint).")
+                }
+            }
+
             // reject the mutually-exclusive combos + a malformed color at parse time (before any connection),
             // so it's a clean usage error and is unit-testable without a socket.
             func validate() throws {
@@ -687,6 +698,7 @@ struct Session: ParsableCommand {
                 if [command, html, url, image, markdown, text].compactMap({ $0 }).count != 1 {
                     throw ValidationError("provide exactly one of COMMAND, --html, --url, --image, --markdown or --text")
                 }
+                try validateNoDescriptorPath()
                 if line != nil, text == nil { throw ValidationError("--line requires --text") }
                 if let line, line < 1 { throw ValidationError("--line must be 1 or more") }
                 try validateLog()
