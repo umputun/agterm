@@ -1,5 +1,39 @@
 # Changelog
 
+## v0.44.0 - 2026-11-21
+
+### New Features
+
+- **Top-level sessions outside workspaces.** Sessions can sit at the top of the sidebar, above the named workspaces and outside any of them. File ▸ New Top-Level Session creates one (`new_root_session` is the keymap action), and a session gets there by drag or Move to ▸ Top-Level Sessions. The last named workspace can now be deleted. In the control API the group is `root`: `session new --workspace root`, `session move root`, `workspace focus --target root`, and `tree` lists it as a workspace node with `root: true` #1069 @umputun
+- **Turn a companion into a top-level session and back.** Drop a companion on a workspace row or between top-level sessions, or pick a workspace in its Move to menu, and it becomes a top-level session there. Dropping a top-level session on the middle of another one makes it that session's companion, together with its own companions. `agtermctl session move --target C --top-level [WORKSPACE | --after X | --before X]` and `session move --parent SID` are the control forms, and it works on agterm-server windows and sessions attached from another Mac #1073 @umputun
+- **Run your own program on a ⌘-clicked file.** An `open` line in `keymap.conf` runs a command of your choice on a ⌘-clicked picture, markdown, text or HTML file path instead of agterm's built-in page, such as `open *.md --error-hud glow-page.sh "$AGT_PATH"`; an OSC 8 hyperlink keeps the built-in page. In a remote session whose origin runs this version, a file within the page size limit is copied to this Mac and your rule runs on the copy. `keymap list` reports the rules and each run emits an `opener.run` event #1051 @umputun
+- **Paste and drop files and images into remote panes.** ⌘V, Edit ▸ Paste, a drop and `agtermctl session paste` follow one rule: files and folders paste as shell-escaped paths, otherwise text pastes as text, otherwise a clipboard image is saved as a PNG and its path pasted, which Claude Code attaches. In a remote pane the files or image are copied to that host first, so the pasted path exists there. An image-only clipboard used to paste nothing, locally too #1035 @umputun
+- **Open session links from other apps.** agterm registers `agterm://` with macOS, so a notification's click-through, a browser link, a note or `open "agterm://session/$AGTERM_SESSION_ID"` selects that session and raises its window, starting agterm first when needed. A cold launch by such a link or by `open -a agterm <folder>` no longer loses a saved window #1041 @umputun
+- a top-level session attached from another Mac or an agterm-server into a regular window picks up companions created or moved under it on the origin, when the origin runs this version. `tree` reports `followsCompanions` #1044 @umputun
+- `zmx attach` takes `--workspace`, `--workspace-name` and `--create-workspace`, so a script can bring each of another host's sessions into its own local workspace #1049 @umputun
+
+### Improved
+
+- **The bundled zmx is v1.0.1, built with Zig 0.17.** Live sessions started by the previous version keep running across the update and reconnect as before, with no Reset Live Sessions needed #1077 @umputun @quetz #1065
+- a remote pane that reconnects after its ssh dropped takes its lead back when this Mac led it at the drop and either still holds the lead or another Mac only filled the gap without using the pane, instead of coming back covered. It applies to sessions started after the update #1072 @umputun
+- `annotate-in-plannotator-tui` cookbook recipe: the replies chord works on a session attached from another Mac, reading the transcript on the Mac where Claude runs #1036 @pySilver
+- a followed log page with a search open updates faster #1075 @umputun
+- upgrading straight from 0.42.x with the `remote-session-restore` cookbook recipe: keep its four hooks for the first launch of this version, then remove them as the v0.43.0 entry describes #999
+- `session overlay open` refuses `/dev/fd` paths from shell process substitution with a hint, since agterm needs a named file #1078 @umputun
+
+### Bug Fixes
+
+- **agterm opens its window again after an unclean exit.** After a crash, force quit or kill, the next launch could show no window and no control socket until a reopen event arrived #1053 @alexandru-savinov
+- a session that printed and then exited could lose its last output, as on a Live `session new --command ... --wait` pane. The full fix applies to sessions started after the update #1056 @alexandru-savinov
+- one stopped or slow Live session left every Live pane without its command captured at quit, so Rerun had nothing to replay #1043 @umputun #1042
+- a `session restart` whose new shell took longer than 10 s to confirm left the pane ended on an attached Mac, which never reattached it #1057 @umputun #1055
+- agterm-server crashed and was restarted by systemd when asked to open a page, such as by `session overlay open` run on that host #1060 @umputun #1058
+- creating a remote companion with a value starting with "-", or a remote session with an empty `--cwd`, failed with a message that the other host's agterm was too old #1061 @umputun
+- a reconnecting remote pane showed "Taking over…" although the reconnect claims no lead; it shows "Reconnecting…". `session lead` and a key press on that cover now take the lead once the reconnect reports in, where the command answered ok and did nothing and the key was swallowed #1068 #1071 @umputun #1066
+- a bare `recent open` of an attached session with an agterm-server window frontmost put it in that window, which removed it, and the entry was gone from Recent Closed too. It is refused now #1070 @umputun
+- an image page could show a broken image for very large pictures (48 and 55 MB PNGs in testing), and a failed page reload could look successful. Large images also open faster and use less memory #1074 @umputun
+- Edit Keymap, Edit Hooks and Edit ghostty.conf only beeped when a hidden session overlay blocked them; they now show that overlay, unless a pane overlay is showing #1040 @umputun
+
 ## v0.43.0 - 2026-11-17
 
 ### New Features
