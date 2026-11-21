@@ -1,7 +1,8 @@
-diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
---- zmx-orig/src/loop.zig
-+++ zmx/src/loop.zig
-@@ -376,17 +376,6 @@
+diff --git a/src/loop.zig b/src/loop.zig
+index 09abe64..0cd26fc 100644
+--- a/src/loop.zig
++++ b/src/loop.zig
+@@ -391,17 +391,6 @@ fn daemonLoop(daemon: *Daemon, gpa: std.mem.Allocator, io: std.Io, server_sock_f
                      daemon.has_pty_output = true;
                      daemon.screen_revision +%= 1;
  
@@ -19,7 +20,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
                      // In run mode, scan output for exit code marker. The marker
                      // can straddle two PTY reads (more likely under a throttled
                      // scheduler, e.g. containers), so prepend the tail carried
-@@ -417,21 +406,7 @@
+@@ -432,21 +421,7 @@ fn daemonLoop(daemon: *Daemon, gpa: std.mem.Allocator, io: std.Io, server_sock_f
                          );
                      }
  
@@ -42,7 +43,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
                  }
              }
          }
-@@ -960,6 +935,31 @@
+@@ -988,6 +963,31 @@ pub const Daemon = struct {
          return null;
      }
  
@@ -74,7 +75,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
      const PTY_WRITE_BUF_MAX = 256 * 1024;
  
      /// Queue bytes for the PTY's stdin. Flushed by daemonLoop on POLLOUT.
-@@ -1590,6 +1590,56 @@
+@@ -1634,6 +1634,56 @@ test "hasTerminalClient follows attach, detach and detach-all" {
      try std.testing.expectEqual(@as(?i32, null), daemon.leader_client_fd);
  }
  
@@ -131,10 +132,11 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
  test "send queues PTY input without changing leader" {
      const alloc = std.testing.allocator;
      var daemon = testDaemon();
-diff -ruN zmx-orig/src/util.zig zmx/src/util.zig
---- zmx-orig/src/util.zig
-+++ zmx/src/util.zig
-@@ -261,7 +261,17 @@
+diff --git a/src/util.zig b/src/util.zig
+index d036f13..d2694da 100644
+--- a/src/util.zig
++++ b/src/util.zig
+@@ -267,7 +267,17 @@ const DA2_QUERY_EXPLICIT = "\x1b[>0c";
  const DA1_RESPONSE = "\x1b[?62;22c";
  const DA2_RESPONSE = "\x1b[>1;10;0c";
  
@@ -153,7 +155,7 @@ diff -ruN zmx-orig/src/util.zig zmx/src/util.zig
      // Scan for DA queries in PTY output and respond on behalf of the terminal.
      // This handles the case where no client is attached (e.g. zmx run)
      // and the shell (e.g. fish) sends a DA query that would otherwise go unanswered.
-@@ -277,6 +287,8 @@
+@@ -283,6 +293,8 @@ pub fn respondToDeviceAttributes(alloc: std.mem.Allocator, buf: *std.ArrayList(u
      //
      // We must NOT match DA responses (which contain '?') as queries.
      var i: usize = 0;
@@ -162,7 +164,7 @@ diff -ruN zmx-orig/src/util.zig zmx/src/util.zig
      while (i < data.len) {
          if (data[i] == '\x1b' and i + 1 < data.len and data[i + 1] == '[') {
              // Skip DA responses which have '?' after CSI
-@@ -284,14 +296,23 @@
+@@ -290,14 +302,23 @@ pub fn respondToDeviceAttributes(alloc: std.mem.Allocator, buf: *std.ArrayList(u
                  i += 3;
                  continue;
              }

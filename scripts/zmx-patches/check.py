@@ -49,10 +49,11 @@ def drain(fd, seconds):
     return out
 
 
-def cli(*args, stdin=None, extra=None):
-    env = dict(os.environ, ZMX_DIR=ZDIR, **(extra or {}))
+def cli(*args, stdin=None, extra=None, executable=ZMX):
+    env = dict(os.environ, ZMX_DIR=ZDIR)
     env.pop("ZMX_SESSION", None)
-    return subprocess.run([ZMX, *args], env=env, input=stdin or b"", capture_output=True, timeout=10)
+    env.update(extra or {})
+    return subprocess.run([executable, *args], env=env, input=stdin or b"", capture_output=True, timeout=10)
 
 
 def listed(name):
@@ -62,6 +63,59 @@ def listed(name):
 def check(label, ok, detail=""):
     print(("PASS " if ok else "FAIL ") + label + (" :: " + detail if detail and not ok else ""))
     return ok
+
+
+def check_upgrade(previous):
+    name = "upgrade"
+    created = cli("attach", "--detached", name, "/bin/sh", executable=previous)
+    if not check("the previous zmx starts a detached daemon", created.returncode == 0, repr(created.stderr)):
+        return False
+
+    pid = None
+    try:
+        ok = check("the new zmx lists the previous daemon", listed(name))
+        pid, fd = attach("upgrade-client", 32, 88, claim=True, name=name)
+        try:
+            roles = ROLE.findall(drain(fd, 2.0))
+            ok &= check("the new client claims leadership on the previous daemon",
+                        bool(roles) and roles[-1][:2] == (b"upgrade-client", b"leader"), repr(roles))
+            marker = b"OLD-DAEMON-OUTPUT"
+            typed = cli("type", name, stdin=b"printf 'OLD-%s-OUTPUT\\n' DAEMON\r")
+            ok &= check("the new client types into the previous daemon",
+                        typed.returncode == 0 and marker in drain(fd, 1.0), repr(typed.stderr))
+            screen = cli("screen", name)
+            ok &= check("the new client reads the previous daemon's grid and screen",
+                        screen.stdout.split(b"\n", 1)[0].split()[1:3] == [b"88", b"32"]
+                        and marker in screen.stdout, repr(screen.stdout))
+            history = cli("history", name)
+            ok &= check("the new client reads history from the previous daemon", marker in history.stdout)
+            detached = cli("detach", extra={"ZMX_SESSION": name})
+            drain(fd, 1.0)
+            deadline = time.monotonic() + 1.0
+            reaped = False
+            while time.monotonic() < deadline:
+                if os.waitpid(pid, os.WNOHANG)[0] == pid:
+                    reaped = True
+                    break
+                time.sleep(0.02)
+            ok &= check("the new client detaches from the previous daemon",
+                        detached.returncode == 0 and reaped, repr(detached.stderr))
+            if reaped:
+                pid = None
+        finally:
+            os.close(fd)
+
+        killed = cli("kill", name)
+        ok &= check("the new client kills the previous daemon", killed.returncode == 0 and not listed(name))
+        return ok
+    finally:
+        cli("kill", name, executable=previous)
+        if pid is not None:
+            try:
+                os.kill(pid, 9)
+            except ProcessLookupError:
+                pass
+            os.waitpid(pid, 0)
 
 
 def main():
@@ -163,7 +217,7 @@ def main():
         replay = drain(f3, 2.0)
         red = b"\x1b[48;5;1m"
         ok &= check("a replayed gap the program skipped is unstyled and the run resumes after it",
-                    red + b"ab\x1b[0m  \x1b[0m" + red + b"c\x1b[0m" in replay, repr(replay[-300:]))
+                    red + b"ab\x1b[2Cc\x1b[0m" in replay, repr(replay[-300:]))
         ok &= check("replayed spaces the program wrote keep their style",
                     red + b"ab  c\x1b[0m" in replay, repr(replay[-300:]))
 
@@ -228,6 +282,8 @@ def main():
         cli("kill", "killed", "--force")
         time.sleep(1.0)
         ok &= check("a killed session writes no record", not listed("killed") and not os.path.exists(killed_record))
+        if len(sys.argv) > 2:
+            ok &= check_upgrade(sys.argv[2])
     finally:
         cli("kill", NAME, "reclaim", "detached", "killed", "env-probe", "--force")
         for pid in pids:

@@ -1,9 +1,64 @@
-diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
---- zmx-orig/src/loop.zig
-+++ zmx/src/loop.zig
-@@ -15,9 +15,38 @@
- const daemonize = @import("daemonize.zig");
- const builtin = @import("builtin");
+diff --git a/src/client.zig b/src/client.zig
+index 26b4c2d..3b72c97 100644
+--- a/src/client.zig
++++ b/src/client.zig
+@@ -122,6 +122,11 @@ pub fn connect(alloc: Allocator, io: Io, name: []const u8) !i32 {
+ 
+ /// Attach the current process's stdin/stdout TTY to a session (creating if needed).
+ pub fn attach(alloc: Allocator, io: Io, name: []const u8, opts: AttachOptions) !void {
++    var close_deadline: ?i64 = null;
++    return attachInner(alloc, io, name, opts, &close_deadline);
++}
++
++fn attachInner(alloc: Allocator, io: Io, name: []const u8, opts: AttachOptions, close_deadline: *?i64) !void {
+     signal.ignoreSigpipe();
+     const cur_sesh = socket.getSeshNameFromEnv();
+     if (cur_sesh.len > 0) {
+@@ -174,12 +179,12 @@ pub fn attach(alloc: Allocator, io: Io, name: []const u8, opts: AttachOptions) !
+         "\x1b[?2031l\x1b[?2048l\x1b]110\x1b\\\x1b]111\x1b\\\x1b]112\x1b\\";
+     const exit_seq = if (role.nonceFromEnv() != null) managed_exit_seq else restore_seq;
+ 
+-    defer {
+-        if (stdin_is_tty) {
+-            _ = cross.tcsetattr(lib_posix.STDIN_FILENO, cross.TCSAFLUSH, &orig_termios);
+-        }
+-        _ = lib_posix.write(lib_posix.STDOUT_FILENO, exit_seq) catch {};
+-    }
++    defer loop.leaveTerminal(loop.Tty{
++        .out_fd = lib_posix.STDOUT_FILENO,
++        .in_fd = if (stdin_is_tty) lib_posix.STDIN_FILENO else null,
++        .orig = &orig_termios,
++        .reset = exit_seq,
++    }, close_deadline.*);
+ 
+     if (stdin_is_tty) {
+         var raw_termios = orig_termios;
+@@ -195,7 +200,8 @@ pub fn attach(alloc: Allocator, io: Io, name: []const u8, opts: AttachOptions) !
+     _ = try lib_posix.write(lib_posix.STDOUT_FILENO, clear_seq);
+ 
+     const env_str = opts.tracked_env orelse "";
+-    const looper = try loop.clientLoop(client_sock, env_str);
++    const looper = try loop.clientLoop(client_sock, env_str, socket_path);
++    close_deadline.* = looper.close_deadline_ms;
+     switch (looper.kind) {
+         .detach => return,
+         .switch_session => {
+@@ -203,7 +209,7 @@ pub fn attach(alloc: Allocator, io: Io, name: []const u8, opts: AttachOptions) !
+                 _ = lib_posix.write(lib_posix.STDOUT_FILENO, restore_seq) catch {};
+                 var new_opts = opts;
+                 if (looper.cwd) |new_cwd| new_opts.cwd = new_cwd;
+-                return attach(alloc, io, target_name, new_opts);
++                return attachInner(alloc, io, target_name, new_opts, close_deadline);
+             }
+         },
+     }
+diff --git a/src/loop.zig b/src/loop.zig
+index 0cd26fc..fd83de1 100644
+--- a/src/loop.zig
++++ b/src/loop.zig
+@@ -16,9 +16,38 @@ const builtin = @import("builtin");
+ const terminal = @import("terminal.zig");
+ const ghostty_vt = terminal.ghostty_vt;
  
 +/// How long a client whose session ended may spend writing its last output and the terminal reset, from
 +/// the moment the daemon hangs up, closes or resets the connection.
@@ -40,17 +95,17 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 +fn clientLoopOn(client_sock_fd: i32, env_str: []const u8, session_path: []const u8, stdin_fd: i32, stdout_fd: i32) !ClientResult {
      std.log.info("client loop fd={d}", .{client_sock_fd});
      const gpa: std.mem.Allocator = blk: {
-         if (builtin.mode == .Debug) {
-@@ -55,7 +84,7 @@
+         if (builtin.mode == .debug) {
+@@ -60,7 +89,7 @@ pub fn clientLoop(client_sock_fd: i32, env_str: []const u8) !ClientResult {
      }
  
      // Send init message with terminal size (buffered)
 -    const size = ipc.getTerminalSize(lib_posix.STDOUT_FILENO);
 +    const size = ipc.getTerminalSize(stdout_fd);
-     try ipc.appendSizeMessage(gpa, &sock_write_buf, .Init, size);
+     try ipc.appendMessage(gpa, &sock_write_buf, .Init, std.mem.asBytes(&size));
  
      var poll_fds = try std.ArrayList(lib_posix.pollfd).initCapacity(gpa, 4);
-@@ -67,54 +96,76 @@
+@@ -72,54 +101,76 @@ pub fn clientLoop(client_sock_fd: i32, env_str: []const u8) !ClientResult {
      var stdout_buf = try std.ArrayList(u8).initCapacity(gpa, 4096);
      defer stdout_buf.deinit(gpa);
  
@@ -131,13 +186,13 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
          if (relay) |*r| try r.expire(gpa, &stdout_buf, role.nowMs());
  
          if (poll_fds.items[2].revents & lib_posix.POLL.IN != 0) {
-             signal.drainSignalPipe();
+             try signal.drainSignalPipe();
 -            const next_size = ipc.getTerminalSize(lib_posix.STDOUT_FILENO);
 +            const next_size = ipc.getTerminalSize(stdout_fd);
-             try ipc.appendSizeMessage(gpa, &sock_write_buf, .Resize, next_size);
-         }
- 
-@@ -146,18 +197,19 @@
+             try ipc.appendMessage(
+                 gpa,
+                 &sock_write_buf,
+@@ -156,18 +207,19 @@ pub fn clientLoop(client_sock_fd: i32, env_str: []const u8) !ClientResult {
  
          // Handle socket read (incoming Output messages from daemon)
          if (poll_fds.items[1].revents & lib_posix.POLL.IN != 0) {
@@ -161,16 +216,16 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
              }
  
              while (read_buf.next()) |msg| {
-@@ -178,7 +230,7 @@
+@@ -188,7 +240,7 @@ pub fn clientLoop(client_sock_fd: i32, env_str: []const u8) !ClientResult {
                      .Resize => {
                          // daemon is asking for the client's window size usually in response
                          // to this client being set as leader.
 -                        const next_size = ipc.getTerminalSize(lib_posix.STDOUT_FILENO);
 +                        const next_size = ipc.getTerminalSize(stdout_fd);
-                         try ipc.appendSizeMessage(gpa, &sock_write_buf, .Resize, next_size);
-                     },
-                     .Switch => {
-@@ -202,11 +254,14 @@
+                         try ipc.appendMessage(
+                             gpa,
+                             &sock_write_buf,
+@@ -217,11 +269,14 @@ pub fn clientLoop(client_sock_fd: i32, env_str: []const u8) !ClientResult {
          // Handle socket write (flush buffered messages to daemon)
          if (poll_fds.items[1].revents & lib_posix.POLL.OUT != 0) {
              if (sock_write_buf.items.len > 0) {
@@ -187,7 +242,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
                      }
                      return err;
                  };
-@@ -217,7 +272,7 @@
+@@ -232,7 +287,7 @@ pub fn clientLoop(client_sock_fd: i32, env_str: []const u8) !ClientResult {
          }
  
          if (stdout_buf.items.len > 0) {
@@ -196,7 +251,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
                  if (err == error.WouldBlock) break :blk 0;
                  return err;
              };
-@@ -227,12 +282,95 @@
+@@ -242,12 +297,95 @@ pub fn clientLoop(client_sock_fd: i32, env_str: []const u8) !ClientResult {
          }
  
          if (poll_fds.items[1].revents & (lib_posix.POLL.HUP | lib_posix.POLL.ERR | lib_posix.POLL.NVAL) != 0) {
@@ -210,7 +265,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
  
 +fn ttyOutputQueued(fd: i32) usize {
 +    var queued: c_int = 0;
-+    if (cross.c.ioctl(fd, cross.c.TIOCOUTQ, &queued) != 0) return 0;
++    if (cross.ioctl(fd, cross.TIOCOUTQ, &queued) != 0) return 0;
 +    return @intCast(@max(queued, 0));
 +}
 +
@@ -247,7 +302,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 +pub const Tty = struct {
 +    out_fd: i32,
 +    in_fd: ?i32,
-+    orig: *const cross.c.termios,
++    orig: *const cross.termios,
 +    reset: []const u8,
 +
 +    /// Waits until the terminal has taken what was written to it, or the deadline passes, and says which.
@@ -256,15 +311,15 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 +        return takenBy(self.out_fd, deadline_ms, ttyOutputQueued);
 +    }
 +    pub fn flushOutput(self: Tty) void {
-+        _ = cross.c.tcflush(self.out_fd, cross.c.TCOFLUSH);
++        _ = cross.tcflush(self.out_fd, cross.TCOFLUSH);
 +    }
 +    pub fn restoreTermios(self: Tty, flushing: bool) void {
 +        const fd = self.in_fd orelse return;
 +        if (flushing) {
-+            _ = cross.c.tcsetattr(fd, cross.c.TCSAFLUSH, self.orig);
++            _ = cross.tcsetattr(fd, cross.TCSAFLUSH, self.orig);
 +        } else {
-+            _ = cross.c.tcflush(fd, cross.c.TCIFLUSH);
-+            _ = cross.c.tcsetattr(fd, cross.c.TCSANOW, self.orig);
++            _ = cross.tcflush(fd, cross.TCIFLUSH);
++            _ = cross.tcsetattr(fd, cross.TCSANOW, self.orig);
 +        }
 +    }
 +    pub fn writeReset(self: Tty, deadline_ms: ?i64) void {
@@ -294,7 +349,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
  fn initTerminal(gpa: std.mem.Allocator, io: std.Io, size: ipc.Resize, cfg: *const Cfg) !ghostty_vt.Terminal {
      return ghostty_vt.Terminal.init(io, gpa, .{
          .cols = size.cols,
-@@ -242,6 +380,10 @@
+@@ -257,6 +395,10 @@ fn initTerminal(gpa: std.mem.Allocator, io: std.Io, size: ipc.Resize, cfg: *cons
      });
  }
  
@@ -305,7 +360,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
  /// dameonLoop is what the daemon runs to send and receive ipc commands from its corresponding
  /// clients.  It uses poll() as its non-blocking mechanism.
  fn daemonLoop(daemon: *Daemon, gpa: std.mem.Allocator, io: std.Io, server_sock_fd: lib_posix.socket_t, pty_fd: i32) !void {
-@@ -266,7 +408,20 @@
+@@ -281,7 +423,20 @@ fn daemonLoop(daemon: *Daemon, gpa: std.mem.Allocator, io: std.Io, server_sock_f
  
      var had_terminal_client = daemon.hasTerminalClient();
  
@@ -326,7 +381,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
          // If the program asked for focus reports (DECSET 1004), send focus-out
          // when the last attached client leaves and focus-in when one returns,
          // as a terminal would when its window loses/gains focus.
-@@ -288,8 +443,9 @@
+@@ -303,8 +458,9 @@ fn daemonLoop(daemon: *Daemon, gpa: std.mem.Allocator, io: std.Io, server_sock_f
          if (daemon.pty_write_buf.items.len > 0) {
              pty_events |= lib_posix.POLL.OUT;
          }
@@ -337,7 +392,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
              .events = pty_events,
              .revents = 0,
          });
-@@ -308,7 +464,11 @@
+@@ -323,7 +479,11 @@ fn daemonLoop(daemon: *Daemon, gpa: std.mem.Allocator, io: std.Io, server_sock_f
              });
          }
  
@@ -349,8 +404,8 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 +        _ = try lib_posix.poll(poll_fds.items, poll_timeout);
  
          if (poll_fds.items[2].revents & lib_posix.POLL.IN != 0) {
-             signal.drainSignalPipe();
-@@ -364,11 +524,9 @@
+             signal.drainSignalPipe() catch {};
+@@ -379,11 +539,9 @@ fn daemonLoop(daemon: *Daemon, gpa: std.mem.Allocator, io: std.Io, server_sock_f
                  if (n == 0) {
                      // EOF: Shell exited
                      std.log.info("shell exited pty_fd={d}", .{pty_fd});
@@ -364,7 +419,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
                  } else {
                      // Feed PTY output to terminal emulator for state tracking
                      vt_stream.nextSlice(buf[0..n]);
-@@ -461,6 +619,11 @@
+@@ -476,6 +634,11 @@ fn daemonLoop(daemon: *Daemon, gpa: std.mem.Allocator, io: std.Io, server_sock_f
                  }
  
                  while (client.read_buf.next()) |msg| {
@@ -376,7 +431,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
                      switch (msg.header.tag) {
                          .Input => try daemon.handleInput(gpa, client, msg.payload),
                          .Send => daemon.handleSend(gpa, msg.payload),
-@@ -534,6 +697,8 @@
+@@ -560,6 +723,8 @@ const ClientResult = struct {
      },
      session_name: ?[]const u8,
      cwd: ?[]const u8 = null,
@@ -385,7 +440,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
  };
  
  /// Client represents each terminal that has connected to a session.
-@@ -668,6 +833,14 @@
+@@ -694,6 +859,14 @@ pub const Daemon = struct {
          return false;
      }
  
@@ -400,7 +455,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
      pub fn closeClient(self: *Daemon, gpa: std.mem.Allocator, client: *Client, i: usize, shutdown_on_last: bool) bool {
          const fd = client.socket_fd;
          // leader is disconnected, remove ref and let another client claim leader on input
-@@ -1971,3 +2144,463 @@
+@@ -2015,3 +2188,463 @@ test "handleEnvGet returns leader client's environment variables including unset
      const pay3 = client_req.write_buf.items[@sizeOf(ipc.Header)..];
      try std.testing.expectEqualStrings("DISPLAY=:99\n", pay3);
  }
@@ -417,14 +472,14 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 +    const name = ptsname(master) orelse return error.PtyUnavailable;
 +    const slave = try lib_posix.open(std.mem.span(name), .{ .ACCMODE = .RDWR, .NOCTTY = true }, 0);
 +    errdefer lib_posix.close(slave);
-+    var tio: cross.c.termios = undefined;
-+    if (cross.c.tcgetattr(slave, &tio) != 0) return error.PtyUnavailable;
-+    cross.c.cfmakeraw(&tio);
-+    if (cross.c.tcsetattr(slave, cross.c.TCSANOW, &tio) != 0) return error.PtyUnavailable;
-+    var ws = std.mem.zeroes(cross.c.struct_winsize);
++    var tio: cross.termios = undefined;
++    if (cross.tcgetattr(slave, &tio) != 0) return error.PtyUnavailable;
++    cross.cfmakeraw(&tio);
++    if (cross.tcsetattr(slave, cross.TCSANOW, &tio) != 0) return error.PtyUnavailable;
++    var ws = std.mem.zeroes(cross.struct_winsize);
 +    ws.ws_row = rows;
 +    ws.ws_col = cols;
-+    if (cross.c.ioctl(master, cross.c.TIOCSWINSZ, &ws) != 0) return error.PtyUnavailable;
++    if (cross.ioctl(master, cross.TIOCSWINSZ, &ws) != 0) return error.PtyUnavailable;
 +    return .{ master, slave };
 +}
 +
@@ -486,8 +541,8 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 +        // the daemon sizes its PTY from its leader's Init
 +        const deadline = role.nowMs() + 10_000;
 +        while (true) : (sleepMs(5)) {
-+            var ws: cross.c.struct_winsize = undefined;
-+            if (cross.c.ioctl(self.shell_pty[1], cross.c.TIOCGWINSZ, &ws) == 0 and ws.ws_col == term_cols) break;
++            var ws: cross.struct_winsize = undefined;
++            if (cross.ioctl(self.shell_pty[1], cross.TIOCGWINSZ, &ws) == 0 and ws.ws_col == term_cols) break;
 +            if (role.nowMs() > deadline) return error.NeverAttached;
 +        }
 +    }
@@ -567,7 +622,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 +
 +    fn queued(fd: i32) usize {
 +        var n: c_int = 0;
-+        if (cross.c.ioctl(fd, cross.c.FIONREAD, &n) != 0) return 0;
++        if (cross.ioctl(fd, cross.FIONREAD, &n) != 0) return 0;
 +        return @intCast(n);
 +    }
 +
@@ -798,7 +853,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 +    while (true) _ = lib_posix.write(pty[1], "x") catch break;
 +    _ = try lib_posix.fcntl(pty[1], lib_posix.F.SETFL, flags);
 +    try signal.openSignalPipe();
-+    signal.installWakeHandler(@intFromEnum(lib_posix.SIG.WINCH));
++    signal.installWakeHandler(@backingInt(lib_posix.SIG.WINCH));
 +
 +    const signaller = try std.Thread.spawn(.{}, signalFor, .{ std.c.pthread_self(), 1500 });
 +    defer signaller.join();
@@ -838,7 +893,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 +    const began = role.nowMs();
 +    try std.testing.expect(!takenBy(pty[1], began + 200, ttyOutputQueued));
 +    try std.testing.expect(role.nowMs() - began <= 1200);
-+    try std.testing.expectEqual(@as(c_int, 0), cross.c.tcflush(pty[1], cross.c.TCOFLUSH));
++    try std.testing.expectEqual(@as(c_int, 0), cross.tcflush(pty[1], cross.TCOFLUSH));
 +    try std.testing.expect(takenBy(pty[1], role.nowMs(), ttyOutputQueued));
 +    while (true) _ = lib_posix.write(pty[1], "x") catch break;
 +    leaveTerminal(Tty{ .out_fd = pty[1], .in_fd = null, .orig = undefined, .reset = "\x1bc" }, role.nowMs() + 400);
@@ -864,58 +919,11 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 +    reader.join();
 +    try std.testing.expectEqualStrings("\x1bc", got[0..len]);
 +}
-diff -ruN zmx-orig/src/main.zig zmx/src/main.zig
---- zmx-orig/src/main.zig
-+++ zmx/src/main.zig
-@@ -1629,7 +1629,11 @@
-     }
- }
- 
-+/// The close deadline of a session that ended inside a switched-to attach, which the attach it switched from shares.
-+var ended_deadline: ?i64 = null;
-+
- fn attach(gpa: std.mem.Allocator, io: std.Io, daemon: *Daemon, env_str: []const u8, labels: ?[]const u8) !void {
-+    ended_deadline = null;
-     const sesh = socket.getSeshNameFromEnv();
-     if (sesh.len > 0) {
-         return switchSesh(gpa, io, daemon, sesh);
-@@ -1672,13 +1676,17 @@
-     const managed_exit_seq = "\x1b[0m\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1004l\x1b[?2004l" ++
-         "\x1b[?2031l\x1b[?2048l\x1b]110\x1b\\\x1b]111\x1b\\\x1b]112\x1b\\";
-     const exit_seq = if (role.nonceFromEnv() != null) managed_exit_seq else restore_seq;
-+    var close_deadline: ?i64 = null;
- 
-     defer {
--        if (stdin_is_tty) {
--            _ = cross.c.tcsetattr(lib_posix.STDIN_FILENO, cross.c.TCSAFLUSH, &orig_termios);
--        }
--        // Reset terminal modes on detach
--        _ = lib_posix.write(lib_posix.STDOUT_FILENO, exit_seq) catch {};
-+        const deadline = close_deadline orelse ended_deadline;
-+        ended_deadline = deadline;
-+        loop.leaveTerminal(loop.Tty{
-+            .out_fd = lib_posix.STDOUT_FILENO,
-+            .in_fd = if (stdin_is_tty) lib_posix.STDIN_FILENO else null,
-+            .orig = &orig_termios,
-+            .reset = exit_seq,
-+        }, deadline);
-     }
- 
-     if (stdin_is_tty) {
-@@ -1704,7 +1712,8 @@
-     const clear_seq = "\x1b[2J\x1b[H";
-     _ = try lib_posix.write(lib_posix.STDOUT_FILENO, clear_seq);
- 
--    const looper = try loop.clientLoop(client_sock, env_str);
-+    const looper = try loop.clientLoop(client_sock, env_str, daemon.socket_path);
-+    close_deadline = looper.close_deadline_ms;
-     switch (looper.kind) {
-         .detach => return,
-         .switch_session => {
-diff -ruN zmx-orig/src/posix.zig zmx/src/posix.zig
---- zmx-orig/src/posix.zig
-+++ zmx/src/posix.zig
-@@ -1248,6 +1248,21 @@
+diff --git a/src/posix.zig b/src/posix.zig
+index f4cbbe4..d944045 100644
+--- a/src/posix.zig
++++ b/src/posix.zig
+@@ -1248,6 +1248,21 @@ pub const PollError = error{
      SystemResources,
  } || UnexpectedError;
  

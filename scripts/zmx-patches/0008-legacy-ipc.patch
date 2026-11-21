@@ -1,0 +1,695 @@
+diff --git a/src/client.zig b/src/client.zig
+index 3b72c97..b9b0feb 100644
+--- a/src/client.zig
++++ b/src/client.zig
+@@ -134,11 +134,11 @@ fn attachInner(alloc: Allocator, io: Io, name: []const u8, opts: AttachOptions,
+         defer cfg.deinit(alloc);
+         const socket_path = try socket.getSocketPath(alloc, cfg.socket_dir, cur_sesh);
+         defer alloc.free(socket_path);
+-        const fd = try socket.sessionConnect(socket_path);
+-        defer lib_posix.close(fd);
++        const connection = try ipc.connectProtocol(socket_path);
++        defer connection.close();
+         const target_sesh = try socket.getSeshName(alloc, name);
+         defer alloc.free(target_sesh);
+-        ipc.send(fd, .Switch, target_sesh) catch |err| switch (err) {
++        connection.send(.Switch, target_sesh) catch |err| switch (err) {
+             error.BrokenPipe, error.ConnectionResetByPeer => return,
+             else => return err,
+         };
+@@ -167,7 +167,7 @@ fn attachInner(alloc: Allocator, io: Io, name: []const u8, opts: AttachOptions,
+         try set(alloc, io, name, kvs);
+     }
+ 
+-    const client_sock = try socket.sessionConnect(socket_path);
++    const connection = try ipc.connectProtocol(socket_path);
+ 
+     var orig_termios: cross.termios = undefined;
+     const stdin_is_tty = cross.tcgetattr(lib_posix.STDIN_FILENO, &orig_termios) == 0;
+@@ -200,7 +200,7 @@ fn attachInner(alloc: Allocator, io: Io, name: []const u8, opts: AttachOptions,
+     _ = try lib_posix.write(lib_posix.STDOUT_FILENO, clear_seq);
+ 
+     const env_str = opts.tracked_env orelse "";
+-    const looper = try loop.clientLoop(client_sock, env_str, socket_path);
++    const looper = try loop.clientLoop(connection, env_str, socket_path);
+     close_deadline.* = looper.close_deadline_ms;
+     switch (looper.kind) {
+         .detach => return,
+@@ -242,7 +242,7 @@ pub fn detach(alloc: Allocator, io: Io, name: []const u8) !void {
+     };
+     defer lib_posix.close(fd);
+ 
+-    ipc.send(fd, .DetachAll, "") catch |err| switch (err) {
++    ipc.sendOneShot(fd, .detach_all) catch |err| switch (err) {
+         error.BrokenPipe, error.ConnectionResetByPeer => return,
+         else => return err,
+     };
+@@ -289,7 +289,7 @@ pub fn kill(alloc: Allocator, io: Io, name: []const u8, opts: KillOptions) !Kill
+     };
+     defer lib_posix.close(fd);
+ 
+-    ipc.send(fd, .Kill, "") catch |err| switch (err) {
++    ipc.sendOneShot(fd, .kill) catch |err| switch (err) {
+         error.BrokenPipe, error.ConnectionResetByPeer => return .killed,
+         else => return err,
+     };
+@@ -304,16 +304,23 @@ pub fn kill(alloc: Allocator, io: Io, name: []const u8, opts: KillOptions) !Kill
+ 
+ fn tailInternal(
+     alloc: Allocator,
+-    client_socket_fds: []const i32,
++    connections: []const ipc.Connection,
+     detached: bool,
+     is_run_cmd: bool,
+     writer: ?*Io.Writer,
+ ) !u8 {
+-    var poll_fds = try std.ArrayList(lib_posix.pollfd).initCapacity(alloc, client_socket_fds.len + 1);
++    var poll_fds = try std.ArrayList(lib_posix.pollfd).initCapacity(alloc, connections.len + 1);
+     defer poll_fds.deinit(alloc);
+ 
+-    var read_buf = try ipc.SocketBuffer.init(alloc);
+-    defer read_buf.deinit();
++    const buffers = try alloc.alloc(ipc.SocketBuffer, connections.len);
++    defer alloc.free(buffers);
++    var initialized: usize = 0;
++    defer for (buffers[0..initialized]) |*buffer| buffer.deinit();
++    for (connections, buffers) |connection, *buffer| {
++        buffer.* = try ipc.SocketBuffer.init(alloc);
++        buffer.wire = connection.wire;
++        initialized += 1;
++    }
+ 
+     var out_buf = try std.ArrayList(u8).initCapacity(alloc, 4096);
+     defer out_buf.deinit(alloc);
+@@ -324,9 +331,9 @@ fn tailInternal(
+     while (true) {
+         poll_fds.clearRetainingCapacity();
+ 
+-        for (client_socket_fds) |fd| {
++        for (connections) |connection| {
+             try poll_fds.append(alloc, .{
+-                .fd = fd,
++                .fd = connection.fd,
+                 .events = lib_posix.POLL.IN,
+                 .revents = 0,
+             });
+@@ -345,7 +352,7 @@ fn tailInternal(
+             return err;
+         };
+ 
+-        for (poll_fds.items) |*poll_fd| {
++        for (poll_fds.items[0..connections.len], buffers) |poll_fd, *read_buf| {
+             if (poll_fd.revents & lib_posix.POLL.IN != 0) {
+                 const n = read_buf.read(poll_fd.fd) catch |err| {
+                     if (err == error.WouldBlock) continue;
+@@ -498,19 +505,18 @@ pub fn run(
+ 
+     if (cmd_to_send == null) return error.CommandRequired;
+ 
+-    const client_sock = try socket.sessionConnect(socket_path);
+-    defer lib_posix.close(client_sock);
++    const connection = try ipc.connectProtocol(socket_path);
++    defer connection.close();
+ 
+     const term_size = ipc.getTerminalSize(lib_posix.STDOUT_FILENO);
+-    ipc.send(client_sock, .Resize, std.mem.asBytes(&term_size)) catch {};
++    connection.send(.Resize, std.mem.asBytes(&term_size)) catch {};
+ 
+-    ipc.send(client_sock, .Run, cmd_to_send.?) catch |err| switch (err) {
++    connection.send(.Run, cmd_to_send.?) catch |err| switch (err) {
+         error.ConnectionResetByPeer, error.BrokenPipe => return 0,
+         else => return err,
+     };
+ 
+-    const fds = [_]i32{client_sock};
+-    return tailInternal(alloc, &fds, opts.detached, true, opts.output_writer);
++    return tailInternal(alloc, &.{connection}, opts.detached, true, opts.output_writer);
+ }
+ 
+ /// Wait for one or more task-mode sessions to complete and return aggregate exit code.
+@@ -619,20 +625,19 @@ pub fn tail(alloc: Allocator, io: Io, names: []const []const u8, writer: ?*Io.Wr
+ 
+     if (resolved_names.items.len == 0) return error.SessionNotFound;
+ 
+-    var fds = try std.ArrayList(i32).initCapacity(alloc, resolved_names.items.len);
++    var connections = try std.ArrayList(ipc.Connection).initCapacity(alloc, resolved_names.items.len);
+     defer {
+-        for (fds.items) |fd| lib_posix.close(fd);
+-        fds.deinit(alloc);
++        for (connections.items) |connection| connection.close();
++        connections.deinit(alloc);
+     }
+ 
+     for (resolved_names.items) |session_name| {
+         const socket_path = try socket.getSocketPath(alloc, cfg.socket_dir, session_name);
+         defer alloc.free(socket_path);
+-        const sock = try socket.sessionConnect(socket_path);
+-        try fds.append(alloc, sock);
++        connections.appendAssumeCapacity(try ipc.connectProtocol(socket_path));
+     }
+ 
+-    return tailInternal(alloc, fds.items, false, false, writer);
++    return tailInternal(alloc, connections.items, false, false, writer);
+ }
+ 
+ /// Send raw input bytes to a session's PTY (fire-and-forget, like `zmx send`).
+@@ -656,7 +661,7 @@ pub fn send(alloc: Allocator, io: Io, name: []const u8, bytes: []const u8) !void
+     };
+     defer probe_result.deinit();
+ 
+-    ipc.send(probe_result.fd, .Send, bytes) catch |err| switch (err) {
++    probe_result.connection.send(.Send, bytes) catch |err| switch (err) {
+         error.ConnectionResetByPeer, error.BrokenPipe => return,
+         else => return err,
+     };
+@@ -683,7 +688,7 @@ pub fn print(alloc: Allocator, io: Io, name: []const u8, bytes: []const u8) !voi
+     };
+     defer probe_result.deinit();
+ 
+-    ipc.send(probe_result.fd, .Output, bytes) catch |err| switch (err) {
++    probe_result.connection.send(.Output, bytes) catch |err| switch (err) {
+         error.ConnectionResetByPeer, error.BrokenPipe => return,
+         else => return err,
+     };
+@@ -717,15 +722,16 @@ pub fn write(alloc: Allocator, io: Io, name: []const u8, remote_path: []const u8
+     try wire_buf.appendSlice(alloc, remote_path);
+     try wire_buf.appendSlice(alloc, content);
+ 
+-    ipc.send(result.fd, .Write, wire_buf.items) catch |err| switch (err) {
++    result.connection.send(.Write, wire_buf.items) catch |err| switch (err) {
+         error.BrokenPipe, error.ConnectionResetByPeer => return,
+         else => return err,
+     };
+ 
+     var sb = try ipc.SocketBuffer.init(alloc);
+     defer sb.deinit();
++    sb.wire = result.connection.wire;
+ 
+-    const n = sb.read(result.fd) catch return error.ReadFailed;
++    const n = sb.read(result.connection.fd) catch return error.ReadFailed;
+     if (n == 0) return error.ConnectionClosed;
+ 
+     while (sb.next()) |msg| {
+@@ -752,26 +758,29 @@ pub fn historyRange(alloc: Allocator, io: Io, name: []const u8, format: HistoryF
+     const exists = try socket.sessionExists(io, dir, sesh);
+     if (!exists) return error.SessionNotFound;
+ 
+-    const fd = ipc.connectSession(socket_path) catch |err| {
++    const connection = ipc.connectProtocol(socket_path) catch |err| {
+         if (err == error.ConnectionRefused) socket.cleanupStaleSocket(io, dir, sesh);
+         return error.SessionUnresponsive;
+     };
+-    defer lib_posix.close(fd);
++    defer connection.close();
++    const fd = connection.fd;
+ 
+     const reply_tag: ipc.Tag = if (scrollback_rows != null) .Capture else .History;
+     if (scrollback_rows) |rows| {
++        if (connection.wire == .legacy) return error.CaptureNotSupported;
+         var request = std.mem.zeroes(ipc.Capture);
+         request.format = @backingInt(format);
+         request.rows = rows;
+-        try ipc.send(fd, .Capture, std.mem.asBytes(&request));
+-        try ipc.send(fd, .Info, "");
++        try connection.send(.Capture, std.mem.asBytes(&request));
++        try connection.send(.Info, "");
+     } else {
+         const format_byte = [_]u8{@backingInt(format)};
+-        try ipc.send(fd, .History, &format_byte);
++        try connection.send(.History, &format_byte);
+     }
+ 
+     var sb = try ipc.SocketBuffer.init(alloc);
+     defer sb.deinit();
++    sb.wire = connection.wire;
+ 
+     while (true) {
+         var poll_fds = [_]lib_posix.pollfd{.{ .fd = fd, .events = lib_posix.POLL.IN, .revents = 0 }};
+diff --git a/src/ipc.zig b/src/ipc.zig
+index 77b17c8..014fd7b 100644
+--- a/src/ipc.zig
++++ b/src/ipc.zig
+@@ -175,37 +175,70 @@ pub const Info = extern struct {
+     _reserved: [6]u8 = @splat(0),
+ };
+ 
+-pub fn send(fd: i32, tag: Tag, data: []const u8) !void {
+-    const header = Header{
+-        .tag = tag,
+-        .len = @intCast(data.len),
+-    };
+-    const header_bytes = std.mem.asBytes(&header);
+-    try writeAll(fd, header_bytes);
+-    if (data.len > 0) {
+-        try writeAll(fd, data);
++pub const Wire = enum {
++    current,
++    legacy,
++
++    fn header(self: Wire, tag: Tag, len: u32) [@sizeOf(Header)]u8 {
++        if (self == .current) return std.mem.asBytes(&Header{ .tag = tag, .len = len }).*;
++
++        // zmx 0.8.1 used a packed { u8, u32 } backed by eight bytes.
++        var bytes: [@sizeOf(Header)]u8 = @splat(0);
++        bytes[0] = if (tag == .Manage) 22 else @backingInt(tag);
++        std.mem.writeInt(u32, bytes[1..5], len, .little);
++        return bytes;
++    }
++
++    fn decode(self: Wire, bytes: *const [@sizeOf(Header)]u8) Header {
++        return switch (self) {
++            .current => std.mem.bytesToValue(Header, bytes),
++            .legacy => .{
++                .tag = @fromBackingInt(@intCast(bytes[0])),
++                .len = std.mem.readInt(u32, bytes[1..5], .little),
++            },
++        };
+     }
++
++    pub fn append(
++        self: Wire,
++        alloc: std.mem.Allocator,
++        list: *std.ArrayList(u8),
++        tag: Tag,
++        data: []const u8,
++    ) !void {
++        try list.ensureUnusedCapacity(alloc, @sizeOf(Header) + data.len);
++        list.appendSliceAssumeCapacity(&self.header(tag, @intCast(data.len)));
++        list.appendSliceAssumeCapacity(data);
++    }
++};
++
++pub fn send(fd: i32, tag: Tag, data: []const u8) !void {
++    try (Connection{ .fd = fd, .wire = .current }).send(tag, data);
+ }
+ 
+ pub fn appendMessage(
+-    gpa: std.mem.Allocator,
++    alloc: std.mem.Allocator,
+     list: *std.ArrayList(u8),
+     tag: Tag,
+     data: []const u8,
+ ) !void {
+-    const header = Header{
+-        .tag = tag,
+-        .len = @intCast(data.len),
+-    };
+-    // Guarantee capacity for header + payload in one check to avoid
+-    // intermediate realloc between the two appends on the hot path.
+-    try list.ensureTotalCapacity(gpa, list.items.len + @sizeOf(Header) + data.len);
+-    list.appendSliceAssumeCapacity(std.mem.asBytes(&header));
+-    if (data.len > 0) {
+-        list.appendSliceAssumeCapacity(data);
+-    }
++    try Wire.current.append(alloc, list, tag, data);
+ }
+ 
++pub const Connection = struct {
++    fd: i32,
++    wire: Wire,
++
++    pub fn close(self: Connection) void {
++        lib_posix.close(self.fd);
++    }
++
++    pub fn send(self: Connection, tag: Tag, data: []const u8) !void {
++        try writeAll(self.fd, &self.wire.header(tag, @intCast(data.len)));
++        try writeAll(self.fd, data);
++    }
++};
++
+ fn writeAll(fd: i32, data: []const u8) !void {
+     var index: usize = 0;
+     while (index < data.len) {
+@@ -232,6 +265,7 @@ pub const SocketMsg = struct {
+ };
+ 
+ pub const SocketBuffer = struct {
++    wire: Wire = .current,
+     buf: std.ArrayList(u8),
+     alloc: std.mem.Allocator,
+     head: usize,
+@@ -279,7 +313,7 @@ pub const SocketBuffer = struct {
+         const available = self.buf.items[self.head..];
+         if (available.len < @sizeOf(Header)) return null;
+ 
+-        const hdr = std.mem.bytesToValue(Header, available[0..@sizeOf(Header)]);
++        const hdr = self.wire.decode(available[0..@sizeOf(Header)]);
+         if (hdr.len > MAX_PAYLOAD_LEN or hdr.protocol_version != PROTOCOL_VERSION) {
+             // framing error / corrupted stream: clear buffer to avoid
+             // infinite alloc
+@@ -320,74 +354,115 @@ const SessionProbeError = error{
+ };
+ 
+ const SessionProbeResult = struct {
+-    fd: i32,
++    connection: Connection,
+     info: Info,
+     labels: ?[]const u8,
+     alloc: std.mem.Allocator,
+ 
+     pub fn deinit(self: *const SessionProbeResult) void {
+         if (self.labels) |lbl| self.alloc.free(lbl);
+-        lib_posix.close(self.fd);
++        self.connection.close();
+     }
+ };
+ 
+-pub fn probeSession(
+-    alloc: std.mem.Allocator,
+-    socket_path: []const u8,
+-) SessionProbeError!SessionProbeResult {
+-    const timeout_ms = 1000;
+-    const fd = try connectSession(socket_path);
+-    errdefer lib_posix.close(fd);
+-
+-    send(fd, .Info, "") catch return error.Unexpected;
+-    send(fd, .LabelGet, "") catch {};
++const ProtocolProbe = struct { connection: Connection, info: Info };
++
++/// Info, Kill and DetachAll ignore their payload. A current header with a
++/// zero length reads as a legacy header with length one because the legacy
++/// length starts at the byte that now holds PROTOCOL_VERSION. Supply that
++/// byte so either daemon can handle the request immediately.
++pub fn sendOneShot(fd: i32, tag: enum { info, kill, detach_all }) !void {
++    const wire_tag: Tag = switch (tag) {
++        .info => .Info,
++        .kill => .Kill,
++        .detach_all => .DetachAll,
++    };
++    try writeAll(fd, &(Wire.current.header(wire_tag, 0) ++ [1]u8{0}));
++}
+ 
+-    var poll_fds = [_]lib_posix.pollfd{.{ .fd = fd, .events = lib_posix.POLL.IN, .revents = 0 }};
+-    const poll_result = lib_posix.poll(&poll_fds, timeout_ms) catch return error.Unexpected;
+-    if (poll_result == 0) {
+-        return error.Timeout;
++fn readProbeBytes(fd: i32, bytes: []u8) SessionProbeError!void {
++    var rest = bytes;
++    while (rest.len != 0) {
++        var pfd = [_]lib_posix.pollfd{.{ .fd = fd, .events = lib_posix.POLL.IN, .revents = 0 }};
++        if ((lib_posix.poll(&pfd, 1000) catch return error.Unexpected) == 0) return error.Timeout;
++        const n = lib_posix.read(fd, rest) catch return error.Unexpected;
++        if (n == 0) return error.Unexpected;
++        rest = rest[n..];
+     }
++}
+ 
+-    var sb = SocketBuffer.init(alloc) catch return error.Unexpected;
+-    defer sb.deinit();
+-
+-    const n = sb.read(fd) catch return error.Unexpected;
+-    if (n == 0) return error.Unexpected;
+-
+-    var info_result: ?Info = null;
+-    var labels: ?[]const u8 = null;
+-    errdefer if (labels) |lbl| alloc.free(lbl);
++fn probeProtocol(socket_path: []const u8) SessionProbeError!ProtocolProbe {
++    const fd = try connectSession(socket_path);
++    errdefer lib_posix.close(fd);
++    sendOneShot(fd, .info) catch return error.Unexpected;
++
++    const reply = try readProbeReply(fd);
++    const wire = reply.wire;
++    const connection_fd = switch (wire) {
++        .legacy => fd,
++        // The current daemon has one extra byte buffered from the probe.
++        .current => blk: {
++            const fresh = try connectSession(socket_path);
++            lib_posix.close(fd);
++            break :blk fresh;
++        },
++    };
++    return .{ .connection = .{ .fd = connection_fd, .wire = wire }, .info = reply.info };
++}
+ 
++fn readProbeReply(fd: i32) SessionProbeError!struct { wire: Wire, info: Info } {
++    var header_bytes: [@sizeOf(Header)]u8 = undefined;
++    var wire: ?Wire = null;
+     while (true) {
+-        if (sb.next()) |msg| {
+-            if (msg.header.tag == .Info) {
+-                if (msg.payload.len != @sizeOf(Info)) return error.InfoSizeMismatch;
+-                info_result = std.mem.bytesToValue(Info, msg.payload[0..@sizeOf(Info)]);
+-            }
+-            if (msg.header.tag == .LabelData) {
+-                labels = alloc.dupe(u8, msg.payload) catch null;
+-            }
+-
+-            if (info_result != null and labels != null) break;
+-            continue;
++        try readProbeBytes(fd, &header_bytes);
++        const current = Wire.current.decode(&header_bytes);
++        // The daemon may send output or task completion before it reads the
++        // Info request. Those unsolicited frames always have a nonempty
++        // payload. In 0.8.1 they are far smaller than 16 MiB, so their packed
++        // length leaves the four bytes of the 1.0 length field zero.
++        const framing = wire orelse if (current.protocol_version == PROTOCOL_VERSION and
++            current._reserved == 0 and current.len != 0) Wire.current else .legacy;
++        wire = framing;
++        const hdr = framing.decode(&header_bytes);
++        if (hdr.protocol_version != PROTOCOL_VERSION) return error.Unexpected;
++
++        switch (hdr.tag) {
++            .Info => {
++                if (hdr.len != @sizeOf(Info)) return error.InfoSizeMismatch;
++                var info: Info = undefined;
++                try readProbeBytes(fd, std.mem.asBytes(&info));
++                return .{ .wire = framing, .info = info };
++            },
++            .Output, .TaskComplete => {
++                if (hdr.len == 0 or hdr.len > MAX_PAYLOAD_LEN) return error.Unexpected;
++                var remaining: usize = hdr.len;
++                var discard: [4096]u8 = undefined;
++                while (remaining > 0) {
++                    const n = @min(remaining, discard.len);
++                    try readProbeBytes(fd, discard[0..n]);
++                    remaining -= n;
++                }
++            },
++            else => return error.Unexpected,
+         }
+-
+-        // No complete message available, wait for more data
+-        const more = lib_posix.poll(&poll_fds, 50) catch break;
+-        if (more == 0) break;
+-        const n_read = sb.read(fd) catch break;
+-        if (n_read == 0) break;
+     }
++}
+ 
+-    if (info_result) |info| {
+-        return .{
+-            .fd = fd,
+-            .info = info,
+-            .labels = labels,
+-            .alloc = alloc,
+-        };
+-    }
+-    return error.Unexpected;
++pub fn connectProtocol(socket_path: []const u8) SessionProbeError!Connection {
++    return (try probeProtocol(socket_path)).connection;
++}
++
++pub fn probeSession(
++    alloc: std.mem.Allocator,
++    socket_path: []const u8,
++) SessionProbeError!SessionProbeResult {
++    const probe = try probeProtocol(socket_path);
++    const connection = probe.connection;
++    const labels = blk: {
++        connection.send(.LabelGet, "") catch break :blk null;
++        break :blk readReply(alloc, connection, .LabelData, 50) catch null;
++    };
++    return .{ .connection = connection, .info = probe.info, .labels = labels, .alloc = alloc };
+ }
+ 
+ //  WIRE PROTOCOL FREEZE: read before "fixing" any test below.
+@@ -426,33 +501,9 @@ pub fn roundTripForTag(
+     payload: []const u8,
+     expected_tag: Tag,
+ ) SessionProbeError![]u8 {
+-    const timeout_ms = 1000;
+-    const fd = try connectSession(socket_path);
+-    defer lib_posix.close(fd);
+-
+-    send(fd, request_tag, payload) catch return error.Unexpected;
+-
+-    var poll_fds = [_]lib_posix.pollfd{.{ .fd = fd, .events = lib_posix.POLL.IN, .revents = 0 }};
+-    const poll_result = lib_posix.poll(&poll_fds, timeout_ms) catch return error.Unexpected;
+-    if (poll_result == 0) return error.Timeout;
+-
+-    var sb = SocketBuffer.init(alloc) catch return error.Unexpected;
+-    defer sb.deinit();
+-
+-    const n = sb.read(fd) catch return error.Unexpected;
+-    if (n == 0) return error.Unexpected;
+-
+-    while (sb.next()) |msg| {
+-        if (msg.header.tag == .Unsupported) return error.Unsupported;
+-        if (msg.header.tag == expected_tag) {
+-            return alloc.dupe(u8, msg.payload) catch return error.Unexpected;
+-        }
+-    }
+-    return error.Unexpected;
++    return roundTripLarge(alloc, socket_path, request_tag, payload, expected_tag, 1000);
+ }
+ 
+-/// Like `roundTripForTag`, for a reply larger than one socket read. `timeout_ms`
+-/// bounds each wait, so a daemon that ignores the request tag ends in `Timeout`.
+ pub fn roundTripLarge(
+     alloc: std.mem.Allocator,
+     socket_path: []const u8,
+@@ -461,13 +512,22 @@ pub fn roundTripLarge(
+     expected_tag: Tag,
+     timeout_ms: i32,
+ ) SessionProbeError![]u8 {
+-    const fd = try connectSession(socket_path);
+-    defer lib_posix.close(fd);
+-
+-    send(fd, request_tag, payload) catch return error.Unexpected;
++    const connection = try connectProtocol(socket_path);
++    defer connection.close();
++    connection.send(request_tag, payload) catch return error.Unexpected;
++    return readReply(alloc, connection, expected_tag, timeout_ms);
++}
+ 
++fn readReply(
++    alloc: std.mem.Allocator,
++    connection: Connection,
++    expected_tag: Tag,
++    timeout_ms: i32,
++) SessionProbeError![]u8 {
++    const fd = connection.fd;
+     var sb = SocketBuffer.init(alloc) catch return error.Unexpected;
+     defer sb.deinit();
++    sb.wire = connection.wire;
+ 
+     while (true) {
+         var poll_fds = [_]lib_posix.pollfd{.{ .fd = fd, .events = lib_posix.POLL.IN, .revents = 0 }};
+@@ -496,3 +556,22 @@ test "zeroed Info has no stack garbage in wire bytes" {
+     const last_field_end = @offsetOf(Info, "task_exit_code") + @sizeOf(u8);
+     for (bytes[last_field_end..]) |b| try std.testing.expectEqual(@as(u8, 0), b);
+ }
++
++test "probe identifies both wire formats after unsolicited output" {
++    for ([_]Wire{ .current, .legacy }) |wire| {
++        var fds: [2]i32 = undefined;
++        if (std.c.socketpair(lib_posix.AF.UNIX, lib_posix.SOCK.STREAM, 0, &fds) != 0) return error.NoSocketPair;
++        defer for (fds) |fd| lib_posix.close(fd);
++
++        const peer: Connection = .{ .fd = fds[0], .wire = wire };
++        try peer.send(.Output, "$");
++        try peer.send(.TaskComplete, "\x00");
++        var info = std.mem.zeroes(Info);
++        info.pid = 123;
++        try peer.send(.Info, std.mem.asBytes(&info));
++
++        const reply = try readProbeReply(fds[1]);
++        try std.testing.expectEqual(wire, reply.wire);
++        try std.testing.expectEqual(info.pid, reply.info.pid);
++    }
++}
+diff --git a/src/loop.zig b/src/loop.zig
+index fd83de1..c6b0afd 100644
+--- a/src/loop.zig
++++ b/src/loop.zig
+@@ -28,8 +28,8 @@ fn resetShare(stdout_fd: i32) i64 {
+ 
+ /// clientLoop sends ipc commands to its corresponding daemon.  It uses poll() as its non-blocking
+ /// mechanism. It will send stdin to the daemon and receive stdout from the daemon.
+-pub fn clientLoop(client_sock_fd: i32, env_str: []const u8, session_path: []const u8) !ClientResult {
+-    return clientLoopOn(client_sock_fd, env_str, session_path, lib_posix.STDIN_FILENO, lib_posix.STDOUT_FILENO);
++pub fn clientLoop(connection: ipc.Connection, env_str: []const u8, session_path: []const u8) !ClientResult {
++    return clientLoopOn(connection, env_str, session_path, lib_posix.STDIN_FILENO, lib_posix.STDOUT_FILENO);
+ }
+ 
+ /// A daemon whose session ended unlinks its socket before it closes its clients, so a hangup with the socket
+@@ -47,7 +47,8 @@ fn sessionEnding(close_deadline: *?i64, session_path: []const u8) bool {
+     return true;
+ }
+ 
+-fn clientLoopOn(client_sock_fd: i32, env_str: []const u8, session_path: []const u8, stdin_fd: i32, stdout_fd: i32) !ClientResult {
++fn clientLoopOn(connection: ipc.Connection, env_str: []const u8, session_path: []const u8, stdin_fd: i32, stdout_fd: i32) !ClientResult {
++    const client_sock_fd = connection.fd;
+     std.log.info("client loop fd={d}", .{client_sock_fd});
+     const gpa: std.mem.Allocator = blk: {
+         if (builtin.mode == .debug) {
+@@ -78,25 +79,26 @@ fn clientLoopOn(client_sock_fd: i32, env_str: []const u8, session_path: []const
+     defer sock_write_buf.deinit(gpa);
+ 
+     if (env_str.len > 0) {
+-        try ipc.appendMessage(gpa, &sock_write_buf, .EnvSet, env_str);
++        try connection.wire.append(gpa, &sock_write_buf, .EnvSet, env_str);
+     }
+ 
+     var relay: ?role.Relay = if (role.nonceFromEnv()) |nonce| role.Relay.init(nonce) else null;
+     defer if (relay) |*r| r.deinit();
+     if (relay != null) {
+         const flags = ipc.ManageFlags{ .claim = role.claimFromEnv() };
+-        try ipc.appendMessage(gpa, &sock_write_buf, .Manage, std.mem.asBytes(&flags));
++        try connection.wire.append(gpa, &sock_write_buf, .Manage, std.mem.asBytes(&flags));
+     }
+ 
+     // Send init message with terminal size (buffered)
+     const size = ipc.getTerminalSize(stdout_fd);
+-    try ipc.appendMessage(gpa, &sock_write_buf, .Init, std.mem.asBytes(&size));
++    try connection.wire.append(gpa, &sock_write_buf, .Init, std.mem.asBytes(&size));
+ 
+     var poll_fds = try std.ArrayList(lib_posix.pollfd).initCapacity(gpa, 4);
+     defer poll_fds.deinit(gpa);
+ 
+     var read_buf = try ipc.SocketBuffer.init(gpa);
+     defer read_buf.deinit();
++    read_buf.wire = connection.wire;
+ 
+     var stdout_buf = try std.ArrayList(u8).initCapacity(gpa, 4096);
+     defer stdout_buf.deinit(gpa);
+@@ -171,7 +173,7 @@ fn clientLoopOn(client_sock_fd: i32, env_str: []const u8, session_path: []const
+         if (poll_fds.items[2].revents & lib_posix.POLL.IN != 0) {
+             try signal.drainSignalPipe();
+             const next_size = ipc.getTerminalSize(stdout_fd);
+-            try ipc.appendMessage(
++            try connection.wire.append(
+                 gpa,
+                 &sock_write_buf,
+                 .Resize,
+@@ -193,9 +195,9 @@ fn clientLoopOn(client_sock_fd: i32, env_str: []const u8, session_path: []const
+                     // Check for detach sequences (ctrl+\ as first byte or Kitty escape sequence)
+                     if (!detach_key_disabled and util.isCtrlBackslash(buf[0..n])) {
+                         std.log.info("detach key detected", .{});
+-                        try ipc.appendMessage(gpa, &sock_write_buf, .Detach, "");
++                        try connection.wire.append(gpa, &sock_write_buf, .Detach, "");
+                     } else {
+-                        try ipc.appendMessage(gpa, &sock_write_buf, .Input, buf[0..n]);
++                        try connection.wire.append(gpa, &sock_write_buf, .Input, buf[0..n]);
+                     }
+                 } else {
+                     std.log.info("eof stdin", .{});
+@@ -241,7 +243,7 @@ fn clientLoopOn(client_sock_fd: i32, env_str: []const u8, session_path: []const
+                         // daemon is asking for the client's window size usually in response
+                         // to this client being set as leader.
+                         const next_size = ipc.getTerminalSize(stdout_fd);
+-                        try ipc.appendMessage(
++                        try connection.wire.append(
+                             gpa,
+                             &sock_write_buf,
+                             .Resize,
+@@ -1487,7 +1489,7 @@ pub const Daemon = struct {
+         payload: []const u8,
+     ) !void {
+         defer client.has_pending_output = true;
+-        const mode: ipc.ScreenMode = if (payload.len == 1) @enumFromInt(payload[0]) else .active;
++        const mode: ipc.ScreenMode = if (payload.len == 1) @fromBackingInt(@intCast(payload[0])) else .active;
+         const all = switch (mode) {
+             .active => false,
+             .all => true,
+@@ -2302,7 +2304,7 @@ const EndingSession = struct {
+     }
+ 
+     fn runClient(self: *EndingSession) void {
+-        self.client_result = clientLoopOn(self.sock, "", self.daemon.socket_path, self.term_pty[1], self.term_pty[1]);
++        self.client_result = clientLoopOn(.{ .fd = self.sock, .wire = .current }, "", self.daemon.socket_path, self.term_pty[1], self.term_pty[1]);
+         self.client_done_ms.store(role.nowMs(), .release);
+     }
+ 

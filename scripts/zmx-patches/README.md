@@ -1,19 +1,14 @@
 # zmx patches
 
-`scripts/setup.sh` applies every `*.patch` here, in name order, to a fresh checkout of `ZMX_REV` before
-building, and every `ghostty/*.patch` to a private checkout of the ghostty revision that `ZMX_REV` pins
-in its `build.zig.zon`. The digest of both sets is part of `.zmx-build-stamp`, so editing one rebuilds
-zmx. A daemon already running keeps the zmx it was started by. `scripts/setup-zmx-linux.sh` builds the same
-patched tree for `aarch64-linux-musl` and `x86_64-linux-musl`, the zmx agterm-server runs, each under its own
-stamp in `build/linux/<arch>/`, so a patch has to build for Linux as well as macOS.
+`scripts/setup.sh` applies the patches in this directory in name order to a fresh checkout of `ZMX_REV`.
+The revision, target, Zig toolchain, and patch digest make up `.zmx-build-stamp`. A daemon already running
+keeps the zmx it was started by. `scripts/setup-zmx-linux.sh` builds the same tree for both Linux musl
+architectures, with a separate stamp under each `build/linux/<arch>/`.
 
-Each patch is a plain `diff -ruN` against a pristine copy of the tree it patches, made so `git apply`
-takes it with `-p1`: the zmx patches against `ZMX_REV`, the `ghostty/` ones against the ghostty revision
-in that `ZMX_REV`'s `build.zig.zon`. To change one, check out both trees side by side as `zmx` and
-`zmx-ghostty`, apply the ghostty patches to `zmx-ghostty` and then the zmx patches to `zmx`, since `0002`
-makes zmx build against `../zmx-ghostty`. Edit, run `zig build test` in `zmx`, then regenerate the file
-against the pristine copy of its own tree. Moving `ZMX_REV` means re-applying them by hand where they no
-longer apply, and re-running `check.py`.
+To update a patch, apply the series at the pinned revision, edit the source, and run `zig build test`.
+Generate a diff against the tree with the preceding patches applied. Run `check.py` against the built
+binary after moving `ZMX_REV`. zmx resolves its Ghostty dependency from its own build manifest. That
+Ghostty version preserves skipped cells during VT replay by moving the cursor across them.
 
 - `0001-explicit-leadership.patch` lets a terminal own which client leads a session. A client attached
   with `ZMX_MANAGED=<token>` leads only by claiming at attach (`ZMX_MANAGED_CLAIM`), never by typing, and
@@ -23,10 +18,6 @@ longer apply, and re-running `check.py`.
   A client that does not set the variable behaves as upstream does. `.claude/rules/control-api.md` owns
   how agterm uses it.
 
-- `0002-private-ghostty-dependency.patch` points zmx's ghostty dependency at `../zmx-ghostty`, the
-  private checkout `setup.sh` patches, in place of the zig package cache. Its context names the pinned
-  revision, so a `ZMX_REV` that moves ghostty stops it applying. zmx's build reads the dependency hash
-  as its reported ghostty version, so the patch writes that string in, marked `+agterm`.
 - `0003-atomic-socket-publish.patch` gives a session socket its name only after it listens. Upstream binds
   the session path and then listens, and `zmx list`, attach and the commands that connect to a session
   delete a path that refuses a connection as stale. A probe between bind and listen can unlink the new socket
@@ -68,10 +59,13 @@ longer apply, and re-running `check.py`.
   token names, or one that took a vacant session without claiming and has sent no key, paste or mouse
   press since, control keys, Esc and kitty paste events included and a terminal's own replies not; otherwise it
   attaches as before. A daemon without the patch ignores the unknown tag.
-- `ghostty/0001-formatter-unstyled-blanks.patch` fixes the snapshot a re-attach replays. The formatter
-  wrote cells a program skipped with a cursor move as spaces under the previous cell's style, so a gap
-  after a colored run came back painted; a skipped cell now closes the style first. Spaces the program
-  wrote keep their style. Not agterm's `GHOSTTY_REV`: this is the ghostty zmx links, nothing else.
+- `0008-legacy-ipc.patch` lets the new client talk to daemons still running the bundled zmx 0.8.1.
+  It detects the older wire format with an Info request and uses it for that connection, including the
+  older managed attach tag. New daemons use upstream 1.0 framing.
+- `0009-bounded-signal-cleanup.patch` restores terminal settings when a signal stops an attach client.
+  It bounds the reset write so a session host that stopped reading the PTY can still reap the client.
 
-`check.py <zmx>` drives managed clients on ptys of different sizes against one daemon in a throwaway
-`ZMX_DIR`, prints one line per rule, and exits nonzero when any of them is broken.
+`check.py <zmx>` drives managed clients on PTYs of different sizes against one daemon in a throwaway
+`ZMX_DIR` and exits nonzero when a check fails. Pass a second argument pointing to agterm's patched
+zmx 0.8.1 binary to also verify listing, reattaching, typing, reading the screen and history, detaching,
+and killing across the upgrade.

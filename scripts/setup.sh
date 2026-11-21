@@ -7,7 +7,7 @@
 # GHOSTTY_REV selects the upstream commit; local patches are applied after checkout. It was held at a
 # 2026-04-30 pre-regression commit while later builds blanked the scrollback on a font-size increase; that is
 # fixed upstream and re-verified by hand before this bump. Re-test the font-increase case when moving
-# it, and check `minimum_zig_version` in build.zig.zon against GHOSTTY_ZIG_FORMULA.
+# it, and check `minimum_zig_version` in build.zig.zon against ZIG_FORMULA.
 #
 # One-time cost: the build (a few minutes, plus a Metal Toolchain download on first run) is skipped
 # whenever the staged artifacts match the current revision and patch digest. Presence alone is not
@@ -18,15 +18,15 @@ cd "$(dirname "$0")/.."
 GHOSTTY_REPO="https://github.com/ghostty-org/ghostty"
 GHOSTTY_REV="83fb95624b0439ee660c2679b43b38c8b63769cd"  # v1.4.0, 2026-10-27
 ZMX_REPO="https://github.com/neurosnap/zmx"
-ZMX_REV="8bab1f0173b07e79835ea372d749af3dbf0d0842"  # v0.8.1, 2026-09-05; SessionHostRuntime/DeviceAttributeResponder.swift copies its DA replies
+ZMX_REV="a35f00a2118b15a5e9d522a43035c8d7487df9b7"  # v1.0.1, 2026-11-06; SessionHostRuntime/DeviceAttributeResponder.swift copies its DA replies
 # zig defaults to the builder's OS version and CPU; ship the app's arm64/macOS 14 baseline.
 ZMX_TARGET="aarch64-macos.14.0"
 # setup-zmx-linux.sh builds the same pin for a Linux target into its own stage dir and stamp. Unquoted, so
 # CI's `^ZMX_TARGET="` read of the line above matches it alone.
 ZMX_TARGET=${AGTERM_ZMX_TARGET:-$ZMX_TARGET}
-# pin minor lines because the unversioned zig formula rolls; zmx stays on 0.16 independently.
-GHOSTTY_ZIG_FORMULA="zig@0.17"
-ZMX_ZIG_FORMULA="zig@0.16"
+# Pin the Homebrew minor line and the Linux CI release.
+ZIG_FORMULA="zig@0.17"
+ZIG_LINUX_VERSION="0.17.1"
 XCFRAMEWORK_DIR="GhosttyKit.xcframework"
 # terminfo/ is the marker: it must extract as a SIBLING of ghostty/ so libghostty's
 # TERMINFO=dirname(GHOSTTY_RESOURCES_DIR)/terminfo derivation resolves xterm-ghostty.
@@ -40,10 +40,12 @@ ZMX_STAMP_FILE="${AGTERM_ZMX_STAMP_FILE:-.zmx-build-stamp}"
 # applied in name order over the plain pin; scripts/zmx-patches/README.md says what each one is for.
 # The stamp carries their digest, so editing a patch rebuilds zmx exactly as a ZMX_REV change does.
 ZMX_PATCH_DIR="scripts/zmx-patches"
-# patches for the ghostty revision zmx itself pins, applied to a private copy of it
-ZMX_GHOSTTY_PATCH_DIR="$ZMX_PATCH_DIR/ghostty"
-ZMX_PATCH_DIGEST="$(cat "$ZMX_PATCH_DIR"/*.patch "$ZMX_GHOSTTY_PATCH_DIR"/*.patch | shasum -a 256 | cut -c1-16)"
-ZMX_STAMP="$ZMX_REV $ZMX_TARGET $ZMX_PATCH_DIGEST"
+ZMX_PATCH_DIGEST="$(cat "$ZMX_PATCH_DIR"/*.patch | shasum -a 256 | cut -c1-16)"
+ZMX_COMPILER="$ZIG_FORMULA"
+if [[ -n "${AGTERM_ZMX_ZIG:-}" ]]; then
+  ZMX_COMPILER="$("$AGTERM_ZMX_ZIG" version)"
+fi
+ZMX_STAMP="$ZMX_REV $ZMX_TARGET $ZMX_COMPILER $ZMX_PATCH_DIGEST"
 
 # stage agterm's own bundled theme(s) from the committed source into the (gitignored,
 # setup-regenerated) ghostty themes dir. idempotent and called on both the cached and the
@@ -85,76 +87,24 @@ if ! $need_xc && ! $need_res && ! $need_zmx; then
   exit 0
 fi
 
-# resolved through the keg prefix rather than PATH, so a machine still linking an older zig for another
-# project builds with the right one and keeps its own `zig` untouched. called only by the build that
-# needs it, so a zmx-only run never installs ghostty's compiler.
+# Resolve the Homebrew keg directly so the user's PATH can still point at a different Zig.
+# Linux CI passes its unpacked compiler for the zmx build.
 zig_for() {
-  local formula="$1" want="${1#zig@}" zig ver
-  zig="$(brew --prefix "$formula" 2>/dev/null || true)/bin/zig"
-  # a Linux CI job has no Homebrew; it names the zig it unpacked, held to the same version check
-  if [[ "$formula" == "$ZMX_ZIG_FORMULA" && -n "${AGTERM_ZMX_ZIG:-}" ]]; then
-    zig="$AGTERM_ZMX_ZIG"
-  elif [[ ! -x "$zig" ]]; then
-    echo "installing $formula..." >&2
-    brew install "$formula" >&2 || return 1
-    zig="$(brew --prefix "$formula")/bin/zig" || return 1
+  local zig="${1:-}" want="${ZIG_FORMULA#zig@}" ver
+  if [[ -z "$zig" ]]; then
+    zig="$(brew --prefix "$ZIG_FORMULA" 2>/dev/null || true)/bin/zig"
+    if [[ ! -x "$zig" ]]; then
+      echo "installing $ZIG_FORMULA..." >&2
+      brew install "$ZIG_FORMULA" >&2 || return 1
+      zig="$(brew --prefix "$ZIG_FORMULA")/bin/zig" || return 1
+    fi
   fi
-  # a versioned alias can still resolve to a stale rolling keg.
   ver="$("$zig" version)" || return 1
   if [[ "$ver" != "$want".* ]]; then
-    echo "error: $zig is zig $ver, need $want; run brew upgrade $formula" >&2
+    echo "error: $zig is zig $ver, need $want" >&2
     return 1
   fi
   printf '%s\n' "$zig"
-}
-
-# The macOS 27 SDK's math.h asks the compiler's float.h for INFINITY/NAN through clang's
-# `__need_infinity_nan` protocol (LLVM PR #164348, Apple clang 21). Zig 0.16's bundled float.h does not
-# implement it, so compiling zig's libc++ fails with "undeclared identifier 'INFINITY'". Both builds link
-# libc++, but libghostty compiles against Ghostty's own apple-sdk math.h overlay and zmx's exported VT
-# dependency path does not, which is why only the zmx build needs this. A shim for the two macros, not a
-# backport of LLVM 22's header split: remove it once ZMX_ZIG_FORMULA resolves to a release carrying zig's own
-# fix, which 0.17.0 does.
-SHIM_MARK='Local patch (agterm scripts/setup.sh)'
-patch_zig_float_h() {
-  local zig_lib float_h source tmp
-  zig_lib="$("$ZMX_ZIG" env | sed -n 's/.*lib_dir"\{0,1\} *[=:] *"\([^"]*\)".*/\1/p')"
-  float_h="$zig_lib/include/float.h"
-  if [[ ! -f "$float_h" ]]; then
-    echo "warning: zig float.h not found at $float_h; skipping __need_infinity_nan shim" >&2
-    return 0
-  fi
-  # upstream's own implementation carries no marker of ours, and must never be replaced by the shim or
-  # by a stale backup taken before the keg gained it
-  if grep -q '__need_infinity_nan' "$float_h" && ! grep -qF "$SHIM_MARK" "$float_h"; then
-    echo "zig float.h implements __need_infinity_nan upstream; no shim needed"
-    return 0
-  fi
-  # both of our markers, so an interrupted run is re-derived rather than mistaken for a finished one
-  if grep -qF "$SHIM_MARK" "$float_h" && grep -q '#endif /\* __need_infinity_nan \*/' "$float_h"; then
-    echo "zig float.h already carries the __need_infinity_nan shim"
-    return 0
-  fi
-  # only a half-applied shim of ours may fall back to the backup it was taken from
-  source="$float_h"
-  if grep -qF "$SHIM_MARK" "$float_h" && [[ -f "$float_h.orig" ]]; then
-    source="$float_h.orig"
-  fi
-  tmp="$(mktemp "$float_h.XXXXXX")"
-  perl -0pe 's|^#ifndef __CLANG_FLOAT_H\n#define __CLANG_FLOAT_H\n|/* Local patch (agterm scripts/setup.sh): honor the macOS 27 SDK\n * __need_infinity_nan protocol (LLVM PR #164348). */\n#if defined(__need_infinity_nan)\n#  undef INFINITY\n#  undef NAN\n#  define INFINITY (__builtin_inff())\n#  define NAN (__builtin_nanf(""))\n#  undef __need_infinity_nan\n#else\n\n#ifndef __CLANG_FLOAT_H\n#define __CLANG_FLOAT_H\n|m' "$source" > "$tmp"
-  printf '#endif /* __need_infinity_nan */\n' >> "$tmp"
-  # publish only a header that got the whole transformation: the substitution is silent when the guard
-  # lines are spaced differently, and appending the closing #endif alone would corrupt the header
-  if ! grep -q '^#if defined(__need_infinity_nan)$' "$tmp" || ! grep -q '^#ifndef __CLANG_FLOAT_H$' "$tmp"; then
-    rm -f "$tmp"
-    echo "warning: zig float.h not in the expected form; skipping __need_infinity_nan shim" >&2
-    return 0
-  fi
-  chmod u+w "$float_h"
-  [[ -f "$float_h.orig" ]] || cp -p "$float_h" "$float_h.orig"
-  chmod --reference="$float_h" "$tmp" 2>/dev/null || chmod 0644 "$tmp"
-  mv "$tmp" "$float_h"
-  echo "shimmed zig float.h for the macOS 27 SDK: $float_h (backup: $float_h.orig)"
 }
 
 # Metal Toolchain is needed only when the xcframework build runs.
@@ -179,7 +129,7 @@ if $need_xc || $need_res; then
     git -C "$ghostty_build" apply --whitespace=nowarn "$PWD/$ghostty_patch"
   done
 
-  GHOSTTY_ZIG="$(zig_for "$GHOSTTY_ZIG_FORMULA")"
+  GHOSTTY_ZIG="$(zig_for)"
   echo "building GhosttyKit.xcframework with zig (a few minutes)..."
   ( cd "$ghostty_build" && "$GHOSTTY_ZIG" build -Doptimize=ReleaseFast -Demit-xcframework=true \
       -Dxcframework-target=native -Demit-macos-app=false )
@@ -213,28 +163,12 @@ if $need_zmx; then
   git -C "$zmx_build" fetch -q --depth 1 origin "$ZMX_REV"
   git -C "$zmx_build" -c advice.detachedHead=false checkout -q FETCH_HEAD
 
-  # zmx takes ghostty as a zig package. Its patches go on a private checkout of the revision zmx pins,
-  # read before the zmx patches repoint the dependency there, so the shared zig cache is never edited.
-  zmx_ghostty_rev="$(sed -n 's|.*ghostty-org/ghostty#\([0-9a-f]\{40\}\)".*|\1|p' "$zmx_build/build.zig.zon")"
-  [[ -n "$zmx_ghostty_rev" ]] || { echo "error: no ghostty revision in zmx build.zig.zon" >&2; exit 1; }
-  zmx_ghostty="$BUILD_DIR/zmx-ghostty"
-  echo "fetching zmx's ghostty $zmx_ghostty_rev..."
-  git init -q "$zmx_ghostty"
-  git -C "$zmx_ghostty" remote add origin "$GHOSTTY_REPO"
-  git -C "$zmx_ghostty" fetch -q --depth 1 origin "$zmx_ghostty_rev"
-  git -C "$zmx_ghostty" -c advice.detachedHead=false checkout -q FETCH_HEAD
-  for ghostty_patch in "$ZMX_GHOSTTY_PATCH_DIR"/*.patch; do
-    echo "applying ghostty/$(basename "$ghostty_patch")..."
-    git -C "$zmx_ghostty" apply --whitespace=nowarn "$PWD/$ghostty_patch"
-  done
-
   for zmx_patch in "$ZMX_PATCH_DIR"/*.patch; do
     echo "applying $(basename "$zmx_patch")..."
     git -C "$zmx_build" apply --whitespace=nowarn "$PWD/$zmx_patch"
   done
 
-  ZMX_ZIG="$(zig_for "$ZMX_ZIG_FORMULA")"
-  patch_zig_float_h
+  ZMX_ZIG="$(zig_for "${AGTERM_ZMX_ZIG:-}")"
 
   echo "building zmx with zig..."
   ( cd "$zmx_build" && "$ZMX_ZIG" build -Doptimize=ReleaseSafe -Dtarget="$ZMX_TARGET" )

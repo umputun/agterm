@@ -1,18 +1,43 @@
-diff -ruN zmx-orig/src/daemonize.zig zmx/src/daemonize.zig
---- zmx-orig/src/daemonize.zig
-+++ zmx/src/daemonize.zig
-@@ -75,6 +75,8 @@
+diff --git a/src/client.zig b/src/client.zig
+index 4fd818f..26b4c2d 100644
+--- a/src/client.zig
++++ b/src/client.zig
+@@ -100,7 +100,7 @@ pub fn create(alloc: Allocator, io: Io, name: []const u8, opts: CreateOptions) !
+     }
+ 
+     if (opts.labels) |kvs| {
+-        try set(alloc, io, sesh, kvs);
++        try set(alloc, io, name, kvs);
+     }
+ 
+     return true;
+@@ -159,7 +159,7 @@ pub fn attach(alloc: Allocator, io: Io, name: []const u8, opts: AttachOptions) !
+     }
+ 
+     if (opts.labels) |kvs| {
+-        try set(alloc, io, sesh, kvs);
++        try set(alloc, io, name, kvs);
+     }
+ 
+     const client_sock = try socket.sessionConnect(socket_path);
+diff --git a/src/daemonize.zig b/src/daemonize.zig
+index c872532..5110560 100644
+--- a/src/daemonize.zig
++++ b/src/daemonize.zig
+@@ -85,6 +85,8 @@ fn exec(sesh_name: []const u8, cmd: Cmd) !noreturn {
      // it must not opt in on the outer terminal's behalf or learn its nonce
-     _ = cross.c.unsetenv("ZMX_MANAGED");
-     _ = cross.c.unsetenv("ZMX_MANAGED_CLAIM");
+     _ = cross.unsetenv("ZMX_MANAGED");
+     _ = cross.unsetenv("ZMX_MANAGED_CLAIM");
 +    // the record is the daemon's to write; a nested session must not write its own exit into it
-+    _ = cross.c.unsetenv("ZMX_EXIT_FILE");
++    _ = cross.unsetenv("ZMX_EXIT_FILE");
  
      const err = lib_posix.execvpeZ(cmd.file, cmd.argv_ptr, std.c.environ);
      std.log.err("execvpe failed: cmd={s} err={s}", .{ cmd.file, @errorName(err) });
-diff -ruN zmx-orig/src/exit_record.zig zmx/src/exit_record.zig
---- zmx-orig/src/exit_record.zig
-+++ zmx/src/exit_record.zig
+diff --git a/src/exit_record.zig b/src/exit_record.zig
+new file mode 100644
+index 0000000..5663838
+--- /dev/null
++++ b/src/exit_record.zig
 @@ -0,0 +1,20 @@
 +const std = @import("std");
 +const lib_posix = @import("posix.zig");
@@ -25,7 +50,7 @@ diff -ruN zmx-orig/src/exit_record.zig zmx/src/exit_record.zig
 +    const path = lib_posix.getenv("ZMX_EXIT_FILE") orelse return;
 +    if (path.len == 0) return;
 +    var tmp_buf: [std.fs.max_path_bytes]u8 = undefined;
-+    const tmp = std.fmt.bufPrintZ(&tmp_buf, "{s}.tmp", .{path}) catch return;
++    const tmp = std.mem.printSentinel(&tmp_buf, "{s}.tmp", .{path}, 0) catch return;
 +    const fd = lib_posix.open(tmp, .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true }, 0o600) catch {
 +        std.log.warn("cannot open exit record path={s}", .{tmp});
 +        return;
@@ -34,10 +59,11 @@ diff -ruN zmx-orig/src/exit_record.zig zmx/src/exit_record.zig
 +    lib_posix.close(fd);
 +    if (std.c.rename(tmp.ptr, path.ptr) != 0) std.log.warn("cannot publish exit record path={s}", .{path});
 +}
-diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
---- zmx-orig/src/loop.zig
-+++ zmx/src/loop.zig
-@@ -8,6 +8,7 @@
+diff --git a/src/loop.zig b/src/loop.zig
+index 5927c5a..09abe64 100644
+--- a/src/loop.zig
++++ b/src/loop.zig
+@@ -7,6 +7,7 @@ const socket = @import("socket.zig");
  const label = @import("label.zig");
  const role = @import("role.zig");
  const lib_posix = @import("posix.zig");
@@ -45,7 +71,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
  const Cfg = @import("cfg.zig");
  const signal = @import("signal.zig");
  const assert = std.debug.assert;
-@@ -366,6 +367,7 @@
+@@ -381,6 +382,7 @@ fn daemonLoop(daemon: *Daemon, gpa: std.mem.Allocator, io: std.Io, server_sock_f
                      // Let the rest of this poll iteration complete so client
                      // write buffers are flushed via the normal POLLOUT path.
                      // On the next iteration, daemon.running will be false.
@@ -53,7 +79,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
                      daemon.running = false;
                  } else {
                      // Feed PTY output to terminal emulator for state tracking
-@@ -612,6 +614,8 @@
+@@ -638,6 +640,8 @@ pub const Daemon = struct {
      /// bumped on every pty read, resize and injected output, carried in each ScreenHeader
      screen_revision: u64 = 0,
      running: bool = true,
@@ -62,7 +88,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
      pid: i32 = undefined,
      command: ?[]const []const u8 = null,
      /// The session's working directory in OSC 7 form, `file://<host><path>`.
-@@ -857,6 +861,10 @@
+@@ -885,6 +889,10 @@ pub const Daemon = struct {
          };
  
          defer {
@@ -73,26 +99,37 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
              // Close and unlink the listen socket BEFORE handleKill()'s
              // 500ms SIGHUP->SIGKILL grace sleep. Otherwise a `zmx run`
              // for the same name issued in that window will hang waiting
-diff -ruN zmx-orig/src/main.zig zmx/src/main.zig
---- zmx-orig/src/main.zig
-+++ zmx/src/main.zig
-@@ -190,6 +190,7 @@
+diff --git a/src/main.zig b/src/main.zig
+index c018d21..6dae58f 100644
+--- a/src/main.zig
++++ b/src/main.zig
+@@ -190,6 +190,17 @@ fn mainImpl(init: std.process.Init) !void {
          const env_str = try getTrackedEnvStr(gpa, env_keys, init.environ_map);
          defer gpa.free(env_str);
  
-+        if (parsed.detached) return createDetached(gpa, io, &daemon, parsed.labels);
-         return attach(gpa, io, &daemon, env_str, parsed.labels);
-     } else if (std.mem.eql(u8, cmd, "run") or std.mem.eql(u8, cmd, "r")) {
-         const session_name = args.next() orelse "";
-@@ -533,6 +534,7 @@
++        if (parsed.detached) {
++            const created = zmx.create(gpa, io, parsed.session_name, .{
++                .command = command,
++                .cwd = cwd,
++                .shell = shell_env,
++                .labels = parsed.labels,
++            }) catch |err| return printError(io, "cannot create session \"{s}\": {s}", .{ parsed.session_name, @errorName(err) });
++            if (!created) return printError(io, "session \"{s}\" exists", .{parsed.session_name});
++            return;
++        }
++
+         zmx.attach(gpa, io, parsed.session_name, .{
+             .command = command,
+             .cwd = cwd,
+@@ -478,6 +489,7 @@ fn help(io: std.Io) !void {
          \\
          \\Commands:
-         \\  [a]ttach [--labels kv] <name> [command...]  Attach to session, creating if needed
-+        \\  attach --detached <name> [command...]       Create session without attaching
-         \\  [r]un <name> [-d] [command...]              Send command without attaching
-         \\  [s]end <name> <text...>                     Send raw input to session PTY
-         \\  [p]rint <name> <text...>                    Inject text into session display
-@@ -1561,6 +1563,8 @@
+         \\  [a]ttach [--labels kv] <name> [command...]                 Attach to session, creating if needed
++        \\  attach --detached <name> [command...]                     Create session without attaching
+         \\  [r]un <name> [-d] [command...]                             Send command without attaching
+         \\  [s]end <name> <text...>                                    Send raw input to session PTY
+         \\  [p]rint <name> <text...>                                   Inject text into session display
+@@ -1159,6 +1171,8 @@ const AttachArgs = struct {
      /// same space-separated form `zmx set` takes.
      labels: ?[]const u8 = null,
      want_help: bool = false,
@@ -101,7 +138,7 @@ diff -ruN zmx-orig/src/main.zig zmx/src/main.zig
      /// `--labels` was given with nothing to apply.
      missing_labels_value: bool = false,
  };
-@@ -1578,6 +1582,10 @@
+@@ -1176,6 +1190,10 @@ fn parseAttachArgs(argv: []const []const u8) AttachArgs {
              parsed.want_help = true;
              return parsed;
          }
@@ -112,31 +149,3 @@ diff -ruN zmx-orig/src/main.zig zmx/src/main.zig
          if (std.mem.startsWith(u8, arg, labels_flag ++ "=")) {
              parsed.labels = arg[labels_flag.len + 1 ..];
              continue;
-@@ -1600,6 +1608,27 @@
-     return parsed;
- }
- 
-+/// Creates the session as an attach would, with no tty and no client: the
-+/// command, or the login shell, starts in the daemon and this returns. A
-+/// session that already answers is an error, so a supervisor that names a
-+/// fresh session knows it started one.
-+fn createDetached(gpa: std.mem.Allocator, io: std.Io, daemon: *Daemon, labels: ?[]const u8) !void {
-+    var dir = try std.Io.Dir.openDirAbsolute(io, daemon.cfg.socket_dir, .{});
-+    const exists = try socket.sessionExists(io, dir, daemon.session_name);
-+    dir.close(io);
-+    if (exists) {
-+        if (ipc.connectSession(daemon.socket_path)) |fd| {
-+            lib_posix.close(fd);
-+            return printError(io, "session \"{s}\" exists", .{daemon.session_name});
-+        } else |_| {}
-+    }
-+    const is_daemon_proc = try daemon.ensureSession(io);
-+    if (is_daemon_proc) return;
-+    if (labels) |kvs| {
-+        try labelSet(gpa, io, daemon.cfg, daemon.session_name, kvs);
-+    }
-+}
-+
- fn attach(gpa: std.mem.Allocator, io: std.Io, daemon: *Daemon, env_str: []const u8, labels: ?[]const u8) !void {
-     const sesh = socket.getSeshNameFromEnv();
-     if (sesh.len > 0) {

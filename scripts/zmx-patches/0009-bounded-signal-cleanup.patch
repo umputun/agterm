@@ -1,0 +1,158 @@
+diff --git a/src/client.zig b/src/client.zig
+index b9b0feb..e9ca2f2 100644
+--- a/src/client.zig
++++ b/src/client.zig
+@@ -122,11 +122,11 @@ pub fn connect(alloc: Allocator, io: Io, name: []const u8) !i32 {
+ 
+ /// Attach the current process's stdin/stdout TTY to a session (creating if needed).
+ pub fn attach(alloc: Allocator, io: Io, name: []const u8, opts: AttachOptions) !void {
+-    var close_deadline: ?i64 = null;
+-    return attachInner(alloc, io, name, opts, &close_deadline);
++    var exit: loop.TerminalExit = .detached;
++    return attachInner(alloc, io, name, opts, &exit);
+ }
+ 
+-fn attachInner(alloc: Allocator, io: Io, name: []const u8, opts: AttachOptions, close_deadline: *?i64) !void {
++fn attachInner(alloc: Allocator, io: Io, name: []const u8, opts: AttachOptions, exit: *loop.TerminalExit) !void {
+     signal.ignoreSigpipe();
+     const cur_sesh = socket.getSeshNameFromEnv();
+     if (cur_sesh.len > 0) {
+@@ -184,7 +184,7 @@ fn attachInner(alloc: Allocator, io: Io, name: []const u8, opts: AttachOptions,
+         .in_fd = if (stdin_is_tty) lib_posix.STDIN_FILENO else null,
+         .orig = &orig_termios,
+         .reset = exit_seq,
+-    }, close_deadline.*);
++    }, exit.*);
+ 
+     if (stdin_is_tty) {
+         var raw_termios = orig_termios;
+@@ -200,8 +200,14 @@ fn attachInner(alloc: Allocator, io: Io, name: []const u8, opts: AttachOptions,
+     _ = try lib_posix.write(lib_posix.STDOUT_FILENO, clear_seq);
+ 
+     const env_str = opts.tracked_env orelse "";
+-    const looper = try loop.clientLoop(connection, env_str, socket_path);
+-    close_deadline.* = looper.close_deadline_ms;
++    const looper = loop.clientLoop(connection, env_str, socket_path) catch |err| {
++        switch (err) {
++            error.Sighup, error.Sigint, error.Sigterm => exit.* = .interrupted,
++            else => {},
++        }
++        return err;
++    };
++    if (looper.close_deadline_ms) |deadline| exit.* = .{ .ended = deadline };
+     switch (looper.kind) {
+         .detach => return,
+         .switch_session => {
+@@ -209,7 +215,7 @@ fn attachInner(alloc: Allocator, io: Io, name: []const u8, opts: AttachOptions,
+                 _ = lib_posix.write(lib_posix.STDOUT_FILENO, restore_seq) catch {};
+                 var new_opts = opts;
+                 if (looper.cwd) |new_cwd| new_opts.cwd = new_cwd;
+-                return attachInner(alloc, io, target_name, new_opts, close_deadline);
++                return attachInner(alloc, io, target_name, new_opts, exit);
+             }
+         },
+     }
+diff --git a/src/loop.zig b/src/loop.zig
+index c6b0afd..a9e4fdf 100644
+--- a/src/loop.zig
++++ b/src/loop.zig
+@@ -323,15 +323,34 @@ fn sleepMs(ms: u64) void {
+     _ = std.c.nanosleep(&ts, null);
+ }
+ 
++pub const TerminalExit = union(enum) {
++    detached,
++    ended: i64,
++    interrupted,
++};
++
+ /// How an attach client leaves its terminal `t`: after a detach (no deadline) as upstream does. After a
+ /// session end the terminal gets until the reset's share of the deadline to take the output and the reset
+ /// the rest; what it has not taken by then is flushed, since TCSAFLUSH and, on macOS, the exit's close of
+ /// the tty wait for it. `t` restores termios with TCSAFLUSH when the output was taken.
+-pub fn leaveTerminal(t: anytype, deadline_ms: ?i64) void {
+-    const d = deadline_ms orelse {
+-        t.restoreTermios(true);
+-        t.writeReset(null);
+-        return;
++pub fn leaveTerminal(t: anytype, exit: TerminalExit) void {
++    const d = switch (exit) {
++        .detached => {
++            t.restoreTermios(true);
++            t.writeReset(null);
++            return;
++        },
++        .interrupted => {
++            // A supervisor can signal an attach client and stop reading its PTY.
++            // TCSAFLUSH would wait for the supervisor while it waits for us.
++            const deadline = role.nowMs() + 100;
++            t.flushOutput();
++            t.restoreTermios(false);
++            t.writeReset(deadline);
++            if (!t.outputTakenBy(deadline)) t.flushOutput();
++            return;
++        },
++        .ended => |deadline| deadline,
+     };
+     const taken = t.outputTakenBy(d - resetShare(t.out_fd));
+     if (!taken) t.flushOutput();
+@@ -2554,23 +2573,37 @@ test "leaving a terminal: a detach as upstream, a session end within the deadlin
+     const C = TerminalLog.Call;
+ 
+     var detach: TerminalLog = .{ .out_fd = pty[1], .takes = true };
+-    leaveTerminal(&detach, null);
++    leaveTerminal(&detach, .detached);
+     try std.testing.expectEqualDeep(&[_]C{ .{ .restore_flushing = true }, .{ .reset = null } }, detach.calls[0..detach.n]);
+ 
+     var taken: TerminalLog = .{ .out_fd = pty[1], .takes = true };
+-    leaveTerminal(&taken, d);
++    leaveTerminal(&taken, .{ .ended = d });
+     try std.testing.expectEqualDeep(&[_]C{ .{ .taken_by = d - RESET_SHARE_MS }, .{ .restore_flushing = true }, .{ .reset = d }, .{ .taken_by = d } }, taken.calls[0..taken.n]);
+ 
+     var unread: TerminalLog = .{ .out_fd = pty[1], .takes = false };
+-    leaveTerminal(&unread, d);
++    leaveTerminal(&unread, .{ .ended = d });
+     try std.testing.expectEqualDeep(&[_]C{ .{ .taken_by = d - RESET_SHARE_MS }, .flush, .{ .restore_flushing = false }, .{ .reset = d }, .{ .taken_by = d }, .flush }, unread.calls[0..unread.n]);
+ 
+     // a stdout that is no terminal needs no share for a reset
+     var file: TerminalLog = .{ .out_fd = pipe[1], .takes = true };
+-    leaveTerminal(&file, d);
++    leaveTerminal(&file, .{ .ended = d });
+     try std.testing.expectEqual(C{ .taken_by = d }, file.calls[0]);
+ }
+ 
++test "a signalled attach restores termios without waiting on unread output" {
++    const pipe = try lib_posix.pipe2(.{});
++    defer for (pipe) |fd| lib_posix.close(fd);
++    var t: TerminalLog = .{ .out_fd = pipe[1], .takes = false };
++    leaveTerminal(&t, .interrupted);
++
++    try std.testing.expectEqual(@as(usize, 5), t.n);
++    try std.testing.expectEqual(TerminalLog.Call.flush, t.calls[0]);
++    try std.testing.expectEqualDeep(TerminalLog.Call{ .restore_flushing = false }, t.calls[1]);
++    const deadline = t.calls[2].reset orelse return error.UnboundedReset;
++    try std.testing.expectEqualDeep(TerminalLog.Call{ .taken_by = deadline }, t.calls[3]);
++    try std.testing.expectEqual(TerminalLog.Call.flush, t.calls[4]);
++}
++
+ fn signalFor(thread: std.c.pthread_t, ms: i64) void {
+     const end = role.nowMs() + ms;
+     while (role.nowMs() < end) : (sleepMs(20)) _ = std.c.pthread_kill(thread, .WINCH);
+@@ -2627,7 +2660,7 @@ test "a pty nobody reads holds its output queue until the deadline, and a flush
+     try std.testing.expectEqual(@as(c_int, 0), cross.tcflush(pty[1], cross.TCOFLUSH));
+     try std.testing.expect(takenBy(pty[1], role.nowMs(), ttyOutputQueued));
+     while (true) _ = lib_posix.write(pty[1], "x") catch break;
+-    leaveTerminal(Tty{ .out_fd = pty[1], .in_fd = null, .orig = undefined, .reset = "\x1bc" }, role.nowMs() + 400);
++    leaveTerminal(Tty{ .out_fd = pty[1], .in_fd = null, .orig = undefined, .reset = "\x1bc" }, .{ .ended = role.nowMs() + 400 });
+     try std.testing.expect(takenBy(pty[1], role.nowMs(), ttyOutputQueued));
+ }
+ 
+@@ -2646,7 +2679,7 @@ test "a session end's reset reaches a pty that is read" {
+     var got: [256]u8 = undefined;
+     var len: usize = 0;
+     const reader = try std.Thread.spawn(.{}, readFor, .{ pty[0], 1000, &got, &len });
+-    leaveTerminal(Tty{ .out_fd = pty[1], .in_fd = null, .orig = undefined, .reset = "\x1bc" }, role.nowMs() + 500);
++    leaveTerminal(Tty{ .out_fd = pty[1], .in_fd = null, .orig = undefined, .reset = "\x1bc" }, .{ .ended = role.nowMs() + 500 });
+     reader.join();
+     try std.testing.expectEqualStrings("\x1bc", got[0..len]);
+ }

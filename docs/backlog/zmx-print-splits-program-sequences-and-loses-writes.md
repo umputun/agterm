@@ -28,5 +28,4 @@ line every 80 ms, 200 of 200 arrived. Capture status and stderr per print before
 leadership patch's `Relay.forward` delays its role title, and the client reports write errors. Decide what a new
 print client promises against an older daemon, which keeps the old behavior, before calling delivery fixed.
 Acceptance: a deliberately split program sequence survives an injection intact, and a dropped or refused print
-has the agreed result, on an older daemon too. Any zmx patch changes the build id in `.zmx-build-stamp`; this one
-stacks on `move-zmx-to-zig-0-17-to-drop-float-h-shim.md`, the zmx pin bump, as its own PR in the same release.
+has the agreed result, on an older daemon too. Any zmx patch changes the build id in `.zmx-build-stamp`.
