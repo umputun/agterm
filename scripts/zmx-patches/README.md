@@ -37,7 +37,8 @@ Ghostty version preserves skipped cells during VT replay by moving the cursor ac
   upstream `run` cannot do it, since it always starts bash and types the command into it. With
   `ZMX_EXIT_FILE` set, a session whose shell exits writes `exited` to that path, atomically, before its socket
   goes, so a session found gone without a record was killed; teardown then ends the shell's process group as
-  upstream does. A killed session writes nothing, and the shell never sees the variable.
+  upstream does. A killed session writes nothing, and the shell never sees the variable. Create and attach
+  hand labels the bare name, since upstream's prefixed one is prefixed again under `ZMX_SESSION_PREFIX`.
 - `0006-single-da-answer.patch` keeps a DA1/DA2 query from being answered twice. Until a client sends
   Init, the daemon answers such queries itself, but upstream also forwards them to an attach it accepted
   and has not yet heard Init from, whose terminal answers again; the program reads the spare reply as the
@@ -64,9 +65,10 @@ Ghostty version preserves skipped cells during VT replay by moving the cursor ac
 - `0009-legacy-ipc.patch` lets the new client reach daemons still running agterm's zmx 0.8.1, so Live
   sessions survive the upgrade and a reset can end them. It sends an Info request both framings read and
   keeps the framing the reply uses for that connection, mapping `Manage` and `Identity` to their 0.8.1
-  tags, 22 and 26. `tail` and `run` keep upstream framing, because the probe would swallow the one
+  tags, 22 and 26. A reply whose first frame reads both ways, an 0.8.1 one-byte Output whose header
+  padding is not zero or a current Output of a multiple of 256 bytes, is retried on a fresh connection. `tail` and `run` keep upstream framing, because the probe would swallow the one
   `TaskComplete` a task sends. `write` refuses an 0.8.1 daemon, which drops a file past its input cap and
-  still acknowledges it.
+  still acknowledges it, and so do `history --screen` and `--scrollback`, which 0.8.1 has no capture for.
 - `0010-caller-owned-socket-path.patch` backports upstream `f5d604e`: the daemon no longer frees the
   socket path its caller owns, which aborted it at shutdown under Zig 0.17.
 - `0011-init-keeps-frame-boundary.patch` keeps the unsent tail of a frame a short write left half sent
