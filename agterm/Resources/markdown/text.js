@@ -414,14 +414,21 @@
       }
       return low;
     };
-    const rangeOf = (index) => {
+    const boundsOf = (index) => {
       const begin = offsets[index], end = begin + lengths[index];
       const first = nodeAt(begin), last = nodeAt(end - 1);
+      return { startContainer: nodes[first], startOffset: begin - starts[first],
+               endContainer: nodes[last], endOffset: end - starts[last] };
+    };
+    const rangeOf = (index) => {
+      const bounds = boundsOf(index);
       const range = document.createRange();
-      range.setStart(nodes[first], begin - starts[first]);
-      range.setEnd(nodes[last], end - starts[last]);
+      range.setStart(bounds.startContainer, bounds.startOffset);
+      range.setEnd(bounds.endContainer, bounds.endOffset);
       return range;
     };
+    // painted marks can be static because replacing the text remaps the nodes and repaints
+    const markOf = (index) => new StaticRange(boundsOf(index));
     // the first match index at or after `offset`
     const firstFrom = (offset) => {
       let low = 0, high = offsets.length;
@@ -459,10 +466,10 @@
       if (force || windowStart < 0 || focus < windowStart || focus >= windowStart + span) {
         windowStart = Math.max(0, Math.min(focus - (span >> 1), offsets.length - span));
         marks.clear();
-        for (let i = windowStart; i < windowStart + span; i += 1) marks.add(rangeOf(i));
+        for (let i = windowStart; i < windowStart + span; i += 1) marks.add(markOf(i));
       }
       mark.clear();
-      if (current >= 0) mark.add(rangeOf(current));
+      if (current >= 0) mark.add(markOf(current));
     };
 
     const draw = () => {
