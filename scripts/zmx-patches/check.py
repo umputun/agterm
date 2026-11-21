@@ -105,6 +105,10 @@ def check_upgrade(previous):
         printed = cli("print", name, stdin=b"OLD-DAEMON-PRINT")
         ok &= check("the new client prints to the previous daemon's clients",
                     printed.returncode == 0 and b"OLD-DAEMON-PRINT" in drain(back[1], 1.0), repr(printed.stderr))
+        ran, tailed = cli("run", name, "true"), cli("tail", name)
+        ok &= check("the new client refuses to run or tail through the previous daemon",
+                    ran.returncode != 0 and b"does not support run" in ran.stderr
+                    and tailed.returncode != 0 and b"does not support tail" in tailed.stderr, repr((ran.stderr, tailed.stderr)))
         wrote = cli("write", name, os.path.join(ZDIR, "upgrade-write"), stdin=b"OLD-DAEMON-WRITE")
         ok &= check("the new client refuses to write through the previous daemon",
                     wrote.returncode != 0 and b"does not support write" in wrote.stderr, repr(wrote.stderr))
@@ -292,6 +296,20 @@ def main():
         ok &= check("a session streaming output is listed and answers", all(p == (True, 0) for p in probes), repr(probes))
         # zmx 0.8.1 misreads a busy session's stream, so the upgrade case must not share a directory with it
         cli("kill", "busy", "--force")
+        ran = cli("run", "task", "sh", "-c", "echo TASK-OUT; exit 3")
+        env = dict(os.environ, ZMX_DIR=ZDIR)
+        env.pop("ZMX_SESSION", None)
+        tailer = subprocess.Popen([ZMX, "tail", "task"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        time.sleep(0.3)
+        cli("run", "task", "echo", "TAIL-OUT")
+        try:
+            tailed, _ = tailer.communicate(timeout=3)
+        except subprocess.TimeoutExpired:
+            tailer.kill()
+            tailed, _ = tailer.communicate()
+        ok &= check("run returns a task's code and output and tail follows it on a current daemon",
+                    ran.returncode == 3 and b"TASK-OUT" in ran.stdout and tailer.returncode == 0 and b"TAIL-OUT" in tailed,
+                    repr((ran.returncode, ran.stdout[-120:], ran.stderr[-120:], tailer.returncode, tailed[-120:])))
         term_pid, term_fd = attach("sigterm", 24, 80, claim=True, name="sigterm")
         pids.append(term_pid)
         roles = ROLE.findall(drain(term_fd, 1.0))
@@ -309,7 +327,7 @@ def main():
         if len(sys.argv) > 2:
             ok &= check_upgrade(sys.argv[2])
     finally:
-        cli("kill", NAME, "reclaim", "detached", "killed", "env-probe", "sigterm", "busy", "--force")
+        cli("kill", NAME, "reclaim", "detached", "killed", "env-probe", "sigterm", "busy", "task", "--force")
         for pid in pids:
             try:
                 os.kill(pid, 9)

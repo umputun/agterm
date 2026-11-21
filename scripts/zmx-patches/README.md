@@ -69,7 +69,9 @@ Ghostty version preserves skipped cells during VT replay by moving the cursor ac
   not zero or a current Output of a multiple of 256 bytes, is current when the bytes after it cannot open
   an 0.8.1 frame, and is otherwise retried on a fresh connection.
   `tail` and `run` keep upstream framing, because the probe would swallow the one `TaskComplete` a task
-  sends. `write` refuses an 0.8.1 daemon, which drops a file past its input cap and
+  sends, and refuse an 0.8.1 daemon, which misreads it: `run` sends its task on the fresh connection the
+  probe returns, and `tail` probes on a second connection after subscribing.
+  `write` refuses an 0.8.1 daemon, which drops a file past its input cap and
   still acknowledges it, and so do `history --screen` and `--scrollback`, which 0.8.1 has no capture for.
 - `0010-caller-owned-socket-path.patch` backports upstream `f5d604e`: the daemon no longer frees the
   socket path its caller owns, which aborted it at shutdown under Zig 0.17.
@@ -84,4 +86,4 @@ Ghostty version preserves skipped cells during VT replay by moving the cursor ac
 `check.py <zmx>` drives managed clients on PTYs of different sizes against one daemon in a throwaway
 `ZMX_DIR` and exits nonzero when a check fails. Pass a second argument pointing to agterm's patched
 zmx 0.8.1 binary to also verify listing, claiming and reclaiming the lead, typing, reading the screen,
-printing, refusing `write` and killing across the upgrade.
+printing, refusing `write`, `run` and `tail`, and killing across the upgrade.

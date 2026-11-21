@@ -52,7 +52,31 @@ diff -ruN zmx-orig/src/client.zig zmx/src/client.zig
          error.BrokenPipe, error.ConnectionResetByPeer => return .killed,
          else => return err,
      };
-@@ -656,7 +656,7 @@
+@@ -498,8 +498,11 @@
+ 
+     if (cmd_to_send == null) return error.CommandRequired;
+ 
+-    const client_sock = try socket.sessionConnect(socket_path);
++    // a current probe hands back a connection nothing has read from, and Run is not sent yet
++    const connection = try ipc.connectProtocol(socket_path);
++    const client_sock = connection.fd;
+     defer lib_posix.close(client_sock);
++    if (connection.wire == .legacy) return error.RunNotSupported;
+ 
+     const term_size = ipc.getTerminalSize(lib_posix.STDOUT_FILENO);
+     ipc.send(client_sock, .Resize, std.mem.asBytes(&term_size)) catch {};
+@@ -630,6 +633,10 @@
+         defer alloc.free(socket_path);
+         const sock = try socket.sessionConnect(socket_path);
+         try fds.append(alloc, sock);
++        // probed after subscribing, so a task that ends meanwhile still reaches `sock`
++        const probe = try ipc.connectProtocol(socket_path);
++        lib_posix.close(probe.fd);
++        if (probe.wire == .legacy) return error.TailNotSupported;
+     }
+ 
+     return tailInternal(alloc, fds.items, false, false, writer);
+@@ -656,7 +663,7 @@
      };
      defer probe_result.deinit();
  
@@ -61,7 +85,7 @@ diff -ruN zmx-orig/src/client.zig zmx/src/client.zig
          error.ConnectionResetByPeer, error.BrokenPipe => return,
          else => return err,
      };
-@@ -683,7 +683,7 @@
+@@ -683,7 +690,7 @@
      };
      defer probe_result.deinit();
  
@@ -70,7 +94,7 @@ diff -ruN zmx-orig/src/client.zig zmx/src/client.zig
          error.ConnectionResetByPeer, error.BrokenPipe => return,
          else => return err,
      };
-@@ -709,6 +709,8 @@
+@@ -709,6 +716,8 @@
          return error.SessionUnresponsive;
      };
      defer result.deinit();
@@ -79,7 +103,7 @@ diff -ruN zmx-orig/src/client.zig zmx/src/client.zig
  
      var wire_buf = try std.ArrayList(u8).initCapacity(alloc, @sizeOf(u32) + remote_path.len + content.len);
      defer wire_buf.deinit(alloc);
-@@ -717,15 +719,16 @@
+@@ -717,15 +726,16 @@
      try wire_buf.appendSlice(alloc, remote_path);
      try wire_buf.appendSlice(alloc, content);
  
@@ -98,7 +122,7 @@ diff -ruN zmx-orig/src/client.zig zmx/src/client.zig
      if (n == 0) return error.ConnectionClosed;
  
      while (sb.next()) |msg| {
-@@ -752,26 +755,29 @@
+@@ -752,26 +762,29 @@
      const exists = try socket.sessionExists(io, dir, sesh);
      if (!exists) return error.SessionNotFound;
  
@@ -727,7 +751,23 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 diff -ruN zmx-orig/src/main.zig zmx/src/main.zig
 --- zmx-orig/src/main.zig
 +++ zmx/src/main.zig
-@@ -1234,6 +1234,7 @@
+@@ -267,6 +267,7 @@
+             .stdin_bytes = stdin_bytes,
+         }) catch |err| switch (err) {
+             error.CommandRequired => return printError(io, "run requires a command (or pipe input via stdin)", .{}),
++            error.RunNotSupported => return printError(io, "session \"{s}\" does not support run (daemon too old?)", .{session_name}),
+             else => return printError(io, "session not ready: {s}", .{@errorName(err)}),
+         };
+         lib_posix.exit(exit_code);
+@@ -428,6 +429,7 @@
+         }
+         _ = zmx.tail(gpa, io, names.items, null) catch |err| switch (err) {
+             error.SessionNotFound => return printError(io, "no matching sessions found", .{}),
++            error.TailNotSupported => return printError(io, "a matching session does not support tail (daemon too old?)", .{}),
+             else => return err,
+         };
+     } else if (std.mem.eql(u8, cmd, "write") or std.mem.eql(u8, cmd, "wr")) {
+@@ -1234,6 +1236,7 @@
      }
  
      zmx.write(gpa, io, session_name, file_path, stdin_buf.items) catch |err| {
