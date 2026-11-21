@@ -191,6 +191,24 @@ struct OverlayCommandsTests {
         #expect(rejects(argv))
     }
 
+    @Test(arguments: [("--html", true), ("--image", false), ("--markdown", false), ("--text", false)])
+    func aShellDescriptorPathIsRefusedWithAHint(flag: String, mentionsBlock: Bool) {
+        do {
+            _ = try Agtermctl.parseAsRoot(["session", "overlay", "open", flag, "/dev/fd/63"])
+            Issue.record("\(flag) /dev/fd/63 was accepted")
+        } catch {
+            let message = Agtermctl.message(for: error)
+            #expect(message.contains("\(flag) /dev/fd/63"))
+            #expect(message.contains("=(...) with --block") == mentionsBlock)
+        }
+    }
+
+    @Test(arguments: ["/dev/fd/x", "/dev/fdx/1", "/tmp/dev/fd/3"])
+    func aPathOnlyResemblingADescriptorIsSent(path: String) throws {
+        let req = try request(["session", "overlay", "open", "--html", path])
+        #expect(req.args?.html == path)
+    }
+
     @Test func imageOpenSendsTheResolvedPathAndNoPageFlags() throws {
         let req = try request(["session", "overlay", "open", "--image", "shots/../shots/a.png", "--follow"])
         let cwd = FileManager.default.currentDirectoryPath

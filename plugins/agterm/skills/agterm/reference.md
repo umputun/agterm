@@ -1170,6 +1170,9 @@ error keeps those names for compatibility.
   page gets NO file access (it is loaded from the file's text), so keep it self-contained: inline CSS and
   SVG, data URIs, or remote images and stylesheets. With `--cwd DIR` the page may read files inside DIR, relative links and assets work, and FILE
   must be inside DIR; `/` and the home directory are refused (`cwd must not be / or the home directory`).
+  agterm reads FILE itself, when the page shows and again on reload, so a `<(...)` path (`/dev/fd/N`) is refused
+  here and for `--image`, `--markdown` and `--text`: pass a named file. For self-contained HTML, zsh's
+  `=(...)` with `--block` keeps the file until the page closes.
   Relative paths resolve against your shell's directory. A page that styles nothing takes the
   terminal theme's background, text color and light/dark scheme (`--background-color` replaces the
   background); any CSS the page sets wins. Every page also gets the theme as CSS variables,
