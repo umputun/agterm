@@ -30,6 +30,7 @@ struct ServerCommandPolicyTests {
         "makes a Mac viewer": [.zmxAttach, .zmxAttachGroup, .sessionRemoteNew],
         "UI-test seam": [.debugAppearance],
         "deferred to docs/backlog/server-user-event-hooks.md": [.hooksList, .hooksReload],
+        "no push transport on the server; clients poll events.read": [.eventsStream],
     ]
 
     @Test func everyCommandIsServedWindowOnlyOrRefusedByDesign() {
