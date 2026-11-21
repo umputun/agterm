@@ -72,7 +72,8 @@ def event_latency(path, state, count, target):
                 if time.monotonic() >= deadline:
                     raise RuntimeError(f"Missing status {status} on followers {pending}")
                 time.sleep(0.002)
-    return statistics.median(samples), statistics.quantiles(samples, n=100, method="inclusive")[94]
+    delivered = len(samples)
+    return statistics.median(samples), statistics.quantiles(samples, n=100, method="inclusive")[94], delivered
 
 
 def app_cpu(pid):
@@ -150,12 +151,13 @@ def run(app, cli, seconds, count, push):
                     request(path, "tree")
                     latencies.append(1000 * (time.monotonic() - start))
                     time.sleep(0.025)
-                event_median, event_p95 = event_latency(path, state, count, target)
+                event_median, event_p95, delivered = event_latency(path, state, count, target)
                 for follower in followers:
                     stop(follower)
                 time.sleep(2)
                 idle = sample(process.pid, min(15, seconds))
-                return idle, steady, statistics.median(latencies), sorted(latencies)[75], event_median, event_p95
+                return (idle, steady, statistics.median(latencies), sorted(latencies)[75],
+                        event_median, event_p95, delivered)
             finally:
                 for follower in followers:
                     stop(follower)
@@ -189,17 +191,19 @@ def main():
     for executable in [cli, stream_cli, *(app / "Contents/MacOS/agterm" for _, app in builds)]:
         if not os.access(executable, os.X_OK):
             parser.error(f"not executable: {executable}")
-    print(f"{args.followers} CLI followers, {args.seconds} s per CPU sample.\n"
-          "| Round | Build | Idle CPU % | Subscribed CPU % | Tree p50/p95 ms | Event p50/p95 ms |\n"
-          "|---|---|---|---|---|---|", flush=True)
+    print(f"{args.followers} CLI followers, {args.seconds} s steady window per build.\n"
+          "| Round | Build | idle cpu % | steady cpu % "
+          f"({args.seconds} s) | tree p50/p95 ms | event p50/p95 ms | listeners complete / frames |\n"
+          "|---|---|---|---|---|---|---|", flush=True)
     for pair in range(args.pairs):
         offset = pair % len(builds)
         for label, app in builds[offset:] + builds[:offset]:
             push = label == "branch push"
-            idle, steady, median, p95, event_median, event_p95 = run(
+            idle, steady, median, p95, event_median, event_p95, delivered = run(
                 app, stream_cli if push else cli, args.seconds, args.followers, push)
-            print(f"| {pair + 1} | {label} | {idle:.3f} | {steady:.3f} | {median:.2f}/{p95:.2f} | "
-                  f"{event_median:.2f}/{event_p95:.2f} |", flush=True)
+            print(f"| {pair + 1} | {label} | {idle:.1f} | {steady:.1f} | {median:.1f}/{p95:.1f} | "
+                  f"{event_median:.0f}/{event_p95:.0f} | {delivered // 25}/{args.followers}, "
+                  f"{delivered} frames |", flush=True)
 
 
 if __name__ == "__main__":
