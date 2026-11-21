@@ -212,6 +212,7 @@ jobs:
         run: |
           echo "rev=$(sed -nE 's/^ZMX_REV="([^"]+)".*/\1/p' scripts/setup.sh)" >> "$GITHUB_OUTPUT"
           echo "zig_version=$(sed -nE 's/^ZIG_LINUX_VERSION="([^"]+)".*/\1/p' scripts/setup.sh)" >> "$GITHUB_OUTPUT"
+          echo "zig_sha256=$(sed -nE 's/^ZIG_LINUX_SHA256="([^"]+)".*/\1/p' scripts/setup.sh)" >> "$GITHUB_OUTPUT"
           echo "ghostty=$(sed -nE 's/^GHOSTTY_REV="([^"]+)".*/\1/p' scripts/setup.sh)" >> "$GITHUB_OUTPUT"
       - name: Cache the Linux shell integration
         uses: actions/cache@v6
@@ -235,7 +236,9 @@ jobs:
         run: |
           zig_version="${{ steps.zmx.outputs.zig_version }}"
           zig_dist="zig-x86_64-linux-$zig_version"
-          curl -fsSL "https://ziglang.org/download/$zig_version/$zig_dist.tar.xz" | tar -xJ -C /opt
+          curl -fsSL -o "/tmp/$zig_dist.tar.xz" "https://ziglang.org/download/$zig_version/$zig_dist.tar.xz"
+          echo "${{ steps.zmx.outputs.zig_sha256 }}  /tmp/$zig_dist.tar.xz" | sha256sum -c -
+          tar -xJf "/tmp/$zig_dist.tar.xz" -C /opt
           AGTERM_ZMX_ZIG="/opt/$zig_dist/zig" AGTERM_ZMX_TARGET=x86_64-linux-musl \
             AGTERM_ZMX_STAGE_DIR=build/linux/x86_64/zmx AGTERM_ZMX_STAMP_FILE=build/linux/x86_64/.zmx-build-stamp \
             scripts/setup.sh --zmx-only

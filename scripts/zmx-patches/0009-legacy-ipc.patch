@@ -1,8 +1,7 @@
-diff --git a/src/client.zig b/src/client.zig
-index 3b72c97..b9b0feb 100644
---- a/src/client.zig
-+++ b/src/client.zig
-@@ -134,11 +134,11 @@ fn attachInner(alloc: Allocator, io: Io, name: []const u8, opts: AttachOptions,
+diff -ruN zmx-orig/src/client.zig zmx/src/client.zig
+--- zmx-orig/src/client.zig
++++ zmx/src/client.zig
+@@ -134,11 +134,11 @@
          defer cfg.deinit(alloc);
          const socket_path = try socket.getSocketPath(alloc, cfg.socket_dir, cur_sesh);
          defer alloc.free(socket_path);
@@ -17,7 +16,7 @@ index 3b72c97..b9b0feb 100644
              error.BrokenPipe, error.ConnectionResetByPeer => return,
              else => return err,
          };
-@@ -167,7 +167,7 @@ fn attachInner(alloc: Allocator, io: Io, name: []const u8, opts: AttachOptions,
+@@ -167,7 +167,7 @@
          try set(alloc, io, name, kvs);
      }
  
@@ -26,7 +25,7 @@ index 3b72c97..b9b0feb 100644
  
      var orig_termios: cross.termios = undefined;
      const stdin_is_tty = cross.tcgetattr(lib_posix.STDIN_FILENO, &orig_termios) == 0;
-@@ -200,7 +200,7 @@ fn attachInner(alloc: Allocator, io: Io, name: []const u8, opts: AttachOptions,
+@@ -200,7 +200,7 @@
      _ = try lib_posix.write(lib_posix.STDOUT_FILENO, clear_seq);
  
      const env_str = opts.tracked_env orelse "";
@@ -35,7 +34,7 @@ index 3b72c97..b9b0feb 100644
      close_deadline.* = looper.close_deadline_ms;
      switch (looper.kind) {
          .detach => return,
-@@ -242,7 +242,7 @@ pub fn detach(alloc: Allocator, io: Io, name: []const u8) !void {
+@@ -242,7 +242,7 @@
      };
      defer lib_posix.close(fd);
  
@@ -44,7 +43,7 @@ index 3b72c97..b9b0feb 100644
          error.BrokenPipe, error.ConnectionResetByPeer => return,
          else => return err,
      };
-@@ -289,7 +289,7 @@ pub fn kill(alloc: Allocator, io: Io, name: []const u8, opts: KillOptions) !Kill
+@@ -289,7 +289,7 @@
      };
      defer lib_posix.close(fd);
  
@@ -53,107 +52,7 @@ index 3b72c97..b9b0feb 100644
          error.BrokenPipe, error.ConnectionResetByPeer => return .killed,
          else => return err,
      };
-@@ -304,16 +304,23 @@ pub fn kill(alloc: Allocator, io: Io, name: []const u8, opts: KillOptions) !Kill
- 
- fn tailInternal(
-     alloc: Allocator,
--    client_socket_fds: []const i32,
-+    connections: []const ipc.Connection,
-     detached: bool,
-     is_run_cmd: bool,
-     writer: ?*Io.Writer,
- ) !u8 {
--    var poll_fds = try std.ArrayList(lib_posix.pollfd).initCapacity(alloc, client_socket_fds.len + 1);
-+    var poll_fds = try std.ArrayList(lib_posix.pollfd).initCapacity(alloc, connections.len + 1);
-     defer poll_fds.deinit(alloc);
- 
--    var read_buf = try ipc.SocketBuffer.init(alloc);
--    defer read_buf.deinit();
-+    const buffers = try alloc.alloc(ipc.SocketBuffer, connections.len);
-+    defer alloc.free(buffers);
-+    var initialized: usize = 0;
-+    defer for (buffers[0..initialized]) |*buffer| buffer.deinit();
-+    for (connections, buffers) |connection, *buffer| {
-+        buffer.* = try ipc.SocketBuffer.init(alloc);
-+        buffer.wire = connection.wire;
-+        initialized += 1;
-+    }
- 
-     var out_buf = try std.ArrayList(u8).initCapacity(alloc, 4096);
-     defer out_buf.deinit(alloc);
-@@ -324,9 +331,9 @@ fn tailInternal(
-     while (true) {
-         poll_fds.clearRetainingCapacity();
- 
--        for (client_socket_fds) |fd| {
-+        for (connections) |connection| {
-             try poll_fds.append(alloc, .{
--                .fd = fd,
-+                .fd = connection.fd,
-                 .events = lib_posix.POLL.IN,
-                 .revents = 0,
-             });
-@@ -345,7 +352,7 @@ fn tailInternal(
-             return err;
-         };
- 
--        for (poll_fds.items) |*poll_fd| {
-+        for (poll_fds.items[0..connections.len], buffers) |poll_fd, *read_buf| {
-             if (poll_fd.revents & lib_posix.POLL.IN != 0) {
-                 const n = read_buf.read(poll_fd.fd) catch |err| {
-                     if (err == error.WouldBlock) continue;
-@@ -498,19 +505,18 @@ pub fn run(
- 
-     if (cmd_to_send == null) return error.CommandRequired;
- 
--    const client_sock = try socket.sessionConnect(socket_path);
--    defer lib_posix.close(client_sock);
-+    const connection = try ipc.connectProtocol(socket_path);
-+    defer connection.close();
- 
-     const term_size = ipc.getTerminalSize(lib_posix.STDOUT_FILENO);
--    ipc.send(client_sock, .Resize, std.mem.asBytes(&term_size)) catch {};
-+    connection.send(.Resize, std.mem.asBytes(&term_size)) catch {};
- 
--    ipc.send(client_sock, .Run, cmd_to_send.?) catch |err| switch (err) {
-+    connection.send(.Run, cmd_to_send.?) catch |err| switch (err) {
-         error.ConnectionResetByPeer, error.BrokenPipe => return 0,
-         else => return err,
-     };
- 
--    const fds = [_]i32{client_sock};
--    return tailInternal(alloc, &fds, opts.detached, true, opts.output_writer);
-+    return tailInternal(alloc, &.{connection}, opts.detached, true, opts.output_writer);
- }
- 
- /// Wait for one or more task-mode sessions to complete and return aggregate exit code.
-@@ -619,20 +625,19 @@ pub fn tail(alloc: Allocator, io: Io, names: []const []const u8, writer: ?*Io.Wr
- 
-     if (resolved_names.items.len == 0) return error.SessionNotFound;
- 
--    var fds = try std.ArrayList(i32).initCapacity(alloc, resolved_names.items.len);
-+    var connections = try std.ArrayList(ipc.Connection).initCapacity(alloc, resolved_names.items.len);
-     defer {
--        for (fds.items) |fd| lib_posix.close(fd);
--        fds.deinit(alloc);
-+        for (connections.items) |connection| connection.close();
-+        connections.deinit(alloc);
-     }
- 
-     for (resolved_names.items) |session_name| {
-         const socket_path = try socket.getSocketPath(alloc, cfg.socket_dir, session_name);
-         defer alloc.free(socket_path);
--        const sock = try socket.sessionConnect(socket_path);
--        try fds.append(alloc, sock);
-+        connections.appendAssumeCapacity(try ipc.connectProtocol(socket_path));
-     }
- 
--    return tailInternal(alloc, fds.items, false, false, writer);
-+    return tailInternal(alloc, connections.items, false, false, writer);
- }
- 
- /// Send raw input bytes to a session's PTY (fire-and-forget, like `zmx send`).
-@@ -656,7 +661,7 @@ pub fn send(alloc: Allocator, io: Io, name: []const u8, bytes: []const u8) !void
+@@ -656,7 +656,7 @@
      };
      defer probe_result.deinit();
  
@@ -162,7 +61,7 @@ index 3b72c97..b9b0feb 100644
          error.ConnectionResetByPeer, error.BrokenPipe => return,
          else => return err,
      };
-@@ -683,7 +688,7 @@ pub fn print(alloc: Allocator, io: Io, name: []const u8, bytes: []const u8) !voi
+@@ -683,7 +683,7 @@
      };
      defer probe_result.deinit();
  
@@ -171,7 +70,16 @@ index 3b72c97..b9b0feb 100644
          error.ConnectionResetByPeer, error.BrokenPipe => return,
          else => return err,
      };
-@@ -717,15 +722,16 @@ pub fn write(alloc: Allocator, io: Io, name: []const u8, remote_path: []const u8
+@@ -709,6 +709,8 @@
+         return error.SessionUnresponsive;
+     };
+     defer result.deinit();
++    // 0.8.1 queues the whole file past its input cap, drops the overflow and still acks
++    if (result.connection.wire == .legacy) return error.WriteNotSupported;
+ 
+     var wire_buf = try std.ArrayList(u8).initCapacity(alloc, @sizeOf(u32) + remote_path.len + content.len);
+     defer wire_buf.deinit(alloc);
+@@ -717,15 +719,16 @@
      try wire_buf.appendSlice(alloc, remote_path);
      try wire_buf.appendSlice(alloc, content);
  
@@ -190,7 +98,7 @@ index 3b72c97..b9b0feb 100644
      if (n == 0) return error.ConnectionClosed;
  
      while (sb.next()) |msg| {
-@@ -752,26 +758,29 @@ pub fn historyRange(alloc: Allocator, io: Io, name: []const u8, format: HistoryF
+@@ -752,26 +755,29 @@
      const exists = try socket.sessionExists(io, dir, sesh);
      if (!exists) return error.SessionNotFound;
  
@@ -225,11 +133,10 @@ index 3b72c97..b9b0feb 100644
  
      while (true) {
          var poll_fds = [_]lib_posix.pollfd{.{ .fd = fd, .events = lib_posix.POLL.IN, .revents = 0 }};
-diff --git a/src/ipc.zig b/src/ipc.zig
-index 77b17c8..014fd7b 100644
---- a/src/ipc.zig
-+++ b/src/ipc.zig
-@@ -175,37 +175,70 @@ pub const Info = extern struct {
+diff -ruN zmx-orig/src/ipc.zig zmx/src/ipc.zig
+--- zmx-orig/src/ipc.zig
++++ zmx/src/ipc.zig
+@@ -178,37 +178,74 @@
      _reserved: [6]u8 = @splat(0),
  };
  
@@ -251,7 +158,11 @@ index 77b17c8..014fd7b 100644
 +
 +        // zmx 0.8.1 used a packed { u8, u32 } backed by eight bytes.
 +        var bytes: [@sizeOf(Header)]u8 = @splat(0);
-+        bytes[0] = if (tag == .Manage) 22 else @backingInt(tag);
++        bytes[0] = switch (tag) {
++            .Manage => 22,
++            .Identity => 26,
++            else => @backingInt(tag),
++        };
 +        std.mem.writeInt(u32, bytes[1..5], len, .little);
 +        return bytes;
 +    }
@@ -321,7 +232,7 @@ index 77b17c8..014fd7b 100644
  fn writeAll(fd: i32, data: []const u8) !void {
      var index: usize = 0;
      while (index < data.len) {
-@@ -232,6 +265,7 @@ pub const SocketMsg = struct {
+@@ -235,6 +272,7 @@
  };
  
  pub const SocketBuffer = struct {
@@ -329,7 +240,7 @@ index 77b17c8..014fd7b 100644
      buf: std.ArrayList(u8),
      alloc: std.mem.Allocator,
      head: usize,
-@@ -279,7 +313,7 @@ pub const SocketBuffer = struct {
+@@ -282,7 +320,7 @@
          const available = self.buf.items[self.head..];
          if (available.len < @sizeOf(Header)) return null;
  
@@ -338,7 +249,7 @@ index 77b17c8..014fd7b 100644
          if (hdr.len > MAX_PAYLOAD_LEN or hdr.protocol_version != PROTOCOL_VERSION) {
              // framing error / corrupted stream: clear buffer to avoid
              // infinite alloc
-@@ -320,74 +354,115 @@ const SessionProbeError = error{
+@@ -323,74 +361,115 @@
  };
  
  const SessionProbeResult = struct {
@@ -362,11 +273,10 @@ index 77b17c8..014fd7b 100644
 -    const timeout_ms = 1000;
 -    const fd = try connectSession(socket_path);
 -    errdefer lib_posix.close(fd);
--
++const ProtocolProbe = struct { connection: Connection, info: Info };
+ 
 -    send(fd, .Info, "") catch return error.Unexpected;
 -    send(fd, .LabelGet, "") catch {};
-+const ProtocolProbe = struct { connection: Connection, info: Info };
-+
 +/// Info, Kill and DetachAll ignore their payload. A current header with a
 +/// zero length reads as a legacy header with length one because the legacy
 +/// length starts at the byte that now holds PROTOCOL_VERSION. Supply that
@@ -400,15 +310,14 @@ index 77b17c8..014fd7b 100644
 -
 -    const n = sb.read(fd) catch return error.Unexpected;
 -    if (n == 0) return error.Unexpected;
--
--    var info_result: ?Info = null;
--    var labels: ?[]const u8 = null;
--    errdefer if (labels) |lbl| alloc.free(lbl);
 +fn probeProtocol(socket_path: []const u8) SessionProbeError!ProtocolProbe {
 +    const fd = try connectSession(socket_path);
 +    errdefer lib_posix.close(fd);
 +    sendOneShot(fd, .info) catch return error.Unexpected;
-+
+ 
+-    var info_result: ?Info = null;
+-    var labels: ?[]const u8 = null;
+-    errdefer if (labels) |lbl| alloc.free(lbl);
 +    const reply = try readProbeReply(fd);
 +    const wire = reply.wire;
 +    const connection_fd = switch (wire) {
@@ -505,7 +414,7 @@ index 77b17c8..014fd7b 100644
  }
  
  //  WIRE PROTOCOL FREEZE: read before "fixing" any test below.
-@@ -426,33 +501,9 @@ pub fn roundTripForTag(
+@@ -429,33 +508,9 @@
      payload: []const u8,
      expected_tag: Tag,
  ) SessionProbeError![]u8 {
@@ -540,7 +449,7 @@ index 77b17c8..014fd7b 100644
  pub fn roundTripLarge(
      alloc: std.mem.Allocator,
      socket_path: []const u8,
-@@ -461,13 +512,22 @@ pub fn roundTripLarge(
+@@ -464,13 +519,22 @@
      expected_tag: Tag,
      timeout_ms: i32,
  ) SessionProbeError![]u8 {
@@ -567,10 +476,18 @@ index 77b17c8..014fd7b 100644
  
      while (true) {
          var poll_fds = [_]lib_posix.pollfd{.{ .fd = fd, .events = lib_posix.POLL.IN, .revents = 0 }};
-@@ -496,3 +556,22 @@ test "zeroed Info has no stack garbage in wire bytes" {
+@@ -499,3 +563,30 @@
      const last_field_end = @offsetOf(Info, "task_exit_code") + @sizeOf(u8);
      for (bytes[last_field_end..]) |b| try std.testing.expectEqual(@as(u8, 0), b);
  }
++
++test "legacy headers carry agterm 0.8.1 tag numbers" {
++    inline for (.{ .{ Tag.Manage, 22 }, .{ Tag.Identity, 26 }, .{ Tag.Role, 23 }, .{ Tag.Screen, 24 }, .{ Tag.Type, 25 }, .{ Tag.Init, 7 } }) |p| {
++        const bytes = Wire.legacy.header(p[0], 3);
++        try std.testing.expectEqual(@as(u8, p[1]), bytes[0]);
++        try std.testing.expectEqual(@as(u32, 3), std.mem.readInt(u32, bytes[1..5], .little));
++    }
++}
 +
 +test "probe identifies both wire formats after unsolicited output" {
 +    for ([_]Wire{ .current, .legacy }) |wire| {
@@ -590,11 +507,10 @@ index 77b17c8..014fd7b 100644
 +        try std.testing.expectEqual(info.pid, reply.info.pid);
 +    }
 +}
-diff --git a/src/loop.zig b/src/loop.zig
-index fd83de1..c6b0afd 100644
---- a/src/loop.zig
-+++ b/src/loop.zig
-@@ -28,8 +28,8 @@ fn resetShare(stdout_fd: i32) i64 {
+diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
+--- zmx-orig/src/loop.zig
++++ zmx/src/loop.zig
+@@ -28,8 +28,8 @@
  
  /// clientLoop sends ipc commands to its corresponding daemon.  It uses poll() as its non-blocking
  /// mechanism. It will send stdin to the daemon and receive stdout from the daemon.
@@ -605,7 +521,7 @@ index fd83de1..c6b0afd 100644
  }
  
  /// A daemon whose session ended unlinks its socket before it closes its clients, so a hangup with the socket
-@@ -47,7 +47,8 @@ fn sessionEnding(close_deadline: *?i64, session_path: []const u8) bool {
+@@ -47,7 +47,8 @@
      return true;
  }
  
@@ -615,7 +531,7 @@ index fd83de1..c6b0afd 100644
      std.log.info("client loop fd={d}", .{client_sock_fd});
      const gpa: std.mem.Allocator = blk: {
          if (builtin.mode == .debug) {
-@@ -78,25 +79,26 @@ fn clientLoopOn(client_sock_fd: i32, env_str: []const u8, session_path: []const
+@@ -78,28 +79,29 @@
      defer sock_write_buf.deinit(gpa);
  
      if (env_str.len > 0) {
@@ -625,10 +541,14 @@ index fd83de1..c6b0afd 100644
  
      var relay: ?role.Relay = if (role.nonceFromEnv()) |nonce| role.Relay.init(nonce) else null;
      defer if (relay) |*r| r.deinit();
-     if (relay != null) {
+     if (relay) |r| {
          const flags = ipc.ManageFlags{ .claim = role.claimFromEnv() };
 -        try ipc.appendMessage(gpa, &sock_write_buf, .Manage, std.mem.asBytes(&flags));
 +        try connection.wire.append(gpa, &sock_write_buf, .Manage, std.mem.asBytes(&flags));
+         // an older daemon ignores the tag, so a reclaim there leaves the lead where it is
+         var id_buf: role.IdentityBuf = undefined;
+-        try ipc.appendMessage(gpa, &sock_write_buf, .Identity, role.identity(&id_buf, r.nonce, role.reclaimFromEnv()));
++        try connection.wire.append(gpa, &sock_write_buf, .Identity, role.identity(&id_buf, r.nonce, role.reclaimFromEnv()));
      }
  
      // Send init message with terminal size (buffered)
@@ -645,7 +565,7 @@ index fd83de1..c6b0afd 100644
  
      var stdout_buf = try std.ArrayList(u8).initCapacity(gpa, 4096);
      defer stdout_buf.deinit(gpa);
-@@ -171,7 +173,7 @@ fn clientLoopOn(client_sock_fd: i32, env_str: []const u8, session_path: []const
+@@ -174,7 +176,7 @@
          if (poll_fds.items[2].revents & lib_posix.POLL.IN != 0) {
              try signal.drainSignalPipe();
              const next_size = ipc.getTerminalSize(stdout_fd);
@@ -654,7 +574,7 @@ index fd83de1..c6b0afd 100644
                  gpa,
                  &sock_write_buf,
                  .Resize,
-@@ -193,9 +195,9 @@ fn clientLoopOn(client_sock_fd: i32, env_str: []const u8, session_path: []const
+@@ -196,9 +198,9 @@
                      // Check for detach sequences (ctrl+\ as first byte or Kitty escape sequence)
                      if (!detach_key_disabled and util.isCtrlBackslash(buf[0..n])) {
                          std.log.info("detach key detected", .{});
@@ -666,7 +586,7 @@ index fd83de1..c6b0afd 100644
                      }
                  } else {
                      std.log.info("eof stdin", .{});
-@@ -241,7 +243,7 @@ fn clientLoopOn(client_sock_fd: i32, env_str: []const u8, session_path: []const
+@@ -244,7 +246,7 @@
                          // daemon is asking for the client's window size usually in response
                          // to this client being set as leader.
                          const next_size = ipc.getTerminalSize(stdout_fd);
@@ -675,7 +595,7 @@ index fd83de1..c6b0afd 100644
                              gpa,
                              &sock_write_buf,
                              .Resize,
-@@ -1487,7 +1489,7 @@ pub const Daemon = struct {
+@@ -1529,7 +1531,7 @@
          payload: []const u8,
      ) !void {
          defer client.has_pending_output = true;
@@ -684,7 +604,7 @@ index fd83de1..c6b0afd 100644
          const all = switch (mode) {
              .active => false,
              .all => true,
-@@ -2302,7 +2304,7 @@ const EndingSession = struct {
+@@ -2438,7 +2440,7 @@
      }
  
      fn runClient(self: *EndingSession) void {
@@ -693,3 +613,14 @@ index fd83de1..c6b0afd 100644
          self.client_done_ms.store(role.nowMs(), .release);
      }
  
+diff -ruN zmx-orig/src/main.zig zmx/src/main.zig
+--- zmx-orig/src/main.zig
++++ zmx/src/main.zig
+@@ -1234,6 +1234,7 @@
+     }
+ 
+     zmx.write(gpa, io, session_name, file_path, stdin_buf.items) catch |err| {
++        if (err == error.WriteNotSupported) return printError(io, "session \"{s}\" does not support write (daemon too old?)", .{session_name});
+         if (err == error.SessionUnresponsive) {
+             var errbuf: [4096]u8 = undefined;
+             var ew = std.Io.File.stderr().writer(io, &errbuf);

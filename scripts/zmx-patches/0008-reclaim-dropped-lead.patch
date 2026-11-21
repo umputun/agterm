@@ -1,29 +1,29 @@
 diff -ruN zmx-orig/src/ipc.zig zmx/src/ipc.zig
 --- zmx-orig/src/ipc.zig
 +++ zmx/src/ipc.zig
-@@ -38,6 +38,9 @@
+@@ -43,6 +43,9 @@
      /// session's keyboard mode and queued without taking the lead.
      /// reply: one `TypeResult` byte. Accepted means queued, not executed.
      Type = 25,
 +    /// client -> daemon, after Manage: the client's ZMX_MANAGED token, then, when it takes back a lead
 +    /// it lost with its link, a newline and the token of the attach that held it.
-+    Identity = 26,
++    Identity = 27,
+     Unsupported = 255,
      // Non-exhaustive: this enum comes off the wire via bytesToValue and
      // @enumFromInt, so out-of-range values are representable
-     // rather than UB. Switches must handle `_` (unknown tag).
-@@ -401,7 +404,7 @@
-         .{ Tag.Write, 12 },    .{ Tag.TaskComplete, 13 }, .{ Tag.LabelGet, 14 },
-         .{ Tag.LabelSet, 15 }, .{ Tag.LabelClear, 16 },   .{ Tag.LabelData, 17 },
-         .{ Tag.Send, 18 },     .{ Tag.Manage, 22 },       .{ Tag.Role, 23 },
--        .{ Tag.Screen, 24 },   .{ Tag.Type, 25 },
-+        .{ Tag.Screen, 24 },   .{ Tag.Type, 25 },         .{ Tag.Identity, 26 },
-     }) |p| try std.testing.expectEqual(@as(u8, p[1]), @intFromEnum(p[0]));
+@@ -415,7 +418,7 @@
+         .{ Tag.Send, 18 },     .{ Tag.EnvGet, 19 },       .{ Tag.EnvSet, 20 },
+         .{ Tag.EnvData, 21 },  .{ Tag.Capture, 22 },      .{ Tag.Unsupported, 255 },
+         .{ Tag.Role, 23 },     .{ Tag.Screen, 24 },       .{ Tag.Type, 25 },
+-        .{ Tag.Manage, 26 },
++        .{ Tag.Manage, 26 },   .{ Tag.Identity, 27 },
+     }) |p| try std.testing.expectEqual(@as(u8, p[1]), @backingInt(p[0]));
  }
  
 diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 --- zmx-orig/src/loop.zig
 +++ zmx/src/loop.zig
-@@ -78,9 +78,12 @@
+@@ -83,9 +83,12 @@
  
      var relay: ?role.Relay = if (role.nonceFromEnv()) |nonce| role.Relay.init(nonce) else null;
      defer if (relay) |*r| r.deinit();
@@ -37,15 +37,15 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
      }
  
      // Send init message with terminal size (buffered)
-@@ -651,6 +654,7 @@
-                         .History => try daemon.handleHistory(gpa, client, &term, msg.payload),
+@@ -667,6 +670,7 @@
+                         .Capture => try daemon.handleCapture(gpa, client, &term, msg.payload),
                          .Run => try daemon.handleRun(gpa, io, client, msg.payload),
                          .Manage => daemon.handleManage(client, msg.payload),
 +                        .Identity => try daemon.handleIdentity(gpa, client, msg.payload),
                          .Type => try daemon.handleType(gpa, client, &term, msg.payload),
                          .Screen => try daemon.handleScreen(gpa, client, &term, msg.payload),
-                         .Ack, .TaskComplete, .LabelData, .EnvData, .Role => {},
-@@ -712,6 +716,10 @@
+                         .Ack, .TaskComplete, .LabelData, .EnvData, .Role, .Unsupported => {},
+@@ -738,6 +742,10 @@
      /// sent .Manage: leads only by claiming, never by typing, and is told its role
      managed: bool = false,
      claim_on_init: bool = false,
@@ -56,7 +56,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
      told_role: ?ipc.Role = null,
      read_buf: ipc.SocketBuffer,
      write_buf: std.ArrayList(u8),
-@@ -722,6 +730,8 @@
+@@ -748,6 +756,8 @@
          self.read_buf.deinit();
          self.write_buf.deinit(self.alloc);
          if (self.env_str) |s| gpa.free(s);
@@ -65,7 +65,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
      }
  
      fn setEnv(self: *Client, gpa: std.mem.Allocator, env_str: []const u8) !void {
-@@ -751,6 +761,9 @@
+@@ -777,6 +787,9 @@
      leader_client_fd: ?i32 = null,
      /// bumped on every leadership change, carried in each RoleChange
      leader_generation: u32 = 0,
@@ -75,7 +75,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
      /// bumped on every pty read, resize and injected output, carried in each ScreenHeader
      screen_revision: u64 = 0,
      running: bool = true,
-@@ -1036,6 +1049,7 @@
+@@ -1064,6 +1077,7 @@
      fn setLeader(self: *Daemon, gpa: std.mem.Allocator, client: *Client) !void {
          std.log.info("setting new leader client_fd={d}", .{client.socket_fd});
          self.leader_client_fd = client.socket_fd;
@@ -83,7 +83,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
          self.leader_generation +%= 1;
          // Send a resize message to the client so it can send us back their window size
          // so we can resize the pty and ghostty state.
-@@ -1077,6 +1091,31 @@
+@@ -1105,6 +1119,31 @@
          client.claim_on_init = flags.claim;
      }
  
@@ -115,7 +115,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
      /// Queue automation bytes without touching leadership, and say whether they were queued.
      pub fn handleType(
          self: *Daemon,
-@@ -1167,6 +1206,7 @@
+@@ -1195,6 +1234,7 @@
  
          // client is leader, send entire payload (ansi escape codes + text)
          if (self.leader_client_fd == client.socket_fd) {
@@ -123,8 +123,8 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
              self.queuePtyInput(gpa, payload);
              return;
          }
-@@ -1240,8 +1280,10 @@
- 
+@@ -1271,8 +1311,10 @@
+         }
          client.is_terminal = true;
  
 -        if (self.leader_client_fd == null or client.claim_on_init) {
@@ -135,7 +135,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
          }
          // ahead of the snapshot below, so a managed client learns its role before any output
          self.notifyRoles(gpa);
-@@ -1930,6 +1972,100 @@
+@@ -1974,6 +2016,100 @@
      _ = daemon.closeClient(alloc, origin, 0, false);
  }
  
@@ -263,7 +263,7 @@ diff -ruN zmx-orig/src/role.zig zmx/src/role.zig
      stream: ghostty_vt.Stream(NoopHandler),
      nonce: []const u8,
 @@ -141,6 +157,12 @@
-     try testing.expect(!isNonce("x" ** (NONCE_MAX + 1)));
+     try testing.expect(!isNonce(&@as([NONCE_MAX + 1]u8, @splat('x'))));
  }
  
 +test "identity carries the reclaimed token after a newline" {
@@ -278,8 +278,8 @@ diff -ruN zmx-orig/src/role.zig zmx/src/role.zig
 diff -ruN zmx-orig/src/util.zig zmx/src/util.zig
 --- zmx-orig/src/util.zig
 +++ zmx/src/util.zig
-@@ -749,6 +749,75 @@
-     return false;
+@@ -739,6 +739,75 @@
+     return value;
  }
  
 +/// Detect input a person at the leading terminal produced: a key, Esc and control keys included, a paste,
@@ -351,13 +351,14 @@ diff -ruN zmx-orig/src/util.zig zmx/src/util.zig
 +    return null;
 +}
 +
- /// Emit the terminal's pwd as OSC 7.
- ///
- /// This replaces the formatter's own `extra.pwd`, which writes
-@@ -2181,6 +2250,32 @@
-     try testing.expect(!isUserInput("\x1b[O")); // focus out
+ pub const HistoryFormat = enum(u8) {
+     plain = 0,
+     vt = 1,
+@@ -1438,3 +1507,29 @@
+     defer alloc.free(result);
+     try testing.expectEqualStrings("Ýmir\nline two\n", result);
  }
- 
++
 +test "isLeaderUse: keys, paste and presses, never a terminal's replies, motion or release" {
 +    const used = [_][]const u8{
 +        "a",              "\x03",                "\x04",          "\x7f",            "\x1b",
@@ -383,7 +384,3 @@ diff -ruN zmx-orig/src/util.zig zmx/src/util.zig
 +        try testing.expect(!isLeaderUse(input));
 +    }
 +}
-+
- test "isUserInput: bracketed paste included" {
-     // Bracketed paste start/end are user-initiated paste operations
-     try testing.expect(isUserInput("\x1b[200~")); // paste start

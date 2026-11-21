@@ -27,6 +27,7 @@ ZMX_TARGET=${AGTERM_ZMX_TARGET:-$ZMX_TARGET}
 # Pin the Homebrew minor line and the Linux CI release.
 ZIG_FORMULA="zig@0.17"
 ZIG_LINUX_VERSION="0.17.1"
+ZIG_LINUX_SHA256="3581863e3cbcfd0fce0efc682ce7e9e93da96668a977791d356a26d2a7e9b17a"  # zig-x86_64-linux-0.17.1.tar.xz
 XCFRAMEWORK_DIR="GhosttyKit.xcframework"
 # terminfo/ is the marker: it must extract as a SIBLING of ghostty/ so libghostty's
 # TERMINFO=dirname(GHOSTTY_RESOURCES_DIR)/terminfo derivation resolves xterm-ghostty.
@@ -173,7 +174,8 @@ if $need_zmx; then
   echo "building zmx with zig..."
   ( cd "$zmx_build" && "$ZMX_ZIG" build -Doptimize=ReleaseSafe -Dtarget="$ZMX_TARGET" )
   echo "testing the zmx patches..."
-  ( cd "$zmx_build" && "$ZMX_ZIG" build test )
+  # agterm panes export it, and a zmx test that unsets it aborts zig 0.17's test runner on its next log line
+  ( cd "$zmx_build" && env -u ZMX_NO_DETACH_KEY "$ZMX_ZIG" build test )
   rm -rf "$ZMX_STAGE_DIR"
   mkdir -p "$ZMX_STAGE_DIR"
   install -m 0755 "$zmx_build/zig-out/bin/zmx" "$ZMX_STAGE_DIR/zmx"

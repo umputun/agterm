@@ -38,9 +38,7 @@ final class SessionHostAcceptanceTests: XCTestCase {
         } while Date() < attachDeadline
         XCTAssertTrue(attached)
         XCTAssertEqual(kill(initialClient, SIGTERM), 0)
-        var status: Int32 = 0
-        XCTAssertEqual(waitpid(initialClient, &status, 0), initialClient)
-        fixture.clients.removeAll { $0 == initialClient }
+        try fixture.waitForClients()
         let session = Session(initialCwd: fixture.directory.path)
         session.wasRestored = true
         if pane == .left { session.paneIdentity = id } else {

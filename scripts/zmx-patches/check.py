@@ -49,6 +49,16 @@ def drain(fd, seconds):
     return out
 
 
+def reaped(pid, seconds):
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        done, status = os.waitpid(pid, os.WNOHANG)
+        if done == pid:
+            return status
+        time.sleep(0.02)
+    return None
+
+
 def cli(*args, stdin=None, extra=None, executable=ZMX):
     env = dict(os.environ, ZMX_DIR=ZDIR)
     env.pop("ZMX_SESSION", None)
@@ -71,52 +81,46 @@ def check_upgrade(previous):
     if not check("the previous zmx starts a detached daemon", created.returncode == 0, repr(created.stderr)):
         return False
 
-    pid = None
+    attached = []
     try:
         ok = check("the new zmx lists the previous daemon", listed(name))
-        pid, fd = attach("upgrade-client", 32, 88, claim=True, name=name)
-        try:
-            roles = ROLE.findall(drain(fd, 2.0))
-            ok &= check("the new client claims leadership on the previous daemon",
-                        bool(roles) and roles[-1][:2] == (b"upgrade-client", b"leader"), repr(roles))
-            marker = b"OLD-DAEMON-OUTPUT"
-            typed = cli("type", name, stdin=b"printf 'OLD-%s-OUTPUT\\n' DAEMON\r")
-            ok &= check("the new client types into the previous daemon",
-                        typed.returncode == 0 and marker in drain(fd, 1.0), repr(typed.stderr))
-            screen = cli("screen", name)
-            ok &= check("the new client reads the previous daemon's grid and screen",
-                        screen.stdout.split(b"\n", 1)[0].split()[1:3] == [b"88", b"32"]
-                        and marker in screen.stdout, repr(screen.stdout))
-            history = cli("history", name)
-            ok &= check("the new client reads history from the previous daemon", marker in history.stdout)
-            detached = cli("detach", extra={"ZMX_SESSION": name})
-            drain(fd, 1.0)
-            deadline = time.monotonic() + 1.0
-            reaped = False
-            while time.monotonic() < deadline:
-                if os.waitpid(pid, os.WNOHANG)[0] == pid:
-                    reaped = True
-                    break
-                time.sleep(0.02)
-            ok &= check("the new client detaches from the previous daemon",
-                        detached.returncode == 0 and reaped, repr(detached.stderr))
-            if reaped:
-                pid = None
-        finally:
-            os.close(fd)
-
+        held = attach("upgrade-held", 32, 88, claim=True, name=name)
+        attached.append(held)
+        roles = ROLE.findall(drain(held[1], 2.0))
+        ok &= check("the new client claims leadership on the previous daemon",
+                    bool(roles) and roles[-1][:2] == (b"upgrade-held", b"leader"), repr(roles))
+        back = attach("upgrade-back", 30, 90, claim=False, name=name, reclaim="upgrade-held")
+        attached.append(back)
+        roles = ROLE.findall(drain(back[1], 2.0))
+        ok &= check("a reconnect takes back the lead its dropped attach holds on the previous daemon",
+                    bool(roles) and roles[-1][:2] == (b"upgrade-back", b"leader"), repr(roles))
+        marker = b"OLD-DAEMON-OUTPUT"
+        typed = cli("type", name, stdin=b"printf 'OLD-%s-OUTPUT\\n' DAEMON\r")
+        ok &= check("the new client types into the previous daemon",
+                    typed.returncode == 0 and marker in drain(back[1], 1.0), repr(typed.stderr))
+        screen = cli("screen", name)
+        ok &= check("the new client reads the previous daemon's grid and screen",
+                    screen.stdout.split(b"\n", 1)[0].split()[1:3] == [b"90", b"30"]
+                    and marker in screen.stdout, repr(screen.stdout))
+        printed = cli("print", name, stdin=b"OLD-DAEMON-PRINT")
+        ok &= check("the new client prints to the previous daemon's clients",
+                    printed.returncode == 0 and b"OLD-DAEMON-PRINT" in drain(back[1], 1.0), repr(printed.stderr))
+        wrote = cli("write", name, os.path.join(ZDIR, "upgrade-write"), stdin=b"OLD-DAEMON-WRITE")
+        ok &= check("the new client refuses to write through the previous daemon",
+                    wrote.returncode != 0 and b"does not support write" in wrote.stderr, repr(wrote.stderr))
         killed = cli("kill", name)
-        ok &= check("the new client kills the previous daemon", killed.returncode == 0 and not listed(name))
+        ok &= check("the new client kills the previous daemon",
+                    killed.returncode == 0 and b"name=" + name.encode() not in cli("list").stdout, repr(killed.stderr))
         return ok
     finally:
         cli("kill", name, executable=previous)
-        if pid is not None:
+        for pid, fd in attached:
+            os.close(fd)
             try:
                 os.kill(pid, 9)
             except ProcessLookupError:
                 pass
             os.waitpid(pid, 0)
-
 
 def main():
     os.makedirs(ZDIR, mode=0o700)
@@ -282,10 +286,24 @@ def main():
         cli("kill", "killed", "--force")
         time.sleep(1.0)
         ok &= check("a killed session writes no record", not listed("killed") and not os.path.exists(killed_record))
+        term_pid, term_fd = attach("sigterm", 24, 80, claim=True, name="sigterm")
+        pids.append(term_pid)
+        roles = ROLE.findall(drain(term_fd, 1.0))
+        printed = cli("print", "sigterm", stdin=b"x" * 200)
+        time.sleep(0.3)
+        os.kill(term_pid, 15)
+        status = reaped(term_pid, 2)
+        ok &= check("a SIGTERMed client exits while nobody reads its terminal",
+                    bool(roles) and roles[-1][:2] == (b"sigterm", b"leader") and printed.returncode == 0
+                    and status is not None and os.WIFSIGNALED(status) and os.WTERMSIG(status) == 15,
+                    repr((roles[-1:], printed.returncode, status)))
+        os.close(term_fd)
+        if status is not None or reaped(term_pid, 2) is not None:
+            pids.remove(term_pid)
         if len(sys.argv) > 2:
             ok &= check_upgrade(sys.argv[2])
     finally:
-        cli("kill", NAME, "reclaim", "detached", "killed", "env-probe", "--force")
+        cli("kill", NAME, "reclaim", "detached", "killed", "env-probe", "sigterm", "--force")
         for pid in pids:
             try:
                 os.kill(pid, 9)

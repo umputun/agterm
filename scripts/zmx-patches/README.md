@@ -5,7 +5,9 @@ The revision, target, Zig toolchain, and patch digest make up `.zmx-build-stamp`
 keeps the zmx it was started by. `scripts/setup-zmx-linux.sh` builds the same tree for both Linux musl
 architectures, with a separate stamp under each `build/linux/<arch>/`.
 
-To update a patch, apply the series at the pinned revision, edit the source, and run `zig build test`.
+To update a patch, apply the series at the pinned revision, edit the source, and run
+`env -u ZMX_NO_DETACH_KEY zig build test`: agterm panes export that variable, and an upstream test that
+unsets it aborts Zig 0.17's test runner.
 Generate a diff against the tree with the preceding patches applied. Run `check.py` against the built
 binary after moving `ZMX_REV`. zmx resolves its Ghostty dependency from its own build manifest. That
 Ghostty version preserves skipped cells during VT replay by moving the cursor across them.
@@ -59,13 +61,23 @@ Ghostty version preserves skipped cells during VT replay by moving the cursor ac
   token names, or one that took a vacant session without claiming and has sent no key, paste or mouse
   press since, control keys, Esc and kitty paste events included and a terminal's own replies not; otherwise it
   attaches as before. A daemon without the patch ignores the unknown tag.
-- `0008-legacy-ipc.patch` lets the new client talk to daemons still running the bundled zmx 0.8.1.
-  It detects the older wire format with an Info request and uses it for that connection, including the
-  older managed attach tag. New daemons use upstream 1.0 framing.
-- `0009-bounded-signal-cleanup.patch` restores terminal settings when a signal stops an attach client.
-  It bounds the reset write so a session host that stopped reading the PTY can still reap the client.
+- `0009-legacy-ipc.patch` lets the new client reach daemons still running agterm's zmx 0.8.1, so Live
+  sessions survive the upgrade and a reset can end them. It sends an Info request both framings read and
+  keeps the framing the reply uses for that connection, mapping `Manage` and `Identity` to their 0.8.1
+  tags, 22 and 26. `tail` and `run` keep upstream framing, because the probe would swallow the one
+  `TaskComplete` a task sends. `write` refuses an 0.8.1 daemon, which drops a file past its input cap and
+  still acknowledges it.
+- `0010-caller-owned-socket-path.patch` backports upstream `f5d604e`: the daemon no longer frees the
+  socket path its caller owns, which aborted it at shutdown under Zig 0.17.
+- `0011-init-keeps-frame-boundary.patch` keeps the unsent tail of a frame a short write left half sent
+  when a client's first Init clears what it was sent before attaching, so the client never reads the next
+  frame from inside it.
+- `0012-bounded-signal-cleanup.patch` lets an attach client stopped by a signal exit while nothing reads its
+  terminal. Upstream catches SIGTERM, SIGHUP and SIGINT and leaves through a detach's `TCSAFLUSH` and
+  blocking reset, which on macOS wait for the terminal to read them. The client instead flushes what is
+  queued, restores termios at once and gives the reset 100 ms.
 
 `check.py <zmx>` drives managed clients on PTYs of different sizes against one daemon in a throwaway
 `ZMX_DIR` and exits nonzero when a check fails. Pass a second argument pointing to agterm's patched
-zmx 0.8.1 binary to also verify listing, reattaching, typing, reading the screen and history, detaching,
-and killing across the upgrade.
+zmx 0.8.1 binary to also verify listing, claiming and reclaiming the lead, typing, reading the screen,
+printing, refusing `write` and killing across the upgrade.
