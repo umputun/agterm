@@ -32,9 +32,12 @@ public enum AttachedForward: Equatable, Sendable {
     case restart(session: String, paneID: String, command: String?)
     case killPane(session: String, pane: ZmxPaneRole, paneID: String)
     case convert(session: String)
-    /// moveCompanion puts the origin's companion `session` under its session `parent`, at the end of that group: the
+    /// moveCompanion puts the origin's session `session` under its session `parent`, at the end of that group: the
     /// viewer places its own row at the requested slot afterwards.
     case moveCompanion(session: String, parent: String)
+    /// promoteCompanion makes the origin's companion `session` top-level after its group there: the viewer places its
+    /// own row afterwards.
+    case promoteCompanion(session: String)
     /// duplicate starts a shell after the origin session, as a server window's Duplicate does, without moving the
     /// origin's own selection.
     case duplicate(after: String, cwd: String?)
@@ -54,6 +57,7 @@ public enum AttachedForward: Equatable, Sendable {
             ["zmx", "kill", "--target", session, "--pane", pane.rawValue, "--pane-id", paneID, "--force"]
         case .convert(let session): ["session", "convert", "--companion", "--target", session]
         case .moveCompanion(let session, let parent): ["session", "move", "--target", session, "--parent", parent]
+        case .promoteCompanion(let session): ["session", "move", "--target", session, "--top-level"]
         case .duplicate(let after, let cwd):
             ["session", "new", "--after", after, "--no-select"] + (cwd.map { ["--cwd=" + $0] } ?? [])
         case .split(let session, let mode, let axis):
@@ -86,6 +90,7 @@ public enum AttachedForward: Equatable, Sendable {
         case .killPane: .zmxKillPane
         case .convert: .sessionCompanionConvert
         case .moveCompanion: .sessionCompanionMove
+        case .promoteCompanion: .sessionCompanionPromote
         case .duplicate: .sessionNew
         case .split: .sessionSplit
         case .closeSplit: .sessionSplitClose
@@ -104,6 +109,8 @@ public enum AttachedForward: Equatable, Sendable {
             return .unknown("\(host) gave no answer\(stderr.isEmpty ? "" : " (\(stderr))"); whether \(what) there is unknown")
         }
         if reply.ok { return .done(reply) }
+        // another Mac made it top-level there already: still not ok, so the viewer places its row but seeds no baseline
+        if case .promoteCompanion = self, reply.error == CompanionPromotionRefusal.notCompanion.message { return .done(reply) }
         if reply.refusesUnknown(command) { return .refused(tooOld) }
         return .refused(reply.error ?? "the command failed on \(host)")
     }
@@ -116,6 +123,7 @@ public enum AttachedForward: Equatable, Sendable {
         case .killPane: "the pane was killed"
         case .convert: "the session was converted"
         case .moveCompanion: "the companion was moved"
+        case .promoteCompanion: "the companion became a top-level session"
         case .duplicate: "a session was created"
         case .split, .closeSplit: "the split changed"
         case .scratch: "the scratch changed"
@@ -126,7 +134,7 @@ public enum AttachedForward: Equatable, Sendable {
 
 /// AttachedOutcome is what became of a request sent to an attached row's origin.
 public enum AttachedOutcome: Equatable, Sendable {
-    /// done is the origin's ok reply.
+    /// done is the origin's ok reply, or its refusal of a promotion the session already satisfies there.
     case done(ControlResponse)
     /// refused means the origin did not do it, with the reason to show.
     case refused(String)

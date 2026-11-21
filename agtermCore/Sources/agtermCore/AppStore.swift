@@ -186,6 +186,8 @@ public final class AppStore {
     @ObservationIgnored public var overlayJobs: OverlayJobs?
     /// Told when an attached session's row is shown or leaves, undo and restoration included.
     @ObservationIgnored public var onRemoteRowVisibility: ((Session, Bool) -> Void)?
+    /// onRemoteRowPromoted is told when an attached session's companion row becomes top-level, by any path.
+    @ObservationIgnored public var onRemoteRowPromoted: ((Session) -> Void)?
     /// onOriginFrame sends a frame to an attached session's origin; false when the origin does not take it.
     @ObservationIgnored public var onOriginFrame: ((UUID, PresentationFrame.Body) -> Bool)?
     /// onReplicaPageChanged is told the local id of a page shown for an origin whose reported state changed.

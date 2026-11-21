@@ -181,6 +181,24 @@ final class ControlServerRemoteCompanionsTests: XCTestCase {
         XCTAssertNil(store.workspaces.flatMap(\.sessions).first { $0.parentID == row.id })
     }
 
+    func testAParentMovedUnderAnotherDuringTheWaitAttachesTheCompanionInItsNewGroup() async throws {
+        let runner = ScriptedRunner([origin, reply(id: created), tree(sessions: session(created))])
+        let (server, store, row) = try makeServer(runner)
+        let workspace = try XCTUnwrap(store.currentWorkspaceID)
+        let destination = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: NSHomeDirectory(), remoteHost: "buildbox"))
+        store.bindRemote(RemoteBinding(remoteSessionID: "origin-2", daemonsByLocalPane: [:], presentationVersion: nil), forSession: destination.id)
+        runner.beforeCall = { index in
+            if index == 2 { await MainActor.run { store.nest(row.id, under: destination.id) } }
+        }
+
+        let reply = await server.createCompanion(row.id.uuidString, options: CompanionOptions(), window: nil)
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        let companion = try XCTUnwrap(reply.result?.id.flatMap(UUID.init(uuidString:)).flatMap(store.session(withID:)))
+        XCTAssertEqual(row.parentID, destination.id)
+        XCTAssertEqual(companion.parentID, destination.id)
+    }
+
     func testAnAttachFailureAfterCreationNamesTheCreatedCompanion() async throws {
         let unaddressable = tree(sessions: #"{"id":"\#(created)","name":"c","windowID":"w1","windowName":"main","workspaceID":"ws1","#
                                  + #""workspaceName":"work","cwd":"/repo","panes":[{"pane":"middle","daemon":"agterm-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa3"}]}"#)
@@ -235,6 +253,25 @@ final class ControlServerRemoteCompanionsTests: XCTestCase {
         let local = try XCTUnwrap(reply.result?.pageID.flatMap(UUID.init(uuidString:)))
         XCTAssertEqual(local, page.htmlOverlay?.id, "a --block caller polls the view's own page")
         XCTAssertEqual(HtmlPageOutcomes.shared.outcome(for: local)?.outcome, .pending)
+    }
+
+    func testAPageHandedOverAfterItsParentJoinedAnotherGroupLandsInThatGroup() async throws {
+        let runner = ScriptedRunner([pageAttach(created)])
+        let (server, store, row) = try makeServer(runner)
+        server.pageLauncher = FakePageLauncher()
+        let workspace = try XCTUnwrap(store.workspace(forSession: row.id))
+        let holder = try XCTUnwrap(store.addSession(toWorkspace: workspace.id, cwd: "/srv", remoteHost: "buildbox"))
+        runner.beforeCall = { index in
+            if index == 0 { await MainActor.run { store.nest(row.id, under: holder.id) } }
+        }
+        let endpoint = ControlZmxEndpoint(executable: "/Applications/agterm.app/zmx", socketDirectory: "/tmp/agterm-zmx-abc")
+
+        let reply = await server.attachRemotePage(created, origin: RemoteBinding.Origin(host: "buildbox", endpoint: endpoint, sessionName: "c"),
+                                                  presentation: .init(version: nil, headless: false),
+                                                  at: .companion(of: row.id), select: false)
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        XCTAssertEqual(store.companions(of: holder.id).filter { $0.content == .page }.count, 1)
     }
 
     // a --block caller on a remote page companion had no outcome to read once the page ended there

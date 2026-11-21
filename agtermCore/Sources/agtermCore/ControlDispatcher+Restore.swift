@@ -58,6 +58,8 @@ extension ControlDispatcher {
             if case .failure = restoreUpdate(request.args) { return true }
         case .sessionCompanionMove:
             if case .failure = companionMoveArguments(request.args) { return true }
+        case .sessionCompanionPromote:
+            if case .failure = companionPromoteArguments(request.args) { return true }
         default:
             break
         }

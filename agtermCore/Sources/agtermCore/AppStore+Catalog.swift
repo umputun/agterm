@@ -144,7 +144,11 @@ extension AppStore {
         let name = catalogCustomName(fields)
         if session.customName != name { session.customName = name }
         if session.currentCwd != fields.cwd { session.currentCwd = TerminalText.sanitized(fields.cwd) }
-        if session.parentID != fields.parent { session.parentID = fields.parent }
+        // a promotion that keeps the flat order moves no row, so nothing else reports the regroup
+        if session.parentID != fields.parent {
+            session.parentID = fields.parent
+            scheduleTreeChanged()
+        }
         let presented = session.presentsCatalog
         let wasEnded = session.ended
         let wasHeld = Set(session.catalogPanes.values.filter { $0.held == true }.map(\.identity))

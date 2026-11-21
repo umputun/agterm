@@ -115,8 +115,10 @@ extension AppStore {
         var closed: [UUID] = []
         for session in workspaces.flatMap(\.sessions) where ids.contains(session.id) && self.session(withID: session.id) != nil {
             let group = [session.id] + companions(of: session.id).map(\.id)
-            for survivor in companions(of: session.id) where !ids.contains(survivor.id) { survivor.parentID = nil }
+            let survivors = companions(of: session.id).filter { !ids.contains($0.id) }
+            for survivor in survivors { survivor.parentID = nil }
             closeSession(session.id)
+            for survivor in survivors where survivor.remoteHost != nil { onRemoteRowPromoted?(survivor) }
             closed += group.filter { ids.contains($0) && self.session(withID: $0) == nil }
         }
         return closed

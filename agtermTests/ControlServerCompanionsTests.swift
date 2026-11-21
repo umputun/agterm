@@ -336,16 +336,25 @@ final class ControlServerCompanionsTests: XCTestCase {
         XCTAssertEqual(nodes.filter { $0.parent == parent.id.uuidString }.map(\.id), [children[0].id.uuidString])
     }
 
+    func testMoveCompanionTakesATopLevelSessionWithItsCompanions() async throws {
+        let (store, parent, children) = try group()
+        let (_, top) = try addSession()
+
+        let reply = await server.moveCompanion(parent.id.uuidString, parent: top.id.uuidString, index: nil, window: nil)
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        XCTAssertEqual(reply.result?.parent, top.id.uuidString)
+        XCTAssertEqual(store.companions(of: top.id).map(\.id), [parent.id] + children.map(\.id))
+    }
+
     func testMoveCompanionRefusesWithTheStoreReasonAndAnUnknownParent() async throws {
         let (store, parent, children) = try group()
         let (_, top) = try addSession()
 
         let underCompanion = await server.moveCompanion(children[0].id.uuidString, parent: children[1].id.uuidString, index: nil, window: nil)
-        let topLevel = await server.moveCompanion(top.id.uuidString, parent: parent.id.uuidString, index: nil, window: nil)
         let unknown = await server.moveCompanion(children[0].id.uuidString, parent: UUID().uuidString, index: nil, window: nil)
 
         XCTAssertEqual(underCompanion.error, CompanionMoveRefusal.parentIsCompanion.message)
-        XCTAssertEqual(topLevel.error, CompanionMoveRefusal.notCompanion.message)
         XCTAssertFalse(unknown.ok)
         XCTAssertEqual(children.map(\.parentID), [parent.id, parent.id])
         XCTAssertNil(store.session(withID: top.id)?.parentID)

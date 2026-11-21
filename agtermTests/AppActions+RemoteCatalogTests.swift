@@ -162,6 +162,30 @@ final class AppActionsRemoteCatalogTests: XCTestCase {
         XCTAssertEqual(store.companions(of: second.id).map(\.id), [companion.id, resident.id])
     }
 
+    func testAMovedTopLevelSessionGoesToTheServerAloneAndItsDetachedCompanionStaysDetached() throws {
+        let first = catalogSession(), second = catalogSession()
+        let shown = catalogSession(parent: first.id), detached = catalogSession(parent: first.id)
+        open([first, shown, detached, second])
+        mirror.detach(sessions: [detached.id])
+        let row = try XCTUnwrap(store.session(withID: first.id))
+
+        actions.moveCompanion(first.id, under: second.id, at: 0, in: store)
+        try sent(1)
+        settle()
+
+        XCTAssertTrue(runner.lines[0].contains("session move --target \(first.id.uuidString) --parent \(second.id.uuidString) --index 0"),
+                      runner.lines[0])
+        XCTAssertNil(row.parentID, "nothing moves here before the catalog reports it")
+        var movedFirst = first.fields, movedShown = shown.fields, movedDetached = detached.fields
+        movedFirst.parent = second.id
+        movedShown.parent = second.id
+        movedDetached.parent = second.id
+        serverApplies(.sessionChanged(movedFirst), .sessionChanged(movedShown), .sessionChanged(movedDetached),
+                      .sessionOrder([second.id, first.id, shown.id, detached.id], workspace: workspaceID))
+        XCTAssertEqual(store.companions(of: second.id).map(\.id), [first.id, shown.id])
+        XCTAssertNil(store.session(withID: detached.id))
+    }
+
     func testASessionDroppedIntoAnAllDetachedRootGoesToTheOwnersRootByID() throws {
         let rootID = UUID()
         let moving = catalogSession(), detached = catalogSession()
@@ -223,7 +247,7 @@ final class AppActionsRemoteCatalogTests: XCTestCase {
         XCTAssertTrue(runner.lines[0].hasSuffix("-- \(rootID.uuidString)"), runner.lines[0])
     }
 
-    func testALoneCompanionInARootlessOwnerGetsNoMoveTo() throws {
+    func testALoneCompanionInARootlessOwnerMovesOnlyToItsWorkspaceWithTopLevelSessionsDisabled() throws {
         let parent = catalogSession()
         let companion = catalogSession(parent: parent.id)
         open([parent, companion])
@@ -233,7 +257,26 @@ final class AppActionsRemoteCatalogTests: XCTestCase {
         let row = try XCTUnwrap((0..<outline.numberOfRows).first { (outline.item(atRow: $0) as? SidebarNode)?.id == companion.id })
 
         let menu = try XCTUnwrap(coordinator.menu(forRow: row))
-        XCTAssertFalse(menu.items.contains { $0.title == "Move to" }, "\(menu.items.map(\.title))")
+        let submenu = try XCTUnwrap(menu.items.first { $0.title == "Move to" }?.submenu, "\(menu.items.map(\.title))")
+        XCTAssertEqual(submenu.items.map(\.title), [ControlWorkspaceNode.rootLabel] + store.displayWorkspaces.map(\.label))
+        XCTAssertFalse(submenu.items[0].isEnabled)
+        XCTAssertTrue(submenu.items[1].isEnabled)
+    }
+
+    func testAPromotedCompanionAppendedToItsWorkspaceGoesToTheServerAsAnAppendPastDetachedRows() throws {
+        let first = catalogSession(), second = catalogSession()
+        let companion = catalogSession(parent: first.id), detached = catalogSession()
+        open([first, companion, second, detached])
+        mirror.detach(sessions: [detached.id])
+        let row = try XCTUnwrap(store.session(withID: companion.id))
+
+        actions.promoteCompanion(companion.id, to: .workspace(workspaceID, slot: nil), in: store)
+        try sent(1)
+        settle()
+
+        XCTAssertTrue(runner.lines[0].contains("session move --target \(companion.id.uuidString) --top-level"), runner.lines[0])
+        XCTAssertTrue(runner.lines[0].hasSuffix("-- \(workspaceID.uuidString)"), runner.lines[0])
+        XCTAssertEqual(row.parentID, first.id, "nothing moves here before the catalog reports it")
     }
 
     func testMoveToShowsTopLevelSessionsDisabledForAnOwnerWithoutARoot() throws {

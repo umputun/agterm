@@ -1,16 +1,16 @@
 import Foundation
 
-/// CompanionMoveRefusal is why a companion did not move to another parent; `message` is the text every caller shows.
+/// CompanionMoveRefusal is why a session did not move under another parent; `message` is the text every caller shows.
 public enum CompanionMoveRefusal: Error, Equatable, Sendable {
     case noSuchSession
-    case notCompanion
+    case ownParent
     case parentIsCompanion
     case otherHost
 
     public var message: String {
         switch self {
         case .noSuchSession: "no such session"
-        case .notCompanion: "not a companion"
+        case .ownParent: "a session cannot move under itself"
         case .parentIsCompanion: "the new parent must be a top-level session"
         case .otherHost: "a companion moves only under a session from the same host"
         }
@@ -22,33 +22,37 @@ extension AppStore {
     /// drop indicator or a Move to entry never offers a parent the move refuses.
     public func canMoveCompanion(_ id: UUID, under parentID: UUID) -> Result<Void, CompanionMoveRefusal> {
         guard let row = session(withID: id), let parent = session(withID: parentID) else { return .failure(.noSuchSession) }
-        guard row.parentID != nil else { return .failure(.notCompanion) }
         guard parent.parentID == nil else { return .failure(.parentIsCompanion) }
+        guard id != parentID else { return .failure(.ownParent) }
         guard isRemoteWindow || sharesHost(row, parent) else { return .failure(.otherHost) }
         return .success(())
     }
 
-    /// moveCompanion moves a companion under another top-level session of this store, any workspace, keeping the same
-    /// `Session` so its surfaces survive. `index` is its slot among the new parent's companions counted without it;
-    /// nil or past the end appends. Moving under its own parent reorders it.
+    /// moveCompanion moves a session under another top-level session of this store, any workspace, keeping the same
+    /// `Session` objects so their surfaces survive. A top-level session brings its companions, as Convert to Companion
+    /// does. `index` is the slot among the new parent's companions counted without the moved rows; nil or past the
+    /// end appends. Moving a companion under its own parent reorders it.
     @discardableResult
     public func moveCompanion(_ id: UUID, under parentID: UUID, at index: Int? = nil) -> Result<Void, CompanionMoveRefusal> {
         if case .failure(let refusal) = canMoveCompanion(id, under: parentID) { return .failure(refusal) }
         guard let source = location(ofSession: id) else { return .failure(.noSuchSession) }
         let before = workspaces.map { $0.sessions.map(\.id) }
-        let row = workspaces[source.workspaceIndex].sessions.remove(at: source.sessionIndex)
-        let previousParent = row.parentID
+        let sourceRows = workspaces[source.workspaceIndex].sessions
+        let previousParent = sourceRows[source.sessionIndex].parentID
+        let blockEnd = previousParent == nil ? Self.groupEnd(from: source.sessionIndex, in: sourceRows) : source.sessionIndex + 1
+        let block = Array(sourceRows[source.sessionIndex..<blockEnd])
+        workspaces[source.workspaceIndex].sessions.removeSubrange(source.sessionIndex..<blockEnd)
         guard let target = location(ofSession: parentID) else {
-            workspaces[source.workspaceIndex].sessions.insert(row, at: source.sessionIndex)
+            workspaces[source.workspaceIndex].sessions.insert(contentsOf: block, at: source.sessionIndex)
             return .failure(.noSuchSession)
         }
         let sessions = workspaces[target.workspaceIndex].sessions
         let end = Self.groupEnd(from: target.sessionIndex, in: sessions)
         let companions = end - target.sessionIndex - 1
         let destination = target.sessionIndex + 1 + min(max(0, index ?? companions), companions)
-        row.parentID = parentID
-        workspaces[target.workspaceIndex].sessions.insert(row, at: destination)
-        if selectedSessionID == id { disableFocusIfSelectionOutsideSet(id) }
+        block.forEach { $0.parentID = parentID }
+        workspaces[target.workspaceIndex].sessions.insert(contentsOf: block, at: destination)
+        if let selected = selectedSessionID, block.contains(where: { $0.id == selected }) { disableFocusIfSelectionOutsideSet(selected) }
         pruneSidebarSelection()
         guard previousParent != parentID || before != workspaces.map({ $0.sessions.map(\.id) }) else { return .success(()) }
         scheduleTreeChanged()
@@ -143,7 +147,7 @@ extension AppStore {
         return remaining[start...].first { !blockIDs.contains($0.id) && $0.parentID == nil }?.id
     }
 
-    private func relocate(_ block: [UUID], toWorkspace targetIndex: Int, before anchor: UUID?) {
+    func relocate(_ block: [UUID], toWorkspace targetIndex: Int, before anchor: UUID?, parentChanged: Bool = false) {
         let before = workspaces.map { $0.sessions.map(\.id) }
         var moving: [Session] = []
         for id in block {
@@ -155,7 +159,7 @@ extension AppStore {
         workspaces[targetIndex].sessions.insert(contentsOf: moving, at: destination)
         if let selectedSessionID, block.contains(selectedSessionID) { disableFocusIfSelectionOutsideSet(selectedSessionID) }
         pruneSidebarSelection()
-        if before != workspaces.map({ $0.sessions.map(\.id) }) { scheduleTreeChanged() }
+        if parentChanged || before != workspaces.map({ $0.sessions.map(\.id) }) { scheduleTreeChanged() }
         save()
     }
 

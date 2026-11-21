@@ -330,6 +330,19 @@ extension WorkspaceSidebar.Coordinator {
         guard let parentID = store.session(withID: id)?.parentID else { return nil }
         let submenu = NSMenu()
         submenu.autoenablesItems = false
+        // an owner predating top-level sessions has no root to promote into
+        if store.isRemoteWindow, store.rootWorkspace == nil {
+            let unavailable = NSMenuItem(title: ControlWorkspaceNode.rootLabel, action: nil, keyEquivalent: "")
+            unavailable.isEnabled = false
+            submenu.addItem(unavailable)
+        }
+        for workspace in store.displayWorkspaces {
+            guard case .success = store.canPromoteCompanion(id, to: .workspace(workspace.id, slot: nil)) else { continue }
+            let item = NSMenuItem(title: workspace.label, action: #selector(menuPromoteCompanion(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = SessionBatchRequest(sessionIDs: [id], targetID: workspace.id)
+            submenu.addItem(item)
+        }
         for workspace in store.displayWorkspaces {
             let parents = workspace.sessions.filter { candidate in
                 guard candidate.parentID == nil, candidate.id != parentID else { return false }
@@ -337,6 +350,7 @@ extension WorkspaceSidebar.Coordinator {
                 return false
             }
             guard !parents.isEmpty else { continue }
+            if !submenu.items.isEmpty, !submenu.items.contains(where: \.isSectionHeader) { submenu.addItem(.separator()) }
             submenu.addItem(.sectionHeader(title: workspace.label))
             for parent in parents {
                 let item = NSMenuItem(title: parent.displayName, action: #selector(menuMoveCompanion(_:)), keyEquivalent: "")
@@ -352,6 +366,12 @@ extension WorkspaceSidebar.Coordinator {
         guard let request = sender.representedObject as? SessionBatchRequest, let id = request.sessionIDs.first,
               let parentID = request.targetID else { return }
         actions.moveCompanion(id, under: parentID, at: nil, in: store)
+    }
+
+    @objc private func menuPromoteCompanion(_ sender: NSMenuItem) {
+        guard let request = sender.representedObject as? SessionBatchRequest, let id = request.sessionIDs.first,
+              let workspace = request.targetID else { return }
+        actions.promoteCompanion(id, to: .workspace(workspace, slot: nil), in: store)
     }
 
     @objc private func menuClose(_ sender: NSMenuItem) {

@@ -87,7 +87,7 @@ extension AppActions {
         }
     }
 
-    /// moveCompanion puts a companion under another top-level session for the sidebar drop and the row menu; the
+    /// moveCompanion puts a session under another top-level session for the sidebar drop and the row menu; the
     /// control command calls the store itself, since this reports only through the HUD.
     func moveCompanion(_ id: UUID, under parentID: UUID, at index: Int?, in store: AppStore) {
         if let remote = store.remoteActions {
@@ -110,6 +110,31 @@ extension AppActions {
         case .success:
             store.noteUserActivity()
         }
+    }
+
+    /// promoteCompanion makes a companion a top-level session for the sidebar drop and the row menu, through the same
+    /// server, origin or store path its control command takes.
+    func promoteCompanion(_ id: UUID, to promotion: CompanionPromotion, in store: AppStore) {
+        let action = "Make Top-Level Session"
+        if case .failure(let refusal) = store.canPromoteCompanion(id, to: promotion) {
+            return showCompanionRefusal(refusal.message, action: action, over: id, in: store)
+        }
+        let placement = store.promotionPlacement(of: id, promotion)
+        if store.remoteActions != nil {
+            _ = performRemote(.promoteCompanion(id, to: placement), in: store)
+            return
+        }
+        var args = ControlArgs()
+        switch placement {
+        case .workspace(let workspace): args.workspace = workspace.uuidString
+        case .after(let anchor): args.after = anchor.uuidString
+        case .before(let anchor): args.before = anchor.uuidString
+        case .step, nil: break
+        }
+        if forwardAttached(ControlRequest(cmd: .sessionCompanionPromote, target: id.uuidString, args: args), row: id, in: store,
+                           action: action) { return }
+        store.promoteCompanion(id, to: promotion)
+        store.noteUserActivity()
     }
 
     // a refusal shows in a timed HUD over the session, falling back to a notification when there is no window for it

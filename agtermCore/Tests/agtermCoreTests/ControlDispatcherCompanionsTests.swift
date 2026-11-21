@@ -263,4 +263,46 @@ struct ControlDispatcherCompanionsTests {
         #expect(ControlDispatcher.refusesArguments(request))
         #expect(actions.calls.isEmpty)
     }
+
+    @Test(arguments: [
+        (ControlArgs(), ControlCompanionPromotion.afterOwnGroup),
+        (ControlArgs(workspace: "w1"), .workspace("w1")),
+        (ControlArgs(after: "a1"), .beside("a1", after: true)),
+        (ControlArgs(before: "b1"), .beside("b1", after: false)),
+    ])
+    func companionPromoteRoutesItsPlacement(args: ControlArgs, placement: ControlCompanionPromotion) async {
+        let actions = MockControlActions()
+        var args = args
+        args.window = "win"
+
+        let response = await ControlDispatcher(actions: actions).dispatch(ControlRequest(cmd: .sessionCompanionPromote, target: "c1", args: args))
+
+        #expect(response == ControlResponse(ok: true))
+        #expect(actions.calls == [.companionPromote(target: "c1", placement: placement, window: "win")])
+    }
+
+    nonisolated private static func promoteArgs(_ edit: (inout ControlArgs) -> Void) -> ControlArgs {
+        var args = ControlArgs()
+        edit(&args)
+        return args
+    }
+
+    @Test(arguments: [
+        (promoteArgs { $0.parent = "p2" }, "session.companion.promote takes no --parent, --index or --to"),
+        (promoteArgs { $0.index = 0 }, "session.companion.promote takes no --parent, --index or --to"),
+        (promoteArgs { $0.to = "up" }, "session.companion.promote takes no --parent, --index or --to"),
+        (promoteArgs { $0.targets = ["c1"] }, "session.companion.promote moves one session, named by target"),
+        (promoteArgs { $0.workspace = "w1"; $0.after = "a1" }, "session.companion.promote takes one of a workspace, --after or --before"),
+        (promoteArgs { $0.after = "a1"; $0.before = "b1" }, "session.companion.promote takes one of a workspace, --after or --before"),
+    ])
+    func companionPromoteRefusesBadArgumentsBeforeActing(args: ControlArgs, error: String) async {
+        let actions = MockControlActions()
+        let request = ControlRequest(cmd: .sessionCompanionPromote, target: "c1", args: args)
+
+        let response = await ControlDispatcher(actions: actions).dispatch(request)
+
+        #expect(response == ControlResponse(ok: false, error: error))
+        #expect(ControlDispatcher.refusesArguments(request))
+        #expect(actions.calls.isEmpty)
+    }
 }

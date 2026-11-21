@@ -176,9 +176,38 @@ struct ServerActionsCompanionsTests {
         let underCompanion = await harness.actions.moveCompanion(session.id.uuidString, parent: companion.id.uuidString, index: nil, window: nil)
         let unknown = await harness.actions.moveCompanion(companion.id.uuidString, parent: UUID().uuidString, index: nil, window: nil)
 
-        #expect(underCompanion.error == CompanionMoveRefusal.notCompanion.message)
+        #expect(underCompanion.error == CompanionMoveRefusal.parentIsCompanion.message)
         #expect(unknown.ok == false)
         #expect(companion.parentID == session.id)
+    }
+
+    @Test func aTopLevelSessionMovesUnderAnotherWithItsWholeGroup() async throws {
+        let session = try newSession()
+        let destination = try newSession()
+        let companion = try harness.session(await harness.actions.createCompanion(session.id.uuidString, options: CompanionOptions(select: false),
+                                                                                  window: nil))
+
+        let reply = await harness.actions.moveCompanion(session.id.uuidString, parent: destination.id.uuidString, index: nil, window: nil)
+
+        #expect(reply.ok, "\(reply)")
+        #expect(reply.result?.parent == destination.id.uuidString)
+        #expect(harness.store.companions(of: destination.id).map(\.id) == [session.id, companion.id])
+    }
+
+    @Test func aCompanionBecomesATopLevelSessionBesideAnAnchor() async throws {
+        let session = try newSession()
+        let companion = try harness.session(await harness.actions.createCompanion(session.id.uuidString, options: CompanionOptions(select: false),
+                                                                                  window: nil))
+        let other = try newSession()
+
+        let reply = await harness.actions.promoteCompanion(companion.id.uuidString, placement: .beside(other.id.uuidString, after: true), window: nil)
+        let again = await harness.actions.promoteCompanion(companion.id.uuidString, placement: .afterOwnGroup, window: nil)
+
+        #expect(reply.ok, "\(reply)")
+        #expect(companion.parentID == nil)
+        #expect(harness.store.companions(of: session.id).isEmpty)
+        #expect(harness.store.workspace(forSession: other.id)?.sessions.map(\.id).suffix(2) == [other.id, companion.id])
+        #expect(again.error == CompanionPromotionRefusal.notCompanion.message)
     }
 
     @Test func aConvertStartsTheFreshParent() throws {

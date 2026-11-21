@@ -84,7 +84,7 @@ extension ServerActions {
         return nil
     }
 
-    /// moveCompanion puts the target companion under another top-level session of the catalog, at `index` in its group.
+    /// moveCompanion puts the target session under another top-level session of the catalog, at `index` in its group.
     public func moveCompanion(_ target: String?, parent: String, index: Int?, window: String?) async -> ControlResponse {
         withSession(target, window: window) { session in
             switch resolveSession(parent) {
@@ -96,6 +96,31 @@ extension ServerActions {
                 }
                 return ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString, parent: destination.id.uuidString))
             }
+        }
+    }
+
+    /// promoteCompanion makes the target companion a top-level session of the catalog at `placement`.
+    public func promoteCompanion(_ target: String?, placement: ControlCompanionPromotion, window: String?) async -> ControlResponse {
+        withSession(target, window: window) { session in
+            let promotion: CompanionPromotion
+            switch placement {
+            case .afterOwnGroup:
+                promotion = .afterOwnGroup
+            case .workspace(let workspace):
+                switch resolveWorkspace(workspace) {
+                case .failure(let refusal): return refusal.response
+                case .success(let destination): promotion = .workspace(destination, slot: nil)
+                }
+            case .beside(let anchor, let after):
+                switch resolveSession(anchor) {
+                case .failure(let refusal): return refusal.response
+                case .success(let destination): promotion = .beside(destination.id, after: after)
+                }
+            }
+            if case .failure(let refusal) = store.promoteCompanion(session.id, to: promotion) {
+                return ControlResponse(ok: false, error: refusal.message)
+            }
+            return ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString))
         }
     }
 

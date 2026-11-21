@@ -43,6 +43,7 @@ public enum Command: String, Codable, Sendable, CaseIterable {
     case sessionCompanionDuplicate = "session.companion.duplicate"
     case sessionCompanionConvert = "session.companion.convert"
     case sessionCompanionMove = "session.companion.move"
+    case sessionCompanionPromote = "session.companion.promote"
     /// A viewer asking for one attachment of a page companion: a single-use token for `session.overlay.page.serve`
     /// plus what the page shows.
     case sessionCompanionPageAttach = "session.companion.page.attach"

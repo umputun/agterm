@@ -29,8 +29,14 @@ final class SidebarOutlineView: NSOutlineView {
     /// listsSessionsFlat is true for the flat and plain flagged lists.
     var listsSessionsFlat = false
 
-    /// selectionMinX is where a row's selection pill starts; a flat list has no strip to leave room for it.
-    var selectionMinX: CGFloat { listsSessionsFlat ? 0 : 8 }
+    /// selectionMinX is where a row's selection pill starts. A flat list has no strip to leave room for, and a
+    /// top-level session's pill spans the strip, where its companions' triangle sits.
+    func selectionMinX(atRow row: Int) -> CGFloat {
+        if listsSessionsFlat { return 0 }
+        guard reservesDisclosureColumn, row >= 0, level(forRow: row) == 0,
+              (item(atRow: row) as? SidebarNode)?.kind == .session else { return 8 }
+        return 0
+    }
 
     // with the cell's 2pt icon inset, puts the icon 8pt inside a pill starting at 0, as in the tree
     private static let flatContentX: CGFloat = 6

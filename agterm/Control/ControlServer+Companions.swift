@@ -4,7 +4,8 @@ import Foundation
 extension ControlServer: CompanionDuplicating {}
 
 extension ControlServer {
-    static let companionMoveError = "a companion moves only among its siblings; use --parent to move it under another session"
+    static let companionMoveError = "a companion moves only among its siblings; use --parent to move it under another session, "
+        + "or --top-level to make it a top-level session"
 
     /// pageCompanionRefusal answers a request a page session cannot take, before any command runs.
     func pageCompanionRefusal(_ request: ControlRequest) -> ControlResponse? {
@@ -137,6 +138,44 @@ extension ControlServer {
                 return ControlResponse(ok: false, error: refusal.message)
             }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, parent: parentID.uuidString))
+        }
+    }
+
+    /// promoteCompanion resolves the workspace or anchor in the companion's own window only, as `moveCompanion` does.
+    func promoteCompanion(_ target: String?, placement: ControlCompanionPromotion, window: String?) async -> ControlResponse {
+        let (store, id): (AppStore, UUID)
+        switch resolver.resolveSessionTarget(target, window: window) {
+        case .failure(let response): return response
+        case .success(let resolved): (store, id) = resolved
+        }
+        switch promotionTarget(placement, in: store) {
+        case .failure(let response):
+            return response
+        case .success(let promotion):
+            if case .failure(let refusal) = store.promoteCompanion(id, to: promotion) {
+                return ControlResponse(ok: false, error: refusal.message)
+            }
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
+    /// promotionTarget resolves a promotion's workspace or anchor in `store`, for this handler and the attached route.
+    func promotionTarget(_ placement: ControlCompanionPromotion, in store: AppStore) -> ControlTargetResolver.Resolution<CompanionPromotion> {
+        let refusal = { (noun: String, target: String, resolution: TargetResolution) in
+            ControlResponse(ok: false, error: ControlResolve.errorMessage(noun: noun, target: target, resolution: resolution))
+        }
+        switch placement {
+        case .afterOwnGroup:
+            return .success(.afterOwnGroup)
+        case .workspace(let target):
+            let resolution = store.resolveWorkspaceTarget(target)
+            guard case .resolved(let id) = resolution else { return .failure(refusal("workspace", target, resolution)) }
+            return .success(.workspace(id, slot: nil))
+        case .beside(let anchor, let after):
+            let resolution = ControlResolve.resolve(anchor, candidates: store.workspaces.flatMap { $0.sessions.map(\.id) },
+                                                    active: store.selectedSessionID)
+            guard case .resolved(let id) = resolution else { return .failure(refusal("session", anchor, resolution)) }
+            return .success(.beside(id, after: after))
         }
     }
 

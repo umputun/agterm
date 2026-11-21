@@ -586,6 +586,22 @@ final class RemoteCatalogMirrorTests {
         #expect(effects.removed.isEmpty)
     }
 
+    @Test func aCompanionMadeTopLevelInPlaceReportsTheTreeChange() throws {
+        let parent = session(panes: [pane()])
+        var companion = session(panes: [pane()])
+        companion.fields.parent = parent.id
+        let before = open([parent, companion])
+        let row = try #require(store.session(withID: companion.id))
+        companion.fields.parent = nil
+        let seen = events.drafts.count
+
+        for (rev, change) in before.changes(to: snapshot([parent, companion])).enumerated() { delta(rev + 1, change) }
+
+        #expect(row.parentID == nil)
+        #expect(store.workspaces.first?.sessions.map(\.id) == [parent.id, companion.id])
+        #expect(events.drafts.dropFirst(seen).contains { $0.kind == .treeChanged })
+    }
+
     @Test func aCompanionMovedUnderAnotherParentKeepsItsRowAndTakesTheNewGroupAndOrder() throws {
         let first = session(panes: [pane()])
         let second = session(panes: [pane()])

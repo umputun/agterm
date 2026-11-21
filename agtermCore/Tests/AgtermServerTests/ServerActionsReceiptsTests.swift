@@ -113,7 +113,8 @@ struct ServerActionsReceiptsTests {
         #expect(companion.parentID == second.id)
     }
 
-    @Test(arguments: [Command.sessionRestart, .sessionCompanionDuplicate, .sessionCompanionConvert, .sessionCompanionMove, .zmxKill, .zmxKillPane])
+    @Test(arguments: [Command.sessionRestart, .sessionCompanionDuplicate, .sessionCompanionConvert, .sessionCompanionMove, .sessionCompanionPromote,
+                      .zmxKill, .zmxKillPane])
     func aPaneLifecycleCommandTakesAnOperationId(_ command: Command) {
         #expect(CatalogOperationBook.receiptCommands.contains(command))
     }

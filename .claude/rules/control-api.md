@@ -180,7 +180,7 @@ renumbering. Do not reintroduce a count anywhere.
 - `tree`, `events.read`
 - `workspace.new`, `.rename`, `.delete`, `.select`, `.go`, `.move`, `.focus`, `.filter`, `.flag`, `.collapse`,
   `.expand`, `.tint`
-- `session.new`, `.duplicate`, `.remote.new`, `.companion.new`, `.companion.page`, `.companion.duplicate`, `.companion.convert`, `.companion.move`, `.companion.page.attach`, `.page`, `.collapse`, `.expand`, `.close`, `.terminate`, `.select`, `.rename`, `.reveal`, `.move`, `.type`, `.split`,
+- `session.new`, `.duplicate`, `.remote.new`, `.companion.new`, `.companion.page`, `.companion.duplicate`, `.companion.convert`, `.companion.move`, `.companion.promote`, `.companion.page.attach`, `.page`, `.collapse`, `.expand`, `.close`, `.terminate`, `.select`, `.rename`, `.reveal`, `.move`, `.type`, `.split`,
   `.split.close`, `.swap`, `.lead`,
   `.scratch`, `.focus`, `.resize`, `.go`, `.copy`, `.paste`, `.selectall`, `.text`, `.search`, `.status`,
   `.flag`, `.tint`, `.info`, `.seen`, `.restore`, `.restart`, `.background`, `.overlay.open`, `.overlay.close`, `.overlay.resize`,
@@ -430,6 +430,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   A remote parent's companion is created by its origin: `ControlServer.createRemoteCompanion` runs the origin's
   `agtermctl` through `RemoteSession.controlCommand`, whose outer quoting every login shell reads alike, polls the
   origin's `zmx tree` until the new id is attachable, then attaches it under the row through `attach(_:placement:)`.
+  Meanwhile every follower on that host and zmx endpoint waits (`holdCompanionFollow`), a first list still baselined,
+  since the parent can join another group; a failure marks the child handled under every followed row there.
   Creation is never retried or done locally; a created but unattached companion is named in the error. The three
   creation commands are in `waitsOnNetwork`, local ones included; `session.companion.convert` is local only and is not.
 - A remote parent's page companion is the origin's page. `session.companion.page.attach` hands out one view through
@@ -507,7 +509,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - `session.companion.move` is its own wire command for the same older-app reason
   (CLI `session move --parent P [--index N]`, too-old text `the running app is too old for companion moves`). `AppStore.moveCompanion` is the seam
   the sidebar drop, Move to and control share; `canMoveCompanion` and `CompanionMoveRefusal` own the refusals, and
-  `index` is the slot among the new parent's companions counted without the mover, clamped, nil appending.
+  `index` is the slot among the new parent's companions counted without the mover, clamped, nil appending. A top-level
+  mover brings its contiguous group, as Convert to Companion does. Each side moves the group it holds: the owner its own
+  members, the initiating viewer the rows it shows under the mover, so groupings already diverged stay diverged.
   A server window's row is moved by its server (`RemoteOperation.moveCompanion`), the GUI slot mapped past this Mac's
   detached rows by `companionIndex` while a control `index` passes through in the server's terms; a server refusing `--parent` or the command is a final too-old answer for this
   operation only. A row attached from another host is checked here, moved on its origin appended, then placed here
@@ -515,6 +519,16 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   to that origin attaches the moved row under the new parent's row only when it shows it nowhere yet; a row it
   already shows keeps its old grouping until it reattaches, the stream carrying membership, never grouping.
   Read back `parent` and the session order.
+- `session.companion.promote` is its own wire command for the same reason (CLI `session move --top-level [WORKSPACE |
+  --after X | --before X]`, too-old text `the running app is too old for companion promotion`); a plain `session.move` on a
+  companion keeps `companionMoveError`. `AppStore.promoteCompanion` is the seam (`CompanionPromotion`, the former parent an
+  allowed anchor). A server window's row goes to its server: a sidebar gap becomes a before/after anchor among the shown rows
+  and an append stays a workspace (`promotionPlacement`), so rows this Mac detached stay ahead of it. A row attached from
+  another host goes to its origin only when its parent shares that origin (`companionPromoteRoute`), then is placed here
+  (`promoteHere`); an origin answering `not a companion` already has it top-level, and the row is still placed. Every
+  promotion of a remote row reaches `remoteRowPromoted` through `onRemoteRowPromoted`: a Mac page root gets its membership
+  observer, and a terminal row baselines the list its stream already sent, which a nested row never does. A confirmed
+  origin promotion seeds an empty baseline first, since a reconnect clears that list. Read back `parent` and order.
 - `PageSessionRefusal` is the one pre-dispatch guard, run by `ControlServer.pageCompanionRefusal`, a remote window's
   route and agterm-server's `pageRowRefusal`, covering the socket and a page's bridge.
   It judges `surface.zoom`/`surface.cursor` only for an explicit target, since their `active` means the

@@ -525,7 +525,9 @@ Two parents, each with its companions indented under it; the blocked <code>logs<
 </figure>
 <ul>
 <li>The parent's disclosure triangle folds its companions away. A folded parent shows a small stack marker while a hidden companion has an agent status, in that status's color; blocked wins over working, working over completed, and the marker's tooltip lists each companion's status. A hidden companion's unread notifications count in its workspace's badge.</li>
-<li>Drag a companion among its siblings to reorder it, or onto another top-level session, or into that session's companions, to move it under that session, in any workspace of the window or among its top-level sessions. <strong>Move to</strong> in a companion's context menu lists the window's other top-level sessions. From a script: <code>agtermctl session move --parent SID [--index N]</code>. In the flagged view a drag never changes a companion's parent; use Move to there.</li>
+<li>Drag a companion among its siblings to reorder it, or onto another top-level session, or into that session's companions, to move it under that session, in any workspace of the window or among its top-level sessions. <strong>Move to</strong> in a companion's context menu lists the window's workspaces, then its other top-level sessions. From a script: <code>agtermctl session move --parent SID [--index N]</code>. In the flagged view a drag never changes a companion's parent; use Move to there.</li>
+<li>Drop a top-level session on another top-level session's row to make it that session's companion, in any workspace of the window; its own companions come with it. A drop between rows still reorders. From a script: <code>agtermctl session move --target SID --parent PARENT</code>.</li>
+<li>Drop a companion on a workspace row, or between top-level sessions, to make it a top-level session there; a workspace picked in <strong>Move to</strong> does the same, at the end. From a script: <code>agtermctl session move --target SID --top-level [WORKSPACE | --after X | --before X]</code>, which with no destination puts it right after its former group.</li>
 <li>Moving the parent carries its companions.</li>
 <li>Closing a companion closes only it. Closing the parent closes the group, and one Reopen Closed Item brings it all back.</li>
 <li>While a parent has companions, its shell exiting starts a fresh shell in the same directory instead of closing the session; one that exits again within 2 seconds closes the group. A Mac viewing that session attaches to the new shell.</li>
@@ -572,7 +574,8 @@ agtermctl session overlay open --html report.html --page</code></pre>
 <ul>
 <li>New Companion and Duplicate as Companion ask that Mac to create the companion under its own session and attach it here. Closing it here only detaches it.</li>
 <li>Convert to Companion runs on that Mac, and its new parent attaches here.</li>
-<li>A companion moves only under another session from that Mac: when the parent changes, that Mac moves it under its own session first, then the row moves here; a reorder under the same parent stays here. Another Mac attached to the same sessions keeps the old grouping until it attaches them again.</li>
+<li>A session moves only under another session from that Mac: when the parent changes, that Mac moves its own session first, with the companions it has there, then the row moves here with the companions shown under it; a reorder under the same parent stays here. Another Mac attached to the same sessions keeps the old grouping until it attaches them again.</li>
+<li>Making a companion top-level runs on that Mac when its parent comes from there too, and the row then takes its place here; under a parent from anywhere else only this Mac's grouping changes.</li>
 <li>A page companion opened there is that Mac's page, shown here through its own channel; it stays there when you close it here.</li>
 </ul>
 <h3 id="workspaces-finder">Opening sessions from Finder</h3>

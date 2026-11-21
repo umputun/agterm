@@ -104,8 +104,9 @@ paths:
   `Session.focusedCwd`. It does not copy name, command, panes, status, flag, font size, or watermark.
   `session.duplicate` provides the control form; its `tree.cwd` can differ from focused cwd when a split's
   non-primary pane is focused.
-- Move to lists Top-Level Sessions first, then the workspaces, for top-level rows and batches. On a single companion row it lists the window's other
-  top-level sessions under workspace headers instead, minus the current parent and what `canMoveCompanion` refuses.
+- Move to lists Top-Level Sessions first, then the workspaces, for top-level rows and batches. On a single companion row it lists the same
+  workspaces first, each promoting it there appended (`AppActions.promoteCompanion`; a rootless owner's Top-Level Sessions disabled), then the
+  window's other top-level sessions under workspace headers, minus the current parent and what `canMoveCompanion` refuses.
 - `SidebarMode` is per-window `.tree` or `.flagged`. `flaggedSessions` is the derived tree-order
   projection; sessions keep one owning workspace and flags survive moves but not deletion.
 - Each store keeps `flaggedOrder`, the saved order the flat and plain layouts render through
@@ -287,7 +288,8 @@ paths:
 
 - The root container has no row: `workspaceProjection` yields it first and the Coordinator lists its session nodes as
   level-0 rows ahead of the workspace rows. Without the disclosure strip a root parent's triangle has no room, so
-  `SidebarOutlineView.rootBlockShift` indents the root block one step instead of reserving the strip.
+  `SidebarOutlineView.rootBlockShift` indents the root block one step instead of reserving the strip. With the strip
+  the root rows stay level with the workspace rows and `selectionMinX(atRow:)` starts their pill at 0, over the triangle.
 - A gap among the level-0 session rows, the one above the first workspace row included, drops into the root
   (`SidebarDrop.isRootGap`); workspace drags count only named workspace rows (`namedWorkspaces`), offset by the
   root block's row count for the highlight.
@@ -308,13 +310,15 @@ paths:
   `companionsNeedingAttention` stays public for agterm-linux's sidebar snapshot.
 - In the ordinary tree one dragged companion moves under another top-level session (`SidebarDrop.companionReparent`):
   a drop on that row puts it first in the group, a gap in another group at that gap, a drop on another group's
-  companion right after it, and each asks `canMoveCompanion`. Within its own group it reorders among its siblings. Several rows and a workspace-level
-  slot keep the sibling-only rule and ask `canMoveSessions`. No flagged drag changes a parent: the flagged tree keeps
+  companion right after it, and each asks `canMoveCompanion`. Within its own group it reorders among its siblings. Dropped on a workspace row or
+  in a gap among top-level rows, the root's included, it becomes top-level there (`resolveCompanionPromotion`, asking `canPromoteCompanion`).
+  Several rows keep the sibling-only rule and ask `canMoveSessions`. One dragged top-level session nests only on the center of
+  another top-level row, first in its group with its own companions; a refused nest refuses the drop rather than reordering. No flagged drag changes a parent: the flagged tree keeps
   siblings, and the flat and plain lists reorder `flaggedOrder` (`moveFlagged`). Move to is the reparenting path there.
 - `syncSelection` reveals on a change of the selected row's parent as well as of the selection
   (`lastRevealedParent`), so a companion moved under a folded parent or into another workspace stays in view.
 - Companion rows keep the `session-row` identifier with accessibility label `companion`; the value stays the name.
-- Convert to Companion and a companion move are the paths that change a `parentID` after creation. A recorded parent can therefore be
+- Convert to Companion, a companion move, a promotion and a parent's close can change a `parentID` after creation. A recorded parent can therefore be
   a companion by the time its child reopens: both restore paths resolve it through `groupRoot(of:)`, and Recent
   Closed's `restoresSession` finds a parent inside a closed group or workspace, not only as an entry's root.
   A group hard close finalizes the parked companions of every member, not only of the closed parent.
