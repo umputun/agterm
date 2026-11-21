@@ -892,6 +892,21 @@ final class HtmlOverlayRegistryTests: HtmlPageTestCase {
         try await waitForScript("document.images[0] ? String(document.images[0].naturalWidth) : ''", in: page.webView) { $0 == "40" }
     }
 
+    func testAnImageThatIsNoPictureFailsThePageLocallyAndAsAReplica() async throws {
+        let path = pages.appendingPathComponent("fake.png").path
+        try Data("not a picture".utf8).write(to: URL(fileURLWithPath: path))
+        let overlay = HtmlOverlay(source: .image(path: path))
+        XCTAssertNil(store.openHtmlOverlay(session.id, pane: nil, overlay: overlay, sizePercent: nil))
+        _ = registry.page(for: overlay, store: store)
+        try await waitFor("local failed") { self.current?.loadState == .failed }
+        XCTAssertEqual(current?.loadError, ImageFile.Failure.notAnImage(path).description)
+
+        store.closeOverlay(session.id)
+        _ = registry.page(for: openReplica(path, .image(width: 30, height: 10)), store: store, replica: replicaLink())
+        try await waitFor("replica failed") { self.current?.loadState == .failed }
+        XCTAssertEqual(current?.loadError, ImageFile.Failure.notAnImage(path).description)
+    }
+
     func testAnImageReadFinishingAfterCloseIsDropped() async throws {
         let overlay = HtmlOverlay(source: .image(path: try writePNG("late.png", width: 30)))
         XCTAssertNil(store.openHtmlOverlay(session.id, pane: nil, overlay: overlay, sizePercent: nil))

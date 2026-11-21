@@ -20,7 +20,7 @@ public enum ImagePage {
     public static let basePercent = 95
     /// minimumPoints is the narrowest auto-sized panel, wide enough for the strip's name and close button.
     public static let minimumPoints = 240.0
-    /// maxBytes bounds the file a page embeds; a larger one is refused before it is read.
+    /// maxBytes bounds the file a page shows; a larger one is refused before it is read.
     public static let maxBytes = 64 << 20
     /// maxPixels refuses a picture whose header promises more pixels than this, a decompression bomb's tell.
     /// It bounds one decoded frame, about 400 MB at four bytes a pixel, not the page's total memory.
