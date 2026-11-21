@@ -309,7 +309,8 @@ paths:
 - In the ordinary tree one dragged companion moves under another top-level session (`SidebarDrop.companionReparent`):
   a drop on that row puts it first in the group, a gap in another group at that gap, a drop on another group's
   companion right after it, and each asks `canMoveCompanion`. Within its own group it reorders among its siblings. Several rows and a workspace-level
-  slot keep the sibling-only rule and ask `canMoveSessions`. No flagged drag changes a parent: the flagged tree keeps
+  slot keep the sibling-only rule and ask `canMoveSessions`. One dragged top-level session nests only on the center of
+  another top-level row, first in its group with its own companions; a refused nest refuses the drop rather than reordering. No flagged drag changes a parent: the flagged tree keeps
   siblings, and the flat and plain lists reorder `flaggedOrder` (`moveFlagged`). Move to is the reparenting path there.
 - `syncSelection` reveals on a change of the selected row's parent as well as of the selection
   (`lastRevealedParent`), so a companion moved under a folded parent or into another workspace stays in view.

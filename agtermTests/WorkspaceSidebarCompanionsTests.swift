@@ -240,16 +240,77 @@ final class WorkspaceSidebarCompanionsTests: XCTestCase {
                        [group.parent.id, group.second.id, group.first.id, group.after.id])
     }
 
-    func testATopLevelSessionDroppedOnARowBelowAGroupLandsRightAfterThatRow() throws {
+    func testATopLevelSessionDroppedInTheGapBelowARowLandsRightAfterThatRow() throws {
         let group = try seed()
         let middle = try XCTUnwrap(group.store.addSession(toWorkspace: group.work.id, cwd: "/tmp", name: "middle"))
         let last = try XCTUnwrap(group.store.addSession(toWorkspace: group.work.id, cwd: "/tmp", name: "last"))
         buildSidebar(for: group.store)
 
-        XCTAssertTrue(try drop([last.id], onRow: group.after.id))
+        XCTAssertTrue(try drop([last.id], onto: group.work.id, childIndex: 2))
+        XCTAssertNil(last.parentID)
 
         XCTAssertEqual(group.store.workspaces.first { $0.id == group.work.id }?.sessions.map(\.id),
                        [group.parent.id, group.first.id, group.second.id, group.after.id, last.id, middle.id])
+    }
+
+    func testATopLevelSessionDroppedOnAnotherTopLevelRowBecomesItsFirstCompanionWithItsGroup() throws {
+        let group = try seed()
+        let resident = try group.store.addCompanion(to: group.after.id, options: CompanionOptions(name: "resident")).get()
+        buildSidebar(for: group.store)
+
+        XCTAssertTrue(try drop([group.parent.id], onRow: group.after.id))
+
+        XCTAssertEqual(group.store.companions(of: group.after.id).map(\.id),
+                       [group.parent.id, group.first.id, group.second.id, resident.id])
+        for moved in [group.parent, group.first, group.second] {
+            XCTAssertEqual(moved.parentID, group.after.id)
+            XCTAssertTrue(group.store.session(withID: moved.id) === moved)
+        }
+    }
+
+    func testARefusedTopLevelNestLeavesTheTreeInsteadOfReordering() throws {
+        let group = try seed()
+        let remote = try XCTUnwrap(group.store.addSession(toWorkspace: group.work.id, cwd: "/tmp", name: "remote", remoteHost: "buildbox"))
+        buildSidebar(for: group.store)
+        let before = group.store.workspaces.first { $0.id == group.work.id }?.sessions.map(\.id)
+
+        XCTAssertFalse(try drop([group.after.id], onRow: remote.id))
+
+        XCTAssertEqual(group.store.workspaces.first { $0.id == group.work.id }?.sessions.map(\.id), before)
+        XCTAssertNil(group.after.parentID)
+    }
+
+    func testATopLevelSessionKeepsItsParentlessPlaceOutsideATopLevelRowsCenter() throws {
+        let group = try seed()
+        buildSidebar(for: group.store)
+
+        _ = try drop([group.after.id], onto: group.parent.id, childIndex: 1)
+        XCTAssertNil(group.after.parentID)
+        _ = try drop([group.after.id], onRow: group.first.id)
+        XCTAssertNil(group.after.parentID)
+    }
+
+    func testSeveralTopLevelRowsDroppedOnARowStillReorder() throws {
+        let group = try seed()
+        let last = try XCTUnwrap(group.store.addSession(toWorkspace: group.work.id, cwd: "/tmp", name: "last"))
+        let extra = try XCTUnwrap(group.store.addSession(toWorkspace: group.work.id, cwd: "/tmp", name: "extra"))
+        buildSidebar(for: group.store)
+
+        XCTAssertTrue(try drop([group.after.id, extra.id], onRow: last.id))
+
+        XCTAssertEqual(group.store.workspaces.first { $0.id == group.work.id }?.sessions.map(\.id),
+                       [group.parent.id, group.first.id, group.second.id, last.id, group.after.id, extra.id])
+        XCTAssertNil(group.after.parentID)
+        XCTAssertNil(extra.parentID)
+    }
+
+    func testACompanionDroppedOnItsOwnParentRowMovesFirstInTheGroup() throws {
+        let group = try seed()
+        buildSidebar(for: group.store)
+
+        XCTAssertTrue(try drop([group.second.id], onRow: group.parent.id))
+
+        XCTAssertEqual(group.store.companions(of: group.parent.id).map(\.id), [group.second.id, group.first.id])
     }
 
     func testAParentDraggedWithItsCompanionMovesTheGroupToAnotherWorkspace() throws {

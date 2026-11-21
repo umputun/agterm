@@ -1221,8 +1221,8 @@
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.companion.move</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
-                Move a companion under another top-level session of the same window, in any workspace. The companion keeps
-                its id, panes and everything running in them. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--index</span> is its 0-based place among the new
+                Move a session under another top-level session of the same window, in any workspace. It keeps
+                its id, panes and everything running in them, and a top-level session brings its companions. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--index</span> is its 0-based place among the new
                 parent's companions, past the end or omitted meaning last; on a server window it counts the server's group,
                 rows this Mac detached included. A parent that is already its own reorders it.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--parent</span> takes no workspace, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--to</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--after</span> or
@@ -1230,15 +1230,15 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.id</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.parent</span>.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
-                Refusals: <span style="font-family: &quot;JetBrains Mono&quot;, monospace">not a companion</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">the new parent must be a top-level session</span>,
+                Refusals: <span style="font-family: &quot;JetBrains Mono&quot;, monospace">a session cannot move under itself</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">the new parent must be a top-level session</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">a companion moves only under a session from the same host</span>. On a remote window its server
                 or Mac moves it and the row follows the catalog; an older one answers
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">the agterm-server on HOST is too old for companion moves</span>
                 (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">the agterm on HOST</span> for a Mac). On a session attached from
-                another Mac, both rows must come from that Mac: for a new parent it moves its own companion and the row then moves
-                here, while a reorder under the same parent stays here.
+                another Mac, both rows must come from that Mac: for a new parent it moves its own session, with the companions it
+                has there, and the row then moves here with the companions shown under it, while a reorder under the same parent stays here.
                 Another Mac attached to the same session keeps the old grouping until it reattaches. The GUI twins are a drag
-                in the sidebar tree and <strong style="color: #bfbab0">Move to</strong> in a companion row's context menu.
+                in the sidebar tree, a drop on another top-level session's row, and <strong style="color: #bfbab0">Move to</strong> in a companion row's context menu.
                 Read back via the node's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">parent</span> and its place in the tree.
               </p>
             </div>

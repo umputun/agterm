@@ -556,7 +556,7 @@ workspace (rename, delete, select, move, collapse, expand, tint and detach) refu
   its output after it exits.
   A companion reorders among its siblings (drag or `session move`) and moves under another session with
   `session move --parent` or a drag onto that session; moving the parent carries its
-  companions. Other session commands (status, notify, type, split, rename, flag, close) act on a companion
+  companions. A top-level session joins another's group the same way, bringing its own companions. Other session commands (status, notify, type, split, rename, flag, close) act on a companion
   as on any session; closing one closes only it. Closing the parent closes its companions too, and one undo
   (Reopen Closed Item) restores the group. If the parent's shell exits while it has companions, a fresh
   login shell starts in that pane's last directory instead of the session closing (a parent created with
@@ -611,19 +611,19 @@ workspace (rename, delete, select, move, collapse, expand, tint and detach) refu
   session) and `result.parent` (the fresh one), and the human output prints the fresh id. Read back as both
   nodes' `parent`. GUI twin: Convert to Companion in the row context menu and the Session menu, a palette row,
   and the keyless `convert_companion` action.
-- `session move --parent SID [--index N] [--target T] [--window W]` - move a companion under another top-level
-  session of the same window, any workspace, keeping its id and running panes. `--index` is its 0-based place
+- `session move --parent SID [--index N] [--target T] [--window W]` - move a session under another top-level
+  session of the same window, any workspace, keeping its id and running panes; a top-level target brings its companions. `--index` is its 0-based place
   among the new parent's companions (omitted or past the end: last); on a server window it counts the server's
   group, rows this Mac detached included. The current parent reorders it. Takes no
-  workspace, `--to`, `--after`/`--before`, and one target. Refusals: `not a companion`, `the new parent must be a
+  workspace, `--to`, `--after`/`--before`, and one target. Refusals: `a session cannot move under itself`, `the new parent must be a
   top-level session`, `a companion moves only under a session from the same host`; an app predating it answers
   `the running app is too old for companion moves`. A remote window's row moves on its server or Mac (an older one
   answers `the agterm-server on HOST is too old for companion moves`, or `the agterm on HOST ...` for a Mac); on a session attached from another Mac
-  both rows must come from it; for a new parent that Mac moves its companion and then the row moves here (a
-  reorder under the same parent stays here), and another Mac attached
+  both rows must come from it; for a new parent that Mac moves its own session, with the companions it has there, and then the row moves here with the
+  companions shown under it (a reorder under the same parent stays here), and another Mac attached
   to the same sessions keeps the old grouping until it reattaches. Wire command `session.companion.move`;
   returns `result.id` and `result.parent`. Read back as the node's `parent` and tree order. GUI twins: a drag in
-  the sidebar tree and Move to in a companion row's context menu.
+  the sidebar tree, a drop on another top-level session's row, and Move to in a companion row's context menu.
 - `session duplicate [--target] [--window W]` — create a fresh session in the SAME workspace as the
   target, inserted directly AFTER it, rooted at the target's focused-pane working directory (the live
   OSC 7 cwd the sidebar row shows and `session reveal` opens); selects + focuses the new session and

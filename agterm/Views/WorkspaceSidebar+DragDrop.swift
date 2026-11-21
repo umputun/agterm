@@ -48,6 +48,10 @@ extension WorkspaceSidebar.Coordinator {
             outlineView.setDropItem(reparent.dropItem, dropChildIndex: reparent.dropChildIndex)
             return .move
         }
+        if isTopLevelNestDrop(from: info, item: item, childIndex: index) {
+            cancelSpringLoadedExpansion()
+            return []
+        }
         if !draggedSessionIDs(from: info).isEmpty {
             guard store.remoteActions == nil || draggedSessionIDs(from: info).count == 1,
                   let move = resolveSessionMove(from: info, item: item, childIndex: index) else {
@@ -104,6 +108,7 @@ extension WorkspaceSidebar.Coordinator {
             dropSucceeded = true
             return true
         }
+        if isTopLevelNestDrop(from: info, item: item, childIndex: index) { return false }
         if !draggedSessionIDs(from: info).isEmpty {
             guard let move = resolveSessionMove(from: info, item: item, childIndex: index) else { return false }
             if store.remoteActions != nil {
@@ -257,7 +262,13 @@ extension WorkspaceSidebar.Coordinator {
     private func resolveCompanionReparent(from info: NSDraggingInfo, item: Any?, childIndex index: Int) -> CompanionReparentDrop? {
         let ids = draggedSessionIDs(from: info)
         guard nestsCompanions, ids.count == 1, let id = ids.first, let rowNode = item as? SidebarNode, rowNode.kind == .session,
-              let current = store.session(withID: id)?.parentID, let target = store.session(withID: rowNode.id) else { return nil }
+              let source = store.session(withID: id), let target = store.session(withID: rowNode.id) else { return nil }
+        guard let current = source.parentID else {
+            guard isTopLevelNestDrop(from: info, item: item, childIndex: index),
+                  case .success = store.canMoveCompanion(id, under: target.id) else { return nil }
+            return CompanionReparentDrop(companion: id, parent: target.id, slot: 0, dropItem: rowNode,
+                                         dropChildIndex: SidebarDrop.onItemIndex)
+        }
         let row: SidebarDrop.CompanionDropRow
         if let parent = target.parentID {
             guard index == SidebarDrop.onItemIndex,
@@ -272,6 +283,15 @@ extension WorkspaceSidebar.Coordinator {
         return CompanionReparentDrop(companion: id, parent: move.parent, slot: move.slot,
                                      dropItem: onParentRow ? rowNode : node(for: move.parent, kind: .session),
                                      dropChildIndex: onParentRow ? SidebarDrop.onItemIndex : move.slot)
+    }
+
+    // a top-level session on another top-level row's center means nest: a refused nest refuses the drop instead of
+    // falling through to resolveSessionMove's reorder
+    private func isTopLevelNestDrop(from info: NSDraggingInfo, item: Any?, childIndex index: Int) -> Bool {
+        let ids = draggedSessionIDs(from: info)
+        guard nestsCompanions, index == SidebarDrop.onItemIndex, ids.count == 1, let rowNode = item as? SidebarNode,
+              rowNode.kind == .session else { return false }
+        return store.session(withID: ids[0])?.parentID == nil && store.session(withID: rowNode.id)?.parentID == nil
     }
 
     private func outlineSlot(forFlatIndex flat: Int, in workspaceID: UUID, moving ids: [UUID]) -> (SidebarNode?, Int) {

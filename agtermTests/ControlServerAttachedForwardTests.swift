@@ -218,6 +218,35 @@ final class ControlServerAttachedForwardTests: XCTestCase {
         XCTAssertEqual(row.parentID, parent.id)
     }
 
+    func testARowMovedUnderAnotherWhileItsConvertedParentAttachesStaysWhereItMoved() async throws {
+        let runner = ScriptedRunner([ok(ControlResult(id: "origin-1", parent: created)), tree(sessions: session(created))])
+        let (server, store) = try makeServer(runner)
+        let row = try attachedRow(in: store)
+        let destination = try attachedRow(in: store, origin: "p2")
+        runner.beforeCall = { index in
+            if index == 1 { await MainActor.run { store.nest(row.id, under: destination.id) } }
+        }
+
+        let reply = try await run(server, ControlRequest(cmd: .sessionCompanionConvert, target: row.id.uuidString))
+
+        XCTAssertEqual(reply.error, "converted on buildbox and attached its new parent here, but the row moved under another session meanwhile and stays there")
+        XCTAssertEqual(row.parentID, destination.id)
+    }
+
+    func testARowClosedBeforeItsConvertedParentAttachesIsReportedClosedNotMoved() async throws {
+        let runner = ScriptedRunner([ok(ControlResult(id: "origin-1", parent: created)), tree(sessions: session(created))])
+        let (server, store) = try makeServer(runner)
+        let row = try attachedRow(in: store)
+        runner.beforeCall = { index in
+            if index == 1 { await MainActor.run { store.closeSession(row.id) } }
+        }
+
+        let reply = try await run(server, ControlRequest(cmd: .sessionCompanionConvert, target: row.id.uuidString))
+
+        XCTAssertEqual(reply.error, "created session \(created) on buildbox but could not attach it: its row here was closed; "
+                       + "`agtermctl zmx attach buildbox \(created)` attaches it")
+    }
+
     func testDuplicateCreatesTheSessionOnTheOriginAndAttachesItAfterTheRow() async throws {
         let runner = ScriptedRunner([ok(ControlResult(id: created)), tree(sessions: session(created))])
         let (server, store) = try makeServer(runner)
@@ -447,6 +476,20 @@ final class ControlServerAttachedForwardTests: XCTestCase {
         XCTAssertEqual(reply.result?.parent, destination.id.uuidString)
     }
 
+    func testATopLevelRowMovesOnTheOriginAloneAndHereWithTheCompanionsShownUnderIt() async throws {
+        let runner = ScriptedRunner([ok(ControlResult(id: "p1", parent: "p2"))])
+        let (server, store) = try makeServer(runner)
+        let (companion, destination) = try companionAndDestination(in: store)
+        let parent = try XCTUnwrap(companion.parentID.flatMap(store.session(withID:)))
+
+        let reply = try await run(server, move(parent, under: destination))
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        XCTAssertEqual(runner.invocations.count, 1)
+        XCTAssertTrue(line(runner, 0).hasSuffix("session move --target p1 --parent p2 --json"), line(runner, 0))
+        XCTAssertEqual(store.companions(of: destination.id).map(\.id), [parent.id, companion.id])
+    }
+
     func testACompanionMoveTakesAPaddedParentAsTheDispatcherDoes() async throws {
         let runner = ScriptedRunner([ok(ControlResult(id: "c1", parent: "p2"))])
         let (server, store) = try makeServer(runner)
@@ -472,12 +515,12 @@ final class ControlServerAttachedForwardTests: XCTestCase {
 
         XCTAssertNil(server.attachedRoute(move(companion, under: destination, index: -1)))
         XCTAssertNil(server.attachedRoute(move(companion, under: parent, index: 0)), "a reorder under its own parent stays here")
-        let refusals = [move(destination, under: parent), move(companion, under: local), move(companion, under: elsewhere)].map { request in
+        let refusals = [move(destination, under: destination), move(companion, under: local), move(companion, under: elsewhere)].map { request in
             guard case .refused(let reply) = server.attachedRoute(request) else { return "routed" }
             return reply.error ?? ""
         }
 
-        XCTAssertEqual(refusals, [CompanionMoveRefusal.notCompanion.message, CompanionMoveRefusal.otherHost.message,
+        XCTAssertEqual(refusals, [CompanionMoveRefusal.ownParent.message, CompanionMoveRefusal.otherHost.message,
                                   CompanionMoveRefusal.otherHost.message])
         XCTAssertTrue(runner.invocations.isEmpty)
     }

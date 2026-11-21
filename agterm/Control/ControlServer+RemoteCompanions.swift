@@ -85,8 +85,8 @@ extension ControlServer {
         guard tree.sessions.contains(where: { $0.id == listedOrigin }) else {
             return ControlResponse(ok: false, error: "the session on \(host) is not attachable now; nothing was created")
         }
-        // the origin creates under the target's current parent there, which is the group whose followers must wait; a
-        // target missing from the tree, such as a companion whose split daemon stopped, is still in its parent's membership
+        // the origin creates under the target's current parent there, the group a failure leaves the child to; a target
+        // missing from the tree, such as a companion whose split daemon stopped, is still in its parent's membership
         let group = tree.sessions.first(where: { $0.id == origin })?.parent
             ?? tree.sessions.first(where: { $0.companions?.contains(where: { $0.id == origin }) == true })?.id
             ?? listedOrigin
@@ -104,6 +104,8 @@ extension ControlServer {
         // a created child the error names is the user's to attach, so no follower attaches it as well
         let leaveToUser = { [self] (created: String) in
             library.markOriginCompanionsHandled([created], parent: reply.result?.parent ?? group, host: host, endpoint: tree.endpoint)
+            // the parent can have joined another group meanwhile, whose follower the host hold kept waiting
+            markFollowersHandled(created, on: hold.originHost)
         }
         // a full receipt with a failed transport still names work the origin did, so it is reported, never redone
         if result.status != 0, reply.ok, let created = reply.result?.id, UUID(uuidString: created) != nil {
@@ -394,7 +396,9 @@ extension ControlServer {
         let outcome = await attachWhenListed(pending.id, host: pending.host, closed: "its parent row here was closed") { [library] in
             guard let store = library.store(forSession: pending.parent),
                   let workspace = store.workspace(forSession: pending.parent)?.id else { return nil }
-            return RemotePlacement(store: store, workspace: workspace, parent: pending.parent, select: pending.select)
+            // a parent moved under another session during the wait takes the companion into that group, never a grandchild
+            let root = store.session(withID: pending.parent)?.parentID ?? pending.parent
+            return RemotePlacement(store: store, workspace: workspace, parent: root, select: pending.select)
         }
         if case .attached(let attached) = outcome, let tint = pending.tint, let id = attached.result?.id.flatMap(UUID.init(uuidString:)) {
             library.store(forSession: id)?.setTint(tint, forSession: id)

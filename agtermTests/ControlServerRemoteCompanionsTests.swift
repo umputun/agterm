@@ -181,6 +181,24 @@ final class ControlServerRemoteCompanionsTests: XCTestCase {
         XCTAssertNil(store.workspaces.flatMap(\.sessions).first { $0.parentID == row.id })
     }
 
+    func testAParentMovedUnderAnotherDuringTheWaitAttachesTheCompanionInItsNewGroup() async throws {
+        let runner = ScriptedRunner([origin, reply(id: created), tree(sessions: session(created))])
+        let (server, store, row) = try makeServer(runner)
+        let workspace = try XCTUnwrap(store.currentWorkspaceID)
+        let destination = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: NSHomeDirectory(), remoteHost: "buildbox"))
+        store.bindRemote(RemoteBinding(remoteSessionID: "origin-2", daemonsByLocalPane: [:], presentationVersion: nil), forSession: destination.id)
+        runner.beforeCall = { index in
+            if index == 2 { await MainActor.run { store.nest(row.id, under: destination.id) } }
+        }
+
+        let reply = await server.createCompanion(row.id.uuidString, options: CompanionOptions(), window: nil)
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        let companion = try XCTUnwrap(reply.result?.id.flatMap(UUID.init(uuidString:)).flatMap(store.session(withID:)))
+        XCTAssertEqual(row.parentID, destination.id)
+        XCTAssertEqual(companion.parentID, destination.id)
+    }
+
     func testAnAttachFailureAfterCreationNamesTheCreatedCompanion() async throws {
         let unaddressable = tree(sessions: #"{"id":"\#(created)","name":"c","windowID":"w1","windowName":"main","workspaceID":"ws1","#
                                  + #""workspaceName":"work","cwd":"/repo","panes":[{"pane":"middle","daemon":"agterm-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa3"}]}"#)

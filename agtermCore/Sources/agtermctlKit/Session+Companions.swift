@@ -30,7 +30,7 @@ extension Session.Move {
         if workspace != nil || to != nil || after != nil || before != nil {
             throw ValidationError("--parent takes no workspace, --to, --after or --before")
         }
-        if target.targets.count > 1 { throw ValidationError("--parent moves one companion") }
+        if target.targets.count > 1 { throw ValidationError("--parent moves one session") }
         if let index, index < 0 { throw ValidationError("--index must be 0 or more") }
     }
 

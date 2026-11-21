@@ -1059,7 +1059,8 @@ extension AppStoreCompanionsTests {
         let remote = try #require(g.store.addSession(toWorkspace: g.work.id, cwd: "/r", remoteHost: "buildbox"))
         let before = g.order
         let cases: [(UUID, UUID, CompanionMoveRefusal)] = [
-            (g.parent.id, g.after.id, .notCompanion),
+            (g.after.id, g.after.id, .ownParent),
+            (g.parent.id, g.first.id, .parentIsCompanion),
             (g.first.id, g.second.id, .parentIsCompanion),
             (g.first.id, g.first.id, .parentIsCompanion),
             (g.first.id, UUID(), .noSuchSession),
@@ -1078,9 +1079,58 @@ extension AppStoreCompanionsTests {
 
     @Test func companionMoveRefusalsCarryTheirMessage() {
         #expect(CompanionMoveRefusal.noSuchSession.message == "no such session")
-        #expect(CompanionMoveRefusal.notCompanion.message == "not a companion")
+        #expect(CompanionMoveRefusal.ownParent.message == "a session cannot move under itself")
         #expect(CompanionMoveRefusal.parentIsCompanion.message == "the new parent must be a top-level session")
         #expect(CompanionMoveRefusal.otherHost.message == "a companion moves only under a session from the same host")
+    }
+
+    @Test func aTopLevelSessionMovesUnderAnotherWithItsCompanionsAsTheSameSessions() throws {
+        let g = try CompanionGroup()
+        let third = try g.store.addCompanion(to: g.after.id, options: CompanionOptions(cwd: "/third")).get()
+
+        try g.store.moveCompanion(g.parent.id, under: g.after.id).get()
+
+        #expect(g.order == [g.after.id, third.id, g.parent.id, g.first.id, g.second.id])
+        #expect([g.parent, g.first, g.second].allSatisfy { $0.parentID == g.after.id })
+        #expect([g.parent, g.first, g.second].allSatisfy { g.store.session(withID: $0.id) === $0 })
+        #expect(g.store.companions(of: g.parent.id).isEmpty)
+    }
+
+    @Test(arguments: [(0, 0), (1, 1), (Int.max, 1)])
+    func aMovedTopLevelGroupTakesTheRequestedSlot(index: Int, slot: Int) throws {
+        let g = try CompanionGroup()
+        let third = try g.store.addCompanion(to: g.after.id, options: CompanionOptions(cwd: "/third")).get()
+
+        try g.store.moveCompanion(g.parent.id, under: g.after.id, at: index).get()
+
+        var expected = [third.id]
+        expected.insert(contentsOf: [g.parent.id, g.first.id, g.second.id], at: slot)
+        #expect(g.store.companions(of: g.after.id).map(\.id) == expected)
+    }
+
+    @Test func aTopLevelGroupMovesIntoAnotherWorkspaceKeepingItsSelectedCompanion() throws {
+        let g = try CompanionGroup()
+        let other = try #require(g.store.addSession(toWorkspace: g.personal.id, cwd: "/other"))
+        let tail = try #require(g.store.addSession(toWorkspace: g.personal.id, cwd: "/tail"))
+        g.store.selectSession(g.first.id)
+
+        try g.store.moveCompanion(g.parent.id, under: other.id).get()
+
+        #expect(g.order == [g.after.id])
+        #expect(g.store.workspaces[1].sessions.map(\.id) == [other.id, g.parent.id, g.first.id, g.second.id, tail.id])
+        #expect(g.store.selectedSessionID == g.first.id)
+    }
+
+    @Test func aMovedTopLevelGroupRoundTripsThroughSnapshot() throws {
+        let g = try CompanionGroup()
+        try g.store.moveCompanion(g.parent.id, under: g.after.id).get()
+
+        let restored = makeStore()
+        restored.restore(from: g.store.snapshot())
+
+        let sessions = try #require(restored.workspaces.first).sessions
+        #expect(sessions.map(\.id) == [g.after.id, g.parent.id, g.first.id, g.second.id])
+        #expect(sessions.dropFirst().allSatisfy { $0.parentID == g.after.id })
     }
 
     @Test func aSelectedCompanionStaysSelectedAfterTheMove() throws {

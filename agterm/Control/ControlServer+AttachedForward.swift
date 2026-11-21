@@ -269,7 +269,13 @@ extension ControlServer {
                                        + "\(attached.error ?? "attach failed"); `agtermctl zmx attach \(origin.host) \(created)` attaches it")
             }
             guard then == .nestUnderCreated else { return attached }
-            library.store(forSession: row)?.nest(row, under: local)
+            let store = library.store(forSession: row)
+            // nesting a row that moved under another session meanwhile would split that group
+            guard store?.session(withID: row)?.parentID == nil else {
+                return ControlResponse(ok: false, error: "converted on \(origin.host) and attached its new parent here, "
+                                       + "but the row moved under another session meanwhile and stays there")
+            }
+            store?.nest(row, under: local)
             return ControlResponse(ok: true, result: ControlResult(id: row.uuidString, parent: local.uuidString))
         }
     }

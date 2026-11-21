@@ -134,8 +134,8 @@ struct Session: ParsableCommand {
         @Option(name: .long, help: "Reorder within the workspace: up, down, top, or bottom.") var to: String?
         @Option(name: .long, help: "Place right AFTER this anchor session (id/prefix/active); the anchor carries its own workspace (relocates + positions in one shot).") var after: String?
         @Option(name: .long, help: "Place right BEFORE this anchor session (id/prefix/active); mirror of --after.") var before: String?
-        @Option(name: .long, help: "Move the target companion under this top-level session (id/prefix) instead.") var parent: String?
-        @Option(name: .long, help: "With --parent: the companion's slot among the new parent's companions, 0 first; omitted appends.")
+        @Option(name: .long, help: "Move the target under this top-level session (id/prefix) instead; a top-level target brings its companions.") var parent: String?
+        @Option(name: .long, help: "With --parent: the slot among the new parent's companions, 0 first; omitted appends.")
         var index: Int?
         @OptionGroup var target: BatchTargetOptions
         @OptionGroup var options: ClientOptions

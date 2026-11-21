@@ -122,15 +122,15 @@ final class WorkspaceSidebarTests: XCTestCase {
         XCTAssertFalse(rows.store.workspaces.first { $0.id == rows.workspace.id }?.sessions.contains { $0.id == rows.named.id } ?? true)
     }
 
-    func testASessionDroppedOnARootRowJoinsTheRoot() throws {
+    func testASessionDroppedInARootGapJoinsTheRoot() throws {
         let rows = try seed()
         buildSidebar(for: rows.store)
         let info = sessionDrag([rows.named.id])
 
-        XCTAssertEqual(coordinator.outlineView(outline, validateDrop: info, proposedItem: try node(rows.second.id),
-                                               proposedChildIndex: SidebarDrop.onItemIndex), .move)
+        XCTAssertEqual(coordinator.outlineView(outline, validateDrop: info, proposedItem: nil, proposedChildIndex: 2), .move)
         XCTAssertTrue(coordinator.outlineView(outline, acceptDrop: info, item: outline.dropItem, childIndex: outline.dropChildIndex))
         XCTAssertEqual(rows.store.workspace(forSession: rows.named.id)?.id, rows.root.id)
+        XCTAssertNil(rows.named.parentID)
     }
 
     func testARootParentDraggedToTheEndOfTheRootMovesWithItsCompanions() throws {

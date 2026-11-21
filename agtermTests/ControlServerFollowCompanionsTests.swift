@@ -315,6 +315,90 @@ final class ControlServerFollowCompanionsTests: XCTestCase {
         XCTAssertTrue(copy.followedCompanions.contains(child))
     }
 
+    func testANewCompanionWhoseParentJoinsAnotherGroupDuringTheWaitIsAttachedOnceThere() async throws {
+        let created = Flag()
+        let gate = Gate()
+        let runner = RoutedRunner(gate: gate, gatedCall: 2) { argv in
+            if argv.joined(separator: " ").contains("--parent") {
+                created.value = true
+                return RemoteCommandResult(status: 0, stdout: #"{"ok":true,"result":{"id":"\#(child)","parent":"origin-1"}}"#, stderr: "")
+            }
+            return Origin.tree(sessions: Origin.session("origin-1") + "," + Origin.session("origin-2")
+                               + (created.value ? "," + Origin.session(child, parent: "origin-2") : ""))
+        }
+        let (server, store, transport) = makeServer(runner)
+        let row = try parentRow(in: store)
+        let joined = try parentRow(in: store, origin: "origin-2")
+        let stream = try open(joined, server: server, transport: transport)
+
+        let creating = Task { await server.createCompanion(row.id.uuidString, options: CompanionOptions(), window: nil) }
+        try await waitUntil { gate.reached }
+        XCTAssertNoThrow(try store.moveCompanion(row.id, under: joined.id).get())
+        stream.send(.companions(list([child])))
+        await settled(server, rows: [joined])
+        XCTAssertEqual(store.companions(of: joined.id).map(\.id), [row.id])
+        gate.open()
+        let reply = await creating.value
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        await settled(server, rows: [joined])
+
+        let shown = store.workspaces.flatMap(\.sessions).filter { $0.remotePresentation?.binding.remoteSessionID == child }
+        XCTAssertEqual(shown.count, 1)
+        let mine = try XCTUnwrap(shown.first)
+        XCTAssertEqual(mine.parentID, joined.id)
+        XCTAssertEqual(ZmxLeadBook.shared.states[mine.paneIdentity]?.attachment.claim, true)
+    }
+
+    func testAFailedNewCompanionWhoseParentJoinedAnotherGroupIsNotAttachedByThatGroup() async throws {
+        let created = Flag()
+        let gate = Gate()
+        let runner = RoutedRunner(gate: gate, gatedCall: 2) { argv in
+            if argv.joined(separator: " ").contains("--parent") {
+                created.value = true
+                return RemoteCommandResult(status: 255, stdout: #"{"ok":true,"result":{"id":"\#(child)","parent":"origin-1"}}"#,
+                                           stderr: "connection closed")
+            }
+            return Origin.tree(sessions: Origin.session("origin-1") + "," + Origin.session("origin-2")
+                               + (created.value ? "," + Origin.session(child, parent: "origin-2") : ""))
+        }
+        let (server, store, transport) = makeServer(runner)
+        let row = try parentRow(in: store)
+        let joined = try parentRow(in: store, origin: "origin-2")
+        let stream = try open(joined, server: server, transport: transport)
+
+        let creating = Task { await server.createCompanion(row.id.uuidString, options: CompanionOptions(), window: nil) }
+        try await waitUntil { gate.reached }
+        XCTAssertNoThrow(try store.moveCompanion(row.id, under: joined.id).get())
+        stream.send(.companions(list([child])))
+        gate.open()
+        let reply = await creating.value
+        await settled(server, rows: [joined])
+
+        XCTAssertFalse(reply.ok)
+        XCTAssertTrue(reply.error?.contains("zmx attach buildbox \(child)") == true, reply.error ?? "")
+        XCTAssertEqual(store.companions(of: joined.id).map(\.id), [row.id])
+        XCTAssertTrue(joined.followedCompanions.contains(child))
+    }
+
+    func testARowBaselinedDuringAHoldStillFollowsWhatArrivesBeforeTheRelease() async throws {
+        let runner = RoutedRunner { _ in Origin.tree(sessions: Origin.session("origin-2") + "," + Origin.session(child, parent: "origin-2")) }
+        let (server, store, transport) = makeServer(runner)
+        let hold = server.holdCompanionFollow(OriginKey(host: "buildbox", endpoint: endpoint, session: "origin-1"))
+        let plain = await server.attachRemoteSession(host: "buildbox", session: "origin-2", window: nil)
+        let row = try XCTUnwrap(plain.result?.id.flatMap(UUID.init(uuidString:)).flatMap(store.session(withID:)))
+        let line = try XCTUnwrap(transport.lines.last)
+
+        try line(try frame(.hello(PresentationHello(version: 1, kinds: [PresentationHub.companionsKind], mode: .mirror)), rev: 0))
+        try line(try frame(.companions(list([])), rev: 1))
+        try line(try frame(.companions(list([child])), rev: 2))
+        await settled(server, rows: [row])
+        XCTAssertTrue(row.companionsBaselined)
+        XCTAssertTrue(store.companions(of: row.id).isEmpty)
+
+        server.releaseCompanionFollow(hold)
+        _ = try await companion(of: row, in: store)
+    }
+
     func testANewCompanionWhoseConnectionFailsAfterItsReceiptIsNotAttachedByAnyCopy() async throws {
         let created = Flag()
         let gate = Gate()
@@ -754,11 +838,12 @@ final class ControlServerFollowCompanionsTests: XCTestCase {
         }
     }
 
-    private func parentRow(in store: AppStore, handled: [String] = [], catalogOwned: Bool = false) throws -> Session {
+    private func parentRow(in store: AppStore, handled: [String] = [], catalogOwned: Bool = false,
+                           origin: String = "origin-1") throws -> Session {
         let workspace = try XCTUnwrap(store.currentWorkspaceID)
         let row = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: NSHomeDirectory(), remoteHost: "buildbox",
-                                                 remoteSessionID: "origin-1"))
-        store.bindRemote(RemoteBinding(remoteSessionID: "origin-1", daemonsByLocalPane: [row.paneIdentity: "agterm-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1"],
+                                                 remoteSessionID: origin))
+        store.bindRemote(RemoteBinding(remoteSessionID: origin, daemonsByLocalPane: [row.paneIdentity: "agterm-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1"],
                                        presentationVersion: 1,
                                        origin: RemoteBinding.Origin(host: "buildbox", endpoint: endpoint, sessionName: "parent"),
                                        catalogOwned: catalogOwned),

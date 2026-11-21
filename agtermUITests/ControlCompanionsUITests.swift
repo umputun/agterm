@@ -53,6 +53,19 @@ final class ControlCompanionsUITests: ControlAPITestCase {
         XCTAssertEqual(try sessionNode(id: companion)["parent"] as? String, second)
     }
 
+    func testATopLevelSessionMovedUnderAnotherBringsItsCompanions() throws {
+        let first = try activeSessionID()
+        let companion = try cliOutput(["session", "new", "--parent", first, "--no-select"])
+        let second = try cliOutput(["session", "new", "--no-select"])
+
+        XCTAssertEqual(try cliOutput(["session", "move", "--target", first, "--parent", second]), "ok")
+
+        XCTAssertEqual(try sessionNode(id: first)["parent"] as? String, second)
+        XCTAssertEqual(try sessionNode(id: companion)["parent"] as? String, second)
+        let refused = try sendCommand(#"{"cmd":"session.companion.move","target":"\#(second)","args":{"parent":"\#(second)"}}"#)
+        XCTAssertEqual(refused["error"] as? String, "a session cannot move under itself")
+    }
+
     func testOrdinarySessionCommandsActOnACompanion() throws {
         let parent = try activeSessionID()
         let companion = try cliOutput(["session", "new", "--parent", parent, "--no-select"])

@@ -237,6 +237,12 @@ struct RemoteOperationRequestTests {
         #expect(parsed == .operation(.moveCompanion(companion.id, parent: second.id, index: 3), select: false))
     }
 
+    @Test func aTopLevelSessionMoveIsAnOperation() throws {
+        let parsed = parse(.sessionCompanionMove, target: first.id.uuidString) { $0.parent = second.id.uuidString }
+
+        #expect(parsed == .operation(.moveCompanion(first.id, parent: second.id, index: nil), select: false))
+    }
+
     @Test func aCompanionMoveKeepsTheLocalRefusals() throws {
         let companion = try store.addCompanion(to: first.id, options: CompanionOptions(select: false)).get()
         let target = companion.id.uuidString
@@ -244,7 +250,7 @@ struct RemoteOperationRequestTests {
         #expect(refusal(parse(.sessionCompanionMove, target: target)) == "session.companion.move needs a parent")
         #expect(refusal(parse(.sessionCompanionMove, target: target) { $0.parent = second.id.uuidString; $0.index = -1 }) == "index must be 0 or more")
         #expect(refusal(parse(.sessionCompanionMove, target: target) { $0.parent = target }) == "the new parent must be a top-level session")
-        #expect(refusal(parse(.sessionCompanionMove, target: first.id.uuidString) { $0.parent = second.id.uuidString }) == "not a companion")
+        #expect(refusal(parse(.sessionCompanionMove, target: first.id.uuidString) { $0.parent = first.id.uuidString }) == "a session cannot move under itself")
         #expect(refusal(parse(.sessionCompanionMove, target: target) { $0.parent = UUID().uuidString })?.isEmpty == false)
     }
 

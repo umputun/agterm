@@ -17,6 +17,15 @@ struct OriginKey: Hashable {
         socketDirectory = endpoint.socketDirectory
         self.session = ControlServer.originID(session)
     }
+
+    var originHost: OriginHost { OriginHost(host: host, executable: executable, socketDirectory: socketDirectory) }
+}
+
+/// OriginHost names one origin host's zmx, every session on it.
+struct OriginHost: Hashable {
+    let host: String
+    let executable: String
+    let socketDirectory: String
 }
 
 /// CompanionFollowState is what this Mac knows about following each attached row's origin companions, by local row.
@@ -41,8 +50,9 @@ struct CompanionFollowState {
     }
 
     var rows: [UUID: Row] = [:]
-    /// holds are origin sessions whose followers wait while this Mac's own New Companion creates under them.
-    var holds: [OriginKey: Int] = [:]
+    /// holds are origin hosts, by host and zmx endpoint, whose followers wait while this Mac's own New Companion creates there: the parent can join
+    /// another group during the creation, so holding its group alone would let that group's follower attach it too.
+    var holds: [OriginHost: Int] = [:]
     private var counter = 0
 
     /// nextID numbers lists and passes alike, so no two of either ever share one.
@@ -95,15 +105,22 @@ extension ControlServer {
     }
 
     func holdCompanionFollow(_ key: OriginKey) -> OriginKey {
-        companionFollow.holds[key, default: 0] += 1
+        companionFollow.holds[key.originHost, default: 0] += 1
         return key
     }
 
     func releaseCompanionFollow(_ key: OriginKey) {
-        guard let count = companionFollow.holds[key] else { return }
-        companionFollow.holds[key] = count > 1 ? count - 1 : nil
-        guard companionFollow.holds[key] == nil else { return }
-        for row in library.rowsShowingOrigin(key.session, host: key.host, endpoint: endpoint(of: key)) { reconcileCompanions(row.id) }
+        let host = key.originHost
+        guard let count = companionFollow.holds[host] else { return }
+        companionFollow.holds[host] = count > 1 ? count - 1 : nil
+        guard companionFollow.holds[host] == nil else { return }
+        for id in companionFollow.rows.keys where followTarget(id)?.2.originHost == host { reconcileCompanions(id) }
+    }
+
+    /// markFollowersHandled marks `child` handled under every row following an origin session on `host`.
+    func markFollowersHandled(_ child: String, on host: OriginHost) {
+        let groups = Set(companionFollow.rows.keys.compactMap { followTarget($0)?.2 }.filter { $0.originHost == host })
+        for key in groups { library.markOriginCompanionsHandled([child], parent: key.session, host: key.host, endpoint: endpoint(of: key)) }
     }
 
     /// tickCompanionFollow runs the passes whose transport retries fell due, for rows whose stream is up and follows.
@@ -116,11 +133,13 @@ extension ControlServer {
 
     private func reconcileCompanions(_ id: UUID) {
         guard let state = companionFollow.rows[id], let list = state.list, let (store, _, key) = followTarget(id),
-              companionFollow.holds[key] == nil, streamFollows(id) else { return }
+              streamFollows(id) else { return }
+        // a first list is taken as the baseline even during a hold, or the list after it would be
         guard store.session(withID: id)?.companionsBaselined == true else {
             store.baselineCompanions(list.members.map(\.id.uuidString), forSession: id)
             return
         }
+        guard companionFollow.holds[key.originHost] == nil else { return }
         companionFollow.rows[id]?.dirty = true
         guard state.pass == nil else { return }
         let pass = companionFollow.nextID()
@@ -258,7 +277,7 @@ extension ControlServer {
     private func followPlacement(_ attempt: FollowAttempt) -> RemotePlacement? {
         let (child, id, key) = (attempt.child, attempt.row, attempt.key)
         guard companionFollow.rows[id]?.generation == attempt.generation, streamFollows(id),
-              let (store, row, current) = followTarget(id), current == key, companionFollow.holds[key] == nil,
+              let (store, row, current) = followTarget(id), current == key, companionFollow.holds[key.originHost] == nil,
               companionFollow.rows[id]?.list?.members.contains(where: { $0.id.uuidString == child }) == true,
               !row.followedCompanions.contains(child), let workspace = store.workspace(forSession: id)?.id else { return nil }
         guard !library.shownOriginSessions(host: key.host, endpoint: endpoint(of: key)).contains(child) else {

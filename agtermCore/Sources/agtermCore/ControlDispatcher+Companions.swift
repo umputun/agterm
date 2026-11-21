@@ -86,7 +86,7 @@ extension ControlDispatcher {
             return .failure(ArgumentRejection(message: "session.companion.move takes no workspace, --to, --after or --before"))
         }
         if args?.targets != nil {
-            return .failure(ArgumentRejection(message: "session.companion.move moves one companion, named by target"))
+            return .failure(ArgumentRejection(message: "session.companion.move moves one session, named by target"))
         }
         if let index = args?.index, index < 0 {
             return .failure(ArgumentRejection(message: "index must be 0 or more"))
