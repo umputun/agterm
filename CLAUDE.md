@@ -106,7 +106,7 @@ C-boundary concurrency before changing the bridge.
 - Xcodegen creates the app project; Xcode 26 builds it. Call `xcodegen`, `xcodebuild`, and `swift`
   directly through repository scripts; `mise` is unused.
 - Swift 6 `agtermCore` uses complete concurrency checking and has no Xcode/libghostty dependency.
-- `scripts/setup.sh` builds pinned libghostty with Homebrew `zig@0.17`, zmx with `zig@0.16`, and Xcode's
+- `scripts/setup.sh` builds pinned libghostty and zmx with Homebrew `zig@0.17` and uses Xcode's
   Metal Toolchain.
   It is idempotent after artifacts exist. zmx is the plain upstream pin plus `scripts/zmx-patches/`,
   whose README says what each patch is for and how to regenerate one.
@@ -152,8 +152,8 @@ C-boundary concurrency before changing the bridge.
   untracked and disappear with worktree removal.
 - Symlink an artifact set only while the main checkout's matching stamp equals what the worktree's
   `setup.sh` would write for that set: `GHOSTTY_REV` and the digest of
-  `scripts/ghostty-patches/*.patch` for ghostty, and `ZMX_REV`, `ZMX_TARGET` and the
-  digest of `scripts/zmx-patches/*.patch` and `scripts/zmx-patches/ghostty/*.patch` for zmx, so a target
+  `scripts/ghostty-patches/*.patch` for ghostty, and `ZMX_REV`, `ZMX_TARGET`, the Zig line
+  and the digest of `scripts/zmx-patches/*.patch` for zmx, so a target
   or a patch change invalidates a set whose revision still matches. When either differs, remove that
   set's artifact and stamp links before setup runs and let it build locally. `setup.sh` writes stamps
   through symlinks while replacing linked artifacts with local files and directories, so a linked build
@@ -256,8 +256,8 @@ C-boundary concurrency before changing the bridge.
   It sat at `4dcb09ada` (2026-04-30) from June while later builds blanked scrollback on a font-size
   increase; upstream fixed that and the case was re-verified by hand before the bump. Re-test the
   font-increase case when moving it, and check `minimum_zig_version` in `build.zig.zon` against
-  `GHOSTTY_ZIG_FORMULA`. zmx has its own `ZMX_ZIG_FORMULA`, so a ghostty compiler jump leaves zmx's
-  stamp and caches valid.
+  `ZIG_FORMULA`, which zmx shares: the compiler is part of zmx's stamp and cache keys, so a jump
+  rebuilds zmx too.
 - `.ghostty-build-stamp` records the revision and patch digest the staged artifacts came from
   and is what decides a rebuild.
   Presence alone would serve an xcframework built from a different rev silently, so a `GHOSTTY_REV`

@@ -8,7 +8,7 @@ added: 2026-10-08
 `agtermctl clipboard set` sends its OSC 52 write through `zmx print`, and two defects at that seam share one fix.
 
 **Injection lands mid-sequence.** The daemon reads the pty in 4096-byte chunks and forwards each as its own
-message; `handleOutput` (loop.zig, pinned `8bab1f0`) forwards a print at once, between two chunks where the
+message; `handleOutput` (loop.zig, pinned `a35f00a`, v1.0.1) forwards a print at once, between two chunks where the
 program's escape sequence or multi-byte character may be half written. Measured in a throwaway session with a
 marker OSC: 0 of 200 injections landed inside a sequence against one short line every 80 ms, 37 of 278 against
 33 KB bursts back to back. The injected OSC 52 still parses whole (in ghostty `683d8db` ESC leaves every parser
@@ -28,5 +28,4 @@ line every 80 ms, 200 of 200 arrived. Capture status and stderr per print before
 leadership patch's `Relay.forward` delays its role title, and the client reports write errors. Decide what a new
 print client promises against an older daemon, which keeps the old behavior, before calling delivery fixed.
 Acceptance: a deliberately split program sequence survives an injection intact, and a dropped or refused print
-has the agreed result, on an older daemon too. Any zmx patch changes the build id in `.zmx-build-stamp`; this one
-stacks on `move-zmx-to-zig-0-17-to-drop-float-h-shim.md`, the zmx pin bump, as its own PR in the same release.
+has the agreed result, on an older daemon too. Any zmx patch changes the build id in `.zmx-build-stamp`.

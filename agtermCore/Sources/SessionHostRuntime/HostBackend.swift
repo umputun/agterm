@@ -126,9 +126,22 @@ final class NativeHostChild: HostChild {
     private func awaitExit(until deadline: TimeInterval) throws -> Bool {
         while ProcessInfo.processInfo.systemUptime < deadline {
             if try reap() { return true }
+            discardPTYOutput()
             Thread.sleep(forTimeInterval: 0.01)
         }
         return try reap()
+    }
+
+    /// Reads what a stopping child writes, unanswered: on macOS its TCSAFLUSH and its exit's close of the
+    /// tty both wait for this side to read, so an unread PTY keeps even a SIGKILLed child unreaped.
+    private func discardPTYOutput() {
+        guard descriptorsOpen && !preparationFailed else { return }
+        var bytes = [UInt8](repeating: 0, count: 4096)
+        for _ in 0..<16 {
+            let count = read(process.ptyFD, &bytes, bytes.count)
+            guard count > 0 else { return }
+            outputTail = (outputTail + bytes.prefix(count)).suffix(1024)
+        }
     }
 
     /// True when the bytes read produced a reply.

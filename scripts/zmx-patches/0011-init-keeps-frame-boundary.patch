@@ -1,0 +1,120 @@
+diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
+--- zmx-orig/src/loop.zig
++++ zmx/src/loop.zig
+@@ -699,9 +699,7 @@
+                     continue;
+                 };
+ 
+-                if (n > 0) {
+-                    client.write_buf.replaceRange(gpa, 0, n, &[_]u8{}) catch unreachable;
+-                }
++                if (n > 0) client.consumeWritten(gpa, n);
+ 
+                 if (client.write_buf.items.len == 0) {
+                     client.has_pending_output = false;
+@@ -751,6 +749,8 @@
+     told_role: ?ipc.Role = null,
+     read_buf: ipc.SocketBuffer,
+     write_buf: std.ArrayList(u8),
++    /// before Init: the bytes of the frame at the head of write_buf that a short write left unsent
++    head_left: usize = 0,
+     env_str: ?[]u8 = null,
+ 
+     pub fn deinit(self: *Client, gpa: std.mem.Allocator) void {
+@@ -762,6 +762,28 @@
+         if (self.reclaim_from) |s| gpa.free(s);
+     }
+ 
++    /// Drop `n` written bytes from write_buf. Before Init it also follows how much of the frame now at
++    /// the head is unsent, so the first Init's clear can keep a frame the client is partway through.
++    fn consumeWritten(self: *Client, gpa: std.mem.Allocator, n: usize) void {
++        if (!self.is_terminal) {
++            var rest = n;
++            var off: usize = @min(rest, self.head_left);
++            self.head_left -= off;
++            rest -= off;
++            while (rest > 0) {
++                const header = std.mem.bytesToValue(ipc.Header, self.write_buf.items[off..][0..@sizeOf(ipc.Header)]);
++                const frame = @sizeOf(ipc.Header) + header.len;
++                if (rest < frame) {
++                    self.head_left = frame - rest;
++                    break;
++                }
++                rest -= frame;
++                off += frame;
++            }
++        }
++        self.write_buf.replaceRange(gpa, 0, n, &[_]u8{}) catch unreachable;
++    }
++
+     fn setEnv(self: *Client, gpa: std.mem.Allocator, env_str: []const u8) !void {
+         if (self.env_str) |s| gpa.free(s);
+         self.env_str = if (env_str.len > 0) try gpa.dupe(u8, env_str) else null;
+@@ -1307,8 +1329,10 @@
+         if (payload.len != @sizeOf(ipc.Resize)) return;
+ 
+         if (!client.is_terminal) {
+-            client.write_buf.clearRetainingCapacity();
+-            client.has_pending_output = false;
++            // dropping the tail of a partly sent frame would make the client read the next frame inside it
++            client.write_buf.shrinkRetainingCapacity(client.head_left);
++            client.has_pending_output = client.head_left > 0;
++            client.head_left = 0;
+         }
+         client.is_terminal = true;
+ 
+@@ -1939,6 +1963,54 @@
+     return .{ .last = last, .count = count };
+ }
+ 
++test "the first Init keeps a partly sent frame and drops the frames not yet sent" {
++    const alloc = std.testing.allocator;
++    const cfg = Cfg{ .socket_dir = "", .log_dir = "" };
++    var term = try initTerminal(alloc, std.testing.io, .{ .cols = 80, .rows = 24 }, &cfg);
++    defer term.deinit(alloc);
++    var daemon = testDaemon();
++    defer daemon.clients.deinit(alloc);
++    defer daemon.pty_write_buf.deinit(alloc);
++
++    const a = try lib_posix.pipe2(.{});
++    defer lib_posix.close(a[1]);
++    const c = try lib_posix.pipe2(.{});
++    defer lib_posix.close(c[1]);
++    defer lib_posix.close(c[0]);
++
++    const client = try testManaged(alloc, &daemon, a[0], false);
++    try ipc.appendMessage(alloc, &client.write_buf, .Output, "partly-sent");
++    try ipc.appendMessage(alloc, &client.write_buf, .Output, "never-sent");
++    var wire: std.ArrayList(u8) = .empty;
++    defer wire.deinit(alloc);
++    const into_header = @sizeOf(ipc.Header) - 3;
++    const into_payload = @sizeOf(ipc.Header) + 4 - into_header;
++    for ([_]usize{ into_header, into_payload }) |n| {
++        try wire.appendSlice(alloc, client.write_buf.items[0..n]);
++        client.consumeWritten(alloc, n);
++    }
++    try daemon.handleInit(alloc, client, c[0], &term, std.mem.asBytes(&ipc.Resize{ .rows = 24, .cols = 80 }));
++    try std.testing.expect(client.has_pending_output);
++    try wire.appendSlice(alloc, client.write_buf.items);
++
++    var rest: []const u8 = wire.items;
++    var first: ?[]const u8 = null;
++    var roles: usize = 0;
++    while (rest.len > 0) {
++        try std.testing.expect(rest.len >= @sizeOf(ipc.Header));
++        const header = std.mem.bytesToValue(ipc.Header, rest[0..@sizeOf(ipc.Header)]);
++        try std.testing.expect(rest.len >= @sizeOf(ipc.Header) + header.len);
++        const body = rest[@sizeOf(ipc.Header)..][0..header.len];
++        if (first == null) first = body;
++        if (header.tag == .Role) roles += 1;
++        try std.testing.expect(!std.mem.eql(u8, body, "never-sent"));
++        rest = rest[@sizeOf(ipc.Header) + header.len ..];
++    }
++    try std.testing.expectEqualStrings("partly-sent", first.?);
++    try std.testing.expectEqual(@as(usize, 1), roles);
++    _ = daemon.closeClient(alloc, client, 0, false);
++}
++
+ fn testManaged(alloc: std.mem.Allocator, daemon: *Daemon, fd: i32, claim: bool) !*Client {
+     const client = try testClient(alloc, fd, false);
+     try daemon.clients.append(alloc, client);

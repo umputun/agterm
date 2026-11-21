@@ -227,6 +227,7 @@ final class SessionHostClientTests: XCTestCase {
         var clients: [Int32] = []
         var terminals: [Int32] = []
         private var terminalPeers: [Int32] = []
+        private var terminalOutput: [Data] = []
         private var evidenceDirectory: URL {
             URL(fileURLWithPath: "/tmp/agterm-session-host-evidence").appendingPathComponent(directory.lastPathComponent)
         }
@@ -265,6 +266,7 @@ final class SessionHostClientTests: XCTestCase {
                 var size = winsize(ws_row: 43, ws_col: 132, ws_xpixel: 0, ws_ypixel: 0)
                 guard openpty(&pty, &terminalFD, nil, nil, &size) == 0 else { throw POSIXError(.EIO) }
                 terminals.append(pty)
+                terminalOutput.append(Data())
                 terminalPeers.append(terminalFD)
                 XCTAssertEqual(fcntl(pty, F_SETFD, FD_CLOEXEC), 0)
                 XCTAssertEqual(fcntl(terminalFD, F_SETFD, FD_CLOEXEC), 0)
@@ -346,23 +348,29 @@ final class SessionHostClientTests: XCTestCase {
         func waitForClients() throws {
             let deadline = Date().addingTimeInterval(10)
             while !clients.isEmpty && Date() < deadline {
+                for (index, fd) in terminals.enumerated() { terminalOutput[index].append(drainTerminal(fd)) }
                 clients.removeAll { pid in
                     var status: Int32 = 0
                     return waitpid(pid, &status, WNOHANG) == pid
                 }
                 Thread.sleep(forTimeInterval: 0.01)
             }
-            XCTAssertTrue(clients.isEmpty)
+            guard clients.isEmpty else { throw POSIXError(.ETIMEDOUT) }
+        }
+
+        private func killClients() throws {
+            for pid in clients { kill(pid, SIGKILL) }
+            try waitForClients()
         }
 
         func cleanup() {
             // the fixture holds each pty's client side until here: the last close discards what is queued, and a
             // client that failed has already exited.
+            XCTAssertNoThrow(try killClients())
             for (index, fd) in terminals.enumerated() {
-                let output = drainTerminal(fd)
+                let output = terminalOutput[index] + drainTerminal(fd)
                 if !output.isEmpty { try? output.write(to: evidenceDirectory.appendingPathComponent("terminal-\(index).out")) }
             }
-            for pid in clients { kill(pid, SIGKILL); var status: Int32 = 0; _ = waitpid(pid, &status, 0) }
             for name in names { _ = try? runZmx(["kill", name, "--force"]) }
             for fd in terminals + terminalPeers { close(fd) }
             if let value = try? String(contentsOfFile: paths.pidfile, encoding: .utf8),
@@ -477,8 +485,7 @@ final class SessionHostClientTests: XCTestCase {
         }
 
         func endClients() throws {
-            for pid in clients { kill(pid, SIGKILL); var status: Int32 = 0; _ = waitpid(pid, &status, 0) }
-            clients = []
+            try killClients()
             for name in names { _ = try? runZmx(["kill", name, "--force"]) }
             let deadline = Date().addingTimeInterval(10)
             while try !ZmxListParser.parse(runZmx(["list"])).isEmpty {

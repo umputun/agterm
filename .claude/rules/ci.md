@@ -48,8 +48,9 @@ paths:
   toolchain agterm-server ships on, under the Swift filter. It installs jq, which the Codex status hook reads
   JSON with where `/usr/bin/plutil` is absent, and runs as an unprivileged user because root passes the
   permission checks several tests expect to fail.
-  It builds the x86_64 musl zmx with a zig 0.16.0 tarball through `scripts/setup.sh --zmx-only` into
-  `build/linux/x86_64`, cached by `ZMX_REV` and the patch digest, stages the shell integration from ghostty's
+  It builds the x86_64 musl zmx with the Zig tarball `ZIG_LINUX_VERSION` names, checked against
+  `ZIG_LINUX_SHA256`, through `scripts/setup.sh --zmx-only` into `build/linux/x86_64`, cached by `ZMX_REV`,
+  that version and the patch digest, stages the shell integration from ghostty's
   source at `GHOSTTY_REV` with `scripts/setup-zmx-linux.sh --shell-integration`, installs fish, and runs with
   `AGTERM_REQUIRE_ZMX=1 AGTERM_REQUIRE_FISH=1` so `ServerLifecycleTests` drive real zsh, fish and bash panes rather
   than skip.
