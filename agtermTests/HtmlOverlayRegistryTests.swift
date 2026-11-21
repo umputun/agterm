@@ -869,6 +869,7 @@ final class HtmlOverlayRegistryTests: HtmlPageTestCase {
         XCTAssertNil(store.openHtmlOverlay(session.id, pane: nil, overlay: overlay, sizePercent: nil))
         let page = registry.page(for: overlay, store: store)
         try await waitForScript("document.images[0] ? String(document.images[0].naturalWidth) : ''", in: page.webView) { $0 == "30" }
+        try await waitForScript("document.images[0] ? document.images[0].src.split(':')[0] : ''", in: page.webView) { $0 == HtmlPageSchemeHandler.scheme }
 
         _ = try writePNG("shot.png", width: 40)
         XCTAssertNil(registry.reload(page.id, target: .current, store: store))
@@ -881,6 +882,7 @@ final class HtmlOverlayRegistryTests: HtmlPageTestCase {
         let page = registry.page(for: openReplica(path, .image(width: 30, height: 10)), store: store, replica: replicaLink())
 
         try await waitForScript("document.images[0] ? String(document.images[0].naturalWidth) : ''", in: page.webView) { $0 == "30" }
+        try await waitForScript("document.images[0] ? document.images[0].src.split(':')[0] : ''", in: page.webView) { $0 == HtmlPageSchemeHandler.scheme }
         XCTAssertEqual(page.webView.value(forKey: "drawsBackground") as? Bool, false)
         XCTAssertEqual(page.webView.configuration.userContentController.userScripts.count, 1, "the theme script alone")
         XCTAssertEqual(fetched, [path])
@@ -888,6 +890,41 @@ final class HtmlOverlayRegistryTests: HtmlPageTestCase {
         _ = try writePNG("shot.png", width: 40)
         XCTAssertNil(registry.reload(page.id, target: .current, store: store))
         try await waitForScript("document.images[0] ? String(document.images[0].naturalWidth) : ''", in: page.webView) { $0 == "40" }
+    }
+
+    func testAnImageThatIsNoPictureFailsThePageLocallyAndAsAReplica() async throws {
+        let path = pages.appendingPathComponent("fake.png").path
+        try Data("not a picture".utf8).write(to: URL(fileURLWithPath: path))
+        let overlay = HtmlOverlay(source: .image(path: path))
+        XCTAssertNil(store.openHtmlOverlay(session.id, pane: nil, overlay: overlay, sizePercent: nil))
+        _ = registry.page(for: overlay, store: store)
+        try await waitFor("local failed") { self.current?.loadState == .failed }
+        XCTAssertEqual(current?.loadError, ImageFile.Failure.notAnImage(path).description)
+
+        store.closeOverlay(session.id)
+        _ = registry.page(for: openReplica(path, .image(width: 30, height: 10)), store: store, replica: replicaLink())
+        try await waitFor("replica failed") { self.current?.loadState == .failed }
+        XCTAssertEqual(current?.loadError, ImageFile.Failure.notAnImage(path).description)
+    }
+
+    // regression: the earlier load's late start and finish undid a reload whose read had failed
+    func testAFailedReloadStaysFailedWhenTheEarlierLoadReportsLate() async throws {
+        let path = try writePNG("late.png", width: 30)
+        let overlay = HtmlOverlay(source: .image(path: path))
+        XCTAssertNil(store.openHtmlOverlay(session.id, pane: nil, overlay: overlay, sizePercent: nil))
+        let page = registry.page(for: overlay, store: store)
+        let held = HeldNavigationDelegate(page)
+        page.webView.navigationDelegate = held
+        defer { page.webView.navigationDelegate = page }
+        try await waitFor("finish held") { held.finish != nil }
+        try Data("not a picture".utf8).write(to: URL(fileURLWithPath: path))
+        XCTAssertNil(registry.reload(page.id, target: .current, store: store))
+        try await waitFor("reload failed") { self.current?.loadState == .failed }
+
+        page.webView(page.webView, didStartProvisionalNavigation: held.start)
+        page.webView(page.webView, didFinish: held.finish)
+        XCTAssertEqual(current?.loadState, .failed)
+        XCTAssertEqual(current?.loadError, ImageFile.Failure.notAnImage(path).description)
     }
 
     func testAnImageReadFinishingAfterCloseIsDropped() async throws {

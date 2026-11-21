@@ -12,8 +12,8 @@ public enum HtmlSource: Equatable, Sendable {
     /// path on that Mac, whose own rules decide what else may be fetched, and `content` what kind of page it is.
     /// It is never a path on this Mac, so nothing reads it from the local disk.
     case replica(path: String, content: ReplicaContent)
-    /// image is a picture shown on a page of its own, embedded in the page's HTML so the page gets no file
-    /// grant, theme or bridge.
+    /// image is a picture shown on a page of its own, its bytes served to that page alone, so the page gets no
+    /// file grant, theme or bridge.
     case image(path: String)
     /// markdown is a markdown file the app renders with its pictures embedded: no file grant or bridge,
     /// but themed.

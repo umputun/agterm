@@ -178,3 +178,42 @@ class HtmlPageTestCase: XCTestCase {
         return url.path
     }
 }
+
+@MainActor
+final class HeldNavigationDelegate: NSObject, WKNavigationDelegate {
+    private let page: HtmlOverlayPage
+    private(set) var start: WKNavigation?
+    private(set) var finish: WKNavigation?
+
+    init(_ page: HtmlOverlayPage) {
+        self.page = page
+    }
+
+    func webView(_ view: WKWebView, decidePolicyFor action: WKNavigationAction) async -> WKNavigationActionPolicy {
+        await page.webView(view, decidePolicyFor: action)
+    }
+
+    func webView(_ view: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        if start == nil { start = navigation } else { page.webView(view, didStartProvisionalNavigation: navigation) }
+    }
+
+    func webView(_ view: WKWebView, didCommit navigation: WKNavigation!) {
+        page.webView(view, didCommit: navigation)
+    }
+
+    func webView(_ view: WKWebView, didFinish navigation: WKNavigation!) {
+        if finish == nil { finish = navigation } else { page.webView(view, didFinish: navigation) }
+    }
+
+    func webView(_ view: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        page.webView(view, didFail: navigation, withError: error)
+    }
+
+    func webView(_ view: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        page.webView(view, didFailProvisionalNavigation: navigation, withError: error)
+    }
+
+    func webViewWebContentProcessDidTerminate(_ view: WKWebView) {
+        page.webViewWebContentProcessDidTerminate(view)
+    }
+}

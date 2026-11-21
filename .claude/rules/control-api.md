@@ -917,9 +917,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   receives ⌘⇧ for a ⌘⌥⇧ click, since the Option strip is not undone. The chord is a gesture modifier with no control
   twin: `overlay open --text` and Finder reveal are already reachable. `wantsBrowser` stays public for the
   agterm-linux fork's caller.
-- An image page (`HtmlSource.image`, `--image`) embeds the file as a data URI in an HTML string, so it gets no
-  file grant, theme or bridge; a presented session shows it on the presenting Mac as a content page (Remote
-  sessions). `BoundedFile.read` opens the path once and judges that
+- An image page (`HtmlSource.image`, `--image`) is an about:blank HTML string whose picture its own
+  `ImagePageSource` serves once through the page's scheme handler, at an address that names the load, so it gets no
+  file grant, theme or bridge, and the bytes never become base64; a presented session shows it on the presenting Mac
+  as a content page (Remote sessions). `ImagePage.html(data:mimeType:)` keeps the data-URI form for agterm-linux. `BoundedFile.read` opens the path once and judges that
   descriptor (`fstat`): a symlink is measured at its target, and a non-regular file, an offloaded iCloud
   placeholder or one over 64 MB is refused before a byte is read. Only a PNG, JPEG, GIF or WebP signature
   (`ImagePage.mimeType(sniffing:)`) reaches ImageIO, and a header over `ImagePage.maxPixels` is refused, since
