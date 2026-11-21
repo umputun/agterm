@@ -147,7 +147,7 @@ extension AppStore {
         return remaining[start...].first { !blockIDs.contains($0.id) && $0.parentID == nil }?.id
     }
 
-    private func relocate(_ block: [UUID], toWorkspace targetIndex: Int, before anchor: UUID?) {
+    func relocate(_ block: [UUID], toWorkspace targetIndex: Int, before anchor: UUID?, parentChanged: Bool = false) {
         let before = workspaces.map { $0.sessions.map(\.id) }
         var moving: [Session] = []
         for id in block {
@@ -159,7 +159,7 @@ extension AppStore {
         workspaces[targetIndex].sessions.insert(contentsOf: moving, at: destination)
         if let selectedSessionID, block.contains(selectedSessionID) { disableFocusIfSelectionOutsideSet(selectedSessionID) }
         pruneSidebarSelection()
-        if before != workspaces.map({ $0.sessions.map(\.id) }) { scheduleTreeChanged() }
+        if parentChanged || before != workspaces.map({ $0.sessions.map(\.id) }) { scheduleTreeChanged() }
         save()
     }
 

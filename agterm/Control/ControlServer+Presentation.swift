@@ -61,6 +61,7 @@ extension ControlServer: PresentationStreamHost {
             store.onRemoteRowVisibility = { [weak self] session, shown in
                 MainActor.assumeIsolated { self?.remoteRowVisibilityChanged(session, shown: shown) }
             }
+            store.onRemoteRowPromoted = { [weak self] session in MainActor.assumeIsolated { self?.remoteRowPromoted(session) } }
             store.onReplicaPageChanged = { [weak self] page in MainActor.assumeIsolated { self?.replicaPageChanged(page) } }
         }
         dropOrphanedPresentationStreams()

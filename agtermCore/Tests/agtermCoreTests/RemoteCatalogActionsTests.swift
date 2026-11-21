@@ -279,6 +279,19 @@ final class RemoteCatalogActionsTests {
         #expect(script.lookupCalls.isEmpty)
     }
 
+    @Test func aServerTooOldForACompanionPromotionIsAFinalAnswer() async {
+        install(snapshot())
+        let refusal = ControlResponse(ok: false, error: "invalid request: unknown cmd session.companion.promote")
+        queue({ _ in String(decoding: (try? JSONEncoder().encode(refusal)) ?? Data(), as: UTF8.self) })
+
+        let response = await send(.promoteCompanion(sessionID, to: nil))
+        await settleLookups()
+
+        #expect(response.error == "the agterm-server on box is too old for companion promotion")
+        #expect(actions.marks.isEmpty)
+        #expect(script.lookupCalls.isEmpty)
+    }
+
     @Test func anyOtherOperationTheFarCLIRefusesIsStillLookedUp() async {
         install(snapshot())
         script.commandStatus = 64

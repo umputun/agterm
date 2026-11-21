@@ -180,7 +180,7 @@ renumbering. Do not reintroduce a count anywhere.
 - `tree`, `events.read`
 - `workspace.new`, `.rename`, `.delete`, `.select`, `.go`, `.move`, `.focus`, `.filter`, `.flag`, `.collapse`,
   `.expand`, `.tint`
-- `session.new`, `.duplicate`, `.remote.new`, `.companion.new`, `.companion.page`, `.companion.duplicate`, `.companion.convert`, `.companion.move`, `.companion.page.attach`, `.page`, `.collapse`, `.expand`, `.close`, `.terminate`, `.select`, `.rename`, `.reveal`, `.move`, `.type`, `.split`,
+- `session.new`, `.duplicate`, `.remote.new`, `.companion.new`, `.companion.page`, `.companion.duplicate`, `.companion.convert`, `.companion.move`, `.companion.promote`, `.companion.page.attach`, `.page`, `.collapse`, `.expand`, `.close`, `.terminate`, `.select`, `.rename`, `.reveal`, `.move`, `.type`, `.split`,
   `.split.close`, `.swap`, `.lead`,
   `.scratch`, `.focus`, `.resize`, `.go`, `.copy`, `.paste`, `.selectall`, `.text`, `.search`, `.status`,
   `.flag`, `.tint`, `.info`, `.seen`, `.restore`, `.restart`, `.background`, `.overlay.open`, `.overlay.close`, `.overlay.resize`,
@@ -518,6 +518,16 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   at the slot (`AttachedFollowUp.moveUnder`); a move under its own parent stays a local reorder. Another Mac attached
   to that origin attaches the moved row under the new parent's row only when it shows it nowhere yet; a row it
   already shows keeps its old grouping until it reattaches, the stream carrying membership, never grouping.
+- `session.companion.promote` is its own wire command for the same reason (CLI `session move --top-level [WORKSPACE |
+  --after X | --before X]`, too-old text `the running app is too old for companion promotion`); a plain `session.move` on a
+  companion keeps `companionMoveError`. `AppStore.promoteCompanion` is the seam (`CompanionPromotion`, the former parent an
+  allowed anchor). A server window's row goes to its server: a sidebar gap becomes a before/after anchor among the shown rows
+  and an append stays a workspace (`promotionPlacement`), so rows this Mac detached stay ahead of it. A row attached from
+  another host goes to its origin only when its parent shares that origin (`companionPromoteRoute`), then is placed here
+  (`promoteHere`); an origin answering `not a companion` already has it top-level, and the row is still placed. Every
+  promotion of a remote row reaches `remoteRowPromoted` through `onRemoteRowPromoted`: a Mac page root gets its membership
+  observer, and a terminal row baselines the list its stream already sent, which a nested row never does. A confirmed
+  origin promotion seeds an empty baseline first, since a reconnect clears that list. Read back `parent` and order.
   Read back `parent` and the session order.
 - `PageSessionRefusal` is the one pre-dispatch guard, run by `ControlServer.pageCompanionRefusal`, a remote window's
   route and agterm-server's `pageRowRefusal`, covering the socket and a page's bridge.

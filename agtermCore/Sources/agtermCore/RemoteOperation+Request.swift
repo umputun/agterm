@@ -13,7 +13,7 @@ extension RemoteOperation {
         .sessionNew, .sessionDuplicate, .sessionCompanionNew, .sessionCompanionPage, .sessionPage, .sessionSplit, .sessionSplitClose, .sessionSwap, .sessionRename, .sessionClose, .sessionTerminate,
         .sessionMove, .sessionScratch, .workspaceNew, .workspaceRename, .workspaceDelete, .workspaceMove,
         .sessionFlag, .sessionTint, .workspaceFlag, .workspaceTint,
-        .sessionRestart, .sessionCompanionDuplicate, .sessionCompanionConvert, .sessionCompanionMove, .zmxKill, .zmxKillPane,
+        .sessionRestart, .sessionCompanionDuplicate, .sessionCompanionConvert, .sessionCompanionMove, .sessionCompanionPromote, .zmxKill, .zmxKillPane,
     ]
 
     /// markCommands set flag and tint, which only a server carrying them in its catalog keeps.
@@ -136,6 +136,8 @@ extension RemoteOperation {
             return session(request.target, in: store) { .operation(.convertCompanion($0), select: false) }
         case .sessionCompanionMove:
             return moveCompanion(request, in: store)
+        case .sessionCompanionPromote:
+            return promoteCompanion(request, in: store)
         case .zmxKill, .zmxKillPane:
             return kill(request, in: store)
         case .sessionTint, .workspaceTint:
@@ -191,6 +193,38 @@ extension RemoteOperation {
                 return .operation(.moveCompanion(id, parent: parent, index: move.index), select: false)
             }
         }
+    }
+
+    @MainActor
+    private static func promoteCompanion(_ request: ControlRequest, in store: AppStore) -> RemoteOperationParse {
+        let placement: ControlCompanionPromotion
+        switch ControlDispatcher.companionPromoteArguments(request.args) {
+        case .failure(let rejection): return refuse(rejection.message)
+        case .success(let parsed): placement = parsed
+        }
+        return session(request.target, in: store) { id in
+            let operation = { (local: CompanionPromotion, remote: RemoteSessionPlacement?) -> RemoteOperationParse in
+                if case .failure(let refusal) = store.canPromoteCompanion(id, to: local) { return refuse(refusal.message) }
+                return .operation(.promoteCompanion(id, to: remote), select: false)
+            }
+            switch placement {
+            case .afterOwnGroup:
+                return operation(.afterOwnGroup, nil)
+            case .workspace(let workspace):
+                return self.workspace(workspace, in: store) { operation(.workspace($0, slot: nil), .workspace($0)) }
+            case .beside(let anchor, let after):
+                return session(anchor, in: store) { operation(.beside($0, after: after), after ? .after($0) : .before($0)) }
+            }
+        }
+    }
+
+    /// promotionPlacement is a sidebar drop of a companion into `workspace` before its `slot`th shown top-level session,
+    /// as the anchor the server places it by: the server's workspace can also hold rows this window detached.
+    public static func promotionPlacement(workspace: UUID, slot: Int?, roots: [UUID]) -> RemoteSessionPlacement {
+        // an append is the server's own, past the rows this window detached; only a gap is pinned to a shown row
+        guard let slot else { return .workspace(workspace) }
+        if slot < roots.count { return .before(roots[max(slot, 0)]) }
+        return roots.last.map { .after($0) } ?? .workspace(workspace)
     }
 
     /// dropPlacement is a sidebar drop of `id` at `destination`, an index among `workspace`'s other sessions, as the

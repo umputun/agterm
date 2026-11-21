@@ -52,6 +52,11 @@ extension WorkspaceSidebar.Coordinator {
             cancelSpringLoadedExpansion()
             return []
         }
+        if let promotion = resolveCompanionPromotion(from: info, item: item, childIndex: index) {
+            outlineView.setDropItem(item, dropChildIndex: index)
+            scheduleSpringLoadedExpansion(of: promotion.workspace, in: outlineView)
+            return .move
+        }
         if !draggedSessionIDs(from: info).isEmpty {
             guard store.remoteActions == nil || draggedSessionIDs(from: info).count == 1,
                   let move = resolveSessionMove(from: info, item: item, childIndex: index) else {
@@ -109,6 +114,11 @@ extension WorkspaceSidebar.Coordinator {
             return true
         }
         if isTopLevelNestDrop(from: info, item: item, childIndex: index) { return false }
+        if let promotion = resolveCompanionPromotion(from: info, item: item, childIndex: index) {
+            actions.promoteCompanion(promotion.companion, to: .workspace(promotion.workspace, slot: promotion.slot), in: store)
+            dropSucceeded = true
+            return true
+        }
         if !draggedSessionIDs(from: info).isEmpty {
             guard let move = resolveSessionMove(from: info, item: item, childIndex: index) else { return false }
             if store.remoteActions != nil {
@@ -292,6 +302,23 @@ extension WorkspaceSidebar.Coordinator {
         guard nestsCompanions, index == SidebarDrop.onItemIndex, ids.count == 1, let rowNode = item as? SidebarNode,
               rowNode.kind == .session else { return false }
         return store.session(withID: ids[0])?.parentID == nil && store.session(withID: rowNode.id)?.parentID == nil
+    }
+
+    private struct CompanionPromotionDrop {
+        let companion: UUID
+        let workspace: UUID
+        let slot: Int?
+    }
+
+    // a workspace row's children in the ordinary tree are its top-level sessions, and the root's are the outline's
+    // leading rows, so a proposed gap index is already the top-level slot the companion lands before
+    private func resolveCompanionPromotion(from info: NSDraggingInfo, item: Any?, childIndex index: Int) -> CompanionPromotionDrop? {
+        let ids = draggedSessionIDs(from: info)
+        guard nestsCompanions, ids.count == 1, let id = ids.first, store.session(withID: id)?.parentID != nil,
+              let (rowID, rowKind) = dropRow(item: item, childIndex: index), rowKind == .workspace else { return nil }
+        let slot = index == SidebarDrop.onItemIndex ? nil : index
+        guard case .success = store.canPromoteCompanion(id, to: .workspace(rowID, slot: slot)) else { return nil }
+        return CompanionPromotionDrop(companion: id, workspace: rowID, slot: slot)
     }
 
     private func outlineSlot(forFlatIndex flat: Int, in workspaceID: UUID, moving ids: [UUID]) -> (SidebarNode?, Int) {

@@ -177,7 +177,7 @@ public final class RemotePresentationClient {
 
     /// observer is a client that only follows the origin's companion membership, for a row the origin shows its asks
     /// and pages to itself: it never asks for the presenter role and answers nothing but pings.
-    private let observer: Bool
+    public let observer: Bool
 
     public init(argv: [String], presentationVersion: Int?, transport: RemotePresentationTransport,
                 effects: RemotePresentationEffects, now: @escaping () -> Date = Date.init, observer: Bool = false) {

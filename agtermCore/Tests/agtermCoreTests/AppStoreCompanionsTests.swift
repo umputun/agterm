@@ -1142,6 +1142,110 @@ extension AppStoreCompanionsTests {
         #expect(g.store.selectedSessionID == g.first.id)
     }
 
+    @Test(arguments: [
+        (CompanionPromotionCase.afterOwnGroup, [1, 3, 2, 4]),
+        (.beforeParent, [2, 1, 3, 4]),
+        (.afterSibling, [1, 3, 2, 4]),
+        (.afterNextGroup, [1, 3, 4, 2]),
+        (.slot(0), [2, 1, 3, 4]),
+        (.slot(1), [1, 3, 2, 4]),
+        (.slot(nil), [1, 3, 4, 2]),
+        (.slot(9), [1, 3, 4, 2]),
+    ])
+    func aPromotedCompanionBecomesATopLevelSessionWherePlaced(placement: CompanionPromotionCase, order: [Int]) throws {
+        let g = try CompanionGroup()
+        let rows = [g.parent, g.first, g.second, g.after]
+
+        try g.store.promoteCompanion(g.first.id, to: placement.promotion(in: g)).get()
+
+        #expect(g.order == order.map { rows[$0 - 1].id })
+        #expect(g.first.parentID == nil)
+        #expect(g.second.parentID == g.parent.id)
+        #expect(g.store.session(withID: g.first.id) === g.first)
+    }
+
+    @Test func aCompanionPromotedIntoAnotherWorkspaceLeavesItsGroupThere() throws {
+        let g = try CompanionGroup()
+        g.store.selectSession(g.first.id)
+
+        try g.store.promoteCompanion(g.first.id, to: .workspace(g.personal.id, slot: nil)).get()
+
+        #expect(g.store.workspace(forSession: g.first.id)?.id == g.personal.id)
+        #expect(g.first.parentID == nil)
+        #expect(g.store.companions(of: g.parent.id).map(\.id) == [g.second.id])
+        #expect(g.store.selectedSessionID == g.first.id)
+    }
+
+    private func promotionRefusal(_ result: Result<Void, CompanionPromotionRefusal>) -> CompanionPromotionRefusal? {
+        if case .failure(let refusal) = result { return refusal }
+        return nil
+    }
+
+    @Test func aPromotionRefusesWhatItCannotPlace() throws {
+        let g = try CompanionGroup()
+
+        #expect(promotionRefusal(g.store.promoteCompanion(g.parent.id, to: .afterOwnGroup)) == .notCompanion)
+        #expect(promotionRefusal(g.store.promoteCompanion(g.first.id, to: .beside(g.first.id, after: true))) == .ownAnchor)
+        #expect(promotionRefusal(g.store.promoteCompanion(g.first.id, to: .workspace(UUID(), slot: nil))) == .noSuchWorkspace)
+        #expect(promotionRefusal(g.store.promoteCompanion(g.first.id, to: .beside(UUID(), after: false))) == .noSuchSession)
+        #expect(promotionRefusal(g.store.promoteCompanion(UUID(), to: .afterOwnGroup)) == .noSuchSession)
+        #expect(g.order == [g.parent.id, g.first.id, g.second.id, g.after.id])
+        #expect(CompanionPromotionRefusal.notCompanion.message == "not a companion")
+    }
+
+    @Test func aPromotionPlacementNamesTheAnchorAnOwnerElsewherePlacesBy() throws {
+        let g = try CompanionGroup()
+
+        #expect(g.store.promotionPlacement(of: g.first.id, .afterOwnGroup) == nil)
+        #expect(g.store.promotionPlacement(of: g.first.id, .workspace(g.work.id, slot: 1)) == .before(g.after.id))
+        #expect(g.store.promotionPlacement(of: g.first.id, .workspace(g.work.id, slot: nil)) == .workspace(g.work.id))
+        #expect(g.store.promotionPlacement(of: g.first.id, .workspace(g.personal.id, slot: 0)) == .workspace(g.personal.id))
+        #expect(g.store.promotionPlacement(of: g.first.id, .beside(g.parent.id, after: false)) == .before(g.parent.id))
+    }
+
+    @Test func aPromotionThatKeepsTheOrderStillAnnouncesTheTree() throws {
+        let events = CompanionEventKinds()
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
+        let store = AppStore(persistence: PersistenceStore(directory: dir), controlEventSink: { events.kinds.append($0.kind) })
+        let workspace = store.addWorkspace(name: "work")
+        let parent = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/p"))
+        let companion = try store.addCompanion(to: parent.id, options: CompanionOptions(cwd: "/c")).get()
+        events.kinds.removeAll()
+
+        try store.promoteCompanion(companion.id, to: .afterOwnGroup).get()
+
+        #expect(store.workspaces[0].sessions.map(\.id) == [parent.id, companion.id])
+        #expect(companion.parentID == nil)
+        #expect(events.kinds.contains(.treeChanged))
+    }
+
+    @Test func onlyARowFromAnotherHostIsReportedWhenItBecomesTopLevel() throws {
+        let g = try CompanionGroup()
+        var reported: [UUID] = []
+        g.store.onRemoteRowPromoted = { reported.append($0.id) }
+        let host = try #require(g.store.addSession(toWorkspace: g.work.id, cwd: "/h", remoteHost: "box"))
+        let remote = try #require(g.store.addSession(toWorkspace: g.work.id, cwd: "/r", remoteHost: "box"))
+        g.store.nest(remote.id, under: host.id)
+
+        try g.store.promoteCompanion(g.first.id, to: .afterOwnGroup).get()
+        try g.store.promoteCompanion(remote.id, to: .afterOwnGroup).get()
+        _ = g.store.promoteCompanion(remote.id, to: .afterOwnGroup)
+
+        #expect(reported == [remote.id])
+    }
+
+    @Test func aPromotedCompanionRoundTripsThroughSnapshotAsTopLevel() throws {
+        let g = try CompanionGroup()
+
+        try g.store.promoteCompanion(g.second.id, to: .afterOwnGroup).get()
+
+        let restored = makeStore()
+        restored.restore(from: g.store.snapshot())
+        let second = try #require(restored.session(withID: g.second.id))
+        #expect(second.parentID == nil)
+        #expect(restored.companions(of: g.parent.id).map(\.id) == [g.first.id])
+    }
+
     @Test func onlyARealMoveAnnouncesTheTree() throws {
         let events = CompanionEventKinds()
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
@@ -1181,5 +1285,27 @@ extension AppStoreCompanionsTests {
 
         #expect(g.order == [g.parent.id, g.second.id, g.after.id, page.id, root.id, g.first.id])
         #expect(page.htmlOverlay != nil)
+    }
+}
+
+enum CompanionPromotionCase: Sendable, CustomTestStringConvertible {
+    case afterOwnGroup, beforeParent, afterSibling, afterNextGroup
+    case slot(Int?)
+
+    @MainActor func promotion(in g: CompanionGroup) -> CompanionPromotion {
+        switch self {
+        case .afterOwnGroup: .afterOwnGroup
+        case .beforeParent: .beside(g.parent.id, after: false)
+        case .afterSibling: .beside(g.second.id, after: true)
+        case .afterNextGroup: .beside(g.after.id, after: true)
+        case .slot(let slot): .workspace(g.work.id, slot: slot)
+        }
+    }
+
+    var testDescription: String {
+        switch self {
+        case .slot(let slot): "slot \(slot.map(String.init) ?? "nil")"
+        default: "\(self)"
+        }
     }
 }

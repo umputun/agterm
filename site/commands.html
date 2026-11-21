@@ -1245,6 +1245,29 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl session move --top-level [WORKSPACE | --after SID | --before SID] [--target T] [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.companion.promote</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Make a companion a top-level session again, keeping its id, panes and everything running in them. With no
+                destination it lands right after the group it leaves; a workspace (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">root</span> for the top-level sessions) appends
+                it there, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--after</span> or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--before</span> places it beside the anchor's whole group, its former parent included.
+                It takes no <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--parent</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--index</span> or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--to</span>, and one <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--target</span>. <strong style="color: #bfbab0">Returns</strong>
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.id</span>.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                Refusals: <span style="font-family: &quot;JetBrains Mono&quot;, monospace">not a companion</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">a session cannot be placed beside itself</span>; an app predating it answers
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">the running app is too old for companion promotion</span>. A plain <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session move</span> on a companion still refuses and
+                names <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--top-level</span>. On a remote window its server or Mac does it and the row follows the catalog. On a session attached
+                from another Mac whose parent comes from that Mac too, that Mac makes its own session top-level and the row then takes its
+                place here; under a parent from anywhere else the grouping is this Mac's alone and changes only here. The GUI twins are a drop on
+                a workspace row or between top-level sessions, and the workspaces at the top of <strong style="color: #bfbab0">Move to</strong> in a
+                companion row's context menu. Read back via the node's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">parent</span>, now absent, and its place in the tree.
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
                 agtermctl session new --parent SID [--cwd DIR] [--command CMD [--wait]] [--name NAME] [--no-select]
                 [--tint COLOR [--tint-on PARTS]] [--window W]
               </div>
@@ -1277,7 +1300,7 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">zmx attach HOST ID</span>.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
-                A companion reorders among its siblings by drag or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session move</span>, moves under another session with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session move --parent</span>, and moving
+                A companion reorders among its siblings by drag or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session move</span>, moves under another session with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session move --parent</span>, becomes a top-level session with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session move --top-level</span>, and moving
                 the parent carries its companions. Other session commands act on a companion as on any session; closing one closes
                 only it. Closing the parent closes its companions too, and one undo restores the group. If the parent's shell exits
                 while it has companions, a fresh login shell starts in that pane's last directory instead of the session closing (a
@@ -1448,7 +1471,7 @@
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 Moving a parent carries its companions. A move that would take a companion out of its group errors
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">a companion moves only among its siblings; use --parent to move it under another session</span>; an ordinary no-op move still answers ok.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">a companion moves only among its siblings; use --parent to move it under another session, or --top-level to make it a top-level session</span>; an ordinary no-op move still answers ok.
               </p>
             </div>
 

@@ -116,6 +116,24 @@ struct SessionCompanionsCommandsTests {
         #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["session", "move"] + extra) }
     }
 
+    @Test func sessionMoveTopLevelSendsTheCompanionPromoteCommand() throws {
+        #expect(try request(["session", "move", "--target", "c1", "--top-level", "--window", "win"])
+            == ControlRequest(cmd: .sessionCompanionPromote, target: "c1", args: ControlArgs(window: "win")))
+        #expect(try request(["session", "move", "--top-level", "w1"]).args?.workspace == "w1")
+        #expect(try request(["session", "move", "--top-level", "--after", "a1"]).args?.after == "a1")
+        #expect(try request(["session", "move", "--top-level", "--before", "b1"]).args?.before == "b1")
+        let promote = try Session.Move.parse(["--target", "c1", "--top-level", "--op-id", "op-1", "--epoch", "e1"])
+        let stamped = try promote.makeRequest()
+        #expect(stamped.cmd == .sessionCompanionPromote)
+        #expect(stamped.args?.opID == "op-1")
+    }
+
+    @Test(arguments: [["--parent", "p2"], ["--index", "1"], ["--to", "up"], ["w1", "--after", "a"], ["--after", "a", "--before", "b"],
+                      ["--target", "c1", "--target", "c2"]])
+    func sessionMoveTopLevelRefusesConflictingOptions(extra: [String]) {
+        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["session", "move", "--top-level"] + extra) }
+    }
+
     @Test func anAppThatDoesNotKnowTheMoveCommandReadsAsTooOld() {
         let unknown = ControlResponse(ok: false, error: "invalid request: unknown cmd session.companion.move")
         let send = companionSend({ _ in SocketReply(response: unknown, raw: Data()) }, json: false)

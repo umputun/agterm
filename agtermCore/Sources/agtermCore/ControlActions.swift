@@ -25,6 +25,8 @@ public protocol ControlActions {
     func convertToCompanion(_ target: String?, window: String?) -> ControlResponse
     /// moveCompanion puts the target companion under `parent`, at `index` among its companions or last.
     func moveCompanion(_ target: String?, parent: String, index: Int?, window: String?) async -> ControlResponse
+    /// promoteCompanion makes the target companion a top-level session at `placement`.
+    func promoteCompanion(_ target: String?, placement: ControlCompanionPromotion, window: String?) async -> ControlResponse
     /// Hands out one attachment of the target page companion to another Mac.
     func attachCompanionPage(_ target: String?, window: String?) -> ControlResponse
     /// Folds or unfolds a parent's companions in the sidebar tree.

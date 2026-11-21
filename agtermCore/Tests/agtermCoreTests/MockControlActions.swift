@@ -39,6 +39,7 @@ final class MockControlActions: ControlActions {
         case companionDuplicate(target: String?, window: String?, select: Bool)
         case companionConvert(target: String?, window: String?)
         case companionMove(target: String?, parent: String, index: Int?, window: String?)
+        case companionPromote(target: String?, placement: ControlCompanionPromotion, window: String?)
         case companionPageAttach(target: String?, window: String?)
         case workspaceFlag(target: String?, window: String?, ControlToggleMode)
         case sessionFlag(target: String?, window: String?, String?)
@@ -378,6 +379,11 @@ final class MockControlActions: ControlActions {
 
     func moveCompanion(_ target: String?, parent: String, index: Int?, window: String?) -> ControlResponse {
         calls.append(.companionMove(target: target, parent: parent, index: index, window: window))
+        return ControlResponse(ok: true)
+    }
+
+    func promoteCompanion(_ target: String?, placement: ControlCompanionPromotion, window: String?) -> ControlResponse {
+        calls.append(.companionPromote(target: target, placement: placement, window: window))
         return ControlResponse(ok: true)
     }
 

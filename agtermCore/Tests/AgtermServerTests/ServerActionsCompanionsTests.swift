@@ -194,6 +194,22 @@ struct ServerActionsCompanionsTests {
         #expect(harness.store.companions(of: destination.id).map(\.id) == [session.id, companion.id])
     }
 
+    @Test func aCompanionBecomesATopLevelSessionBesideAnAnchor() async throws {
+        let session = try newSession()
+        let companion = try harness.session(await harness.actions.createCompanion(session.id.uuidString, options: CompanionOptions(select: false),
+                                                                                  window: nil))
+        let other = try newSession()
+
+        let reply = await harness.actions.promoteCompanion(companion.id.uuidString, placement: .beside(other.id.uuidString, after: true), window: nil)
+        let again = await harness.actions.promoteCompanion(companion.id.uuidString, placement: .afterOwnGroup, window: nil)
+
+        #expect(reply.ok, "\(reply)")
+        #expect(companion.parentID == nil)
+        #expect(harness.store.companions(of: session.id).isEmpty)
+        #expect(harness.store.workspace(forSession: other.id)?.sessions.map(\.id).suffix(2) == [other.id, companion.id])
+        #expect(again.error == CompanionPromotionRefusal.notCompanion.message)
+    }
+
     @Test func aConvertStartsTheFreshParent() throws {
         let session = try newSession()
         let launches = harness.runner.launches.count

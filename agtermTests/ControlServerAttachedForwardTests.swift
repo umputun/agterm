@@ -568,6 +568,75 @@ final class ControlServerAttachedForwardTests: XCTestCase {
         XCTAssertTrue(line(runner, 0).hasSuffix("session move --target c1 --parent p2 --json"), line(runner, 0))
     }
 
+    func testAPromotionOfACompanionWhoseParentSharesItsOriginRunsThereThenTakesItsPlaceHere() async throws {
+        let runner = ScriptedRunner([ok(ControlResult(id: "c1"))])
+        let (server, store) = try makeServer(runner)
+        let (companion, destination) = try companionAndDestination(in: store)
+
+        let reply = try await run(server, promote(companion, before: destination))
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        XCTAssertEqual(runner.invocations.count, 1)
+        XCTAssertTrue(line(runner, 0).hasSuffix("session move --target c1 --top-level --json"), line(runner, 0))
+        XCTAssertNil(companion.parentID)
+        let order = store.workspaces.flatMap(\.sessions).map(\.id)
+        XCTAssertEqual(order.firstIndex(of: companion.id).map { $0 + 1 }, order.firstIndex(of: destination.id))
+    }
+
+    func testAPromotionWhoseGroupExistsOnlyHereNeverReachesTheOrigin() throws {
+        let runner = ScriptedRunner([])
+        let (server, store) = try makeServer(runner)
+        let workspace = try XCTUnwrap(store.currentWorkspaceID)
+        let local = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: NSHomeDirectory()))
+        let underLocal = try attachedRow(in: store, origin: "c1")
+        store.nest(underLocal.id, under: local.id)
+        let elsewhere = try attachedRow(in: store, host: "otherbox", origin: "o2")
+        let underElsewhere = try attachedRow(in: store, origin: "c2")
+        store.nest(underElsewhere.id, under: elsewhere.id)
+        let top = try attachedRow(in: store, origin: "t1")
+
+        XCTAssertNil(server.attachedRoute(promote(underLocal)))
+        XCTAssertNil(server.attachedRoute(promote(underElsewhere)))
+        guard case .refused(let refusal) = server.attachedRoute(promote(top)) else { return XCTFail("routed") }
+        XCTAssertEqual(refusal.error, CompanionPromotionRefusal.notCompanion.message)
+        XCTAssertTrue(runner.invocations.isEmpty)
+    }
+
+    func testAnOriginWhereTheCompanionIsAlreadyTopLevelStillPlacesItHereAndALostAnchorIsReported() async throws {
+        let already = ControlResponse(ok: false, error: CompanionPromotionRefusal.notCompanion.message)
+        let runner = ScriptedRunner([printed(already, status: 1), ok(ControlResult(id: "c2"))])
+        let (server, store) = try makeServer(runner)
+        let (companion, destination) = try companionAndDestination(in: store)
+        let parent = try XCTUnwrap(companion.parentID)
+        let late = try attachedRow(in: store, origin: "c2")
+        try store.moveCompanion(late.id, under: parent).get()
+
+        let reply = try await run(server, promote(companion))
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        XCTAssertNil(companion.parentID)
+
+        let route = try XCTUnwrap(server.attachedRoute(promote(late, before: destination)))
+        _ = store.closeExactly([destination.id])
+        let lost = await server.runRemoteRoute(route)
+
+        XCTAssertEqual(lost.error, "top-level on buildbox, but not here: \(CompanionPromotionRefusal.noSuchSession.message)")
+        XCTAssertEqual(late.parentID, parent)
+    }
+
+    func testAGuiPromotionOfAnAttachedCompanionAsksTheOrigin() async throws {
+        let runner = ScriptedRunner([ok(ControlResult(id: "c1"))])
+        let (server, store) = try makeServer(runner)
+        server.actions.remoteAttacher = server
+        let (companion, _) = try companionAndDestination(in: store)
+
+        server.actions.promoteCompanion(companion.id, to: .afterOwnGroup, in: store)
+
+        let deadline = Date().addingTimeInterval(5)
+        while companion.parentID != nil, Date() < deadline { try await Task.sleep(for: .milliseconds(20)) }
+        XCTAssertNil(companion.parentID)
+        XCTAssertTrue(line(runner, 0).hasSuffix("session move --target c1 --top-level --json"), line(runner, 0))
+    }
+
     func testAGuiDuplicateOfAnAttachedRowAsksTheOrigin() async throws {
         let runner = ScriptedRunner([ok(ControlResult(id: created)), tree(sessions: session(created))])
         let (server, store) = try makeServer(runner)
@@ -639,6 +708,12 @@ final class ControlServerAttachedForwardTests: XCTestCase {
         args.parent = parent.id.uuidString
         args.index = index
         return ControlRequest(cmd: .sessionCompanionMove, target: row.id.uuidString, args: args)
+    }
+
+    private func promote(_ row: Session, before anchor: Session? = nil) -> ControlRequest {
+        var args = ControlArgs()
+        args.before = anchor?.id.uuidString
+        return ControlRequest(cmd: .sessionCompanionPromote, target: row.id.uuidString, args: args)
     }
 
     private func printed(_ response: ControlResponse, status: Int32) -> RemoteCommandResult {

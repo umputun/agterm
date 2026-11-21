@@ -224,8 +224,9 @@ final class WorkspaceSidebarTests: XCTestCase {
         rows.store.setSidebarSelection([helper.id])
 
         let submenu = try moveToMenu(helper.id)
-        XCTAssertEqual(Array(submenu.items.prefix(3).map(\.title)), [ControlWorkspaceNode.rootLabel, "top", "second"])
-        XCTAssertTrue(submenu.items[0].isSectionHeader)
+        let header = try XCTUnwrap(submenu.items.firstIndex(where: \.isSectionHeader))
+        XCTAssertEqual(Array(submenu.items[header...].prefix(3).map(\.title)), [ControlWorkspaceNode.rootLabel, "top", "second"])
+        XCTAssertEqual(submenu.items.prefix(header).last?.isSeparatorItem, true)
     }
 
     func testARootRowFocusesTheRootAndTogglesItsMembership() throws {

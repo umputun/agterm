@@ -99,6 +99,31 @@ extension ServerActions {
         }
     }
 
+    /// promoteCompanion makes the target companion a top-level session of the catalog at `placement`.
+    public func promoteCompanion(_ target: String?, placement: ControlCompanionPromotion, window: String?) async -> ControlResponse {
+        withSession(target, window: window) { session in
+            let promotion: CompanionPromotion
+            switch placement {
+            case .afterOwnGroup:
+                promotion = .afterOwnGroup
+            case .workspace(let workspace):
+                switch resolveWorkspace(workspace) {
+                case .failure(let refusal): return refusal.response
+                case .success(let destination): promotion = .workspace(destination, slot: nil)
+                }
+            case .beside(let anchor, let after):
+                switch resolveSession(anchor) {
+                case .failure(let refusal): return refusal.response
+                case .success(let destination): promotion = .beside(destination.id, after: after)
+                }
+            }
+            if case .failure(let refusal) = store.promoteCompanion(session.id, to: promotion) {
+                return ControlResponse(ok: false, error: refusal.message)
+            }
+            return ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString))
+        }
+    }
+
     /// convertToCompanion nests the target and its companions under a fresh session started in its slot. A fresh
     /// parent that cannot start is undone before it is closed, so the close ends none of the regrouped sessions.
     public func convertToCompanion(_ target: String?, window: String?) -> ControlResponse {

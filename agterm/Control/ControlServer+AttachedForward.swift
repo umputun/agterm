@@ -19,6 +19,8 @@ enum AttachedFollowUp: Sendable, Equatable {
     case select
     /// moveUnder moves the row under the local `parent` at `index`, the slot the origin was not told.
     case moveUnder(parent: UUID, index: Int?)
+    /// promoteHere makes the row top-level at the local placement, which the origin was not told.
+    case promoteHere(CompanionPromotion)
 }
 
 /// TerminatePlan is a `session.terminate` split by where each root runs: one origin close per origin, and the local
@@ -42,7 +44,7 @@ extension ControlServer {
     func attachedRoute(_ request: ControlRequest) -> RemoteRoute? {
         if request.cmd == .sessionTerminate { return terminateRoute(request) }
         let forwarded: Set<Command> = [.sessionRestart, .zmxKill, .zmxKillPane, .sessionCompanionConvert, .sessionCompanionMove,
-                                       .sessionDuplicate, .sessionSplit, .sessionSplitClose, .sessionScratch, .sessionRestore]
+                                       .sessionCompanionPromote, .sessionDuplicate, .sessionSplit, .sessionSplitClose, .sessionScratch, .sessionRestore]
         // a request the command's own checks refuse goes on to the dispatcher, which answers it in its own words
         guard forwarded.contains(request.cmd), !ControlDispatcher.refusesArguments(request) else { return nil }
         // zmx.kill refuses `active` itself; resolving it here would aim the kill at whatever is in front
@@ -54,6 +56,7 @@ extension ControlServer {
             return .refused(ControlResponse(ok: false, error: refusal))
         }
         if request.cmd == .sessionCompanionMove { return companionMoveRoute(request, row: row, origin: origin, in: store) }
+        if request.cmd == .sessionCompanionPromote { return companionPromoteRoute(request, row: row, origin: origin, in: store) }
         switch attachedForward(request, row: row, origin: origin) {
         case .failure(let refusal): return .refused(ControlResponse(ok: false, error: refusal.message))
         case .success(let (forward, then)): return .attached(.forward(forward, origin: origin, row: id, then: then))
@@ -78,6 +81,24 @@ extension ControlServer {
         }
         return .attached(.forward(.moveCompanion(session: origin.session, parent: parentOrigin.session), origin: origin, row: row.id,
                                   then: .moveUnder(parent: parentID, index: request.args?.index)))
+    }
+
+    /// companionPromoteRoute asks the origin only when the row's parent shares its origin: a row nested here under a
+    /// local row or another host's is a companion on this Mac alone, so it is promoted here as a local one is. A shared
+    /// origin does not prove the same grouping there, which the origin's own reply settles.
+    private func companionPromoteRoute(_ request: ControlRequest, row: Session, origin: AttachedOrigin, in store: AppStore) -> RemoteRoute? {
+        guard let placement = ControlDispatcher.companionPromotion(request.args) else { return nil }
+        let promotion: CompanionPromotion
+        switch promotionTarget(placement, in: store) {
+        case .failure(let response): return .refused(response)
+        case .success(let resolved): promotion = resolved
+        }
+        if case .failure(let refusal) = store.canPromoteCompanion(row.id, to: promotion) {
+            return .refused(ControlResponse(ok: false, error: refusal.message))
+        }
+        guard let parent = row.parentID.flatMap(store.session(withID:)), let parentOrigin = AttachedOrigin(parent),
+              parentOrigin.shares(origin) else { return nil }
+        return .attached(.forward(.promoteCompanion(session: origin.session), origin: origin, row: row.id, then: .promoteHere(promotion)))
     }
 
     /// originScratchRefusal is why an attached row cannot show its origin's scratch: a row runs no scratch of its own.
@@ -258,6 +279,17 @@ extension ControlServer {
                 return ControlResponse(ok: false, error: "moved on \(origin.host), but not here: \(refusal.message)")
             }
             return ControlResponse(ok: true, result: ControlResult(id: row.uuidString, parent: parent.uuidString))
+        case .promoteHere(let promotion):
+            guard let store = library.store(forSession: row) else {
+                return ControlResponse(ok: false, error: "top-level on \(origin.host), but not here: no such session")
+            }
+            // the origin's new group starts empty, so a stream reconnecting meanwhile cannot hand its first companion in
+            // as the baseline
+            if reply.ok, store.session(withID: row)?.companionsBaselined == false { store.baselineCompanions([], forSession: row) }
+            if case .failure(let refusal) = store.promoteCompanion(row, to: promotion) {
+                return ControlResponse(ok: false, error: "top-level on \(origin.host), but not here: \(refusal.message)")
+            }
+            return ControlResponse(ok: true, result: ControlResult(id: row.uuidString))
         case .attachAfter, .nestUnderCreated:
             let created = then == .attachAfter ? reply.result?.id : reply.result?.parent
             guard let created, UUID(uuidString: created) != nil else {

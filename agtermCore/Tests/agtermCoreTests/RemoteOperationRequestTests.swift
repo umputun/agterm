@@ -243,6 +243,21 @@ struct RemoteOperationRequestTests {
         #expect(parsed == .operation(.moveCompanion(first.id, parent: second.id, index: nil), select: false))
     }
 
+    @Test func aCompanionPromotionGoesToTheServerWithItsAnchor() throws {
+        let companion = try store.addCompanion(to: first.id, options: CompanionOptions(select: false)).get()
+        let target = companion.id.uuidString
+
+        #expect(parse(.sessionCompanionPromote, target: target) == .operation(.promoteCompanion(companion.id, to: nil), select: false))
+        #expect(parse(.sessionCompanionPromote, target: target) { $0.after = String(second.id.uuidString.prefix(8)) }
+            == .operation(.promoteCompanion(companion.id, to: .after(second.id)), select: false))
+        #expect(parse(.sessionCompanionPromote, target: target) { $0.before = first.id.uuidString }
+            == .operation(.promoteCompanion(companion.id, to: .before(first.id)), select: false))
+        #expect(refusal(parse(.sessionCompanionPromote, target: first.id.uuidString)) == "not a companion")
+        #expect(refusal(parse(.sessionCompanionPromote, target: target) { $0.after = target }) == "a session cannot be placed beside itself")
+        #expect(refusal(parse(.sessionCompanionPromote, target: target) { $0.parent = first.id.uuidString })
+            == "session.companion.promote takes no --parent, --index or --to")
+    }
+
     @Test func aCompanionMoveKeepsTheLocalRefusals() throws {
         let companion = try store.addCompanion(to: first.id, options: CompanionOptions(select: false)).get()
         let target = companion.id.uuidString
@@ -400,6 +415,10 @@ struct RemoteOperationRequestTests {
             == ["session", "move", "--target", id.uuidString, "--parent", id.uuidString, "--index", "2"])
         #expect(RemoteOperation.moveCompanion(id, parent: id, index: nil).words == ["session", "move", "--target", id.uuidString, "--parent", id.uuidString])
         #expect(RemoteOperation.moveCompanion(id, parent: id, index: nil).label == "Move Companion")
+        #expect(RemoteOperation.promoteCompanion(id, to: nil).words == ["session", "move", "--target", id.uuidString, "--top-level"])
+        #expect(RemoteOperation.promoteCompanion(id, to: .before(id)).words
+            == ["session", "move", "--target", id.uuidString, "--top-level", "--before", id.uuidString])
+        #expect(RemoteOperation.promoteCompanion(id, to: .workspace(id)).operands == [id.uuidString])
         #expect(RemoteOperation.killDaemon(id, pane: .left).words == ["zmx", "kill", "--target", id.uuidString, "--pane", "left", "--force"])
         #expect(RemoteOperation.killDaemon(id, pane: .right, paneID: "tok").words
             == ["zmx", "kill", "--target", id.uuidString, "--pane", "right", "--pane-id", "tok", "--force"])
@@ -426,6 +445,17 @@ struct RemoteOperationRequestTests {
         #expect(RemoteOperation.dropPlacement(of: ids[2], workspace: target, sessions: ids, destination: 0) == .before(ids[0]))
         #expect(RemoteOperation.dropPlacement(of: ids[0], workspace: target, sessions: ids, destination: 2) == .after(ids[2]))
         #expect(RemoteOperation.dropPlacement(of: ids[0], workspace: target, sessions: [], destination: 0) == .workspace(target))
+    }
+
+    @Test func aPromotionSlotBecomesAnAnchorAmongTheShownTopLevelRows() {
+        let roots = [UUID(), UUID()]
+        let target = UUID()
+
+        #expect(RemoteOperation.promotionPlacement(workspace: target, slot: 0, roots: roots) == .before(roots[0]))
+        #expect(RemoteOperation.promotionPlacement(workspace: target, slot: 1, roots: roots) == .before(roots[1]))
+        #expect(RemoteOperation.promotionPlacement(workspace: target, slot: 2, roots: roots) == .after(roots[1]))
+        #expect(RemoteOperation.promotionPlacement(workspace: target, slot: nil, roots: roots) == .workspace(target))
+        #expect(RemoteOperation.promotionPlacement(workspace: target, slot: 0, roots: []) == .workspace(target))
     }
 
     @Test(arguments: [(2, 0, "top"), (1, 4, "bottom"), (3, 2, "up"), (1, 2, "down"), (1, 3, nil), (2, 2, nil)] as [(Int, Int, String?)])

@@ -787,6 +787,69 @@ final class ControlServerFollowCompanionsTests: XCTestCase {
         }
     }
 
+    func testACompanionMadeTopLevelHereFollowsTheFirstCompanionItsOriginAddsAfterwards() async throws {
+        let runner = RoutedRunner { _ in Origin.tree(sessions: Origin.session(child, parent: "origin-c")) }
+        let (server, store, transport) = makeServer(runner)
+        let row = try nestedRow(under: try parentRow(in: store), in: store, server: server)
+        let stream = try open(row, server: server, transport: transport)
+        stream.send(.snapshot(PresentationSnapshot(status: nil, hud: nil, companions: list([]))))
+        await settled(server, rows: [row])
+
+        try store.promoteCompanion(row.id, to: .afterOwnGroup).get()
+        stream.send(.companions(list([child])))
+        let attached = try await companion(of: row, in: store)
+
+        XCTAssertEqual(attached.remoteSessionID, child)
+    }
+
+    func testACompanionPromotedOnItsOriginDuringAReconnectFollowsTheFirstCompanionInTheNextSnapshot() async throws {
+        let runner = RoutedRunner { argv in
+            argv.joined(separator: " ").contains("--top-level")
+                ? RemoteCommandResult(status: 0, stdout: #"{"ok":true,"result":{"id":"origin-c"}}"#, stderr: "")
+                : Origin.tree(sessions: Origin.session(child, parent: "origin-c"))
+        }
+        let (server, store, transport) = makeServer(runner)
+        let row = try nestedRow(under: try parentRow(in: store), in: store, server: server)
+        _ = try open(row, server: server, transport: transport)
+        try XCTUnwrap(transport.closes.last)("connection lost")
+
+        let route = try XCTUnwrap(server.attachedRoute(ControlRequest(cmd: .sessionCompanionPromote, target: row.id.uuidString)))
+        let reply = await server.runRemoteRoute(route)
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        let client = try XCTUnwrap(server.remoteClients[row.id])
+        client.retryNow()
+        client.tick()
+        let line = try XCTUnwrap(transport.lines.last)
+        line(try frame(.hello(PresentationHello(version: 1, kinds: [PresentationHub.companionsKind], mode: .mirror)), rev: 0))
+        line(try frame(.snapshot(PresentationSnapshot(status: nil, hud: nil, companions: list([child]))), rev: 1))
+        let attached = try await companion(of: row, in: store)
+
+        XCTAssertEqual(attached.remoteSessionID, child)
+    }
+
+    func testAPageCompanionMadeTopLevelSwitchesToTheMembershipObserverAndFollowsItsCompanions() async throws {
+        let runner = RoutedRunner { _ in Origin.tree(sessions: Origin.pageRootEntry(companions: []) + "," + Origin.session(child, parent: pageRoot)) }
+        let (server, store, transport) = makeServer(runner)
+        let parent = try parentRow(in: store)
+        let page = try pageRow(in: store)
+        store.nest(page.id, under: parent.id)
+        store.onRemoteRowPromoted = { [weak server] session in MainActor.assumeIsolated { server?.remoteRowPromoted(session) } }
+        server.startRemotePresentation(for: page)
+        XCTAssertEqual(server.remoteClients[page.id]?.observer, false)
+
+        try store.promoteCompanion(page.id, to: .afterOwnGroup).get()
+
+        XCTAssertEqual(server.remoteClients[page.id]?.observer, true)
+        XCTAssertEqual(transport.hellos.last?.kinds, RemotePresentationClient.observerKinds)
+        let line = try XCTUnwrap(transport.lines.last)
+        line(try frame(.hello(PresentationHello(version: 1, kinds: RemotePresentationClient.observerKinds, mode: .mirror)), rev: 0))
+        line(try frame(.snapshot(PresentationSnapshot(status: nil, hud: nil, companions: list([]))), rev: 1))
+        line(try frame(.companions(list([child])), rev: 2))
+        let followed = try await companion(of: page, in: store)
+
+        XCTAssertEqual(followed.remoteSessionID, child)
+    }
+
     func testACatalogPageRowKeepsTheFullStream() throws {
         let (server, store, transport) = makeServer(RoutedRunner { _ in Origin.tree(sessions: "") })
         let row = try pageRow(in: store, catalogOwned: true)
@@ -839,7 +902,7 @@ final class ControlServerFollowCompanionsTests: XCTestCase {
     }
 
     private func parentRow(in store: AppStore, handled: [String] = [], catalogOwned: Bool = false,
-                           origin: String = "origin-1") throws -> Session {
+                           origin: String = "origin-1", baselined: Bool = true) throws -> Session {
         let workspace = try XCTUnwrap(store.currentWorkspaceID)
         let row = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: NSHomeDirectory(), remoteHost: "buildbox",
                                                  remoteSessionID: origin))
@@ -848,7 +911,14 @@ final class ControlServerFollowCompanionsTests: XCTestCase {
                                        origin: RemoteBinding.Origin(host: "buildbox", endpoint: endpoint, sessionName: "parent"),
                                        catalogOwned: catalogOwned),
                          forSession: row.id)
-        store.baselineCompanions(handled, forSession: row.id)
+        if baselined { store.baselineCompanions(handled, forSession: row.id) }
+        return row
+    }
+
+    private func nestedRow(under parent: Session, in store: AppStore, server: ControlServer) throws -> Session {
+        let row = try parentRow(in: store, origin: "origin-c", baselined: false)
+        store.nest(row.id, under: parent.id)
+        store.onRemoteRowPromoted = { [weak server] session in MainActor.assumeIsolated { server?.remoteRowPromoted(session) } }
         return row
     }
 

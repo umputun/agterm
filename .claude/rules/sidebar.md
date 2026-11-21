@@ -104,8 +104,9 @@ paths:
   `Session.focusedCwd`. It does not copy name, command, panes, status, flag, font size, or watermark.
   `session.duplicate` provides the control form; its `tree.cwd` can differ from focused cwd when a split's
   non-primary pane is focused.
-- Move to lists Top-Level Sessions first, then the workspaces, for top-level rows and batches. On a single companion row it lists the window's other
-  top-level sessions under workspace headers instead, minus the current parent and what `canMoveCompanion` refuses.
+- Move to lists Top-Level Sessions first, then the workspaces, for top-level rows and batches. On a single companion row it lists the same
+  workspaces first, each promoting it there appended (`AppActions.promoteCompanion`; a rootless owner's Top-Level Sessions disabled), then the
+  window's other top-level sessions under workspace headers, minus the current parent and what `canMoveCompanion` refuses.
 - `SidebarMode` is per-window `.tree` or `.flagged`. `flaggedSessions` is the derived tree-order
   projection; sessions keep one owning workspace and flags survive moves but not deletion.
 - Each store keeps `flaggedOrder`, the saved order the flat and plain layouts render through
@@ -309,8 +310,9 @@ paths:
   `companionsNeedingAttention` stays public for agterm-linux's sidebar snapshot.
 - In the ordinary tree one dragged companion moves under another top-level session (`SidebarDrop.companionReparent`):
   a drop on that row puts it first in the group, a gap in another group at that gap, a drop on another group's
-  companion right after it, and each asks `canMoveCompanion`. Within its own group it reorders among its siblings. Several rows and a workspace-level
-  slot keep the sibling-only rule and ask `canMoveSessions`. One dragged top-level session nests only on the center of
+  companion right after it, and each asks `canMoveCompanion`. Within its own group it reorders among its siblings. Dropped on a workspace row or
+  in a gap among top-level rows, the root's included, it becomes top-level there (`resolveCompanionPromotion`, asking `canPromoteCompanion`).
+  Several rows keep the sibling-only rule and ask `canMoveSessions`. One dragged top-level session nests only on the center of
   another top-level row, first in its group with its own companions; a refused nest refuses the drop rather than reordering. No flagged drag changes a parent: the flagged tree keeps
   siblings, and the flat and plain lists reorder `flaggedOrder` (`moveFlagged`). Move to is the reparenting path there.
 - `syncSelection` reveals on a change of the selected row's parent as well as of the selection

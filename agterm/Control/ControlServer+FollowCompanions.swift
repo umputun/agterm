@@ -123,6 +123,19 @@ extension ControlServer {
         for key in groups { library.markOriginCompanionsHandled([child], parent: key.session, host: key.host, endpoint: endpoint(of: key)) }
     }
 
+    /// remoteRowPromoted starts following what a row made top-level now heads: a Mac page root needs the membership
+    /// observer its nested row had no use for, and a terminal row baselines the list its stream already delivered,
+    /// which stays unchanged through the promotion, so the first companion after it is followed rather than baselined.
+    func remoteRowPromoted(_ session: Session) {
+        if let binding = session.remotePresentation?.binding, Self.observesMembershipOnly(session, binding: binding),
+           remoteClients[session.id]?.observer != true {
+            stopRemotePresentation(session.id)
+            startRemotePresentation(for: session)
+            return
+        }
+        reconcileCompanions(session.id)
+    }
+
     /// tickCompanionFollow runs the passes whose transport retries fell due, for rows whose stream is up and follows.
     func tickCompanionFollow() {
         let now = hudClock()
