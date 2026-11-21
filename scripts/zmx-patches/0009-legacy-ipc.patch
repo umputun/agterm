@@ -314,7 +314,7 @@ diff -ruN zmx-orig/src/ipc.zig zmx/src/ipc.zig
 -
 -    const n = sb.read(fd) catch return error.Unexpected;
 -    if (n == 0) return error.Unexpected;
-+/// A reply whose first frame reads in both framings is retried on a fresh connection.
++/// Retries a reply `probeFraming` cannot settle on a fresh connection, three attempts in all.
 +fn probeProtocol(socket_path: []const u8) SessionProbeError!ProtocolProbe {
 +    for (0..2) |_| return probeOnce(socket_path) catch |err| switch (err) {
 +        error.Ambiguous => continue,
