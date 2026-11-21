@@ -286,6 +286,12 @@ def main():
         cli("kill", "killed", "--force")
         time.sleep(1.0)
         ok &= check("a killed session writes no record", not listed("killed") and not os.path.exists(killed_record))
+        cli("attach", "--detached", "busy", "yes")
+        time.sleep(0.5)
+        probes = [(listed("busy"), cli("screen", "busy").returncode) for _ in range(5)]
+        ok &= check("a session streaming output is listed and answers", all(p == (True, 0) for p in probes), repr(probes))
+        # zmx 0.8.1 misreads a busy session's stream, so the upgrade case must not share a directory with it
+        cli("kill", "busy", "--force")
         term_pid, term_fd = attach("sigterm", 24, 80, claim=True, name="sigterm")
         pids.append(term_pid)
         roles = ROLE.findall(drain(term_fd, 1.0))
@@ -303,7 +309,7 @@ def main():
         if len(sys.argv) > 2:
             ok &= check_upgrade(sys.argv[2])
     finally:
-        cli("kill", NAME, "reclaim", "detached", "killed", "env-probe", "sigterm", "--force")
+        cli("kill", NAME, "reclaim", "detached", "killed", "env-probe", "sigterm", "busy", "--force")
         for pid in pids:
             try:
                 os.kill(pid, 9)

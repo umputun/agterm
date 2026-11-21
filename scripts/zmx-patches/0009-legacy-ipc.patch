@@ -165,7 +165,7 @@ diff -ruN zmx-orig/src/ipc.zig zmx/src/ipc.zig
 +        };
 +        std.mem.writeInt(u32, bytes[1..5], len, .little);
 +        return bytes;
-+    }
+     }
 +
 +    fn decode(self: Wire, bytes: *const [@sizeOf(Header)]u8) Header {
 +        return switch (self) {
@@ -175,7 +175,7 @@ diff -ruN zmx-orig/src/ipc.zig zmx/src/ipc.zig
 +                .len = std.mem.readInt(u32, bytes[1..5], .little),
 +            },
 +        };
-     }
++    }
 +
 +    pub fn append(
 +        self: Wire,
@@ -249,7 +249,7 @@ diff -ruN zmx-orig/src/ipc.zig zmx/src/ipc.zig
          if (hdr.len > MAX_PAYLOAD_LEN or hdr.protocol_version != PROTOCOL_VERSION) {
              // framing error / corrupted stream: clear buffer to avoid
              // infinite alloc
-@@ -320,77 +358,144 @@
+@@ -320,77 +358,157 @@
      Unexpected,
      InfoSizeMismatch,
      Unsupported,
@@ -311,6 +311,9 @@ diff -ruN zmx-orig/src/ipc.zig zmx/src/ipc.zig
  
 -    var sb = SocketBuffer.init(alloc) catch return error.Unexpected;
 -    defer sb.deinit();
+-
+-    const n = sb.read(fd) catch return error.Unexpected;
+-    if (n == 0) return error.Unexpected;
 +/// A reply whose first frame reads in both framings is retried on a fresh connection.
 +fn probeProtocol(socket_path: []const u8) SessionProbeError!ProtocolProbe {
 +    for (0..2) |_| return probeOnce(socket_path) catch |err| switch (err) {
@@ -320,16 +323,23 @@ diff -ruN zmx-orig/src/ipc.zig zmx/src/ipc.zig
 +    return probeOnce(socket_path) catch |err| if (err == error.Ambiguous) error.Unexpected else err;
 +}
  
--    const n = sb.read(fd) catch return error.Unexpected;
--    if (n == 0) return error.Unexpected;
+-    var info_result: ?Info = null;
+-    var labels: ?[]const u8 = null;
+-    errdefer if (labels) |lbl| alloc.free(lbl);
 +fn probeOnce(socket_path: []const u8) SessionProbeError!ProtocolProbe {
 +    const fd = try connectSession(socket_path);
 +    errdefer lib_posix.close(fd);
 +    sendOneShot(fd, .info) catch return error.Unexpected;
  
--    var info_result: ?Info = null;
--    var labels: ?[]const u8 = null;
--    errdefer if (labels) |lbl| alloc.free(lbl);
+-    while (true) {
+-        if (sb.next()) |msg| {
+-            if (msg.header.tag == .Info) {
+-                if (msg.payload.len != @sizeOf(Info)) return error.InfoSizeMismatch;
+-                info_result = std.mem.bytesToValue(Info, msg.payload[0..@sizeOf(Info)]);
+-            }
+-            if (msg.header.tag == .LabelData) {
+-                labels = alloc.dupe(u8, msg.payload) catch null;
+-            }
 +    const reply = try readProbeReply(fd);
 +    const wire = reply.wire;
 +    const connection_fd = switch (wire) {
@@ -344,32 +354,15 @@ diff -ruN zmx-orig/src/ipc.zig zmx/src/ipc.zig
 +    return .{ .connection = .{ .fd = connection_fd, .wire = wire }, .info = reply.info };
 +}
  
-+fn readProbeReply(fd: i32) SessionProbeError!struct { wire: Wire, info: Info } {
-+    var header_bytes: [@sizeOf(Header)]u8 = undefined;
-+    var wire: ?Wire = null;
-     while (true) {
--        if (sb.next()) |msg| {
--            if (msg.header.tag == .Info) {
--                if (msg.payload.len != @sizeOf(Info)) return error.InfoSizeMismatch;
--                info_result = std.mem.bytesToValue(Info, msg.payload[0..@sizeOf(Info)]);
--            }
--            if (msg.header.tag == .LabelData) {
--                labels = alloc.dupe(u8, msg.payload) catch null;
--            }
--
 -            if (info_result != null and labels != null) break;
 -            continue;
-+        try readProbeBytes(fd, &header_bytes);
-+        // output or a task completion can arrive before the Info reply
-+        const framing = wire orelse blk: {
-+            const as_current = opensProbeReply(.current, Wire.current.decode(&header_bytes));
-+            const as_legacy = opensProbeReply(.legacy, Wire.legacy.decode(&header_bytes));
-+            if (as_current and as_legacy) return error.Ambiguous;
-+            if (!as_current and !as_legacy) return error.Unexpected;
-+            break :blk if (as_current) Wire.current else Wire.legacy;
-+        };
-+        wire = framing;
-+        const hdr = framing.decode(&header_bytes);
++fn readProbeReply(fd: i32) SessionProbeError!struct { wire: Wire, info: Info } {
++    var header_bytes: [@sizeOf(Header)]u8 = undefined;
++    try readProbeBytes(fd, &header_bytes);
++    // output or a task completion can arrive before the Info reply
++    const wire = try probeFraming(fd, &header_bytes);
++    while (true) : (try readProbeBytes(fd, &header_bytes)) {
++        const hdr = wire.decode(&header_bytes);
 +        if (hdr.protocol_version != PROTOCOL_VERSION) return error.Unexpected;
 +
 +        switch (hdr.tag) {
@@ -377,17 +370,11 @@ diff -ruN zmx-orig/src/ipc.zig zmx/src/ipc.zig
 +                if (hdr.len != @sizeOf(Info)) return error.InfoSizeMismatch;
 +                var info: Info = undefined;
 +                try readProbeBytes(fd, std.mem.asBytes(&info));
-+                return .{ .wire = framing, .info = info };
++                return .{ .wire = wire, .info = info };
 +            },
 +            .Output, .TaskComplete => {
 +                if (hdr.len == 0 or hdr.len > MAX_PAYLOAD_LEN) return error.Unexpected;
-+                var remaining: usize = hdr.len;
-+                var discard: [4096]u8 = undefined;
-+                while (remaining > 0) {
-+                    const n = @min(remaining, discard.len);
-+                    try readProbeBytes(fd, discard[0..n]);
-+                    remaining -= n;
-+                }
++                try discardProbeBytes(fd, hdr.len);
 +            },
 +            else => return error.Unexpected,
          }
@@ -407,8 +394,34 @@ diff -ruN zmx-orig/src/ipc.zig zmx/src/ipc.zig
 -            .labels = labels,
 -            .alloc = alloc,
 -        };
--    }
++/// Picks the framing of a reply opening with `header_bytes`, leaving the next header to read there.
++/// The nine bytes after an Output that reads both ways arrive in either framing; it is current only
++/// when their last eight cannot open a legacy frame, since raw output can hold any header.
++fn probeFraming(fd: i32, header_bytes: *[@sizeOf(Header)]u8) SessionProbeError!Wire {
++    const as_current = opensProbeReply(.current, Wire.current.decode(header_bytes));
++    const as_legacy = opensProbeReply(.legacy, Wire.legacy.decode(header_bytes));
++    if (as_current != as_legacy) return if (as_current) .current else .legacy;
++    if (!as_current) return error.Unexpected;
++
++    var after: [1 + @sizeOf(Header)]u8 = undefined;
++    try readProbeBytes(fd, &after);
++    if (opensProbeReply(.legacy, Wire.legacy.decode(after[1..]))) return error.Ambiguous;
++    try discardProbeBytes(fd, Wire.current.decode(header_bytes).len - after.len);
++    try readProbeBytes(fd, header_bytes);
++    return .current;
++}
++
++fn discardProbeBytes(fd: i32, len: usize) SessionProbeError!void {
++    var remaining = len;
++    var discard: [4096]u8 = undefined;
++    while (remaining > 0) {
++        const n = @min(remaining, discard.len);
++        try readProbeBytes(fd, discard[0..n]);
++        remaining -= n;
+     }
 -    return error.Unexpected;
++}
++
 +/// Whether `hdr` can open a probe reply in `wire`'s framing. TaskComplete carries one byte and Info
 +/// its 552 in both, so only Output reads both ways: a legacy one-byte Output whose packed header
 +/// carries padding, or a current Output whose length is a multiple of 256.
@@ -442,7 +455,7 @@ diff -ruN zmx-orig/src/ipc.zig zmx/src/ipc.zig
  }
  
  //  WIRE PROTOCOL FREEZE: read before "fixing" any test below.
-@@ -429,33 +534,9 @@
+@@ -429,33 +547,9 @@
      payload: []const u8,
      expected_tag: Tag,
  ) SessionProbeError![]u8 {
@@ -477,7 +490,7 @@ diff -ruN zmx-orig/src/ipc.zig zmx/src/ipc.zig
  pub fn roundTripLarge(
      alloc: std.mem.Allocator,
      socket_path: []const u8,
-@@ -464,13 +545,22 @@
+@@ -464,13 +558,22 @@
      expected_tag: Tag,
      timeout_ms: i32,
  ) SessionProbeError![]u8 {
@@ -504,7 +517,7 @@ diff -ruN zmx-orig/src/ipc.zig zmx/src/ipc.zig
  
      while (true) {
          var poll_fds = [_]lib_posix.pollfd{.{ .fd = fd, .events = lib_posix.POLL.IN, .revents = 0 }};
-@@ -499,3 +589,75 @@
+@@ -499,3 +602,100 @@
      const last_field_end = @offsetOf(Info, "task_exit_code") + @sizeOf(u8);
      for (bytes[last_field_end..]) |b| try std.testing.expectEqual(@as(u8, 0), b);
  }
@@ -536,18 +549,43 @@ diff -ruN zmx-orig/src/ipc.zig zmx/src/ipc.zig
 +    }
 +}
 +
-+test "probe refuses to guess a first frame that reads in both framings" {
-+    // regression: 0.8.1 leaves its packed header's padding uninitialized, so a one-byte Output read as current
-+    const legacy_output = [_]u8{ 1, 1, 0, 0, 0, 0, 1, 0, 'x' };
-+    var current_output: [@sizeOf(Header) + 256]u8 = undefined;
-+    current_output[0..@sizeOf(Header)].* = Wire.current.header(.Output, 256);
-+    current_output[@sizeOf(Header)..][0..@sizeOf(Header)].* = Wire.legacy.header(.Info, @sizeOf(Info));
-+    @memset(current_output[2 * @sizeOf(Header) ..], 'y');
-+    for ([_][]const u8{ &legacy_output, &current_output }) |frame| {
++test "probe settles a busy current daemon's first frame that reads in both framings" {
++    // regression: a busy daemon's 4096-byte Output reads as a padded 0.8.1 one-byte Output
++    var fds: [2]i32 = undefined;
++    if (std.c.socketpair(lib_posix.AF.UNIX, lib_posix.SOCK.STREAM, 0, &fds) != 0) return error.NoSocketPair;
++    defer for (fds) |fd| lib_posix.close(fd);
++    var text: [4096]u8 = undefined;
++    @memset(&text, 'y');
++    var info = std.mem.zeroes(Info);
++    info.pid = 321;
++    const peer: Connection = .{ .fd = fds[0], .wire = .current };
++    try peer.send(.Output, &text);
++    try peer.send(.Info, std.mem.asBytes(&info));
++
++    const reply = try readProbeReply(fds[1]);
++    try std.testing.expectEqual(Wire.current, reply.wire);
++    try std.testing.expectEqual(info.pid, reply.info.pid);
++}
++
++test "probe refuses to guess when the bytes after an ambiguous frame open a legacy one" {
++    var fake = std.mem.zeroes(Info);
++    fake.pid = 666;
++    var info = std.mem.zeroes(Info);
++    info.pid = 321;
++    const padded_output = [_]u8{ 1, 1, 0, 0, 0, 0, 1, 0, 'x' };
++    const legacy_info = Wire.legacy.header(.Info, @sizeOf(Info)) ++ std.mem.toBytes(info);
++    var current_output: [@sizeOf(Header) + 4096]u8 = undefined;
++    current_output[0..@sizeOf(Header)].* = Wire.current.header(.Output, 4096);
++    @memset(current_output[@sizeOf(Header)..], 'y');
++    current_output[@sizeOf(Header) + 1 ..][0 .. @sizeOf(Header) + @sizeOf(Info)].* =
++        Wire.legacy.header(.Info, @sizeOf(Info)) ++ std.mem.toBytes(fake);
++    const current_info = Wire.current.header(.Info, @sizeOf(Info)) ++ std.mem.toBytes(info);
++    const cases = [_][]const []const u8{ &.{ &padded_output, &legacy_info }, &.{ &current_output, &current_info } };
++    for (cases) |frames| {
 +        var fds: [2]i32 = undefined;
 +        if (std.c.socketpair(lib_posix.AF.UNIX, lib_posix.SOCK.STREAM, 0, &fds) != 0) return error.NoSocketPair;
 +        defer for (fds) |fd| lib_posix.close(fd);
-+        try writeAll(fds[0], frame);
++        for (frames) |frame| try writeAll(fds[0], frame);
 +        try std.testing.expectError(error.Ambiguous, readProbeReply(fds[1]));
 +    }
 +}

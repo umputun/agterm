@@ -65,8 +65,9 @@ Ghostty version preserves skipped cells during VT replay by moving the cursor ac
 - `0009-legacy-ipc.patch` lets the new client reach daemons still running agterm's zmx 0.8.1, so Live
   sessions survive the upgrade and a reset can end them. It sends an Info request both framings read and
   keeps the framing the reply uses for that connection, mapping `Manage` and `Identity` to their 0.8.1
-  tags, 22 and 26. A reply whose first frame reads both ways, an 0.8.1 one-byte Output whose header
-  padding is not zero or a current Output of a multiple of 256 bytes, is retried on a fresh connection.
+  tags, 22 and 26. A first frame that reads both ways, an 0.8.1 one-byte Output whose header padding is
+  not zero or a current Output of a multiple of 256 bytes, is current when the bytes after it cannot open
+  an 0.8.1 frame, and is otherwise retried on a fresh connection.
   `tail` and `run` keep upstream framing, because the probe would swallow the one `TaskComplete` a task
   sends. `write` refuses an 0.8.1 daemon, which drops a file past its input cap and
   still acknowledges it, and so do `history --screen` and `--scrollback`, which 0.8.1 has no capture for.
