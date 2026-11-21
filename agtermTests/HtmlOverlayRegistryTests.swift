@@ -907,6 +907,26 @@ final class HtmlOverlayRegistryTests: HtmlPageTestCase {
         XCTAssertEqual(current?.loadError, ImageFile.Failure.notAnImage(path).description)
     }
 
+    // regression: the earlier load's late start and finish undid a reload whose read had failed
+    func testAFailedReloadStaysFailedWhenTheEarlierLoadReportsLate() async throws {
+        let path = try writePNG("late.png", width: 30)
+        let overlay = HtmlOverlay(source: .image(path: path))
+        XCTAssertNil(store.openHtmlOverlay(session.id, pane: nil, overlay: overlay, sizePercent: nil))
+        let page = registry.page(for: overlay, store: store)
+        let held = HeldNavigationDelegate(page)
+        page.webView.navigationDelegate = held
+        defer { page.webView.navigationDelegate = page }
+        try await waitFor("finish held") { held.finish != nil }
+        try Data("not a picture".utf8).write(to: URL(fileURLWithPath: path))
+        XCTAssertNil(registry.reload(page.id, target: .current, store: store))
+        try await waitFor("reload failed") { self.current?.loadState == .failed }
+
+        page.webView(page.webView, didStartProvisionalNavigation: held.start)
+        page.webView(page.webView, didFinish: held.finish)
+        XCTAssertEqual(current?.loadState, .failed)
+        XCTAssertEqual(current?.loadError, ImageFile.Failure.notAnImage(path).description)
+    }
+
     func testAnImageReadFinishingAfterCloseIsDropped() async throws {
         let overlay = HtmlOverlay(source: .image(path: try writePNG("late.png", width: 30)))
         XCTAssertNil(store.openHtmlOverlay(session.id, pane: nil, overlay: overlay, sizePercent: nil))

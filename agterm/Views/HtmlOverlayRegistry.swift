@@ -224,6 +224,8 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     // an image, markdown, text or document page reads its file off the main actor; a result is applied only while this still
     // counts the load that started it, so a close or a newer reload drops a slow read's late result
     private var textLoad = 0
+    // navigations show() started, with their load: an older navigation cannot change the current load state
+    private var builtNavigations: [(navigation: WKNavigation, load: Int)] = []
     private(set) var textPage: TextPageBridge?
     private let storageFailure: String?
     private let replica: HtmlReplicaLink?
@@ -488,6 +490,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     func close() {
         textLoad += 1
         images?.clear()
+        builtNavigations.removeAll()
         textPage?.stop()
         endPrompt()
         webView.configuration.userContentController.removeAllScriptMessageHandlers()
@@ -612,7 +615,19 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     private func show(_ html: String, load: Int) async {
         let filtered = overlay.source.kind != .document ? true : await DocumentRules.shared.install(on: webView.configuration.userContentController)
         guard textLoad == load else { return }
-        if filtered { webView.loadHTMLString(html, baseURL: nil) } else { fail(DocumentRules.unavailable) }
+        guard filtered else { return fail(DocumentRules.unavailable) }
+        if let navigation = webView.loadHTMLString(html, baseURL: nil) { builtNavigations.append((navigation, load)) }
+    }
+
+    private func isStale(_ navigation: WKNavigation?) -> Bool {
+        builtNavigations.first { $0.navigation === navigation }.map { $0.load != textLoad } ?? false
+    }
+
+    // drops a navigation that ended from the record and says whether a newer load overtook it
+    private func endedStale(_ navigation: WKNavigation?) -> Bool {
+        let stale = isStale(navigation)
+        builtNavigations.removeAll { $0.navigation === navigation }
+        return stale
     }
 
     private typealias ReplicaContentFailure = HtmlReplicaLink.ReadFailure
@@ -772,7 +787,8 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         return decision == .allow ? .allow : .cancel
     }
 
-    func webView(_: WKWebView, didStartProvisionalNavigation _: WKNavigation!) {
+    func webView(_: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        guard !isStale(navigation) else { return }
         loadPending = true
         store?.setHtmlLoadState(id, state: .loading, error: nil)
     }
@@ -783,21 +799,25 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         reportPage()
     }
 
-    func webView(_: WKWebView, didFinish _: WKNavigation!) {
+    func webView(_: WKWebView, didFinish navigation: WKNavigation!) {
+        guard !endedStale(navigation) else { return }
         loadPending = false
         store?.setHtmlLoadState(id, state: .loaded, error: nil)
         reportPage()
     }
 
-    func webView(_: WKWebView, didFail _: WKNavigation!, withError error: Error) {
+    func webView(_: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        guard !endedStale(navigation) else { return }
         reportFailure(error)
     }
 
-    func webView(_: WKWebView, didFailProvisionalNavigation _: WKNavigation!, withError error: Error) {
+    func webView(_: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        guard !endedStale(navigation) else { return }
         reportFailure(error)
     }
 
     func webViewWebContentProcessDidTerminate(_: WKWebView) {
+        builtNavigations.removeAll()
         committed = false
         shownURL = nil
         fail("web content process terminated")
