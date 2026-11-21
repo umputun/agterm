@@ -110,6 +110,9 @@ C-boundary concurrency before changing the bridge.
   Metal Toolchain.
   It is idempotent after artifacts exist. zmx is the plain upstream pin plus `scripts/zmx-patches/`,
   whose README says what each patch is for and how to regenerate one.
+  In an unpacked zmx tree inside another git checkout, `git apply` treats the tree as a subdirectory of
+  that checkout, so it can skip the entire series and still exit 0:
+  verify or regenerate the series outside the enclosing checkout.
 - Commands:
   - `scripts/run.sh`: setup, generate, Debug build, launch.
   - `scripts/build.sh`: setup, generate, Release build.
