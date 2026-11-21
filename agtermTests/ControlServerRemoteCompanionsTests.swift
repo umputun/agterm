@@ -256,11 +256,14 @@ final class ControlServerRemoteCompanionsTests: XCTestCase {
     }
 
     func testAPageHandedOverAfterItsParentJoinedAnotherGroupLandsInThatGroup() async throws {
-        let (server, store, row) = try makeServer(ScriptedRunner([pageAttach(created)]))
+        let runner = ScriptedRunner([pageAttach(created)])
+        let (server, store, row) = try makeServer(runner)
         server.pageLauncher = FakePageLauncher()
         let workspace = try XCTUnwrap(store.workspace(forSession: row.id))
         let holder = try XCTUnwrap(store.addSession(toWorkspace: workspace.id, cwd: "/srv", remoteHost: "buildbox"))
-        store.nest(row.id, under: holder.id)
+        runner.beforeCall = { index in
+            if index == 0 { await MainActor.run { store.nest(row.id, under: holder.id) } }
+        }
         let endpoint = ControlZmxEndpoint(executable: "/Applications/agterm.app/zmx", socketDirectory: "/tmp/agterm-zmx-abc")
 
         let reply = await server.attachRemotePage(created, origin: RemoteBinding.Origin(host: "buildbox", endpoint: endpoint, sessionName: "c"),

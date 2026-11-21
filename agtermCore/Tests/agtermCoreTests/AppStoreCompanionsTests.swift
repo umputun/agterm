@@ -1092,7 +1092,7 @@ extension AppStoreCompanionsTests {
 
         #expect(g.order == [g.after.id, third.id, g.parent.id, g.first.id, g.second.id])
         #expect([g.parent, g.first, g.second].allSatisfy { $0.parentID == g.after.id })
-        #expect([g.parent, g.first, g.second].allSatisfy { g.store.session(withID: $0.id) === $0 })
+        #expect([g.parent, g.first, g.second].allSatisfy { (row: Session) in g.store.session(withID: row.id) === row })
         #expect(g.store.companions(of: g.parent.id).isEmpty)
     }
 
