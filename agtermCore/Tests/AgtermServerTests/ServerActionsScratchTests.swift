@@ -34,6 +34,31 @@ struct ServerActionsScratchTests {
         #expect(!session.daemonBackedPanes.contains(identity))
     }
 
+    private final class LayoutSink: PresentationSink {
+        var layouts: [PresentationLayout] = []
+        func offer(_ frame: PresentationFrame) -> Bool {
+            if case .layout(let layout) = frame.body { layouts.append(layout) }
+            return true
+        }
+        func close(_: PresentationHub.CloseReason) {}
+    }
+
+    @Test func showingAndHidingTheScratchTellsTheSessionsViewers() async throws {
+        let session = try await newSession()
+        let sink = LayoutSink()
+        let hub = try #require(harness.store.presentationHub)
+        _ = try hub.subscribe(session: session.id, hello: PresentationHello(version: PresentationCodec.version,
+                                                                            kinds: PresentationHub.supportedKinds, mode: .mirror),
+                              sink: sink) { harness.store.presentationSnapshot(forSession: session.id) }
+
+        _ = scratch(session, "on")
+        let identity = try #require(session.scratchDaemon?.identity)
+        _ = scratch(session, "off")
+
+        #expect(sink.layouts.map(\.scratch) == [identity, identity])
+        #expect(sink.layouts.map(\.scratchShown) == [true, false])
+    }
+
     @Test func theScratchStartsInTheSessionCwdAsTheScratchPane() async throws {
         let session = try await newSession()
 

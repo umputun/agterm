@@ -86,49 +86,66 @@ struct HudHelperTests {
         }
         func removeBody() throws { try FileManager.default.removeItem(at: bodyFile) }
 
+        func use(_ test: (Run) async throws -> Void) async throws {
+            do {
+                try await test(self)
+            } catch {
+                await stop()
+                throw error
+            }
+            await stop()
+        }
+
         @discardableResult
-        func wait(_ timeout: TimeInterval = 5, until check: (String) -> Bool) -> String {
-            let deadline = Date().addingTimeInterval(timeout)
-            var text = painted
-            while !check(text), Date() < deadline {
-                Thread.sleep(forTimeInterval: 0.02)
+        func wait(polls: Int = 250, until check: (String) -> Bool) async -> String {
+            var text = ""
+            _ = await Run.poll(polls) {
                 text = painted
+                return check(text)
             }
             return text
         }
 
         /// Whether every needle reaches the painted stream before the timeout — the whole assertion for most
         /// of these tests, since the helper writes frames and never rewrites history.
-        func paints(_ needles: String...) -> Bool { paints(needles) }
+        func paints(_ needles: String...) async -> Bool { await paints(needles) }
 
-        func paints(_ needles: [String]) -> Bool {
-            let text = wait { painted in needles.allSatisfy(painted.contains) }
+        func paints(_ needles: [String]) async -> Bool {
+            let text = await wait { painted in needles.allSatisfy(painted.contains) }
             return needles.allSatisfy(text.contains)
         }
 
-        func waitForExit(_ timeout: TimeInterval = 5) -> Bool {
-            let deadline = Date().addingTimeInterval(timeout)
-            while proc.isRunning, Date() < deadline { Thread.sleep(forTimeInterval: 0.02) }
-            return !proc.isRunning
+        func waitForExit(polls: Int = 250) async -> Bool {
+            await Run.poll(polls) { !proc.isRunning }
+        }
+
+        // count polls so Linux startup stalls cannot expire a wait before the helper runs
+        static func poll(_ polls: Int, until done: () -> Bool) async -> Bool {
+            var left = polls
+            while !done(), left > 0 {
+                try? await Task.sleep(for: .milliseconds(20))
+                left -= 1
+            }
+            return done()
         }
 
         /// Ends the helper with SIGTERM, and fails the test if that does not work. The fallback then removes
         /// the body file, the helper's own stop, and SIGKILLs as a last resort; every wait is bounded.
-        func stop() {
+        func stop() async {
             defer { try? FileManager.default.removeItem(at: dir) }
             if proc.isRunning { proc.terminate() }
-            if waitForExit(2) { return }
-            Issue.record("\(Run.ignoredTermMessage): pid \(proc.processIdentifier)\n\(missEvidence())")
+            if await waitForExit(polls: 100) { return }
+            Issue.record("\(Run.ignoredTermMessage): pid \(proc.processIdentifier)\n\(await missEvidence())")
             try? removeBody()
-            if waitForExit(2) { return }
+            if await waitForExit(polls: 100) { return }
             Issue.record("hud.sh outlived its body file: pid \(proc.processIdentifier)")
             kill(proc.processIdentifier, SIGKILL)
-            if !waitForExit(2) { Issue.record("hud.sh survived SIGKILL: pid \(proc.processIdentifier)") }
+            if await !waitForExit(polls: 100) { Issue.record("hud.sh survived SIGKILL: pid \(proc.processIdentifier)") }
         }
 
-        private func missEvidence() -> String {
+        private func missEvidence() async -> String {
             let first = (painted.utf8.count, Run.processTree(of: proc.processIdentifier))
-            Thread.sleep(forTimeInterval: 0.5)
+            try? await Task.sleep(for: .milliseconds(500))
             let second = (painted.utf8.count, Run.processTree(of: proc.processIdentifier))
             return "output \(first.0) -> \(second.0) bytes over 0.5s\n\(first.1)\n\(second.1)"
         }
@@ -157,265 +174,265 @@ struct HudHelperTests {
                 "no helper at \(Self.helper): agterm/Resources/hud/hud.sh moved, or this file did")
     }
 
-    @Test func paintsTheMessage() throws {
-        let run = try Run("gathering options\n", cols: 40, rows: 7)
-        defer { run.stop() }
-        #expect(run.paints("gathering options"))
+    @Test func paintsTheMessage() async throws {
+        try await Run("gathering options\n", cols: 40, rows: 7).use { run in
+            #expect(await run.paints("gathering options"))
+        }
     }
 
-    @Test func placesTheMessageInTheBoxTheHeaderGave() throws {
+    @Test func placesTheMessageInTheBoxTheHeaderGave() async throws {
         // cols 41 / "abc" leaves 19 columns to the left, rows 9 / 1 line leaves 4 rows above
-        let run = try Run("abc\n", cols: 41, rows: 9)
-        defer { run.stop() }
-        let e = Self.esc
-        let frame = "\(e)[H\(e)[J\(e)[E\(e)[E\(e)[E\(e)[E\(e)[19Cabc"
-        #expect(run.paints(frame))
+        try await Run("abc\n", cols: 41, rows: 9).use { run in
+            let e = Self.esc
+            let frame = "\(e)[H\(e)[J\(e)[E\(e)[E\(e)[E\(e)[E\(e)[19Cabc"
+            #expect(await run.paints(frame))
+        }
     }
 
-    @Test func aGridAsTallAsTheTextPaintsFromTheFirstRow() throws {
-        let run = try Run("abc\ndef\n", cols: 41, rows: 2)
-        defer { run.stop() }
-        let e = Self.esc
-        #expect(run.paints("\(e)[H\(e)[J\(e)[19Cabc"))
+    @Test func aGridAsTallAsTheTextPaintsFromTheFirstRow() async throws {
+        try await Run("abc\ndef\n", cols: 41, rows: 2).use { run in
+            let e = Self.esc
+            #expect(await run.paints("\(e)[H\(e)[J\(e)[19Cabc"))
+        }
     }
 
-    @Test func keepsAnOversizedLineAtTheLeftEdgeRatherThanOffScreen() throws {
-        let run = try Run("a message wider than its box\n", cols: 10, rows: 3)
-        defer { run.stop() }
-        let e = Self.esc
-        let frame = "\(e)[H\(e)[J\(e)[Ea message wider than its box"
-        #expect(run.paints(frame))
+    @Test func keepsAnOversizedLineAtTheLeftEdgeRatherThanOffScreen() async throws {
+        try await Run("a message wider than its box\n", cols: 10, rows: 3).use { run in
+            let e = Self.esc
+            let frame = "\(e)[H\(e)[J\(e)[Ea message wider than its box"
+            #expect(await run.paints(frame))
+        }
     }
 
-    @Test func dimsEverythingAfterTheBodysEmptyLine() throws {
-        let run = try Run("working\n\nthis may take a while\n", cols: 40, rows: 9)
-        defer { run.stop() }
-        let painted = run.wait { $0.contains("this may take a while") }
-        #expect(painted.contains("\(Self.esc)[2mthis may take a while"))
-        #expect(!painted.contains("\(Self.esc)[2mworking"))
+    @Test func dimsEverythingAfterTheBodysEmptyLine() async throws {
+        try await Run("working\n\nthis may take a while\n", cols: 40, rows: 9).use { run in
+            let painted = await run.wait { $0.contains("this may take a while") }
+            #expect(painted.contains("\(Self.esc)[2mthis may take a while"))
+            #expect(!painted.contains("\(Self.esc)[2mworking"))
+        }
     }
 
-    @Test func picksUpARewrittenBodyWithoutRespawning() throws {
-        let run = try Run("first\n", cols: 40, rows: 7, spinner: .bar)
-        defer { run.stop() }
-        run.wait { $0.contains("first") }
-        try run.rewrite("second\n", spinner: .bar)
-        #expect(run.paints("second"))
-        #expect(run.running)
+    @Test func picksUpARewrittenBodyWithoutRespawning() async throws {
+        try await Run("first\n", cols: 40, rows: 7, spinner: .bar).use { run in
+            await run.wait { $0.contains("first") }
+            try run.rewrite("second\n", spinner: .bar)
+            #expect(await run.paints("second"))
+            #expect(run.running)
+        }
     }
 
-    @Test func rewritingResizesTheContentInsideTheSameBox() throws {
-        let run = try Run("abc\n", cols: 41, rows: 9, spinner: .bar)
-        defer { run.stop() }
-        run.wait { $0.contains("abc") }
-        try run.rewrite("abcdefg\n", cols: 41, rows: 9, spinner: .bar)
-        // 41 - 7 content - 2 spinner leaves 16 to the left, versus 18 for the shorter message
-        #expect(run.paints("\(Self.esc)[16C"))
+    @Test func rewritingResizesTheContentInsideTheSameBox() async throws {
+        try await Run("abc\n", cols: 41, rows: 9, spinner: .bar).use { run in
+            await run.wait { $0.contains("abc") }
+            try run.rewrite("abcdefg\n", cols: 41, rows: 9, spinner: .bar)
+            // 41 - 7 content - 2 spinner leaves 16 to the left, versus 18 for the shorter message
+            #expect(await run.paints("\(Self.esc)[16C"))
+        }
     }
 
     // the header is what makes `session.hud.update` able to grow the panel: a running helper cannot see its
     // environment change, so a box carried there would leave the text centred in the box it spawned with.
-    @Test func rewritingWithANewBoxRecentersWithoutRespawning() throws {
-        let run = try Run("abc\n", cols: 41, rows: 9)
-        defer { run.stop() }
-        let e = Self.esc
-        run.wait { $0.contains("\(e)[19Cabc") }
-        try run.rewrite("abc\n", cols: 21, rows: 5)
-        // 21 - 3 leaves 9 to the left, and 5 rows - 1 line leaves 2 rows above
-        let frame = "\(e)[H\(e)[J\(e)[E\(e)[E\(e)[9Cabc"
-        #expect(run.paints(frame))
-        #expect(run.running)
+    @Test func rewritingWithANewBoxRecentersWithoutRespawning() async throws {
+        try await Run("abc\n", cols: 41, rows: 9).use { run in
+            let e = Self.esc
+            await run.wait { $0.contains("\(e)[19Cabc") }
+            try run.rewrite("abc\n", cols: 21, rows: 5)
+            // 21 - 3 leaves 9 to the left, and 5 rows - 1 line leaves 2 rows above
+            let frame = "\(e)[H\(e)[J\(e)[E\(e)[E\(e)[9Cabc"
+            #expect(await run.paints(frame))
+            #expect(run.running)
+        }
     }
 
-    @Test func rewritingTurnsTheSpinnerOnWithoutRespawning() throws {
-        let run = try Run("busy\n", cols: 40, rows: 7)
-        defer { run.stop() }
-        run.wait { $0.contains("busy") }
-        #expect(!run.painted.contains("| busy"))
-        try run.rewrite("busy\n", spinner: .bar)
-        #expect(run.paints("| busy"))
-        #expect(run.running)
+    @Test func rewritingTurnsTheSpinnerOnWithoutRespawning() async throws {
+        try await Run("busy\n", cols: 40, rows: 7).use { run in
+            await run.wait { $0.contains("busy") }
+            #expect(!run.painted.contains("| busy"))
+            try run.rewrite("busy\n", spinner: .bar)
+            #expect(await run.paints("| busy"))
+            #expect(run.running)
+        }
     }
 
     // line one is always the header; a body whose header is not numbers paints in the built-in box instead
     // of arithmetic on garbage.
-    @Test func aMalformedHeaderFallsBackToTheDefaultBox() throws {
-        let run = try Run("", cols: 21, rows: 5)
-        defer { run.stop() }
-        try "not a header\nvisible\n".write(to: run.bodyFile, atomically: true, encoding: .utf8)
-        // the default 40-column box leaves 16 to the left of a 7-character line, where 21 would leave 7
-        #expect(run.paints("\(Self.esc)[16Cvisible"))
+    @Test func aMalformedHeaderFallsBackToTheDefaultBox() async throws {
+        try await Run("", cols: 21, rows: 5).use { run in
+            try "not a header\nvisible\n".write(to: run.bodyFile, atomically: true, encoding: .utf8)
+            // the default 40-column box leaves 16 to the left of a 7-character line, where 21 would leave 7
+            #expect(await run.paints("\(Self.esc)[16Cvisible"))
+        }
     }
 
-    @Test func aMarkdownBodyIsPaintedVerbatimAtOneSharedOffset() throws {
-        let run = try Run("  • a\n\(Self.esc)[1mb\(Self.esc)[22m\n", cols: 40, rows: 7, blockWidth: 5)
-        defer { run.stop() }
-        #expect(run.paints("\(Self.esc)[17C  • a", "\(Self.esc)[17C\(Self.esc)[1mb\(Self.esc)[22m"))
+    @Test func aMarkdownBodyIsPaintedVerbatimAtOneSharedOffset() async throws {
+        try await Run("  • a\n\(Self.esc)[1mb\(Self.esc)[22m\n", cols: 40, rows: 7, blockWidth: 5).use { run in
+            #expect(await run.paints("\(Self.esc)[17C  • a", "\(Self.esc)[17C\(Self.esc)[1mb\(Self.esc)[22m"))
+        }
     }
 
-    @Test func aMarkdownBlankRowIsSpacingNotTheDetailSeparator() throws {
-        let run = try Run("a\n\nb\n", cols: 40, rows: 7, blockWidth: 1)
-        defer { run.stop() }
-        #expect(run.paints("a\(Self.esc)[E\(Self.esc)[E\(Self.esc)[19Cb"))
-        #expect(!run.painted.contains("\(Self.esc)[2m"))
+    @Test func aMarkdownBlankRowIsSpacingNotTheDetailSeparator() async throws {
+        try await Run("a\n\nb\n", cols: 40, rows: 7, blockWidth: 1).use { run in
+            #expect(await run.paints("a\(Self.esc)[E\(Self.esc)[E\(Self.esc)[19Cb"))
+            #expect(!run.painted.contains("\(Self.esc)[2m"))
+        }
     }
 
-    @Test func aMarkdownHyperlinkReachesTheTerminalWithItsTerminatorIntact() throws {
+    @Test func aMarkdownHyperlinkReachesTheTerminalWithItsTerminatorIntact() async throws {
         let link = "\(Self.esc)]8;;http://x\(Self.esc)\\go\(Self.esc)]8;;\(Self.esc)\\"
-        let run = try Run(link + "\n", cols: 40, rows: 7, blockWidth: 2)
-        defer { run.stop() }
-        #expect(run.paints("\(Self.esc)[19C" + link))
+        try await Run(link + "\n", cols: 40, rows: 7, blockWidth: 2).use { run in
+            #expect(await run.paints("\(Self.esc)[19C" + link))
+        }
     }
 
-    @Test func aMalformedBlockWidthPaintsInPlainMode() throws {
-        let run = try Run("hi\n", cols: 40, rows: 7)
-        defer { run.stop() }
-        run.wait { $0.contains("hi") }
-        let owner = ProcessInfo.processInfo.processIdentifier
-        try "40 7 0 \(owner) 0.5 - x\nhey\n".write(to: run.bodyFile, atomically: true, encoding: .utf8)
-        #expect(run.paints("\(Self.esc)[18Chey"))
+    @Test func aMalformedBlockWidthPaintsInPlainMode() async throws {
+        try await Run("hi\n", cols: 40, rows: 7).use { run in
+            await run.wait { $0.contains("hi") }
+            let owner = ProcessInfo.processInfo.processIdentifier
+            try "40 7 0 \(owner) 0.5 - x\nhey\n".write(to: run.bodyFile, atomically: true, encoding: .utf8)
+            #expect(await run.paints("\(Self.esc)[18Chey"))
+        }
     }
 
-    @Test func oneHelperSwitchesBetweenPlainAndMarkdown() throws {
-        let run = try Run("plain\n", cols: 40, rows: 7)
-        defer { run.stop() }
-        run.wait { $0.contains("plain") }
-        try run.rewrite("  md\n", blockWidth: 10)
-        #expect(run.paints("\(Self.esc)[15C  md"))
-        try run.rewrite("back\n")
-        #expect(run.paints("\(Self.esc)[18Cback"))
-        #expect(run.running)
+    @Test func oneHelperSwitchesBetweenPlainAndMarkdown() async throws {
+        try await Run("plain\n", cols: 40, rows: 7).use { run in
+            await run.wait { $0.contains("plain") }
+            try run.rewrite("  md\n", blockWidth: 10)
+            #expect(await run.paints("\(Self.esc)[15C  md"))
+            try run.rewrite("back\n")
+            #expect(await run.paints("\(Self.esc)[18Cback"))
+            #expect(run.running)
+        }
     }
 
-    @Test func aSpinningMarkdownBodyPutsTheGlyphInTheFirstRowsGutter() throws {
-        let run = try Run("a\n  b\n", cols: 40, rows: 7, spinner: .bar, blockWidth: 9)
-        defer { run.stop() }
-        #expect(run.paints("\(Self.esc)[15C| a\(Self.esc)[E\(Self.esc)[15C  b", "\(Self.esc)[15C/ a"))
+    @Test func aSpinningMarkdownBodyPutsTheGlyphInTheFirstRowsGutter() async throws {
+        try await Run("a\n  b\n", cols: 40, rows: 7, spinner: .bar, blockWidth: 9).use { run in
+            #expect(await run.paints("\(Self.esc)[15C| a\(Self.esc)[E\(Self.esc)[15C  b", "\(Self.esc)[15C/ a"))
+        }
     }
 
     // an empty first row skipped its prepared glyph, so the spinner never appeared.
-    @Test func anEmptyFirstMarkdownRowStillCarriesTheSpinner() throws {
-        let run = try Run("\n  b\n", cols: 40, rows: 7, spinner: .bar, blockWidth: 3)
-        defer { run.stop() }
-        #expect(run.paints("\(Self.esc)[18C| \(Self.esc)[E\(Self.esc)[18C  b", "\(Self.esc)[18C/ \(Self.esc)[E\(Self.esc)[18C  b"))
+    @Test func anEmptyFirstMarkdownRowStillCarriesTheSpinner() async throws {
+        try await Run("\n  b\n", cols: 40, rows: 7, spinner: .bar, blockWidth: 3).use { run in
+            #expect(await run.paints("\(Self.esc)[18C| \(Self.esc)[E\(Self.esc)[18C  b", "\(Self.esc)[18C/ \(Self.esc)[E\(Self.esc)[18C  b"))
+        }
     }
 
-    @Test func aOneRowSpinningMarkdownBodyAnimatesItsOverflowMarker() throws {
+    @Test func aOneRowSpinningMarkdownBodyAnimatesItsOverflowMarker() async throws {
         let marker = "\(Self.esc)[2m… 3 more\(Self.esc)[22m"
-        let run = try Run(marker + "\n", cols: 20, rows: 3, spinner: .bar, blockWidth: 10)
-        defer { run.stop() }
-        #expect(run.paints("\(Self.esc)[5C| " + marker, "\(Self.esc)[5C/ " + marker))
+        try await Run(marker + "\n", cols: 20, rows: 3, spinner: .bar, blockWidth: 10).use { run in
+            #expect(await run.paints("\(Self.esc)[5C| " + marker, "\(Self.esc)[5C/ " + marker))
+        }
     }
 
-    @Test func spinnerPrefixesTheFirstLineAndAdvances() throws {
-        let run = try Run("busy\n", cols: 40, rows: 7, spinner: .bar)
-        defer { run.stop() }
-        #expect(run.paints("| busy", "/ busy", "- busy"))
+    @Test func spinnerPrefixesTheFirstLineAndAdvances() async throws {
+        try await Run("busy\n", cols: 40, rows: 7, spinner: .bar).use { run in
+            #expect(await run.paints("| busy", "/ busy", "- busy"))
+        }
     }
 
     // the frames live in the header, not the script, so a style the helper has never heard of animates
-    @Test(arguments: HudSpinner.allCases) func paintsWhicheverFramesTheHeaderCarries(style: HudSpinner) throws {
-        let run = try Run("busy\n", cols: 40, rows: 7, spinner: style)
-        defer { run.stop() }
-        #expect(run.paints(style.frames.map { "\($0) busy" }))
+    @Test(arguments: HudSpinner.allCases) func paintsWhicheverFramesTheHeaderCarries(style: HudSpinner) async throws {
+        try await Run("busy\n", cols: 40, rows: 7, spinner: style).use { run in
+            #expect(await run.paints(style.frames.map { "\($0) busy" }))
+        }
     }
 
     // regression: a helper that missed SIGTERM left stop() in an unbounded wait and hung the whole suite
-    @Test(.timeLimit(.minutes(1))) func stopFailsAndStillEndsAHelperThatIgnoresTerm() throws {
+    @Test(.timeLimit(.minutes(1))) func stopFailsAndStillEndsAHelperThatIgnoresTerm() async throws {
         let run = try Run("busy\n", cols: 40, rows: 7, ignoresTerm: true)
-        #expect(run.paints("busy"))
-        withKnownIssue {
-            run.stop()
+        #expect(await run.paints("busy"))
+        await withKnownIssue {
+            await run.stop()
         } matching: { issue in
             issue.comments.contains { $0.rawValue.contains(Run.ignoredTermMessage) }
         }
         #expect(!run.running)
     }
 
-    @Test func switchingStyleRepaintsWithoutRespawning() throws {
-        let run = try Run("busy\n", cols: 40, rows: 7, spinner: .bar)
-        defer { run.stop() }
-        run.wait { $0.contains("| busy") }
-        try run.rewrite("busy\n", spinner: .braille)
-        #expect(run.paints("⠋ busy"))
-        #expect(run.running)
+    @Test func switchingStyleRepaintsWithoutRespawning() async throws {
+        try await Run("busy\n", cols: 40, rows: 7, spinner: .bar).use { run in
+            await run.wait { $0.contains("| busy") }
+            try run.rewrite("busy\n", spinner: .braille)
+            #expect(await run.paints("⠋ busy"))
+            #expect(run.running)
+        }
     }
 
     #if canImport(Darwin)
     // the blink's off frame is a NO-BREAK SPACE, which the header's word splitting keeps and which still
     // occupies the glyph's column: a real space would be swallowed and the message would jump two columns
     // left on every other frame.
-    @Test func theBlinkKeepsItsColumnOnTheOffFrame() throws {
-        let run = try Run("busy\n", cols: 40, rows: 7, spinner: .dot)
-        defer { run.stop() }
-        // 40 columns less 4 for "busy" less 2 for the glyph leaves 17 on both frames
-        #expect(run.paints("\(Self.esc)[17C● busy"))
-        #expect(run.paints("\(Self.esc)[17C\u{00A0} busy"))
+    @Test func theBlinkKeepsItsColumnOnTheOffFrame() async throws {
+        try await Run("busy\n", cols: 40, rows: 7, spinner: .dot).use { run in
+            // 40 columns less 4 for "busy" less 2 for the glyph leaves 17 on both frames
+            #expect(await run.paints("\(Self.esc)[17C● busy"))
+            #expect(await run.paints("\(Self.esc)[17C\u{00A0} busy"))
+        }
     }
     #endif
 
-    @Test func theHeadersTextColorIsEmittedBeforeTheFrame() throws {
-        let run = try Run("busy\n", cols: 40, rows: 7, textColor: "38;2;126;192;126")
-        defer { run.stop() }
-        #expect(run.paints("\(Self.esc)[38;2;126;192;126m"))
+    @Test func theHeadersTextColorIsEmittedBeforeTheFrame() async throws {
+        try await Run("busy\n", cols: 40, rows: 7, textColor: "38;2;126;192;126").use { run in
+            #expect(await run.paints("\(Self.esc)[38;2;126;192;126m"))
+        }
     }
 
     // it goes after the erase so the cleared cells keep the terminal's own colors, and before the block so
     // the detail's dim attribute composes over it rather than replacing it.
-    @Test func theTextColorSitsBetweenTheEraseAndTheContent() throws {
-        let run = try Run("busy\n", cols: 40, rows: 7, textColor: "38;2;0;0;255")
-        defer { run.stop() }
-        run.wait { $0.contains("busy") }
-        #expect(run.painted.contains("\(Self.esc)[J\(Self.esc)[38;2;0;0;255m"))
+    @Test func theTextColorSitsBetweenTheEraseAndTheContent() async throws {
+        try await Run("busy\n", cols: 40, rows: 7, textColor: "38;2;0;0;255").use { run in
+            await run.wait { $0.contains("busy") }
+            #expect(run.painted.contains("\(Self.esc)[J\(Self.esc)[38;2;0;0;255m"))
+        }
     }
 
-    @Test func noColorEscapeWhenTheHeaderCarriesTheSentinel() throws {
-        let run = try Run("busy\n", cols: 40, rows: 7)
-        defer { run.stop() }
-        run.wait { $0.contains("busy") }
-        #expect(!run.painted.contains("\(Self.esc)[38;2"))
+    @Test func noColorEscapeWhenTheHeaderCarriesTheSentinel() async throws {
+        try await Run("busy\n", cols: 40, rows: 7).use { run in
+            await run.wait { $0.contains("busy") }
+            #expect(!run.painted.contains("\(Self.esc)[38;2"))
+        }
     }
 
     // the color rides the header, so an update recolors the live panel with no respawn — the one half of a
     // HUD's color a `hud update` can change.
-    @Test func recoloringThroughTheHeaderKeepsTheHelperAlive() throws {
-        let run = try Run("busy\n", cols: 40, rows: 7)
-        defer { run.stop() }
-        run.wait { $0.contains("busy") }
-        try run.rewrite("busy\n", textColor: "38;2;255;0;0")
-        #expect(run.paints("\(Self.esc)[38;2;255;0;0m"))
-        #expect(run.running)
+    @Test func recoloringThroughTheHeaderKeepsTheHelperAlive() async throws {
+        try await Run("busy\n", cols: 40, rows: 7).use { run in
+            await run.wait { $0.contains("busy") }
+            try run.rewrite("busy\n", textColor: "38;2;255;0;0")
+            #expect(await run.paints("\(Self.esc)[38;2;255;0;0m"))
+            #expect(run.running)
+        }
     }
 
     // a header field that is not SGR parameters is dropped rather than wrapped, so a malformed body cannot
     // emit an arbitrary escape into the pane.
     @Test(arguments: ["38;2;1m;7", "abc", "1;J"])
-    func aMalformedTextColorPaintsNoEscape(raw: String) throws {
-        let run = try Run("busy\n", cols: 40, rows: 7, textColor: raw)
-        defer { run.stop() }
-        run.wait { $0.contains("busy") }
-        #expect(!run.painted.contains("\(Self.esc)[\(raw)m"))
+    func aMalformedTextColorPaintsNoEscape(raw: String) async throws {
+        try await Run("busy\n", cols: 40, rows: 7, textColor: raw).use { run in
+            await run.wait { $0.contains("busy") }
+            #expect(!run.painted.contains("\(Self.esc)[\(raw)m"))
+        }
     }
 
-    @Test func noSpinnerGlyphWithoutTheFlag() throws {
-        let run = try Run("busy\n", cols: 40, rows: 7)
-        defer { run.stop() }
-        let painted = run.wait { $0.contains("busy") }
-        #expect(!painted.contains("| busy"))
-        #expect(!painted.contains("/ busy"))
+    @Test func noSpinnerGlyphWithoutTheFlag() async throws {
+        try await Run("busy\n", cols: 40, rows: 7).use { run in
+            let painted = await run.wait { $0.contains("busy") }
+            #expect(!painted.contains("| busy"))
+            #expect(!painted.contains("/ busy"))
+        }
     }
 
-    @Test func exitsWhenTheBodyFileDisappears() throws {
-        let run = try Run("bye\n", cols: 40, rows: 7, spinner: .bar)
-        defer { run.stop() }
-        run.wait { $0.contains("bye") }
-        try run.removeBody()
-        #expect(run.waitForExit())
+    @Test func exitsWhenTheBodyFileDisappears() async throws {
+        try await Run("bye\n", cols: 40, rows: 7, spinner: .bar).use { run in
+            await run.wait { $0.contains("bye") }
+            try run.removeBody()
+            #expect(await run.waitForExit())
+        }
     }
 
     // pins the fix for the orphan a HARD-killed app used to leave: no teardown deletes the body file and no
     // SIGHUP reaches the pty (its session leader is `login`), so the pid in the header is the only stop.
-    @Test func exitsWhenTheOwningProcessIsGone() throws {
+    @Test func exitsWhenTheOwningProcessIsGone() async throws {
         let owner = Process()
         owner.executableURL = URL(fileURLWithPath: "/bin/sh")
         owner.arguments = ["-c", "while :; do sleep 0.2; done"]
@@ -423,46 +440,47 @@ struct HudHelperTests {
         // `Run`'s initializer can throw, which would otherwise leave this sleeper behind for the whole run
         defer { if owner.isRunning { owner.terminate() } }
 
-        let run = try Run("bye\n", cols: 40, rows: 7, spinner: .bar, ownerPid: owner.processIdentifier)
-        defer { run.stop() }
-        run.wait { $0.contains("bye") }
-        #expect(run.running)
+        try await Run("bye\n", cols: 40, rows: 7, spinner: .bar, ownerPid: owner.processIdentifier).use { run in
+            await run.wait { $0.contains("bye") }
+            #expect(run.running)
 
-        owner.terminate()
-        owner.waitUntilExit()   // reaps it: kill -0 succeeds on a zombie, which still has a process entry
+            owner.terminate()
+            // waitUntilExit can hang after an await resumes on a different thread
+            #expect(await Run.poll(500) { !owner.isRunning })
 
-        #expect(run.waitForExit())
+            #expect(await run.waitForExit())
+        }
     }
 
-    @Test func keepsPaintingWhenTheHeaderNamesNoOwner() throws {
-        let run = try Run("", cols: 21, rows: 5)
-        defer { run.stop() }
-        try "40 7 0\nstill here\n".write(to: run.bodyFile, atomically: true, encoding: .utf8)
+    @Test func keepsPaintingWhenTheHeaderNamesNoOwner() async throws {
+        try await Run("", cols: 21, rows: 5).use { run in
+            try "40 7 0\nstill here\n".write(to: run.bodyFile, atomically: true, encoding: .utf8)
 
-        #expect(run.paints("still here"))
-        #expect(run.running)
+            #expect(await run.paints("still here"))
+            #expect(run.running)
+        }
     }
 
     // the fourth field has three treat-as-absent spellings; a non-numeric one reaching `kill -0` would fail
     // and take a live panel down on the next tick.
-    @Test(arguments: ["", "0", "notapid"]) func keepsPaintingWhenTheOwnerFieldIsNotAPid(owner: String) throws {
-        let run = try Run("", cols: 21, rows: 5)
-        defer { run.stop() }
-        try "40 7 0 \(owner)\nstill here\n".write(to: run.bodyFile, atomically: true, encoding: .utf8)
+    @Test(arguments: ["", "0", "notapid"]) func keepsPaintingWhenTheOwnerFieldIsNotAPid(owner: String) async throws {
+        try await Run("", cols: 21, rows: 5).use { run in
+            try "40 7 0 \(owner)\nstill here\n".write(to: run.bodyFile, atomically: true, encoding: .utf8)
 
-        #expect(run.paints("still here"))
-        #expect(run.running)
+            #expect(await run.paints("still here"))
+            #expect(run.running)
+        }
     }
 
     #if canImport(Darwin)
     // `${#line}` counts BYTES outside a UTF-8 locale, and the app sized the box in characters: under the
     // locale-less environment a Dock-launched app inherits, an unfixed script centers "…" three columns off.
-    @Test func centersANonAsciiMessageByCharactersNotBytes() throws {
-        let run = try Run("a message …\n", cols: 41, rows: 5)
-        defer { run.stop() }
-        // 41 columns less 11 characters leaves 15 to the left; counting the 13 bytes would leave 14
-        let frame = "\(Self.esc)[15Ca message …"
-        #expect(run.paints(frame))
+    @Test func centersANonAsciiMessageByCharactersNotBytes() async throws {
+        try await Run("a message …\n", cols: 41, rows: 5).use { run in
+            // 41 columns less 11 characters leaves 15 to the left; counting the 13 bytes would leave 14
+            let frame = "\(Self.esc)[15Ca message …"
+            #expect(await run.paints(frame))
+        }
     }
     #endif
 
@@ -470,45 +488,45 @@ struct HudHelperTests {
     // the two halves must count the same unit: `${#line}` counts CODE POINTS, `String.count` counts grapheme
     // clusters, and an accented word is where they part. macOS hands paths back decomposed, so `HudLayout`
     // precomposes and measures in `cellCount`; centering the bytes it actually wrote is what proves both.
-    @Test func centersAnAccentedMessageOnTheCountTheAppMeasured() throws {
+    @Test func centersAnAccentedMessageOnTheCountTheAppMeasured() async throws {
         let lines = HudLayout.bodyLines(for: HudSpec(message: "cafe\u{0301} au lait"))
-        let run = try Run(lines.map { $0 + "\n" }.joined(), cols: 40, rows: 5)
-        defer { run.stop() }
+        try await Run(lines.map { $0 + "\n" }.joined(), cols: 40, rows: 5).use { run in
 
-        // 40 columns less the 12 the app counted leaves 14 to the left; a decomposed 13 would leave 13
-        let left = (40 - HudLayout.cellCount(lines[0])) / 2
-        #expect(left == 14)
-        let frame = "\(Self.esc)[\(left)C\(lines[0])"
-        #expect(run.paints(frame))
+            // 40 columns less the 12 the app counted leaves 14 to the left; a decomposed 13 would leave 13
+            let left = (40 - HudLayout.cellCount(lines[0])) / 2
+            #expect(left == 14)
+            let frame = "\(Self.esc)[\(left)C\(lines[0])"
+            #expect(await run.paints(frame))
+        }
     }
     #endif
 
     // every write wakes the app's renderer, so a settled panel must go quiet rather than repaint at 2 Hz
-    @Test func stopsWritingOnceASpinnerlessFrameIsSettled() throws {
-        let run = try Run("settled\n", cols: 40, rows: 7)
-        defer { run.stop() }
-        run.wait { $0.contains("settled") }
+    @Test func stopsWritingOnceASpinnerlessFrameIsSettled() async throws {
+        try await Run("settled\n", cols: 40, rows: 7).use { run in
+            await run.wait { $0.contains("settled") }
 
-        let after = run.painted
-        Thread.sleep(forTimeInterval: Self.spinnerlessTick * 2)
-        #expect(run.painted == after)
-        #expect(run.running)
+            let after = run.painted
+            try await Task.sleep(for: .seconds(Self.spinnerlessTick * 2))
+            #expect(run.painted == after)
+            #expect(run.running)
 
-        try run.rewrite("moved on\n", cols: 40, rows: 7)
-        #expect(run.paints("moved on"))
+            try run.rewrite("moved on\n", cols: 40, rows: 7)
+            #expect(await run.paints("moved on"))
+        }
     }
 
-    @Test func hidesTheCursorAndRestoresItOnExit() throws {
-        let run = try Run("bye\n", cols: 40, rows: 7, spinner: .bar)
-        defer { run.stop() }
-        run.wait { $0.contains("bye") }
-        #expect(run.painted.hasPrefix("\(Self.esc)[?25l"))
-        try run.removeBody()
-        #expect(run.waitForExit())
-        #expect(run.painted.contains("\(Self.esc)[?25h"))
+    @Test func hidesTheCursorAndRestoresItOnExit() async throws {
+        try await Run("bye\n", cols: 40, rows: 7, spinner: .bar).use { run in
+            await run.wait { $0.contains("bye") }
+            #expect(run.painted.hasPrefix("\(Self.esc)[?25l"))
+            try run.removeBody()
+            #expect(await run.waitForExit())
+            #expect(run.painted.contains("\(Self.esc)[?25h"))
+        }
     }
 
-    @Test func exitsQuietlyWithoutABodyPath() throws {
+    @Test func exitsQuietlyWithoutABodyPath() async throws {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/bin/sh")
         proc.arguments = [Self.helper]
@@ -518,8 +536,7 @@ struct HudHelperTests {
         proc.standardError = FileHandle.nullDevice
         try proc.run()
         // bounded: a regression that made this path loop would otherwise hang the suite instead of failing
-        let deadline = Date().addingTimeInterval(5)
-        while proc.isRunning, Date() < deadline { Thread.sleep(forTimeInterval: 0.02) }
+        _ = await Run.poll(250) { !proc.isRunning }
         defer { if proc.isRunning { proc.terminate() } }
         #expect(!proc.isRunning, "no body path must exit at once, not loop")
         #expect(proc.terminationStatus == 0)

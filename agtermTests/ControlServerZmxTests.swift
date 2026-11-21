@@ -28,7 +28,7 @@ final class ControlServerZmxTests: XCTestCase {
             if failedList { throw ZmxClient.CommandError.timedOut }
             return names.map { "name=\($0)\tpid=200\tclients=0" }.joined(separator: "\n")
         })
-        let resolver = ZmxForegroundResolver(leaderProvider: { _ in foregroundLists += 1; return [:] }, leaderProbe: { .foreground($0) })
+        let resolver = ZmxForegroundResolver(leaderProvider: { foregroundLists += 1; return [:] }, leaderProbe: { .foreground($0) })
         let probe = LiveAttributionProbe(responsible: { pid in
             lookups[pid, default: 0] += 1
             return .live(pid == 100 ? 100 : root)
@@ -118,7 +118,7 @@ final class ControlServerZmxTests: XCTestCase {
         session.surface = GhosttySurfaceView(workingDirectory: "/tmp", backedByZmx: true)
         let row = "name=\(ZmxSupport.daemonName(for: session.paneIdentity))\tpid=200\tclients=1"
         let client = ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir", runner: { _ in row })
-        let resolver = ZmxForegroundResolver(leaderProvider: { _ in [:] }, leaderProbe: { .foreground($0) })
+        let resolver = ZmxForegroundResolver(leaderProvider: { [:] }, leaderProbe: { .foreground($0) })
         func node(current: String?) throws -> ControlSessionNode {
             let probe = LiveAttributionProbe(responsible: { $0 == 200 ? .live(101) : .live($0) },
                                              hosts: { _ in .init(pids: ["current": 100, "earlier": 101], current: current) },
@@ -330,6 +330,25 @@ final class ControlServerZmxTests: XCTestCase {
         XCTAssertEqual(library.activeWindowID, front)
     }
 
+    func testAnAttachIntoABackgroundWindowIsOnDiskWhenItReturns() async throws {
+        let front = try XCTUnwrap(library.activeWindowID)
+        let destination = library.newWindow(name: "other").id
+        _ = try XCTUnwrap(library.loadStore(for: destination))
+        library.frontmostWindowID = front
+        let runner = FakeRemoteRunner(result: RemoteCommandResult(status: 0, stdout: Self.splitProjection, stderr: ""))
+        let server = makeServer(list: "", remoteRunner: runner)
+
+        let dispatched = await ControlDispatcher(actions: server).dispatch(ControlRequest(cmd: .zmxAttach, target: "s1",
+            args: ControlArgs(host: "buildbox", window: destination.uuidString)))
+
+        let id = try XCTUnwrap(dispatched?.result?.id)
+        let saved = PersistenceStore(directory: stateDir.appendingPathComponent("windows"), fileName: "\(destination.uuidString).json").load()
+        let attached = try XCTUnwrap(saved.workspaces.flatMap { $0.attached ?? [] }.first)
+        XCTAssertEqual(attached.session.id.uuidString, id)
+        XCTAssertEqual(attached.origin.host, "buildbox")
+        XCTAssertEqual(attached.origin.panes.count, 2)
+    }
+
     func testAttachRefusesAClosedOrUnknownDestination() async throws {
         let front = try XCTUnwrap(library.activeWindowID)
         let destination = library.newWindow(name: "closed").id
@@ -493,6 +512,80 @@ final class ControlServerZmxTests: XCTestCase {
         let companion = try XCTUnwrap(reply.result?.id.flatMap(UUID.init(uuidString:)))
         XCTAssertEqual(store.session(withID: companion)?.parentID, parent)
         XCTAssertEqual(store.workspace(forSession: companion)?.id, home)
+    }
+
+    func testAttachIntoANamedWorkspaceCreatesItOnlyWhenAsked() async throws {
+        let server = makeServer(list: "", remoteRunner: FakeRemoteRunner(result: Self.groupProjection))
+        let store = try XCTUnwrap(library.activeStore)
+        let current = try XCTUnwrap(store.currentWorkspaceID)
+
+        let missing = await server.attachRemoteSession(host: "buildbox", session: "s1", window: nil,
+                                                       workspace: .name("api", create: false))
+        XCTAssertEqual(missing.error, "no workspace named \"api\" (pass --create-workspace to add it)")
+        XCTAssertNil(store.workspace(named: "api"))
+        XCTAssertNil(store.workspaces.flatMap(\.sessions).first { $0.remoteHost != nil })
+
+        let first = await server.attachRemoteSession(host: "buildbox", session: "s1", window: nil,
+                                                     workspace: .name("api", create: true))
+        let second = await server.attachRemoteSession(host: "buildbox", session: "s1", window: nil,
+                                                      workspace: .name("api", create: true))
+
+        let api = try XCTUnwrap(store.workspace(named: "api"))
+        XCTAssertEqual(store.workspaces.filter { $0.name == "api" }.count, 1)
+        for reply in [first, second] {
+            XCTAssertTrue(reply.ok, reply.error ?? "")
+            let row = try XCTUnwrap(reply.result?.id.flatMap(UUID.init(uuidString:)))
+            XCTAssertEqual(store.workspace(forSession: row)?.id, api.id)
+        }
+        XCTAssertNotEqual(api.id, current)
+    }
+
+    func testAttachIntoAWorkspaceByIdTakesItOverTheCurrentOne() async throws {
+        let server = makeServer(list: "", remoteRunner: FakeRemoteRunner(result: Self.groupProjection))
+        let store = try XCTUnwrap(library.activeStore)
+        let first = try XCTUnwrap(store.currentWorkspaceID)
+        let other = store.addWorkspace(name: "other").id
+        XCTAssertEqual(store.currentWorkspaceID, other)
+
+        let reply = await server.attachRemoteSession(host: "buildbox", session: "s1", window: nil,
+                                                     workspace: .id(String(first.uuidString.prefix(8))))
+        let unknown = await server.attachRemoteSession(host: "buildbox", session: "s1", window: nil, workspace: .id("zzzz"))
+        let blank = await server.attachRemoteSession(host: "buildbox", session: "s1", window: nil, workspace: .id(" "))
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        let row = try XCTUnwrap(reply.result?.id.flatMap(UUID.init(uuidString:)))
+        XCTAssertEqual(store.workspace(forSession: row)?.id, first)
+        XCTAssertEqual(unknown.error, "no such workspace: zzzz")
+        XCTAssertEqual(blank.error, "no such workspace:  ")
+        XCTAssertEqual(store.workspaces.flatMap(\.sessions).filter { $0.remoteHost != nil }.count, 1)
+    }
+
+    func testAttachByTheRootTargetLandsAmongTheTopLevelSessions() async throws {
+        let server = makeServer(list: "", remoteRunner: FakeRemoteRunner(result: Self.groupProjection))
+        let store = try XCTUnwrap(library.activeStore)
+
+        let reply = await server.attachRemoteSession(host: "buildbox", session: "s1", window: nil, workspace: .id("root"))
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        let row = try XCTUnwrap(reply.result?.id.flatMap(UUID.init(uuidString:)))
+        XCTAssertEqual(store.workspace(forSession: row)?.id, store.rootWorkspace?.id)
+    }
+
+    func testACompanionJoiningItsParentStaysInTheParentsWorkspaceWhateverWorkspaceIsNamed() async throws {
+        let server = makeServer(list: "", remoteRunner: FakeRemoteRunner(result: Self.groupProjection))
+        let store = try XCTUnwrap(library.activeStore)
+        let parentReply = await server.attachRemoteSession(host: "buildbox", session: "s1")
+        let parent = try XCTUnwrap(parentReply.result?.id.flatMap(UUID.init(uuidString:)))
+        let home = try XCTUnwrap(store.workspace(forSession: parent)?.id)
+
+        let reply = await server.attachRemoteSession(host: "buildbox", session: "c1", window: nil,
+                                                     workspace: .name("api", create: true))
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        XCTAssertEqual(reply.result?.parent, parent.uuidString)
+        let companion = try XCTUnwrap(reply.result?.id.flatMap(UUID.init(uuidString:)))
+        XCTAssertEqual(store.workspace(forSession: companion)?.id, home)
+        XCTAssertNil(store.workspace(named: "api"), "a companion that joins its parent creates no workspace")
     }
 
     func testEveryAttachedRowReportsItsOriginSessionIdInTheTreeAndItsEdges() async throws {

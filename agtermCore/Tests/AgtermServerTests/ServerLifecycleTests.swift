@@ -108,6 +108,25 @@ final class ServerLifecycleTests {
         Set(((try? server.zmx.list()) ?? []).map(\.name))
     }
 
+    #if os(Linux)
+    @Test func aRestartConfirmsItsNewShellFromProcAsZmxListsIt() async throws {
+        let server = try start()
+        let session = try newSession(server)
+        let daemon = ZmxSupport.daemonName(for: session.paneIdentity)
+        #expect(await eventually { self.listed(server).contains(daemon) })
+        let configuration = server.actions.panes.configuration
+        let target = ProcDaemon.Target(name: daemon, directory: configuration.zmxSocketDirectory, executable: configuration.zmxPath,
+                                       launchedAt: ProcDaemon.now())
+
+        let reply = await server.actions.restartSessionPane(session.id.uuidString, window: nil,
+                                                            options: ControlSessionRestartOptions(command: "sleep 600", pane: .left))
+
+        let newPid = try #require(reply.result?.restart?.newPid, "\(reply)")
+        #expect(try server.zmx.list().first { $0.name == daemon }?.leaderPID == newPid)
+        #expect(ProcDaemon.leader(target) == newPid)
+    }
+    #endif
+
     @Test func aPaneRunsItsShellWithThePaneEnvironment() async throws {
         let server = try start()
         let session = try newSession(server)

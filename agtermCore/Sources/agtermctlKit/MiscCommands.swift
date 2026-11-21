@@ -878,6 +878,28 @@ struct Font: ParsableCommand {
     }
 }
 
+// MARK: - update
+
+struct Update: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        abstract: "In-app updates of the app serving the socket.",
+        subcommands: [Check.self]
+    )
+
+    /// `agtermctl update check`: app-wide, so no `--window`.
+    struct Check: RequestCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Check for an update now, or bring up the one already found.",
+            discussion: "Asks the feed with no alert and opens the update window only for a newer version; "
+                + "the reply names the Mac that checks and what it found. "
+                + "Refused by a build without an update feed, while a check is running, and by agterm-server."
+        )
+        @OptionGroup var options: BasicOptions
+
+        func makeRequest() throws -> ControlRequest { ControlRequest(cmd: .updateCheck) }
+    }
+}
+
 // MARK: - version
 
 /// Which agterm is serving the socket this client reached. The app answers from its own bundle, so a

@@ -55,6 +55,42 @@ struct AgentHooksFilesTests {
         #expect(try [".zshrc", ".bashrc", ".claude/settings.json", ".codex/config.toml"].map { try read(home, $0) } == before)
     }
 
+    @Test func appendingKeepsShellRCMode() throws {
+        let home = try makeHome()
+        defer { try? FileManager.default.removeItem(at: home) }
+        let bashrc = home.appendingPathComponent(".bashrc")
+        try "export EDITOR=vim\n".write(to: bashrc, atomically: false, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o600)], ofItemAtPath: bashrc.path)
+        let files = AgentHooksFiles(source: scripts, home: home, toolPath: toolPath)
+
+        _ = try files.install()
+
+        #expect(AgentHooksInstall.posixMode(ofFile: bashrc.path)?.intValue == 0o600)
+        #expect(try read(home, ".bashrc").contains(files.destination.appendingPathComponent(AgentHooksInstall.integrationRelativePath).path))
+    }
+
+    @Test func bakingPreservesWrapperModesAcrossReinstall() throws {
+        let home = try makeHome()
+        defer { try? FileManager.default.removeItem(at: home) }
+        let source = home.appendingPathComponent("resources/agent-status")
+        try FileManager.default.createDirectory(at: source.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try DirectoryCopy.copy(scripts, to: source)
+        let wrappers = [(AgentHooksInstall.wrapperName, 0o700), (AgentHooksInstall.codexWrapperName, 0o750)]
+        for (name, mode) in wrappers {
+            try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: mode)], ofItemAtPath: source.appendingPathComponent(name).path)
+        }
+        let files = AgentHooksFiles(source: source, home: home, toolPath: toolPath)
+
+        for installation in 1...2 {
+            _ = try files.install()
+            for (name, mode) in wrappers {
+                let wrapper = files.destination.appendingPathComponent(name)
+                #expect(AgentHooksInstall.posixMode(ofFile: wrapper.path)?.intValue == mode, "Installation \(installation): \(name)")
+                #expect(try String(contentsOf: wrapper, encoding: .utf8).contains(toolPath))
+            }
+        }
+    }
+
     @Test func missingJqSkipsOnlyCodex() throws {
         let home = try makeHome()
         defer { try? FileManager.default.removeItem(at: home) }

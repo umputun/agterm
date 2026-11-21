@@ -40,9 +40,10 @@ public struct ControlSessionOverlayOpenOptions: Equatable, Sendable {
     public let imagePixels: ImagePixels?
     /// textLog makes a text page a log page (`--tail`, `--follow-file`).
     public let textLog: TextLog?
-    /// forwarded marks a page a click on the presenting Mac asked for: it opens there or not at all, and replaces a
-    /// hidden clicked page there. The app sets it and the dispatcher never does.
-    public let forwarded: Bool
+    /// forwardedTo is the token of the viewer whose click asked for this page: it opens on that Mac or not at all, and
+    /// replaces a hidden clicked page there. The app sets it and the dispatcher never does.
+    public let forwardedTo: Int?
+    public var forwarded: Bool { forwardedTo != nil }
     /// markdownLinks is a markdown page's link grant, computed by the app from the file; the dispatcher never sets it.
     public let markdownLinks: MarkdownLinkGrant?
 
@@ -50,10 +51,10 @@ public struct ControlSessionOverlayOpenOptions: Equatable, Sendable {
                 follow: Bool = false, pane: OverlayPane? = nil, page: HtmlSource? = nil, navigation: Bool = false,
                 javascript: Bool = false, chromeless: Bool = false, persistent: Bool = false, browse: Bool = false,
                 points: OverlayPointSize = OverlayPointSize(), clicked: Bool = false, imagePixels: ImagePixels? = nil,
-                textLog: TextLog? = nil, forwarded: Bool = false, markdownLinks: MarkdownLinkGrant? = nil) {
+                textLog: TextLog? = nil, forwardedTo: Int? = nil, markdownLinks: MarkdownLinkGrant? = nil) {
         self.markdownLinks = markdownLinks
         self.textLog = textLog
-        self.forwarded = forwarded
+        self.forwardedTo = forwardedTo
         self.clicked = clicked
         self.imagePixels = imagePixels
         self.command = command
@@ -78,7 +79,7 @@ public struct ControlSessionOverlayOpenOptions: Equatable, Sendable {
                                          backgroundColor: backgroundColor, follow: follow, pane: pane, page: page,
                                          navigation: navigation, javascript: javascript, chromeless: chromeless,
                                          persistent: persistent, browse: browse, points: points, clicked: clicked,
-                                         imagePixels: imagePixels, textLog: textLog, forwarded: forwarded,
+                                         imagePixels: imagePixels, textLog: textLog, forwardedTo: forwardedTo,
                                          markdownLinks: markdownLinks)
     }
 
@@ -88,7 +89,7 @@ public struct ControlSessionOverlayOpenOptions: Equatable, Sendable {
                                          backgroundColor: backgroundColor, follow: follow, pane: pane, page: page,
                                          navigation: navigation, javascript: javascript, chromeless: chromeless,
                                          persistent: persistent, browse: browse, points: points, clicked: clicked,
-                                         imagePixels: imagePixels, textLog: textLog, forwarded: forwarded,
+                                         imagePixels: imagePixels, textLog: textLog, forwardedTo: forwardedTo,
                                          markdownLinks: markdownLinks)
     }
 }
@@ -157,13 +158,14 @@ public struct ControlSessionRestartOptions: Equatable, Sendable {
 /// The pids are the daemon leaders, the pane's root shells, not the program the caller's line starts.
 public struct ControlRestartReceipt: Codable, Equatable, Sendable {
     public let paneID: String
-    public let oldPid: Int32
+    /// oldPid is nil when the pane had no shell to replace: an ended agterm-server row started again.
+    public let oldPid: Int32?
     public let newPid: Int32
     /// replayedArgv is the foreground program a restart without a command asked the new shell to run;
     /// nil when the caller supplied the line. It is what was requested, not proof the program started.
     public let replayedArgv: [String]?
 
-    public init(paneID: String, oldPid: Int32, newPid: Int32, replayedArgv: [String]? = nil) {
+    public init(paneID: String, oldPid: Int32?, newPid: Int32, replayedArgv: [String]? = nil) {
         self.paneID = paneID
         self.oldPid = oldPid
         self.newPid = newPid

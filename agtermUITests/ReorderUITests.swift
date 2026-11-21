@@ -25,31 +25,37 @@ final class ReorderUITests: XCTestCase {
         if let stateDir { try? FileManager.default.removeItem(at: stateDir) }
     }
 
-    // the aaa/bbb/ccc custom names make the persisted order an unambiguous oracle; dropping ON a row
-    // inserts just AFTER it, so ccc onto aaa gives [aaa, ccc, bbb].
     func testReorderSessionUp() throws {
         try relaunchWithSessions(["aaa", "bbb", "ccc"])
-        dragRow(named: "ccc", onto: "aaa")
+        dragRow(named: "ccc", toTopOf: "bbb")
         XCTAssertTrue(pollSessionNames(["aaa", "ccc", "bbb"], timeout: 10),
-                      "dragging ccc up onto aaa should reorder to [aaa, ccc, bbb]")
+                      "dragging ccc up into the gap above bbb should reorder to [aaa, ccc, bbb]")
+        XCTAssertTrue(pollParentNames([:], timeout: 10))
     }
 
     // the downward path exercises the same-workspace `childIndex - 1` post-removal adjustment in
     // `acceptDrop` (sourceIndex 1 < dropChildIndex 3) that the up-move does not.
     func testReorderSessionDown() throws {
         try relaunchWithSessions(["aaa", "bbb", "ccc"])
-        dragRow(named: "bbb", onto: "ccc")
+        dragRow(named: "bbb", onto: "ccc", at: 0.95)
         XCTAssertTrue(pollSessionNames(["aaa", "ccc", "bbb"], timeout: 10),
-                      "dragging bbb down onto ccc should reorder to [aaa, ccc, bbb]")
+                      "dragging bbb down into the gap below ccc should reorder to [aaa, ccc, bbb]")
+        XCTAssertTrue(pollParentNames([:], timeout: 10))
     }
 
-    // the drop must NOT be onto the last row, or the two outcomes coincide: with the `childIndex - 1`
-    // post-removal adjustment aaa lands at index 2, without it the append-clamp pushes it to the END.
     func testReorderSessionDownPastMiddle() throws {
         try relaunchWithSessions(["aaa", "bbb", "ccc", "ddd"])
-        dragRow(named: "aaa", onto: "ccc")
+        dragRow(named: "aaa", toTopOf: "ddd")
         XCTAssertTrue(pollSessionNames(["bbb", "ccc", "aaa", "ddd"], timeout: 10),
-                      "dragging aaa down onto the middle row ccc should land it between ccc and ddd")
+                      "dragging aaa down into the gap above ddd should land it between ccc and ddd")
+        XCTAssertTrue(pollParentNames([:], timeout: 10))
+    }
+
+    func testDroppingASessionOnAnotherSessionsRowMakesItThatSessionsCompanion() throws {
+        try relaunchWithSessions(["aaa", "bbb", "ccc"])
+        dragRow(named: "ccc", onto: "aaa")
+        XCTAssertTrue(pollParentNames(["ccc": "aaa"], timeout: 10), "dropping ccc on aaa's row should nest it under aaa")
+        XCTAssertTrue(pollSessionNames(["aaa", "ccc", "bbb"], timeout: 10))
     }
 
     // the oracle is the persisted flag state because AppKit's transient outline multi-selection is not
@@ -214,6 +220,36 @@ final class ReorderUITests: XCTestCase {
 
     // MARK: - Fixture
 
+    func testDraggingASessionIntoTheRootGapMovesItIntoTheRoot() throws {
+        try relaunchWithWorkspaces([(name: "workspace 1", sessions: ["aaa", "bbb"])], root: ["top"])
+        dragRow(named: "bbb", onto: "top", at: 0.95)
+        XCTAssertTrue(pollWorkspaceSessionNames(["": ["top", "bbb"], "workspace 1": ["aaa"]], timeout: 10))
+        XCTAssertTrue(pollParentNames([:], timeout: 10))
+    }
+
+    func testDraggingARootSessionIntoAWorkspaceGapMovesItOut() throws {
+        try relaunchWithWorkspaces([(name: "workspace 1", sessions: ["aaa", "bbb"])], root: ["top"])
+        dragRow(named: "top", toTopOf: "bbb")
+        XCTAssertTrue(pollWorkspaceSessionNames(["": [], "workspace 1": ["aaa", "top", "bbb"]], timeout: 10))
+        XCTAssertTrue(pollParentNames([:], timeout: 10))
+    }
+
+    func testMoveToTopLevelSessionsFromTheRowMenu() throws {
+        try relaunchWithWorkspaces([(name: "workspace 1", sessions: ["aaa", "bbb"])], root: ["top"])
+        sessionRow(named: "bbb").rightClick()
+        presentedMenuItem("Move to").hover()
+        presentedMenuItem("Top-Level Sessions").click()
+        XCTAssertTrue(pollWorkspaceSessionNames(["": ["top", "bbb"], "workspace 1": ["aaa"]], timeout: 10))
+    }
+
+    func testFocusTopLevelSessionsFromARootRowHidesTheWorkspaceRows() throws {
+        try relaunchWithWorkspaces([(name: "workspace 1", sessions: ["aaa"])], root: ["top"])
+        sessionRow(named: "top").rightClick()
+        presentedMenuItem("Focus Top-Level Sessions").click()
+        XCTAssertTrue(workspaceRow(named: "workspace 1").waitForNonExistence(timeout: 10), "the filter shows the root alone")
+        XCTAssertTrue(sessionRow(named: "top").exists)
+    }
+
     private func relaunchFlagged(_ fixtures: [(name: String, sessions: [(String, Bool)], collapsed: Bool)],
                                  layout: String) throws {
         let snapshotFile = stateDir.windowSnapshotFile()
@@ -255,19 +291,21 @@ final class ReorderUITests: XCTestCase {
 
     /// Relaunches with named workspaces and sessions. `confirmClose` opts one focused test back into the
     /// close modal that ordinary XCUITest launches suppress to avoid hanging unrelated close flows.
-    private func relaunchWithWorkspaces(_ fixtures: [(name: String, sessions: [String])], confirmClose: Bool = false) throws {
+    private func relaunchWithWorkspaces(_ fixtures: [(name: String, sessions: [String])], root: [String]? = nil,
+                                        confirmClose: Bool = false) throws {
         let snapshotFile = stateDir.windowSnapshotFile()
         app.terminate()
 
         var firstSessionID: String?
-        let workspaces = fixtures.map { fixture -> [String: Any] in
-            let sessions = fixture.sessions.map { name -> [String: Any] in
+        let sessions = { (names: [String]) -> [[String: Any]] in
+            names.map { name in
                 let id = UUID().uuidString
                 if firstSessionID == nil { firstSessionID = id }
                 return ["id": id, "customName": name, "cwd": NSHomeDirectory()]
             }
-            return ["id": UUID().uuidString, "name": fixture.name, "sessions": sessions]
         }
+        var workspaces = fixtures.map { ["id": UUID().uuidString, "name": $0.name, "sessions": sessions($0.sessions)] as [String: Any] }
+        if let root { workspaces.append(["id": UUID().uuidString, "name": "", "root": true, "sessions": sessions(root)]) }
         let selectedSessionID = try XCTUnwrap(firstSessionID, "the fixture must contain at least one session")
         let snapshot: [String: Any] = [
             "version": 1,
@@ -286,7 +324,7 @@ final class ReorderUITests: XCTestCase {
         app.launchEnvironment["AGTERM_STATE_DIR"] = stateDir.path
         if confirmClose { app.launchEnvironment["AGTERM_UITEST_ALLOW_CLOSE_CONFIRMATION"] = "1" }
         app.launchForUITest()
-        for name in fixtures.flatMap(\.sessions) {
+        for name in fixtures.flatMap(\.sessions) + (root ?? []) {
             XCTAssertTrue(sessionRow(named: name).waitForExistence(timeout: 10), "seeded session \(name) should be visible")
         }
     }
@@ -367,7 +405,7 @@ final class ReorderUITests: XCTestCase {
     ///    so a coordinate drag targets the outline machinery directly;
     /// 2. use the mouse-native `click(forDuration:thenDragTo:withVelocity:thenHoldForDuration:)`
     ///    (with a final hold), NOT the touch `press(...)`.
-    private func dragRow(named source: String, onto target: String) {
+    private func dragRow(named source: String, onto target: String, at offset: CGFloat = 0.5) {
         let from = sessionRow(named: source)
         let to = sessionRow(named: target)
         XCTAssertTrue(from.waitForHittable(timeout: 10), "\(source) row should be hittable to drag")
@@ -376,7 +414,7 @@ final class ReorderUITests: XCTestCase {
         from.click()
         RunLoop.current.run(until: Date().addingTimeInterval(0.2))
         let start = from.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-        let end = to.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        let end = to.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: offset))
         start.click(forDuration: 0.7, thenDragTo: end, withVelocity: 180, thenHoldForDuration: 0.25)
     }
 
@@ -451,6 +489,21 @@ final class ReorderUITests: XCTestCase {
         }
     }
 
+    private func pollParentNames(_ expected: [String: String], timeout: TimeInterval) -> Bool {
+        stateDir.pollSnapshot(equals: expected, timeout: timeout) { obj in
+            guard let workspaces = obj["workspaces"] as? [[String: Any]] else { return nil }
+            let sessions = workspaces.flatMap { $0["sessions"] as? [[String: Any]] ?? [] }
+            let names = Dictionary(sessions.compactMap { s in (s["id"] as? String).map { ($0, s["customName"] as? String ?? "") } },
+                                   uniquingKeysWith: { first, _ in first })
+            var result: [String: String] = [:]
+            for session in sessions {
+                guard let parent = session["parentID"] as? String, let name = session["customName"] as? String else { continue }
+                result[name] = names[parent] ?? parent
+            }
+            return result
+        }
+    }
+
     /// Polls every named workspace's persisted session labels, preserving each workspace's session order.
     private func pollWorkspaceSessionNames(_ expected: [String: [String]], timeout: TimeInterval) -> Bool {
         stateDir.pollSnapshot(equals: expected, timeout: timeout) { obj in
@@ -507,7 +560,7 @@ final class ReorderUITests: XCTestCase {
     private func pollWorkspaceNames(_ expected: [String], timeout: TimeInterval) -> Bool {
         stateDir.pollSnapshot(equals: expected, timeout: timeout) { obj in
             guard let workspaces = obj["workspaces"] as? [[String: Any]] else { return nil }
-            return workspaces.compactMap { $0["name"] as? String }
+            return workspaces.filter { $0["root"] as? Bool != true }.compactMap { $0["name"] as? String }
         }
     }
 }

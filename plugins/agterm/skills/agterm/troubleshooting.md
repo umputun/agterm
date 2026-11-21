@@ -148,6 +148,12 @@ Check these in order:
   keeps the host it started under; `agtermctl tree --json` marks it `liveHostStale`. Agterm ▸ Reset Live
   Sessions… (or `agtermctl zmx reset --force`) moves it to the current host, with the same cost as any reset;
   at every launch agterm asks each earlier host to stop, and one stops once no live session runs under it.
+- **Live sessions close about 30 seconds after a GUI program starts from one.** macOS force-quits a program
+  switched off in System Settings ▸ General ▸ Login Items ▸ Allow in the Background, together with the
+  coalition it started in (#985). On macOS 27 and later the session host runs as its own launchd job, so
+  only the program goes. A session under a host from an earlier build stays exposed until Agterm ▸ Reset Live
+  Sessions…; one whose host fell back after a `session host job ... failed` log line stays exposed, and a
+  reset does not help. Switching the program on in Allow in the Background stops it in every case.
 - **Switching modes ends detached live processes.** Selecting Fresh shells or Re-run commands and restarting
   reaps the live daemons in this state directory. An unavailable launch that still requests Live sessions
   preserves its claimed daemons for a later eligible launch.
@@ -257,6 +263,13 @@ The pane gets the thumbnail's `TemporaryItems/NSIRD_screencaptureui_*` path, but
 `Operation not permitted` and Claude Code drops the image silently. In the reported case Full Disk Access fixed
 it without a restart; see the [screenshot read diagnosis](https://github.com/umputun/agterm/blob/master/docs/troubleshooting.md#a-dropped-screenshot-reaches-a-live-pane-but-cannot-be-read).
 
+### "Ctrl-V pastes no image into Claude Code in a remote session"
+
+Claude Code's Ctrl-V reads the clipboard of the host it runs on, which in a remote pane is the other Mac or the
+server. Use ⌘V: agterm copies the clipboard image, or files copied in Finder, to that host and pastes the path
+there, which Claude Code attaches. A paste binding of your own in ghostty.conf, and the bundled one at the V position on a
+Latin alternative layout such as Dvorak, paste text only in a remote pane.
+
 ### "agterm would like to access data from other apps, over and over"
 
 Use `agtermctl tree --json` to read `liveAttribution` and `splitLiveAttribution`; see the
@@ -316,13 +329,15 @@ disconnects the CLI sessions attached to it. A daemon-backed conversation can st
 exits: if `codex --no-daemon resume <id>` shows "This conversation is open in another app", stop the
 shared daemon and press R to retry.
 
-### "Claude Code background sessions have no status"
+### "Claude Code background session status lands on another session, or on none"
 
-A session started with `claude --bg` runs under Claude Code's supervisor, which does not pass the
-launching pane's `AGTERM_*` variables, so its status hooks find no `AGTERM_SESSION_ID` and exit quietly.
-`--settings` carries over into a background session and its hooks inherit the `env` block, so pass the
-variables there. With the hooks installed (Help ▸ Install Agent Status Hooks…), launch from the pane that
-should show the status:
+A session started with `claude --bg` or from `claude agents` runs under Claude Code's supervisor, which
+starts on demand from the first shell that needs it. By default the session can inherit `AGTERM_*` from
+that supervisor rather than the pane that launched or shows it, so its status hooks can report to the
+session that started the supervisor, or exit quietly if the supervisor has no session id. `--settings` carries over into a
+background session, and its `env` block reaches both the session and its hooks, so `cbg` explicitly
+passes the launch session, socket and pane. With the hooks installed (Help ▸ Install Agent Status
+Hooks…), launch from the pane that should show the status:
 
 ```bash
 cbg() {
@@ -334,8 +349,9 @@ cbg() {
 cbg "your prompt"
 ```
 
-The status stays with the launching pane; `claude attach` from another pane does not move it. Verified
-hook routing with Claude Code 2.1.311.
+The status stays with the launching pane; `claude attach` from another pane does not move it.
+`cbg` does not set `AGTERM_WINDOW_ID` or `AGTERM_WORKSPACE_ID`. On Claude Code 2.1.327, the four `cbg`
+values reached the Bash tool and a Stop hook.
 
 ### "Claude Code's question/permission prompt is unresponsive after switching apps"
 

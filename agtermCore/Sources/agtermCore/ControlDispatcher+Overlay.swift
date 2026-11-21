@@ -128,24 +128,6 @@ extension ControlDispatcher {
             }
         case .sessionOverlayText:
             return dispatchSessionOverlayText(request)
-        case .sessionOverlayFollow:
-            guard let mode = ControlToggleMode.parse(request.args?.mode) else {
-                return ControlResponse(ok: false, error: "invalid overlay follow mode: \(request.args?.mode ?? "toggle")")
-            }
-            switch parseOverlayPane(request.args?.pane) {
-            case .rejected(let response): return response
-            case .pane(let pane):
-                return actions.setSessionOverlayFollow(request.target, window: request.args?.window, pane: pane, mode: mode)
-            }
-        case .sessionOverlayWrap:
-            guard let mode = ControlToggleMode.parse(request.args?.mode) else {
-                return ControlResponse(ok: false, error: "invalid overlay wrap mode: \(request.args?.mode ?? "toggle")")
-            }
-            switch parseOverlayPane(request.args?.pane) {
-            case .rejected(let response): return response
-            case .pane(let pane):
-                return actions.setSessionOverlayWrap(request.target, window: request.args?.window, pane: pane, mode: mode)
-            }
         case .sessionOverlayHide, .sessionOverlayShow, .sessionOverlayToggle:
             let mode: OverlayVisibilityMode = request.cmd == .sessionOverlayHide ? .hide
                 : (request.cmd == .sessionOverlayShow ? .show : .toggle)
@@ -335,6 +317,42 @@ extension ControlDispatcher {
         }
     }
 
+    /// dispatchSessionOverlayFollow takes an optional mode, toggle when absent.
+    func dispatchSessionOverlayFollow(_ request: ControlRequest) async -> ControlResponse {
+        guard let mode = ControlToggleMode.parse(request.args?.mode) else {
+            return ControlResponse(ok: false, error: "invalid overlay follow mode: \(request.args?.mode ?? "toggle")")
+        }
+        switch parseOverlayPane(request.args?.pane) {
+        case .rejected(let response): return response
+        case .pane(let pane):
+            return await actions.setSessionOverlayFollow(request.target, window: request.args?.window, pane: pane, mode: mode)
+        }
+    }
+
+    /// dispatchSessionOverlayWrap takes an optional mode, toggle when absent.
+    func dispatchSessionOverlayWrap(_ request: ControlRequest) async -> ControlResponse {
+        guard let mode = ControlToggleMode.parse(request.args?.mode) else {
+            return ControlResponse(ok: false, error: "invalid overlay wrap mode: \(request.args?.mode ?? "toggle")")
+        }
+        switch parseOverlayPane(request.args?.pane) {
+        case .rejected(let response): return response
+        case .pane(let pane):
+            return await actions.setSessionOverlayWrap(request.target, window: request.args?.window, pane: pane, mode: mode)
+        }
+    }
+
+    /// dispatchSessionOverlayExpand takes an optional mode, toggle when absent.
+    func dispatchSessionOverlayExpand(_ request: ControlRequest) async -> ControlResponse {
+        guard let mode = ControlToggleMode.parse(request.args?.mode) else {
+            return ControlResponse(ok: false, error: "invalid overlay expand mode: \(request.args?.mode ?? "toggle")")
+        }
+        switch parseOverlayPane(request.args?.pane) {
+        case .rejected(let response): return response
+        case .pane(let pane):
+            return await actions.setSessionOverlayExpand(request.target, window: request.args?.window, pane: pane, mode: mode)
+        }
+    }
+
     /// dispatchSessionOverlayChanges takes a required `to` of next or prev.
     func dispatchSessionOverlayChanges(_ request: ControlRequest) async -> ControlResponse {
         let forward: Bool
@@ -349,6 +367,18 @@ extension ControlDispatcher {
         case .pane(let pane):
             return await actions.stepSessionOverlayChanges(request.target, window: request.args?.window, pane: pane,
                                                            forward: forward)
+        }
+    }
+
+    /// dispatchSessionOverlayFiles takes a required `to`, a file's number from 1 or its path as the page shows it.
+    func dispatchSessionOverlayFiles(_ request: ControlRequest) async -> ControlResponse {
+        guard let to = request.args?.to, !to.isEmpty else {
+            return ControlResponse(ok: false, error: "session.overlay.files requires to, a file number or path")
+        }
+        switch parseOverlayPane(request.args?.pane) {
+        case .rejected(let response): return response
+        case .pane(let pane):
+            return await actions.goSessionOverlayFiles(request.target, window: request.args?.window, pane: pane, to: to)
         }
     }
 }

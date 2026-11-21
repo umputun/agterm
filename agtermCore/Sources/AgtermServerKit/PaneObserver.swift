@@ -55,30 +55,38 @@ final class PaneObserver {
         let records = panes.endUnownedScratches(records)
         let listed = Dictionary(records.map { ($0.name, $0) }) { first, _ in first }
         var missing: [(session: Session, identities: [UUID])] = []
-        for session in store.workspaces.flatMap(\.sessions) where !session.ended {
+        var leaders: [UUID: Int32] = [:]
+        // a page row has no daemon, so its absence from a listing never ends it
+        for session in store.workspaces.flatMap(\.sessions) where !session.ended && session.content == .terminal {
             var gone: [UUID] = []
             for (identity, role) in panesOf(session) {
                 if let record = listed[ZmxSupport.daemonName(for: identity)] {
                     session.daemonBackedPanes.insert(identity)
+                    leaders[identity] = record.leaderPID
                     updateCwd(of: session, role: role, leader: record.leaderPID)
-                } else if !panes.started(identity, since: listedAt) {
+                } else if !panes.started(identity, since: listedAt), !panes.isRestarting(identity) {
                     gone.append(identity)
                 }
             }
             if !gone.isEmpty { missing.append((session, gone)) }
         }
+        panes.leaders = leaders
         for (session, gone) in missing { gone.forEach { session.daemonBackedPanes.remove($0) } }
         for (session, gone) in missing { settle(session, gone: gone) }
         settleScratches(listed, listedAt: listedAt)
         onApplied?()
     }
 
-    /// settleScratches clears every session's scratch, an ended session's included, whose daemon a listing no longer
-    /// holds: its shell exited or its daemon was lost.
+    /// settleScratches refreshes the directory of every session's listed scratch, an ended session's included, and
+    /// clears one whose daemon a listing no longer holds: its shell exited or its daemon was lost.
     private func settleScratches(_ listed: [String: ZmxSessionRecord], listedAt: Date) {
         for session in store.workspaces.flatMap(\.sessions) {
-            guard let scratch = session.scratchDaemon, listed[ZmxSupport.scratchDaemonName(for: scratch.identity)] == nil,
-                  !panes.started(scratch.identity, since: listedAt) else { continue }
+            guard let scratch = session.scratchDaemon else { continue }
+            if let record = listed[ZmxSupport.scratchDaemonName(for: scratch.identity)] {
+                updateCwd(of: session, role: .scratch, leader: record.leaderPID)
+                continue
+            }
+            guard !panes.started(scratch.identity, since: listedAt) else { continue }
             _ = consumeExitRecord(scratch.identity)
             panes.forgetScratch(scratch.identity)
             store.dropScratchDaemon(session.id)
@@ -120,6 +128,15 @@ final class PaneObserver {
         }
     }
 
+    /// settleExited runs the exit transition of a pane whose daemon a confirmed kill ended. zmx writes no exit record
+    /// for a killed daemon, so one is written here and the pane settles as if its shell had exited.
+    func settleExited(_ session: Session, identity: UUID) {
+        _ = FileManager.default.createFile(atPath: panes.exitRecord(identity), contents: nil)
+        session.daemonBackedPanes.remove(identity)
+        settle(session, gone: [identity])
+        onApplied?()
+    }
+
     /// consumeExitRecord reports whether `identity`'s shell exited, removing the record it read.
     private func consumeExitRecord(_ identity: UUID) -> Bool {
         let path = panes.exitRecord(identity)
@@ -133,7 +150,7 @@ final class PaneObserver {
         switch role {
         case .left: if session.currentCwd != directory { session.currentCwd = directory }
         case .right: if session.splitCwd != directory { session.splitCwd = directory }
-        case .scratch: break
+        case .scratch: if session.scratchCwd != directory { session.scratchCwd = directory }
         }
     }
 }
@@ -169,5 +186,27 @@ enum ProcCwd {
         guard let resolved = realpath(path, nil) else { return nil }
         defer { free(resolved) }
         return String(cString: resolved)
+    }
+}
+
+/// ProcForeground reads the argv of the program in the foreground of a pane's terminal from `/proc`, the shell
+/// itself while it waits at a prompt. Linux only; elsewhere there is none.
+enum ProcForeground {
+    static func argv(leader: Int32) -> [String]? {
+        #if os(Linux)
+        let group = ProcCwd.foregroundGroup(of: leader) ?? leader
+        guard let data = FileManager.default.contents(atPath: "/proc/\(group)/cmdline") else { return nil }
+        return parseCmdline(data)
+        #else
+        return nil
+        #endif
+    }
+
+    /// parseCmdline splits `/proc/<pid>/cmdline`, whose arguments each end in a NUL; nil for an empty one, which a
+    /// kernel thread or a process already gone reports.
+    static func parseCmdline(_ data: Data) -> [String]? {
+        var parts = data.split(separator: 0, omittingEmptySubsequences: false).map { String(decoding: $0, as: UTF8.self) }
+        if parts.last == "" { parts.removeLast() }
+        return parts.isEmpty ? nil : parts
     }
 }

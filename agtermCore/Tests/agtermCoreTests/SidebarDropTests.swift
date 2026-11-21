@@ -465,4 +465,44 @@ struct SidebarDropTests {
     @Test func flaggedTreeDropOnItsOwnRowIsANoOp() {
         #expect(treeDrop(Self.b, from: (Self.wsA, 2), .onSession(workspace: Self.wsA, index: 2, count: 3)) == nil)
     }
+
+    @Test(arguments: [
+        (SidebarDrop.CompanionDropRow.parent(SidebarDropTests.b), SidebarDrop.onItemIndex, SidebarDrop.CompanionReparent(parent: SidebarDropTests.b, slot: 0)),
+        (.parent(SidebarDropTests.b), 2, SidebarDrop.CompanionReparent(parent: SidebarDropTests.b, slot: 2)),
+        (.parent(SidebarDropTests.b), 0, SidebarDrop.CompanionReparent(parent: SidebarDropTests.b, slot: 0)),
+        (.companion(parent: SidebarDropTests.b, position: 1), SidebarDrop.onItemIndex, SidebarDrop.CompanionReparent(parent: SidebarDropTests.b, slot: 2)),
+    ])
+    func aCompanionDroppedOnAnotherGroupJoinsItWhereTheIndicatorShows(
+        row: SidebarDrop.CompanionDropRow, childIndex: Int, expected: SidebarDrop.CompanionReparent) {
+        #expect(SidebarDrop.companionReparent(from: Self.a, onto: row, childIndex: childIndex) == expected)
+    }
+
+    @Test(arguments: [SidebarDrop.CompanionDropRow.parent(SidebarDropTests.a), .companion(parent: SidebarDropTests.a, position: 0)])
+    func aCompanionDroppedInItsOwnGroupIsNoReparent(row: SidebarDrop.CompanionDropRow) {
+        #expect(SidebarDrop.companionReparent(from: Self.a, onto: row, childIndex: SidebarDrop.onItemIndex) == nil)
+        #expect(SidebarDrop.companionReparent(from: Self.a, onto: row, childIndex: 1) == nil)
+    }
+
+    // MARK: - Root block
+
+    @Test(arguments: [
+        (childIndex: 0, rootRows: 2, rootShown: true, expected: true),
+        (childIndex: 2, rootRows: 2, rootShown: true, expected: true),
+        (childIndex: 3, rootRows: 2, rootShown: true, expected: false),
+        (childIndex: 0, rootRows: 0, rootShown: true, expected: true),
+        (childIndex: 0, rootRows: 0, rootShown: false, expected: false),
+        (childIndex: 1, rootRows: 2, rootShown: false, expected: false),
+        (childIndex: SidebarDrop.onItemIndex, rootRows: 2, rootShown: true, expected: false),
+    ])
+    func aTopLevelGapDropsIntoTheRootOnlyWithinAShownRootBlock(childIndex: Int, rootRows: Int, rootShown: Bool, expected: Bool) {
+        #expect(SidebarDrop.isRootGap(childIndex: childIndex, rootRows: rootRows, rootShown: rootShown) == expected)
+    }
+
+    @Test func aSessionDroppedIntoTheRootBlockLandsAtItsSlot() {
+        let root = UUID()
+        let move = SidebarDrop.resolveSessions(sources: [SidebarDrop.SessionSource(workspace: Self.wsA, index: 1)],
+                                               target: .workspaceRow(id: root, sessionCount: 2), childIndex: 1)
+        #expect(move?.workspace == root)
+        #expect(move?.destination == 1)
+    }
 }

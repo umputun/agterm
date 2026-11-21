@@ -20,8 +20,11 @@ extension ServerActions {
                 let name = ZmxSupport.daemonName(for: identity)
                 if running.contains(name) { daemons[session.id.uuidString, default: [:]][role] = name }
             }
+            if let scratch = session.scratchDaemon, running.contains(ZmxSupport.scratchDaemonName(for: scratch.identity)) {
+                daemons[session.id.uuidString, default: [:]]["scratch"] = ZmxSupport.scratchDaemonName(for: scratch.identity)
+            }
         }
-        let tree = store.controlTree(paneForeground: { _ in nil }, app: identity)
+        let tree = tree()
         let window = RemoteWindowProjection(id: catalog.id.uuidString, name: catalog.name, tree: tree)
         let endpoint = ControlZmxEndpoint(executable: panes.configuration.zmxPath,
                                           socketDirectory: panes.configuration.zmxSocketDirectory)
@@ -31,11 +34,17 @@ extension ServerActions {
 
     /// openPresentation answers `zmx.present`; the stream starts once this reply is on the wire.
     public func openPresentation(session target: String) -> ControlResponse {
+        // a session in its undo grace keeps its stream, and one removed for good is answered `ended` on it
+        if let id = UUID(uuidString: target), store.session(withID: id) == nil,
+           store.pendingCloseSession(withID: id) != nil || PresentationEnds.shared.contains(id) {
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
         switch resolveSession(target) {
         case .failure(let refusal): return refusal.response
         case .success(let session):
-            // a session whose panes are gone keeps a stream while its scratch still runs
-            guard session.allPanesBackedByZmx || session.scratchDaemon != nil else {
+            // a session whose panes are gone keeps a stream while its scratch still runs; a page row has no daemon
+            // but takes its asks and picks through one
+            guard session.allPanesBackedByZmx || session.scratchDaemon != nil || session.content == .page else {
                 return ControlResponse(ok: false, error: "session is not live-backed, so nothing can be attached to it")
             }
             return ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString))

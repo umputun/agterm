@@ -1,20 +1,23 @@
 import Foundation
 
-/// CatalogVersions is what a headless origin advertises: its build, the presentation protocol it speaks and the
-/// catalog protocol. A Mac origin advertises none, which is how a remote window knows not to bind to it.
+/// CatalogVersions is what an origin serving a catalog advertises: its build, the presentation protocol it speaks and
+/// the catalog protocol. A Mac advertises it as `macCatalog` on `version`, never as `versions`.
 public struct CatalogVersions: Codable, Equatable, Sendable {
     public var server: String
     public var protocolVersion: Int
     public var catalog: Int
+    /// live is whether a Mac runs Live sessions, which its windows need to be served; agterm-server leaves it out.
+    public var live: Bool?
 
-    public init(server: String, protocolVersion: Int, catalog: Int) {
+    public init(server: String, protocolVersion: Int, catalog: Int, live: Bool? = nil) {
         self.server = server
         self.protocolVersion = protocolVersion
         self.catalog = catalog
+        self.live = live
     }
 
     enum CodingKeys: String, CodingKey {
-        case server, protocolVersion = "protocol", catalog
+        case server, protocolVersion = "protocol", catalog, live
     }
 }
 
@@ -29,11 +32,18 @@ public struct CatalogPane: Codable, Equatable, Sendable {
     public var identity: UUID
     public var daemon: String
     public var endpoint: ControlZmxEndpoint
+    /// pendingMessages is the pane's unacked mail on the server, omitted at none and by a server predating it.
+    public var pendingMessages: Int?
+    /// held marks a Mac origin's pane whose daemon is not running, listed so the row keeps its pane roles; the viewer
+    /// shows it ended and never attaches it. agterm-server never sets it.
+    public var held: Bool?
 
-    public init(identity: UUID, daemon: String, endpoint: ControlZmxEndpoint) {
+    public init(identity: UUID, daemon: String, endpoint: ControlZmxEndpoint, pendingMessages: Int? = nil, held: Bool? = nil) {
         self.identity = identity
         self.daemon = daemon
         self.endpoint = endpoint
+        self.pendingMessages = pendingMessages
+        self.held = held
     }
 }
 
@@ -52,9 +62,20 @@ public struct CatalogSessionFields: Codable, Equatable, Sendable {
     public var lifecycle: CatalogLifecycle
     /// scratch is the session's server scratch while its daemon runs, an ended session's included.
     public var scratch: CatalogScratch?
+    /// page marks a page row, which has no pane; its `primary` is its own id.
+    public var page: CatalogPage?
+    /// customName is the session's manual name, empty when it has none, while `name` is its resolved label. A
+    /// server predating it omits it, and its `name` then stands in as the manual name.
+    public var customName: String?
+    /// flagged and tint are the server's: `false` and `""` for none, nil only from a server predating them, whose
+    /// viewer keeps its own. `tintOn` lists the parts a tint colors.
+    public var flagged: Bool?
+    public var tint: String?
+    public var tintOn: [String]?
 
     public init(id: UUID, name: String, parent: UUID?, cwd: String, primary: UUID, axis: String?, shown: Bool,
-                lifecycle: CatalogLifecycle, scratch: CatalogScratch? = nil) {
+                lifecycle: CatalogLifecycle, scratch: CatalogScratch? = nil, page: CatalogPage? = nil,
+                customName: String? = nil, flagged: Bool? = nil, tint: String? = nil, tintOn: [String]? = nil) {
         self.id = id
         self.name = name
         self.parent = parent
@@ -64,6 +85,25 @@ public struct CatalogSessionFields: Codable, Equatable, Sendable {
         self.shown = shown
         self.lifecycle = lifecycle
         self.scratch = scratch
+        self.page = page
+        self.customName = customName
+        self.flagged = flagged
+        self.tint = tint
+        self.tintOn = tintOn
+    }
+}
+
+/// CatalogPage is a page row's page: `file` or `url`, its identity text, and the server's zmx endpoint, which
+/// names the server for the row's binding as a pane's endpoint does.
+public struct CatalogPage: Codable, Equatable, Sendable {
+    public var kind: String
+    public var identity: String
+    public var endpoint: ControlZmxEndpoint
+
+    public init(kind: String, identity: String, endpoint: ControlZmxEndpoint) {
+        self.kind = kind
+        self.identity = identity
+        self.endpoint = endpoint
     }
 }
 
@@ -117,12 +157,30 @@ public struct CatalogSession: Codable, Equatable, Sendable {
 public struct CatalogWorkspace: Codable, Equatable, Sendable {
     public var id: UUID
     public var name: String
+    /// tint is the server's, as on a session: `""` for none, nil only from a server predating it.
+    public var tint: String?
+    public var tintOn: [String]?
+    /// root marks the origin's root container, the one a viewer adopts as its own; nil for a named workspace and from
+    /// an origin predating it, which a viewer then shows as a named workspace.
+    public var root: Bool?
     public var sessions: [CatalogSession]
 
-    public init(id: UUID, name: String, sessions: [CatalogSession]) {
+    public init(id: UUID, name: String, tint: String? = nil, tintOn: [String]? = nil, root: Bool? = nil,
+                sessions: [CatalogSession]) {
         self.id = id
         self.name = name
+        self.tint = tint
+        self.tintOn = tintOn
+        self.root = root
         self.sessions = sessions
+    }
+}
+
+/// CatalogTint reads a catalog tint back as a row's: nil when the server sent none or a color this Mac cannot read.
+public enum CatalogTint {
+    public static func sidebarTint(_ tint: String?, on parts: [String]?) -> SidebarTint? {
+        guard let color = tint.flatMap(TintValue.init(rawValue:)) else { return nil }
+        return SidebarTint(color: color, parts: Set((parts ?? []).compactMap(TintPart.init(rawValue:))))
     }
 }
 
@@ -134,20 +192,25 @@ public struct CatalogSnapshot: Codable, Equatable, Sendable {
     public var catalogID: UUID
     public var versions: CatalogVersions
     public var workspaces: [CatalogWorkspace]
+    /// recent is the server's Recent Closed list, newest first; a server predating it sends none.
+    public var recent: [ControlRecentItem]?
 
-    public init(epoch: String, rev: Int, catalogID: UUID, versions: CatalogVersions, workspaces: [CatalogWorkspace]) {
+    public init(epoch: String, rev: Int, catalogID: UUID, versions: CatalogVersions, workspaces: [CatalogWorkspace],
+                recent: [ControlRecentItem]? = nil) {
         self.epoch = epoch
         self.rev = rev
         self.catalogID = catalogID
         self.versions = versions
         self.workspaces = workspaces
+        self.recent = recent
     }
 }
 
 /// CatalogChange is one structural change, applied in order by `CatalogSnapshot.apply`.
 public enum CatalogChange: Equatable, Sendable {
     case workspaceAdded(CatalogWorkspace, index: Int)
-    case workspaceChanged(id: UUID, name: String)
+    /// workspaceChanged carries the workspace's name and tint; a server predating the tint sends none.
+    case workspaceChanged(id: UUID, name: String, tint: String? = nil, tintOn: [String]? = nil)
     case workspaceRemoved(UUID)
     case workspaceOrder([UUID])
     case sessionAdded(CatalogSession, workspace: UUID, index: Int)
@@ -159,6 +222,8 @@ public enum CatalogChange: Equatable, Sendable {
     case paneAdded(CatalogPane, session: UUID)
     case paneChanged(CatalogPane, session: UUID)
     case paneRemoved(UUID, session: UUID)
+    /// recentChanged replaces the Recent Closed list; an older viewer reads it as an unknown kind and steps past it.
+    case recentChanged([ControlRecentItem])
 
     public var kind: String {
         switch self {
@@ -174,6 +239,7 @@ public enum CatalogChange: Equatable, Sendable {
         case .paneAdded: "pane.added"
         case .paneChanged: "pane.changed"
         case .paneRemoved: "pane.removed"
+        case .recentChanged: "recent.changed"
         }
     }
 }
@@ -183,11 +249,18 @@ public struct CatalogHello: Codable, Equatable, Sendable {
     /// epoch is set on the server's answer, never on the viewer's opening hello.
     public var epoch: String?
     public var versions: CatalogVersions?
+    /// pageRows is set on a viewer's opening hello when it shows page rows; an older viewer is sent none.
+    public var pageRows: Bool?
+    /// window names the Mac window a viewer's opening hello subscribes to; a server's catalog takes none.
+    public var window: String?
 
-    public init(version: Int, epoch: String? = nil, versions: CatalogVersions? = nil) {
+    public init(version: Int, epoch: String? = nil, versions: CatalogVersions? = nil, pageRows: Bool? = nil,
+                window: String? = nil) {
         self.version = version
         self.epoch = epoch
         self.versions = versions
+        self.pageRows = pageRows
+        self.window = window
     }
 }
 
@@ -202,13 +275,20 @@ public enum CatalogFrame: Equatable, Sendable {
     case delta(epoch: String, rev: Int, change: CatalogChange)
     case ping
     case ack
+    /// refused ends a subscription with the reason to show; a final one stops the viewer's retries.
+    case refused(reason: String, final: Bool)
     case unknown(kind: String, epoch: String?, rev: Int?)
+}
+
+extension CatalogFrame {
+    /// skipKind is a revision with no change for this viewer: one a viewer without page rows is not sent.
+    public static let skipKind = "catalog.skip"
 }
 
 extension CatalogFrame: Codable {
     private enum Keys: String, CodingKey {
-        case kind, hello, snapshot, index, data, epoch, rev, chunks
-        case workspace, session, id, ids, name, pane, identity
+        case kind, hello, snapshot, index, data, epoch, rev, chunks, reason, final
+        case workspace, session, id, ids, name, pane, identity, tint, tintOn, recent
     }
 
     public init(from decoder: Decoder) throws {
@@ -224,6 +304,8 @@ extension CatalogFrame: Codable {
                            chunks: try container.decode(Int.self, forKey: .chunks))
         case "ping": self = .ping
         case "ack": self = .ack
+        case "refused":
+            self = .refused(reason: try container.decode(String.self, forKey: .reason), final: try container.decode(Bool.self, forKey: .final))
         default:
             guard let change = try Self.change(kind, container) else {
                 self = .unknown(kind: kind, epoch: try container.decodeIfPresent(String.self, forKey: .epoch),
@@ -237,11 +319,15 @@ extension CatalogFrame: Codable {
 
     private static func change(_ kind: String, _ container: KeyedDecodingContainer<Keys>) throws -> CatalogChange? {
         switch kind {
+        case "recent.changed":
+            return .recentChanged(try container.decode([ControlRecentItem].self, forKey: .recent))
         case "workspace.added":
             return .workspaceAdded(try container.decode(CatalogWorkspace.self, forKey: .workspace),
                                    index: try container.decode(Int.self, forKey: .index))
         case "workspace.changed":
-            return .workspaceChanged(id: try container.decode(UUID.self, forKey: .id), name: try container.decode(String.self, forKey: .name))
+            return .workspaceChanged(id: try container.decode(UUID.self, forKey: .id), name: try container.decode(String.self, forKey: .name),
+                                     tint: try container.decodeIfPresent(String.self, forKey: .tint),
+                                     tintOn: try container.decodeIfPresent([String].self, forKey: .tintOn))
         case "workspace.removed": return .workspaceRemoved(try container.decode(UUID.self, forKey: .id))
         case "workspace.order": return .workspaceOrder(try container.decode([UUID].self, forKey: .ids))
         case "session.added":
@@ -290,6 +376,10 @@ extension CatalogFrame: Codable {
             try Self.encode(change, into: &container)
         case .ping: try container.encode("ping", forKey: .kind)
         case .ack: try container.encode("ack", forKey: .kind)
+        case .refused(let reason, let final):
+            try container.encode("refused", forKey: .kind)
+            try container.encode(reason, forKey: .reason)
+            try container.encode(final, forKey: .final)
         case .unknown(let kind, let epoch, let rev):
             try container.encode(kind, forKey: .kind)
             try container.encodeIfPresent(epoch, forKey: .epoch)
@@ -302,9 +392,11 @@ extension CatalogFrame: Codable {
         case .workspaceAdded(let workspace, let index):
             try container.encode(workspace, forKey: .workspace)
             try container.encode(index, forKey: .index)
-        case .workspaceChanged(let id, let name):
+        case .workspaceChanged(let id, let name, let tint, let tintOn):
             try container.encode(id, forKey: .id)
             try container.encode(name, forKey: .name)
+            try container.encodeIfPresent(tint, forKey: .tint)
+            try container.encodeIfPresent(tintOn, forKey: .tintOn)
         case .workspaceRemoved(let id), .sessionRemoved(let id): try container.encode(id, forKey: .id)
         case .workspaceOrder(let ids): try container.encode(ids, forKey: .ids)
         case .sessionAdded(let session, let workspace, let index):
@@ -325,6 +417,7 @@ extension CatalogFrame: Codable {
         case .paneRemoved(let identity, let session):
             try container.encode(identity, forKey: .identity)
             try container.encode(session, forKey: .session)
+        case .recentChanged(let items): try container.encode(items, forKey: .recent)
         }
     }
 }

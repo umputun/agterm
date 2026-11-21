@@ -80,4 +80,10 @@ struct ImagePageTests {
         #expect(html.contains("src=\"data:image/png;base64,AQID\""))
         #expect(html.contains("width:100%;height:100%;object-fit:contain"))
     }
+
+    @Test func htmlEscapesTheSourceItIsGiven() {
+        let html = ImagePage.html(src: "agterm-page://p/image/1?a=\"b\"&c")
+        #expect(html.contains("src=\"agterm-page://p/image/1?a=&quot;b&quot;&amp;c\""))
+        #expect(html.contains("width:100%;height:100%;object-fit:contain"))
+    }
 }

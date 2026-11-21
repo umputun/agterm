@@ -22,7 +22,7 @@ final class ControlCompanionsUITests: ControlAPITestCase {
         let created = try sendCommand(#"{"cmd":"workspace.new","args":{"name":"other"}}"#)
         let other = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String)
         let refused = try sendCommand(#"{"cmd":"session.move","target":"\#(companion)","args":{"workspace":"\#(other)"}}"#)
-        XCTAssertEqual(refused["error"] as? String, "a companion moves only among its siblings")
+        XCTAssertEqual(refused["error"] as? String, "a companion moves only among its siblings; use --parent to move it under another session, or --top-level to make it a top-level session")
         let moved = try sendCommand(#"{"cmd":"session.move","target":"\#(parent)","args":{"workspace":"\#(other)"}}"#)
         XCTAssertEqual(moved["ok"] as? Bool, true, "\(moved)")
         XCTAssertTrue(pollSessionOrder(inWorkspace: 1, equals: [parent, sibling, companion].compactMap(UUID.init(uuidString:)), timeout: 5))
@@ -34,6 +34,55 @@ final class ControlCompanionsUITests: ControlAPITestCase {
         XCTAssertEqual(result["affected"] as? Int, 3)
         XCTAssertEqual(Set(result["closed"] as? [String] ?? []), [parent, companion, sibling])
         XCTAssertNil(try sessionNodeIfPresent(id: companion))
+    }
+
+    func testACompanionMovedUnderAnotherParentReadsBackItsNewParentAndSlot() throws {
+        let first = try activeSessionID()
+        let companion = try cliOutput(["session", "new", "--parent", first, "--no-select"])
+        let created = try sendCommand(#"{"cmd":"workspace.new","args":{"name":"other"}}"#)
+        let other = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String)
+        let second = try cliOutput(["session", "new", "--workspace", other, "--no-select"])
+        let resident = try cliOutput(["session", "new", "--parent", second, "--no-select"])
+
+        XCTAssertEqual(try cliOutput(["session", "move", "--target", companion, "--parent", second, "--index", "0"]), "ok")
+
+        XCTAssertEqual(try sessionNode(id: companion)["parent"] as? String, second)
+        XCTAssertTrue(pollSessionOrder(inWorkspace: 1, equals: [second, companion, resident].compactMap(UUID.init(uuidString:)), timeout: 5))
+        let refused = try sendCommand(#"{"cmd":"session.companion.move","target":"\#(companion)","args":{"parent":"\#(resident)"}}"#)
+        XCTAssertEqual(refused["error"] as? String, "the new parent must be a top-level session")
+        XCTAssertEqual(try sessionNode(id: companion)["parent"] as? String, second)
+    }
+
+    func testACompanionMadeTopLevelReadsBackNoParentAndItsPlace() throws {
+        let parent = try activeSessionID()
+        let first = try cliOutput(["session", "new", "--parent", parent, "--no-select"])
+        let second = try cliOutput(["session", "new", "--parent", parent, "--no-select"])
+        let created = try sendCommand(#"{"cmd":"workspace.new","args":{"name":"other"}}"#)
+        let other = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String)
+
+        XCTAssertEqual(try cliOutput(["session", "move", "--target", first, "--top-level"]), "ok")
+        XCTAssertNil(try sessionNode(id: first)["parent"])
+        XCTAssertEqual(try sessionNode(id: second)["parent"] as? String, parent)
+        XCTAssertTrue(pollSessionOrder([parent, second, first].compactMap(UUID.init(uuidString:)), timeout: 5))
+
+        XCTAssertEqual(try cliOutput(["session", "move", "--target", second, "--top-level", other]), "ok")
+        XCTAssertNil(try sessionNode(id: second)["parent"])
+        XCTAssertTrue(pollSessionOrder(inWorkspace: 1, equals: [second].compactMap(UUID.init(uuidString:)), timeout: 5))
+        let refused = try sendCommand(#"{"cmd":"session.companion.promote","target":"\#(first)"}"#)
+        XCTAssertEqual(refused["error"] as? String, "not a companion")
+    }
+
+    func testATopLevelSessionMovedUnderAnotherBringsItsCompanions() throws {
+        let first = try activeSessionID()
+        let companion = try cliOutput(["session", "new", "--parent", first, "--no-select"])
+        let second = try cliOutput(["session", "new", "--no-select"])
+
+        XCTAssertEqual(try cliOutput(["session", "move", "--target", first, "--parent", second]), "ok")
+
+        XCTAssertEqual(try sessionNode(id: first)["parent"] as? String, second)
+        XCTAssertEqual(try sessionNode(id: companion)["parent"] as? String, second)
+        let refused = try sendCommand(#"{"cmd":"session.companion.move","target":"\#(second)","args":{"parent":"\#(second)"}}"#)
+        XCTAssertEqual(refused["error"] as? String, "a session cannot move under itself")
     }
 
     func testOrdinarySessionCommandsActOnACompanion() throws {

@@ -29,6 +29,7 @@ final class WorkspaceSidebarCompanionsTests: XCTestCase {
         await MainActor.run {
             NSMenuItem.usesUserKeyEquivalents = savedUserKeyEquivalents
             GhosttyApp.shared.setFlaggedViewLayout(.flat)
+            GhosttyApp.shared.setAgentStatusColors(activeHex: nil, blockedHex: nil, completedHex: nil)
             window?.orderOut(nil)
             window = nil
             outline = nil
@@ -64,23 +65,58 @@ final class WorkspaceSidebarCompanionsTests: XCTestCase {
         XCTAssertEqual(outline.level(forRow: try row(group.first.id)), outline.level(forRow: try row(group.parent.id)))
     }
 
-    func testFoldingAParentPersistsAndShowsTheCompanionsThatNeedAttention() throws {
+    func testFoldingAParentPersistsAndMarksItsCompanionsInTheMostUrgentStatusColor() throws {
         let group = try seed()
-        group.store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: group.first.id)
+        group.store.setAgentIndicator(AgentIndicator(status: .completed), forSession: group.first.id)
+        group.store.setAgentIndicator(AgentIndicator(status: .blocked, color: "#123456"), forSession: group.second.id)
         buildSidebar(for: group.store)
-        XCTAssertTrue(try XCTUnwrap(cell(group.parent.id).companionMarker).isHidden, "an open parent shows its companions")
+        XCTAssertTrue(try marker(group.parent.id).isHidden, "an open parent shows its companions")
 
         outline.collapseItem(try node(group.parent.id))
 
         XCTAssertFalse(group.parent.isExpanded)
-        let marker = try XCTUnwrap(cell(group.parent.id).companionMarker)
+        let marker = try marker(group.parent.id)
         XCTAssertFalse(marker.isHidden)
-        XCTAssertEqual(marker.accessibilityLabel(), "companions need attention: \(group.first.displayName)")
+        XCTAssertEqual(marker.contentTintColor, NSColor(agtermHex: "#123456"))
+        XCTAssertEqual(marker.accessibilityLabel(), "companions: second blocked, first completed")
 
         outline.expandItem(try node(group.parent.id))
 
         XCTAssertTrue(group.parent.isExpanded)
-        XCTAssertTrue(try XCTUnwrap(cell(group.parent.id).companionMarker).isHidden)
+        XCTAssertTrue(try self.marker(group.parent.id).isHidden)
+    }
+
+    func testAFoldedParentRetintsWhenAHiddenCompanionChangesStatus() throws {
+        let group = try seed()
+        group.store.setSessionExpanded(group.parent.id, expanded: false)
+        group.first.unseenCount = 2
+        buildSidebar(for: group.store)
+        XCTAssertTrue(try marker(group.parent.id).isHidden, "unread notifications alone leave no marker")
+
+        group.store.setAgentIndicator(AgentIndicator(status: .active), forSession: group.first.id)
+        coordinator.reconcile()
+        XCTAssertFalse(try marker(group.parent.id).isHidden)
+        XCTAssertEqual(try marker(group.parent.id).contentTintColor, GhosttyApp.shared.statusColor(for: .active))
+        XCTAssertEqual(try marker(group.parent.id).accessibilityLabel(), "companions: first active")
+
+        group.store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: group.second.id)
+        coordinator.reconcile()
+        XCTAssertEqual(try marker(group.parent.id).contentTintColor, GhosttyApp.shared.statusColor(for: .blocked))
+        XCTAssertEqual(try marker(group.parent.id).accessibilityLabel(), "companions: second blocked, first active")
+    }
+
+    func testAStatusColorChangeInSettingsRetintsAFoldedParentsMarker() throws {
+        let group = try seed()
+        group.store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: group.first.id)
+        group.store.setSessionExpanded(group.parent.id, expanded: false)
+        group.store.selectSession(group.after.id)
+        buildSidebar(for: group.store)
+
+        GhosttyApp.shared.setAgentStatusColors(activeHex: nil, blockedHex: "#abcdef", completedHex: nil)
+        NotificationCenter.default.post(name: .agtermAppearanceChanged, object: nil)
+
+        XCTAssertFalse(try marker(group.parent.id).isHidden)
+        XCTAssertEqual(try marker(group.parent.id).contentTintColor, NSColor(agtermHex: "#abcdef"))
     }
 
     func testAFoldedParentStaysFoldedAcrossARebuild() throws {
@@ -160,7 +196,7 @@ final class WorkspaceSidebarCompanionsTests: XCTestCase {
         }
     }
 
-    func testConvertIsOmittedOnACompanionRowAndDisabledOnARemoteRow() throws {
+    func testConvertIsOmittedOnACompanionRowAndEnabledOnARowAttachedFromAnotherHost() throws {
         let group = try seed()
         let remote = try XCTUnwrap(group.store.addSession(toWorkspace: group.work.id, cwd: "/tmp", remoteHost: "far"))
         buildSidebar(for: group.store)
@@ -170,7 +206,7 @@ final class WorkspaceSidebarCompanionsTests: XCTestCase {
         group.store.setSidebarSelection([remote.id])
         let remoteMenu = try XCTUnwrap(coordinator.menu(forRow: try row(remote.id)))
         let item = try XCTUnwrap(remoteMenu.items.first { $0.title == "Convert to Companion" }, "\(remoteMenu.items.map(\.title))")
-        XCTAssertFalse(item.isEnabled)
+        XCTAssertTrue(item.isEnabled)
     }
 
     // a cached parent node kept its nested rows into the flat flagged list
@@ -204,16 +240,77 @@ final class WorkspaceSidebarCompanionsTests: XCTestCase {
                        [group.parent.id, group.second.id, group.first.id, group.after.id])
     }
 
-    func testATopLevelSessionDroppedOnARowBelowAGroupLandsRightAfterThatRow() throws {
+    func testATopLevelSessionDroppedInTheGapBelowARowLandsRightAfterThatRow() throws {
         let group = try seed()
         let middle = try XCTUnwrap(group.store.addSession(toWorkspace: group.work.id, cwd: "/tmp", name: "middle"))
         let last = try XCTUnwrap(group.store.addSession(toWorkspace: group.work.id, cwd: "/tmp", name: "last"))
         buildSidebar(for: group.store)
 
-        XCTAssertTrue(try drop([last.id], onRow: group.after.id))
+        XCTAssertTrue(try drop([last.id], onto: group.work.id, childIndex: 2))
+        XCTAssertNil(last.parentID)
 
         XCTAssertEqual(group.store.workspaces.first { $0.id == group.work.id }?.sessions.map(\.id),
                        [group.parent.id, group.first.id, group.second.id, group.after.id, last.id, middle.id])
+    }
+
+    func testATopLevelSessionDroppedOnAnotherTopLevelRowBecomesItsFirstCompanionWithItsGroup() throws {
+        let group = try seed()
+        let resident = try group.store.addCompanion(to: group.after.id, options: CompanionOptions(name: "resident")).get()
+        buildSidebar(for: group.store)
+
+        XCTAssertTrue(try drop([group.parent.id], onRow: group.after.id))
+
+        XCTAssertEqual(group.store.companions(of: group.after.id).map(\.id),
+                       [group.parent.id, group.first.id, group.second.id, resident.id])
+        for moved in [group.parent, group.first, group.second] {
+            XCTAssertEqual(moved.parentID, group.after.id)
+            XCTAssertTrue(group.store.session(withID: moved.id) === moved)
+        }
+    }
+
+    func testARefusedTopLevelNestLeavesTheTreeInsteadOfReordering() throws {
+        let group = try seed()
+        let remote = try XCTUnwrap(group.store.addSession(toWorkspace: group.work.id, cwd: "/tmp", name: "remote", remoteHost: "buildbox"))
+        buildSidebar(for: group.store)
+        let before = group.store.workspaces.first { $0.id == group.work.id }?.sessions.map(\.id)
+
+        XCTAssertFalse(try drop([group.after.id], onRow: remote.id))
+
+        XCTAssertEqual(group.store.workspaces.first { $0.id == group.work.id }?.sessions.map(\.id), before)
+        XCTAssertNil(group.after.parentID)
+    }
+
+    func testATopLevelSessionKeepsItsParentlessPlaceOutsideATopLevelRowsCenter() throws {
+        let group = try seed()
+        buildSidebar(for: group.store)
+
+        _ = try drop([group.after.id], onto: group.parent.id, childIndex: 1)
+        XCTAssertNil(group.after.parentID)
+        _ = try drop([group.after.id], onRow: group.first.id)
+        XCTAssertNil(group.after.parentID)
+    }
+
+    func testSeveralTopLevelRowsDroppedOnARowStillReorder() throws {
+        let group = try seed()
+        let last = try XCTUnwrap(group.store.addSession(toWorkspace: group.work.id, cwd: "/tmp", name: "last"))
+        let extra = try XCTUnwrap(group.store.addSession(toWorkspace: group.work.id, cwd: "/tmp", name: "extra"))
+        buildSidebar(for: group.store)
+
+        XCTAssertTrue(try drop([group.after.id, extra.id], onRow: last.id))
+
+        XCTAssertEqual(group.store.workspaces.first { $0.id == group.work.id }?.sessions.map(\.id),
+                       [group.parent.id, group.first.id, group.second.id, last.id, group.after.id, extra.id])
+        XCTAssertNil(group.after.parentID)
+        XCTAssertNil(extra.parentID)
+    }
+
+    func testACompanionDroppedOnItsOwnParentRowMovesFirstInTheGroup() throws {
+        let group = try seed()
+        buildSidebar(for: group.store)
+
+        XCTAssertTrue(try drop([group.second.id], onRow: group.parent.id))
+
+        XCTAssertEqual(group.store.companions(of: group.parent.id).map(\.id), [group.second.id, group.first.id])
     }
 
     func testAParentDraggedWithItsCompanionMovesTheGroupToAnotherWorkspace() throws {
@@ -227,26 +324,157 @@ final class WorkspaceSidebarCompanionsTests: XCTestCase {
                        [group.parent.id, group.first.id, group.second.id])
     }
 
-    func testMoveToIsOfferedForAParentAndNotForACompanion() throws {
+    func testMoveToIsOfferedForAParentAndListsOtherParentsForACompanion() throws {
         let group = try seed()
-        _ = group.store.addWorkspace(name: "other")
+        let other = group.store.addWorkspace(name: "other")
+        let elsewhere = try XCTUnwrap(group.store.addSession(toWorkspace: other.id, cwd: "/tmp", name: "elsewhere", select: false))
         buildSidebar(for: group.store)
 
         let parentMenu = try XCTUnwrap(coordinator.menu(forRow: try row(group.parent.id)))
         XCTAssertNotNil(parentMenu.items.first { $0.title == "Move to" })
         group.store.setSidebarSelection([group.first.id])
         let companionMenu = try XCTUnwrap(coordinator.menu(forRow: try row(group.first.id)))
-        XCTAssertNil(companionMenu.items.first { $0.title == "Move to" }, "\(companionMenu.items.map(\.title))")
+        let submenu = try XCTUnwrap(companionMenu.items.first { $0.title == "Move to" }?.submenu, "\(companionMenu.items.map(\.title))")
+        let titles = submenu.items.map(\.title)
+        XCTAssertEqual(Array(titles.suffix(4)), ["work", "after", "other", "elsewhere"], "\(titles)")
+        XCTAssertFalse(titles.contains("parent"), "the current parent is no destination")
+        XCTAssertEqual(submenu.items.suffix(4).map(\.isSectionHeader), [true, false, true, false])
+
+        let item = try XCTUnwrap(submenu.items.first { $0.title == "elsewhere" })
+        coordinator.perform(item.action, with: item)
+
+        XCTAssertEqual(group.first.parentID, elsewhere.id)
+        XCTAssertEqual(group.store.workspaces.first { $0.id == other.id }?.sessions.map(\.id), [elsewhere.id, group.first.id])
+    }
+
+    func testACompanionDroppedOnAnotherTopLevelRowBecomesItsFirstCompanion() throws {
+        let group = try seed()
+        let resident = try group.store.addCompanion(to: group.after.id, options: CompanionOptions(name: "resident")).get()
+        group.store.setSessionExpanded(group.after.id, expanded: false)
+        buildSidebar(for: group.store)
+
+        XCTAssertTrue(try drop([group.second.id], onto: group.after.id))
+
+        XCTAssertEqual(group.second.parentID, group.after.id)
+        XCTAssertEqual(group.store.workspaces.first { $0.id == group.work.id }?.sessions.map(\.id),
+                       [group.parent.id, group.first.id, group.after.id, group.second.id, resident.id])
+    }
+
+    func testACompanionDroppedInAGapOrOnARowOfAnotherGroupLandsWhereTheIndicatorShows() throws {
+        let group = try seed()
+        let resident = try group.store.addCompanion(to: group.after.id, options: CompanionOptions(name: "resident")).get()
+        buildSidebar(for: group.store)
+
+        XCTAssertTrue(try drop([group.second.id], onto: group.after.id, childIndex: 1))
+        XCTAssertEqual(group.store.companions(of: group.after.id).map(\.id), [resident.id, group.second.id])
+
+        coordinator.rebuildAndReload()
+        XCTAssertTrue(try drop([group.first.id], onto: resident.id))
+        XCTAssertEqual(group.store.companions(of: group.after.id).map(\.id), [resident.id, group.first.id, group.second.id])
+        XCTAssertTrue(group.store.companions(of: group.parent.id).isEmpty)
+    }
+
+    func testSeveralCompanionsCannotChangeParentOrLeaveTheirGroupTogether() throws {
+        let group = try seed()
+        buildSidebar(for: group.store)
+
+        XCTAssertFalse(try drop([group.first.id, group.second.id], onto: group.work.id, childIndex: 1))
+        XCTAssertFalse(try drop([group.first.id, group.second.id], onto: group.after.id))
+        XCTAssertEqual(group.store.companions(of: group.parent.id).map(\.id), [group.first.id, group.second.id])
+    }
+
+    func testACompanionDroppedInATopLevelGapOrOnAWorkspaceRowBecomesTopLevelThere() throws {
+        let group = try seed()
+        let other = group.store.addWorkspace(name: "other")
+        let resident = try XCTUnwrap(group.store.addSession(toWorkspace: other.id, cwd: "/tmp", name: "resident", select: false))
+        buildSidebar(for: group.store)
+
+        XCTAssertTrue(try drop([group.first.id], onto: group.work.id, childIndex: 1))
+        XCTAssertNil(group.first.parentID)
+        XCTAssertEqual(group.store.workspaces.first { $0.id == group.work.id }?.sessions.map(\.id),
+                       [group.parent.id, group.second.id, group.first.id, group.after.id])
+
+        coordinator.rebuildAndReload()
+        XCTAssertTrue(try drop([group.second.id], onRow: other.id))
+        XCTAssertNil(group.second.parentID)
+        XCTAssertEqual(group.store.workspaces.first { $0.id == other.id }?.sessions.map(\.id), [resident.id, group.second.id])
+    }
+
+    func testACompanionDroppedInTheTopLevelGapBecomesATopLevelSessionThere() throws {
+        let group = try seed()
+        let root = try XCTUnwrap(group.store.rootWorkspace)
+        let top = try XCTUnwrap(group.store.addSession(toWorkspace: root.id, cwd: "/tmp", name: "top", select: false))
+        buildSidebar(for: group.store)
+
+        XCTAssertTrue(try drop([group.first.id], item: nil, childIndex: 0))
+
+        XCTAssertNil(group.first.parentID)
+        XCTAssertEqual(group.store.rootWorkspace?.sessions.map(\.id), [group.first.id, top.id])
+    }
+
+    func testMoveToOnACompanionListsEveryWorkspaceFirstAndMakesItTopLevelThere() throws {
+        let group = try seed()
+        let other = group.store.addWorkspace(name: "other")
+        buildSidebar(for: group.store)
+        group.store.setSidebarSelection([group.first.id])
+
+        let menu = try XCTUnwrap(coordinator.menu(forRow: try row(group.first.id)))
+        let submenu = try XCTUnwrap(menu.items.first { $0.title == "Move to" }?.submenu, "\(menu.items.map(\.title))")
+        let labels = group.store.displayWorkspaces.map(\.label)
+        XCTAssertEqual(submenu.items.prefix(labels.count).map(\.title), labels)
+        XCTAssertTrue(labels.contains("work"), "\(labels)")
+        XCTAssertTrue(submenu.items[labels.count].isSeparatorItem)
+
+        let item = try XCTUnwrap(submenu.items.prefix(labels.count).first { $0.title == "other" })
+        coordinator.perform(item.action, with: item)
+
+        XCTAssertNil(group.first.parentID)
+        XCTAssertEqual(group.store.workspaces.first { $0.id == other.id }?.sessions.map(\.id), [group.first.id])
+    }
+
+    func testTheFlaggedTreeKeepsCompanionsAmongTheirSiblings() throws {
+        let group = try seed()
+        GhosttyApp.shared.setFlaggedViewLayout(.tree)
+        group.store.setFlag(true, forSessions: [group.parent.id, group.first.id, group.second.id, group.after.id])
+        group.store.setSidebarMode(.flagged)
+        buildSidebar(for: group.store)
+
+        _ = try drop([group.first.id], onto: group.after.id)
+
+        XCTAssertEqual(group.first.parentID, group.parent.id)
+    }
+
+    func testASelectedCompanionMovedUnderAFoldedParentIsRevealedWithoutPersisting() throws {
+        let group = try seed()
+        _ = try group.store.addCompanion(to: group.after.id, options: CompanionOptions(name: "resident")).get()
+        group.store.setSessionExpanded(group.after.id, expanded: false)
+        group.store.selectSession(group.first.id)
+        buildSidebar(for: group.store)
+        coordinator.syncSelection()
+
+        XCTAssertNoThrow(try group.store.moveCompanion(group.first.id, under: group.after.id).get())
+        coordinator.rebuildAndReload()
+        coordinator.syncSelection()
+
+        XCTAssertEqual(outline.selectedRow, try row(group.first.id))
+        XCTAssertFalse(group.after.isExpanded, "a reveal is a view action")
     }
 
     private func drop(_ ids: [UUID], onRow target: UUID) throws -> Bool {
+        try drop(ids, onto: target)
+    }
+
+    private func drop(_ ids: [UUID], onto target: UUID, childIndex: Int = SidebarDrop.onItemIndex) throws -> Bool {
+        try drop(ids, item: try node(target), childIndex: childIndex)
+    }
+
+    private func drop(_ ids: [UUID], item: SidebarNode?, childIndex: Int) throws -> Bool {
         let pasteboard = NSPasteboard(name: NSPasteboard.Name("agterm-companions-\(UUID().uuidString)"))
         defer { pasteboard.releaseGlobally() }
         pasteboard.clearContents()
         pasteboard.setString(ids.map(\.uuidString).joined(separator: "\n"), forType: sessionPasteboardType)
-        let info = FakeDrag(pasteboard, over: outline)
-        let operation = coordinator.outlineView(outline, validateDrop: info, proposedItem: try node(target),
-                                                proposedChildIndex: SidebarDrop.onItemIndex)
+        let info = SidebarDrag(pasteboard, over: outline)
+        let operation = coordinator.outlineView(outline, validateDrop: info, proposedItem: item, proposedChildIndex: childIndex)
         guard operation == .move else { return false }
         return coordinator.outlineView(outline, acceptDrop: info, item: outline.dropItem,
                                        childIndex: outline.dropChildIndex)
@@ -334,6 +562,10 @@ final class WorkspaceSidebarCompanionsTests: XCTestCase {
         try XCTUnwrap(outline.view(atColumn: 0, row: try row(id), makeIfNecessary: true) as? SidebarCellView)
     }
 
+    private func marker(_ id: UUID) throws -> NSImageView {
+        try XCTUnwrap(try cell(id).companionMarker)
+    }
+
     private func buildSidebar(for store: AppStore) {
         outline = RecordingOutlineView()
         coordinator = WorkspaceSidebar.Coordinator(store: store, actions: actions)
@@ -370,7 +602,7 @@ private struct CompanionRows {
     let after: Session
 }
 
-private final class RecordingOutlineView: NSOutlineView {
+final class RecordingOutlineView: NSOutlineView {
     private(set) var dropItem: Any?
     private(set) var dropChildIndex = SidebarDrop.onItemIndex
 
@@ -382,15 +614,15 @@ private final class RecordingOutlineView: NSOutlineView {
 }
 
 @MainActor
-private final class FakeDrag: NSObject, @preconcurrency NSDraggingInfo {
+final class SidebarDrag: NSObject, @preconcurrency NSDraggingInfo {
     let draggingPasteboard: NSPasteboard
     let draggingDestinationWindow: NSWindow?
     let draggingLocation: NSPoint
 
-    init(_ pasteboard: NSPasteboard, over view: NSView) {
+    init(_ pasteboard: NSPasteboard, over view: NSView, at location: NSPoint = .zero) {
         draggingPasteboard = pasteboard
         draggingDestinationWindow = view.window
-        draggingLocation = .zero
+        draggingLocation = location
     }
 
     var draggingSourceOperationMask: NSDragOperation { .every }

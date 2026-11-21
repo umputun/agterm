@@ -5,18 +5,26 @@ import agtermCore
 ///
 /// The deadline is the caller's, not ssh's: `ConnectTimeout` ends at the handshake and cannot bound a
 /// remote command that never returns.
-struct RemoteCommandProcessRunner: RemoteCommandRunner {
+struct RemoteCommandProcessRunner: RemoteCommandRunner, RemoteInputCommandRunner {
     private static let terminationGrace = ProcessOutputCapture.terminationGrace
 
     func run(_ argv: [String], deadline: TimeInterval) async -> RemoteCommandResult {
+        await launch(argv, deadline: deadline, input: nil)
+    }
+
+    func run(_ argv: [String], deadline: TimeInterval, input: URL) async -> RemoteCommandResult {
+        await launch(argv, deadline: deadline, input: input)
+    }
+
+    private func launch(_ argv: [String], deadline: TimeInterval, input: URL?) async -> RemoteCommandResult {
         await withCheckedContinuation { continuation in
             Thread.detachNewThread {
-                continuation.resume(returning: Self.execute(argv, deadline: deadline))
+                continuation.resume(returning: Self.execute(argv, deadline: deadline, input: input))
             }
         }
     }
 
-    private static func execute(_ argv: [String], deadline: TimeInterval) -> RemoteCommandResult {
+    private static func execute(_ argv: [String], deadline: TimeInterval, input: URL?) -> RemoteCommandResult {
         guard let executable = argv.first else {
             return RemoteCommandResult(status: -1, stdout: "", stderr: "no command to run")
         }
@@ -24,6 +32,12 @@ struct RemoteCommandProcessRunner: RemoteCommandRunner {
         // env resolves `ssh` through PATH, so a user who put their own ahead of /usr/bin keeps it
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = argv
+        if let input {
+            guard let handle = try? FileHandle(forReadingFrom: input) else {
+                return RemoteCommandResult(status: -1, stdout: "", stderr: "could not read \(input.lastPathComponent)")
+            }
+            process.standardInput = handle
+        }
         let capture: ProcessOutputCapture
         do {
             capture = try ProcessOutputCapture(attachingTo: process)

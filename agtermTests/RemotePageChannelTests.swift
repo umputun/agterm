@@ -158,6 +158,37 @@ final class RemotePageChannelTests: XCTestCase {
         XCTAssertEqual(resources(origin.received), [1])
     }
 
+    func testALogTailReturnsTheOriginsBytesAndNilWhileUnchanged() async throws {
+        let stamp = BoundedFile.FileStamp(device: 1, inode: 2, size: 3000, modifiedSeconds: 4, modifiedNanoseconds: 5)
+        let tail = BoundedFile.TailRead(data: Data((0..<3000).map { UInt8($0 % 251) }), offset: 7, stamp: stamp)
+        launcher.log = tail
+        let channel = channel()
+
+        let fresh = try await channel.logTail(since: nil)
+        let unchanged = try await channel.logTail(since: stamp)
+
+        XCTAssertEqual(fresh, tail)
+        XCTAssertNil(unchanged)
+        let next = try await channel.fetch("/docs/index.html", current: { true })
+        let data = try await read(next)
+        XCTAssertEqual(data, Data("<p>index</p>".utf8))
+    }
+
+    func testALogTailTheOriginRefusesThrowsAndTheChannelStays() async throws {
+        let channel = channel()
+
+        do {
+            _ = try await channel.logTail(since: nil)
+            XCTFail("a page that is not a log must refuse")
+        } catch {
+            XCTAssertEqual(error as? RemotePageChannel.Failure, .refused("not a log page"))
+        }
+
+        let next = try await channel.fetch("/docs/index.html", current: { true })
+        let data = try await read(next)
+        XCTAssertEqual(data, Data("<p>index</p>".utf8))
+    }
+
     func testAStalledConsumerStopsTheReaderUntilItPulls() async throws {
         let channel = channel()
         let resource = try await channel.fetch("/docs/big.bin", current: { true })

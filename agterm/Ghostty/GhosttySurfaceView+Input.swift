@@ -5,26 +5,32 @@ import AppKit
 import GhosttyKit
 
 extension GhosttySurfaceView {
+    /// isPasteChord is whether a press with exactly Command is ⌘V by the keymap's chord rule (`chordKey`): the typed
+    /// v on a Latin layout, the V position on any other. `produced` is read through the Command table, as the menu
+    /// matches, so a Latin alternative layout leaves the V position to its own letter and ghostty's binding for it.
+    static func isPasteChord(keyCode: UInt16, produced: String?, layoutIsASCIICapable: Bool) -> Bool {
+        chordKey(forKeyCode: keyCode, produced: produced, layoutIsASCIICapable: layoutIsASCIICapable) == "v"
+    }
+
     // MARK: - Drag and drop (issue #51)
 
-    /// Accept the drag with a copy cursor when it carries something we can insert (a file/web URL or text),
-    /// reject it otherwise — so a session-row drag from the sidebar (a private pasteboard type) is ignored.
+    /// Accept the drag with a copy cursor when it carries something we can insert (a file/web URL, text or an
+    /// image), reject it otherwise — so a session-row drag from the sidebar (a private pasteboard type) is ignored.
     override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
-        dropText(from: sender) != nil ? .copy : []
+        GhosttyCallbacks.hasPasteOffer(sender.draggingPasteboard) ? .copy : []
     }
 
-    /// Insert the dropped path (shell-escaped, space-joined) or text at the cursor as a bracketed paste, so
-    /// a multi-line drop is literal text, not executed lines. Deferred a tick so the drag session unwinds.
+    /// Paste the drop through the paste seam, so a multi-line drop is literal text, not executed lines. The drag
+    /// pasteboard is read now, as it is gone once the drop returns; the paste waits a tick so the drag session unwinds.
     override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
-        guard let text = dropText(from: sender) else { return false }
-        DispatchQueue.main.async { [weak self] in self?.insertPasted(text: text) }
+        if let refusal = pasteRefusal {
+            PasteTransfer.shared.refuse(self, refusal)
+            return false
+        }
+        let offer = GhosttyCallbacks.pasteOffer(sender.draggingPasteboard)
+        guard offer.action != nil else { return false }
+        DispatchQueue.main.async { [weak self] in _ = self?.paste(offer, drop: true) }
         return true
-    }
-
-    /// The text a drop would insert, via the shared `GhosttyCallbacks.pasteboardText` reader; nil when the
-    /// drag carries nothing usable.
-    private func dropText(from sender: any NSDraggingInfo) -> String? {
-        GhosttyCallbacks.pasteboardText(sender.draggingPasteboard)
     }
 
     // MARK: - Keyboard
@@ -85,6 +91,14 @@ extension GhosttySurfaceView {
         }
 
         if flags.contains(.command) {
+            // the keymap's chords never reach here, and AppKit's menu usually takes a Latin ⌘V before it does
+            if flags.intersection([.command, .shift, .option, .control]) == .command,
+               Self.isPasteChord(keyCode: event.keyCode,
+                                 produced: event.characters(byApplyingModifiers: .command) ?? event.charactersIgnoringModifiers,
+                                 layoutIsASCIICapable: KeyboardLayout.isASCIICapable) {
+                userPaste()
+                return
+            }
             var ke = buildKeyEvent(from: event, action: action)
             ke.text = nil
             _ = ghostty_surface_key(surface, ke)
@@ -214,7 +228,7 @@ extension GhosttySurfaceView {
         reportMousePos(from: event, mods: forwarded)
         let intent = keepsAlt ? .normal : chord
         releaseIntent.withLock { $0 = intent }
-        defer { releaseIntent.withLock { $0 = .normal } }
+        defer { releaseIntent.withLock { $0 = nil } }
         _ = ghostty_surface_mouse_button(surface, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_LEFT, forwarded)
     }
 
@@ -223,9 +237,9 @@ extension GhosttySurfaceView {
     func passiveClick(_ state: ghostty_input_mouse_state_e, with event: NSEvent) {
         guard let surface else { return }
         reportMousePos(from: event)
-        let intent = state == GHOSTTY_MOUSE_RELEASE ? clickIntent(event) : .normal
+        let intent = state == GHOSTTY_MOUSE_RELEASE ? clickIntent(event) : nil
         releaseIntent.withLock { $0 = intent }
-        defer { releaseIntent.withLock { $0 = .normal } }
+        defer { releaseIntent.withLock { $0 = nil } }
         _ = ghostty_surface_mouse_button(surface, state, GHOSTTY_MOUSE_LEFT, linkMods(event))
     }
 
@@ -290,6 +304,8 @@ extension GhosttySurfaceView {
     /// and on `ownsPointer` so it stops at the chrome drawn over this pane (issue #324). The position report
     /// stays ungated — libghostty tracks the pointer across the whole surface either way.
     override func mouseMoved(with event: NSEvent) {
+        // libghostty re-reports a link only on a new cell, so entering a HUD mid-cell would leave this label up
+        if underHoveredHud { linkHover?.label = nil }
         reportMousePos(from: event)
         guard deckVisible, ownsPointer(at: event.locationInWindow) else { return }
         Self.nsCursor(for: mouseShape).set()
@@ -638,19 +654,48 @@ extension GhosttySurfaceView: @preconcurrency NSTextInputClient {
 
     /// openLink acts on a clicked terminal link (`GHOSTTY_ACTION_OPEN_URL`); what happens to it is the host-free
     /// `LinkPolicy`'s decision.
-    func openLink(_ raw: String, intent: LinkPolicy.ClickIntent) {
-        LinkOpener.shared.follow(raw, from: linkClickOrigin, pane: linkClickPane, cwd: linkClickCwd, intent: intent)
+    func openLink(_ raw: String, intent: LinkPolicy.ClickIntent, source: LinkPolicy.ClickSource) {
+        LinkOpener.shared.follow(raw, from: linkClickOrigin, pane: linkClickPane, cwd: linkClickCwd,
+                                 gesture: LinkOpener.Gesture(intent: intent, source: source), remote: linkClickRemoteSession,
+                                 surface: self)
     }
 
-    /// linkClickPane is the identity of the pane this surface shows, nil for a surface no session pane owns.
+    /// applyLinkHover shows the link under a ⌘-held pointer, naming the session a session link would select.
+    func applyLinkHover(_ link: String) {
+        // the callback hops to main, so one queued before teardown arrives after the label was cleared
+        guard !isDestroyed else { return }
+        let (origin, pane) = (linkClickOrigin, linkClickPane)
+        linkHover?.label = link.isEmpty || underHoveredHud
+            ? nil : LinkHover.label(for: link) { LinkOpener.shared.sessionName($0, origin, pane) }
+    }
+
+    /// underHoveredHud is true while a HUD panel over this pane has the pointer: the panel takes the link chord's click,
+    /// so this pane's links are unreachable and show no target.
+    private var underHoveredHud: Bool { HudLinkClick.hovered.map { $0 !== self } ?? false }
+
+    /// linkClickPane is the identity of the pane this surface shows, nil for a surface no session pane owns. A scratch
+    /// running on its row's origin is named by the origin's identity, which the click carries there.
     var linkClickPane: UUID? {
-        session.flatMap { isSplitPane ? $0.splitPaneIdentity : $0.paneIdentity }
+        if let session { return isSplitPane ? session.splitPaneIdentity : session.paneIdentity }
+        return scratchOwner?.originScratch
     }
 
-    /// The directory a relative link names a file in: this pane's reported cwd. Nil for the scratch, quick and
-    /// overlay terminals, whose own directory the app does not track, so a relative link there stays ignored.
+    /// linkClickRemoteSession is the row whose host runs this surface's program, so a loopback address it prints names
+    /// that host: a remote pane, a scratch on its origin, or an overlay showing an origin job. Nil for what runs here.
+    var linkClickRemoteSession: UUID? {
+        if let session { return session.remoteHost == nil ? nil : session.id }
+        if let owner = scratchOwner { return owner.originScratch == nil ? nil : owner.id }
+        guard hudBodyFile == nil, let owner = focusSession, owner.overlayRunsOnOrigin(self) else { return nil }
+        return owner.id
+    }
+
+    /// The directory a relative link names a file in: this pane's reported cwd, a local scratch's included. Nil
+    /// for a remote window's scratch, whose directory is on the server, and for the quick and overlay
+    /// terminals, whose own directory the app does not track, so a relative link there stays ignored.
     var linkClickCwd: String? {
-        session.map { isSplitPane ? $0.cwd(for: .right) : $0.effectiveCwd }
+        if let session { return isSplitPane ? session.cwd(for: .right) : session.effectiveCwd }
+        guard let owner = scratchOwner, owner.originScratch == nil else { return nil }
+        return owner.cwd(for: .scratch)
     }
 
     /// Which kind of surface a clicked link came from, read off the ownership each factory already sets.
@@ -658,7 +703,7 @@ extension GhosttySurfaceView: @preconcurrency NSTextInputClient {
     var linkClickOrigin: LinkPolicy.ClickOrigin {
         if hudBodyFile != nil { return .hud }
         if let session { return session.remoteHost == nil ? .pane(session.id) : .remotePane(session.id) }
-        if let owner = watermarkSession { return .scratch(owner.id) }
+        if let owner = watermarkSession { return owner.originScratch == nil ? .scratch(owner.id) : .remotePane(owner.id) }
         return focusSession == nil ? .quick : .programOverlay
     }
 }
@@ -668,14 +713,14 @@ extension GhosttySurfaceView: @preconcurrency NSTextInputClient {
 /// The stock Edit ▸ Copy/Paste/Select All actions, implemented on the surface so AppKit's automatic menu
 /// enabling routes them to the terminal when it holds first responder, while a focused text field (inline
 /// rename, palette search, Settings) keeps its own — its field editor wins the responder chain. That is why
-/// agterm keeps the standard SwiftUI Edit menu instead of a custom Commands group. Each action runs the same
-/// libghostty binding ⌘C/⌘V/⌘A use. Cut is deliberately NOT implemented, so it stays disabled for the
+/// agterm keeps the standard SwiftUI Edit menu instead of a custom Commands group. Copy and Select All run the
+/// libghostty binding ⌘C/⌘A use, Paste the paste seam ⌘V uses. Cut is deliberately NOT implemented, so it stays disabled for the
 /// terminal yet works in text fields; it cannot be dropped on its own, sharing SwiftUI's `.pasteboard`
 /// group. Undo/Redo are removed entirely (`CommandGroup(replacing: .undoRedo)` in `agtermApp+Menus`).
 extension GhosttySurfaceView: NSMenuItemValidation {
     @objc func copy(_ sender: Any?) { performBindingAction("copy_to_clipboard") }
 
-    @objc func paste(_ sender: Any?) { performBindingAction("paste_from_clipboard") }
+    @objc func paste(_ sender: Any?) { userPaste() }
 
     /// `override` because `selectAll(_:)` is declared on `NSResponder`, unlike `copy:`/`paste:`.
     override func selectAll(_ sender: Any?) { performBindingAction("select_all") }
@@ -685,19 +730,19 @@ extension GhosttySurfaceView: NSMenuItemValidation {
     /// enable by default — AppKit consults this only on the responder implementing the action, so `cut:`
     /// never reaches it.
     ///
-    /// Paste asks `GhosttyCallbacks.hasPasteboardText()`, the SAME reader `paste_from_clipboard` uses,
+    /// Paste asks `GhosttyCallbacks.hasPasteOffer()`, built on the SAME text reader `paste_from_clipboard` uses,
     /// rather than probing for a plain string: the clipboard may hold a file/web URL with no string
     /// representation (a Finder copy) the reader turns into a shell-escaped path, so an `NSString` probe
     /// reports "nothing to paste" while ⌘V pastes it. A bare `canReadObject([NSURL])` TYPE probe is wrong
     /// the other way, enabling Paste for a URL-type-only pasteboard. The gate short-circuits on the first
-    /// usable URL, never escaping a whole Finder copy to answer.
+    /// usable URL, never escaping a whole Finder copy to answer, and probes an image by type, converting nothing.
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         switch menuItem.action {
         case #selector(copy(_:)):
             guard let surface else { return false }
             return ghostty_surface_has_selection(surface)
         case #selector(paste(_:)):
-            return surface != nil && GhosttyCallbacks.hasPasteboardText()
+            return surface != nil && GhosttyCallbacks.hasPasteOffer()
         case #selector(selectAll(_:)):
             return surface != nil
         default:

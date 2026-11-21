@@ -28,7 +28,7 @@ final class RemoteCatalogMirrorDetachTests {
         var store: AppStore?
         var saves = 0
 
-        func attachCommand(host: String, pane: CatalogPane) -> String { "attach \(host) \(pane.daemon)" }
+        func attachCommand(host: String, pane: CatalogPane, claim _: Bool) -> String { "attach \(host) \(pane.daemon)" }
         func catalogRowAdded(_ session: Session) { added.append(session.id) }
         func catalogRowRemoved(_ sessionID: UUID) {
             removed.append(sessionID)
@@ -57,12 +57,30 @@ final class RemoteCatalogMirrorDetachTests {
         func promoteToPrimaryPane() {}
     }
 
-    private func open(_ sessions: [CatalogSession], other: [CatalogSession] = []) {
+    @discardableResult
+    private func open(_ sessions: [CatalogSession], other: [CatalogSession] = [], tint: String? = nil) -> CatalogSnapshot {
         let snapshot = CatalogSnapshot(epoch: "e1", rev: 0, catalogID: catalogID, versions: Self.versions,
-                                       workspaces: [CatalogWorkspace(id: workspaceID, name: "w", sessions: sessions),
-                                                    CatalogWorkspace(id: otherWorkspaceID, name: "other", sessions: other)])
+                                       workspaces: [CatalogWorkspace(id: workspaceID, name: "w", tint: tint, sessions: sessions),
+                                                    CatalogWorkspace(id: otherWorkspaceID, name: "other", tint: tint, sessions: other)])
         _ = mirror.receive(.hello(CatalogHello(version: 1, epoch: "e1", versions: Self.versions)))
         _ = mirror.receive(.snapshot(snapshot))
+        return snapshot
+    }
+
+    private func reopen(_ snapshot: CatalogSnapshot) -> AppStore {
+        let saved = RemoteWindowViewState.capture(from: store)
+        let reopened = AppStore(persistence: PersistenceStore(directory: directory.appendingPathComponent(UUID().uuidString)),
+                                paneFinalizer: nil)
+        mirror = RemoteCatalogMirror(host: "box", store: reopened, effects: effects, viewState: saved)
+        _ = mirror.receive(.hello(CatalogHello(version: 1, epoch: "e1", versions: Self.versions)))
+        _ = mirror.receive(.snapshot(snapshot))
+        return reopened
+    }
+
+    private func flagged() -> CatalogSession {
+        var entry = session()
+        entry.fields.flagged = true
+        return entry
     }
 
     private func delta(_ rev: Int, _ change: CatalogChange) {
@@ -252,6 +270,189 @@ final class RemoteCatalogMirrorDetachTests {
         #expect(effects.added.filter { $0 == first.id }.count == 2)
     }
 
+    @Test func aReattachedRowKeepsItsBackgroundFoldAndContext() throws {
+        let first = session()
+        open([first, session()])
+        let row = try #require(store.session(withID: first.id))
+        let mark = BackgroundWatermark(kind: .text, text: "PROD"), left = BackgroundWatermark(kind: .text, text: "L")
+        row.backgroundWatermark = mark
+        row.paneBackgrounds = PaneBackgrounds(left: left)
+        row.isExpanded = false
+        row.context = "deploy"
+        mirror.detach(sessions: [first.id])
+
+        #expect(mirror.reattach(session: first.id) == nil)
+
+        let back = try #require(store.session(withID: first.id))
+        #expect(back.backgroundWatermark == mark)
+        #expect(back.paneBackgrounds == PaneBackgrounds(left: left))
+        #expect(!back.isExpanded)
+        #expect(back.context == "deploy")
+    }
+
+    @Test func theServersFlagsCountTheRowsThisWindowDetached() {
+        var shown = session(), plain = session(), parked = session()
+        shown.fields.flagged = true
+        plain.fields.flagged = false
+        parked.fields.flagged = true
+        let snapshot = CatalogSnapshot(epoch: "e1", rev: 0, catalogID: catalogID, versions: Self.versions,
+                                       workspaces: [CatalogWorkspace(id: workspaceID, name: "w", tint: "", sessions: [shown, plain, parked])])
+        _ = mirror.receive(.hello(CatalogHello(version: 1, epoch: "e1", versions: Self.versions)))
+        _ = mirror.receive(.snapshot(snapshot))
+        let actions = RemoteCatalogActions(mirror: mirror, runner: { _ in (0, "") })
+        store.remoteActions = actions
+
+        mirror.detach(sessions: [plain.id, parked.id])
+
+        #expect(store.allSessionsFlagged(inWorkspace: workspaceID))
+        #expect(!store.workspaceAllFlagged(workspaceID))
+        #expect(store.flaggedSessions.count == 1)
+        #expect(store.clearableFlagCount == 2)
+        #expect(store.marksOnServer)
+    }
+
+    @Test func anOlderServersFlagsAreThisWindowsOwn() {
+        open([session(), session()])
+        let actions = RemoteCatalogActions(mirror: mirror, runner: { _ in (0, "") })
+        store.remoteActions = actions
+        for row in store.workspaces[0].sessions { store.setFlag(true, forSession: row.id) }
+
+        #expect(!store.marksOnServer)
+        #expect(store.workspaceAllFlagged(workspaceID))
+        #expect(store.clearableFlagCount == 2)
+    }
+
+    @Test func aDetachedWorkspaceKeepsItsFocusMembershipThroughReopenAndReattach() {
+        let snapshot = open([session()], other: [session()])
+        store.restoreFocus(ids: [workspaceID, otherWorkspaceID], enabled: true)
+
+        mirror.detach(workspace: otherWorkspaceID)
+        let detached = (store.focusedWorkspaceIDs, store.focusEnabled)
+        let reopened = reopen(snapshot)
+        let afterReopen = (reopened.focusedWorkspaceIDs, reopened.focusEnabled)
+        #expect(mirror.reattach(workspace: otherWorkspaceID) == nil)
+
+        #expect(detached == ([workspaceID], true))
+        #expect(afterReopen == ([workspaceID], true))
+        #expect(reopened.focusedWorkspaceIDs == [workspaceID, otherWorkspaceID])
+        #expect(reopened.focusEnabled)
+    }
+
+    @Test func detachingTheSoleFocusedWorkspaceTurnsTheFilterOffAndReattachKeepsItOff() {
+        open([session()], other: [session()])
+        store.restoreFocus(ids: [otherWorkspaceID], enabled: true)
+
+        mirror.detach(workspace: otherWorkspaceID)
+        let detached = (store.focusedWorkspaceIDs, store.focusEnabled)
+        #expect(mirror.reattach(workspace: otherWorkspaceID) == nil)
+
+        #expect(detached == ([], false))
+        #expect(store.focusedWorkspaceIDs == [otherWorkspaceID])
+        #expect(!store.focusEnabled)
+    }
+
+    @Test func aFilterTurnedOffWhileAMemberIsDetachedStaysOffOnReattach() {
+        open([session()], other: [session()])
+        store.restoreFocus(ids: [workspaceID, otherWorkspaceID], enabled: true)
+        mirror.detach(workspace: otherWorkspaceID)
+
+        store.setFocusEnabled(false)
+        #expect(mirror.reattach(workspace: otherWorkspaceID) == nil)
+
+        #expect(store.focusedWorkspaceIDs == [workspaceID, otherWorkspaceID])
+        #expect(!store.focusEnabled)
+    }
+
+    @Test func aReattachedFlaggedRowReturnsToItsSlotAlsoAcrossReopen() {
+        let first = flagged(), middle = flagged(), last = flagged()
+        let snapshot = open([first, middle, last])
+        let order = [first.fields.id, middle.fields.id, last.fields.id]
+
+        mirror.detach(sessions: [middle.fields.id])
+        let detached = store.orderedFlaggedSessions.map(\.id)
+        #expect(mirror.reattach(session: middle.fields.id) == nil)
+        let reattached = store.orderedFlaggedSessions.map(\.id)
+        mirror.detach(sessions: [middle.fields.id])
+        let reopened = reopen(snapshot)
+        #expect(mirror.reattach(session: middle.fields.id) == nil)
+
+        #expect(detached == [first.fields.id, last.fields.id])
+        #expect(reattached == order)
+        #expect(reopened.orderedFlaggedSessions.map(\.id) == order)
+    }
+
+    @Test func aSelectionOutsideTheRestoredFocusMovesIntoItOnReopen() {
+        let inside = session(), outside = session()
+        let snapshot = open([inside], other: [outside])
+        store.restoreFocus(ids: [workspaceID], enabled: true)
+        store.selectSession(inside.id)
+        store.setFocusEnabled(false)
+        store.selectSession(outside.id)
+        let saved = RemoteWindowViewState.capture(from: store)
+        let reopened = AppStore(persistence: PersistenceStore(directory: directory.appendingPathComponent("reopened")), paneFinalizer: nil)
+        var view = saved
+        view.workspaceFilter = true
+        mirror = RemoteCatalogMirror(host: "box", store: reopened, effects: effects, viewState: view)
+
+        _ = mirror.receive(.hello(CatalogHello(version: 1, epoch: "e1", versions: Self.versions)))
+        _ = mirror.receive(.snapshot(snapshot))
+
+        #expect(reopened.focusEnabled)
+        #expect(reopened.selectedSessionID == inside.id)
+    }
+
+    @Test func flagAllCountsTheServersRowsThisWindowDetached() {
+        let rows = [session(), session()]
+        open(rows, tint: "")
+        let actions = RemoteCatalogActions(mirror: mirror, runner: { _ in (0, "") })
+        store.remoteActions = actions
+
+        mirror.detach(sessions: rows.map(\.id))
+
+        #expect(store.workspaces.first { $0.id == workspaceID }?.sessions.isEmpty == true)
+        #expect(store.workspaceHasSessions(workspaceID))
+        #expect(!store.workspaceHasSessions(otherWorkspaceID))
+    }
+
+    private func split(_ id: UUID, panes: [UUID]) -> CatalogSession {
+        let catalogPanes = panes.map { CatalogPane(identity: $0, daemon: "agterm-\($0.uuidString)", endpoint: Self.endpoint) }
+        return CatalogSession(fields: CatalogSessionFields(id: id, name: "s", parent: nil, cwd: "/srv", primary: panes[0],
+                                                           axis: panes.count > 1 ? "vertical" : nil, shown: panes.count > 1,
+                                                           lifecycle: .live),
+                              panes: catalogPanes)
+    }
+
+    private func snapshot(_ sessions: [CatalogSession], rev: Int) -> CatalogSnapshot {
+        CatalogSnapshot(epoch: "e1", rev: rev, catalogID: catalogID, versions: Self.versions,
+                        workspaces: [CatalogWorkspace(id: workspaceID, name: "w", sessions: sessions),
+                                     CatalogWorkspace(id: otherWorkspaceID, name: "other", sessions: [])])
+    }
+
+    @Test(arguments: ["swap", "promote", "replace"], [false, true])
+    func eachPaneBackgroundFollowsItsTerminalThroughAServerChangeWhileDetached(_ change: String, _ reopened: Bool) throws {
+        let id = UUID(), left = UUID(), right = UUID()
+        let leftMark = BackgroundWatermark(kind: .text, text: "L"), rightMark = BackgroundWatermark(kind: .text, text: "R")
+        let first = open([split(id, panes: [left, right]), session()])
+        try #require(store.session(withID: id)).paneBackgrounds = PaneBackgrounds(left: leftMark, right: rightMark)
+        mirror.detach(sessions: [id])
+        let shown = reopened ? reopen(first) : store
+        let panes = switch change {
+        case "swap": [right, left]
+        case "promote": [right]
+        default: [left, UUID()]
+        }
+
+        _ = mirror.receive(.snapshot(snapshot([split(id, panes: panes), first.workspaces[0].sessions[1]], rev: 1)))
+        #expect(mirror.reattach(session: id) == nil)
+
+        let expected = switch change {
+        case "swap": PaneBackgrounds(left: rightMark, right: leftMark)
+        case "promote": PaneBackgrounds(left: rightMark)
+        default: PaneBackgrounds(left: leftMark)
+        }
+        #expect(shown.session(withID: id)?.paneBackgrounds == expected)
+    }
+
     @Test func aDetachedWorkspaceHidesEveryRowAndAnEmptyOneToo() {
         let inside = session()
         open([session()], other: [inside])
@@ -368,7 +569,7 @@ final class RemoteCatalogMirrorDetachTests {
         #expect(store.workspaces.count == 1)
         #expect(lastShown)
         #expect(withDetachedSibling)
-        #expect(!local.canCloseWorkspace)
+        #expect(local.canCloseWorkspace)
     }
 
     @Test func theServersOnlyWorkspaceCannotBeTerminated() {
@@ -435,4 +636,49 @@ final class RemoteCatalogMirrorDetachTests {
         #expect(!rows.contains(first.id))
         #expect(store.catalogDetachedSessions == [first.id])
     }
+
+    @Test func aSavedDetachOfTheRootIsPrunedAndSessionDetachesStay() {
+        let rootID = UUID()
+        let kept = session()
+        mirror = RemoteCatalogMirror(host: "box", store: store, effects: effects,
+                                     viewState: RemoteWindowViewState(detachedSessions: [kept.id], detachedWorkspaces: [rootID]))
+        let snapshot = CatalogSnapshot(epoch: "e1", rev: 0, catalogID: catalogID, versions: Self.versions,
+                                       workspaces: [CatalogWorkspace(id: workspaceID, name: "w", sessions: [kept]),
+                                                    CatalogWorkspace(id: rootID, name: "", root: true, sessions: [session()])])
+        _ = mirror.receive(.hello(CatalogHello(version: 1, epoch: "e1", versions: Self.versions)))
+        _ = mirror.receive(.snapshot(snapshot))
+
+        #expect(store.catalogDetachedWorkspaces.isEmpty)
+        #expect(store.catalogDetachedSessions == [kept.id])
+        #expect(store.rootWorkspace?.id == rootID)
+    }
+
+    @Test func theRootIsNeverDetachedAsAWorkspace() {
+        let rootID = UUID()
+        let snapshot = CatalogSnapshot(epoch: "e1", rev: 0, catalogID: catalogID, versions: Self.versions,
+                                       workspaces: [CatalogWorkspace(id: workspaceID, name: "w", sessions: []),
+                                                    CatalogWorkspace(id: rootID, name: "", root: true, sessions: [])])
+        _ = mirror.receive(.hello(CatalogHello(version: 1, epoch: "e1", versions: Self.versions)))
+        _ = mirror.receive(.snapshot(snapshot))
+
+        mirror.detach(workspace: rootID)
+
+        #expect(store.catalogDetachedWorkspaces.isEmpty)
+    }
+
+    @Test func aServerWithARootTerminatesItsOnlyNamedWorkspaceAndNeverCountsTheRoot() {
+        let rootID = UUID()
+        let root = CatalogWorkspace(id: rootID, name: "", root: true, sessions: [])
+        let snapshot = CatalogSnapshot(epoch: "e1", rev: 0, catalogID: catalogID, versions: Self.versions,
+                                       workspaces: [CatalogWorkspace(id: workspaceID, name: "w", sessions: []), root])
+        _ = mirror.receive(.hello(CatalogHello(version: 1, epoch: "e1", versions: Self.versions)))
+        _ = mirror.receive(.snapshot(snapshot))
+        let withNamed = mirror.canTerminateWorkspace
+        _ = mirror.receive(.snapshot(CatalogSnapshot(epoch: "e1", rev: 1, catalogID: catalogID, versions: Self.versions,
+                                                     workspaces: [root])))
+
+        #expect(withNamed)
+        #expect(!mirror.canTerminateWorkspace)
+    }
+
 }

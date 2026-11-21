@@ -1,6 +1,6 @@
 import Foundation
 
-/// ForwardedPage is a headless origin's loopback URL page as this Mac reaches it: the forward targets the origin's
+/// ForwardedPage is a loopback URL on a remote host as this Mac reaches it: the forward targets the origin's
 /// host and port, and the URL keeps its host and changes only the port, so TLS checks the name the page was opened
 /// with. The local listener binds that same host.
 public struct ForwardedPage: Equatable, Sendable {

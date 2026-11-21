@@ -6,8 +6,8 @@ public struct RemoteOverlaySlot: Equatable, Sendable {
     public let job: String
     /// The pane role the slot covers, nil for the session-wide slot. Follows its pane across a swap.
     public fileprivate(set) var pane: OverlayPane?
-    /// The presenter generation the job was handed to; only that stream can still reach its surface. Nil while a
-    /// headless origin holds the slot for a presenter to come.
+    /// owner is the token of the viewer the job was handed to; only that stream can still reach its surface. Nil
+    /// while a headless origin holds the slot for a viewer to come.
     public internal(set) var owner: Int?
     /// The size requested for a session-wide overlay, nil for full. What the viewer applied is not known.
     public var sizePercent: Int?
@@ -53,14 +53,26 @@ public struct RemotePage: Equatable, Sendable {
     /// request is the page as first offered, sent again with a new token at each offer.
     var request: PresentationPage?
     public internal(set) var claimed = false
-    /// withdrawnFrom is the presenter generation a headless origin took the page back from after its channel ended,
-    /// until the next offer: that presenter's close can arrive after the channel's end and still dismiss the page.
+    /// withdrawnFrom and withdrawnOffer name the copy the page was last taken back from after its channel ended: that
+    /// viewer's close of that copy can arrive after the channel's end, and after the page was offered again.
     var withdrawnFrom: Int?
+    var withdrawnOffer: Int?
+    /// recovered is whether the page was offered to its viewer after the one holding it was lost; on a Mac such a page
+    /// that viewer refuses comes here.
+    var recovered = false
+    /// offer is the current hand-over's, which every report from its presenter echoes.
+    var offer: Int?
     /// hidden is the visibility the presenter last reported.
     public internal(set) var hidden = false
     /// requested is a visibility sent and not yet echoed back by the presenter.
     private(set) var requested: VisibilityRequest?
-    private var lastSeq = 0
+    private(set) var lastSeq = 0
+    /// loadedOffer is the offer under which the viewer last reported the page loaded: the evidence a re-offer after its
+    /// connection breaks rests on, consumed by that re-offer.
+    var loadedOffer: Int?
+    /// retried is whether the page is offered again after a broken connection; one that breaks again before it reports
+    /// loaded ends.
+    var retried = false
 
     init(overlay: HtmlOverlay, token: String, claimDeadline: Date) {
         self.overlay = overlay
@@ -71,6 +83,9 @@ public struct RemotePage: Equatable, Sendable {
     /// effectiveHidden is what a toggle and a visibility reply go by: an unacknowledged request, else the
     /// presenter's last report, so a hide made on the presenter turns the next toggle into a show.
     var effectiveHidden: Bool { requested?.hidden ?? hidden }
+
+    /// continueSeq starts numbering past `floor`, the last command sequence the page used before it was shown here.
+    mutating func continueSeq(after floor: Int) { lastSeq = max(lastSeq, floor) }
 
     mutating func nextSeq() -> Int {
         lastSeq += 1
@@ -83,10 +98,12 @@ public struct RemotePage: Equatable, Sendable {
         return seq
     }
 
-    /// apply takes the presenter's report, true when the reported visibility changed. A report echoing the
-    /// pending request's sequence settles it; an older one leaves the request pending.
+    /// apply takes the presenter's report, true when the reported visibility, a log's following, the search query or
+    /// the wrap changed; counts alone never count. A report echoing the pending request's sequence settles it; an
+    /// older one leaves the request pending.
     mutating func apply(_ state: PresentationPageState) -> Bool {
         let wasHidden = hidden
+        if state.load == .loaded { loadedOffer = offer }
         overlay.loadState = state.load
         overlay.loadError = state.error
         overlay.current = state.address.map {
@@ -94,8 +111,18 @@ public struct RemotePage: Equatable, Sendable {
         }
         hidden = state.hidden
         if let requested, state.appliedSeq >= requested.seq { self.requested = nil }
-        return wasHidden != hidden
+        let textChanged = state.text.map { overlay.mirror($0) } ?? false
+        return wasHidden != hidden || textChanged
     }
+
+    /// apply takes the text state a `pageResult` carried; true on the same transitions as a report.
+    mutating func apply(_ text: PresentationTextState) -> Bool { overlay.mirror(text) }
+}
+
+/// PageRefusal is a viewer that refused a page's move, at the session's lead report count `lead`.
+struct PageRefusal: Equatable, Sendable {
+    let owner: Int
+    let lead: Int
 }
 
 /// RemoteOverlays is a session's remote overlay state on the origin: the reserved slots, and for each slot
@@ -103,6 +130,23 @@ public struct RemotePage: Equatable, Sendable {
 public struct RemoteOverlays: Equatable, Sendable {
     public private(set) var slots: [RemoteOverlaySlot] = []
     private var failures: [OverlayPane?: String] = [:]
+    /// candidates are pages offered to the viewer they move to, by page id, until that viewer confirms or the offer
+    /// is dropped; the page meanwhile stays where it is shown.
+    private(set) var candidates: [String: PageCandidate] = [:]
+    /// seqFloors are the last command sequences of pages taken back here, by page id, so a page offered out again
+    /// never reuses a sequence a reply or a timeout of its earlier copy still answers.
+    private(set) var seqFloors: [String: Int] = [:]
+    /// refusals are the viewers that refused a page's move, by page id, with the lead report count they refused at:
+    /// the page is offered to that viewer again only after the session's next lead report.
+    private(set) var refusals: [String: PageRefusal] = [:]
+
+    func candidate(job: String) -> PageCandidate? { candidates[job] }
+
+    mutating func setCandidate(_ candidate: PageCandidate?, job: String) { candidates[job] = candidate }
+
+    mutating func setSeqFloor(_ seq: Int, job: String) { seqFloors[job] = seq }
+
+    mutating func setRefusal(_ refusal: PageRefusal?, job: String) { refusals[job] = refusal }
 
     public func slot(_ pane: OverlayPane?) -> RemoteOverlaySlot? { slots.first { $0.pane == pane } }
 
@@ -166,12 +210,17 @@ public struct RemoteOverlays: Equatable, Sendable {
         for index in slots.indices where slots[index].pane != nil {
             slots[index].pane = slots[index].pane == .left ? .right : .left
         }
+        for job in candidates.keys {
+            guard let pane = candidates[job]?.arriving?.pane else { continue }
+            candidates[job]?.arriving?.pane = pane == .left ? .right : .left
+        }
         (failures[.left], failures[.right]) = (failures[.right], failures[.left])
     }
 
     /// The split was promoted to the primary pane, whose own slot is already dropped.
     mutating func promoteRight() {
         for index in slots.indices where slots[index].pane == .right { slots[index].pane = .left }
+        for job in candidates.keys where candidates[job]?.arriving?.pane == .right { candidates[job]?.arriving?.pane = .left }
         failures[.left] = failures[.right]
         failures[.right] = nil
     }
@@ -180,4 +229,24 @@ public struct RemoteOverlays: Equatable, Sendable {
 
     /// A local open on the slot starts a new result, as the local exit code does.
     mutating func clearFailure(_ pane: OverlayPane?) { failures[pane] = nil }
+}
+
+/// PageCandidate is a page offered to the viewer it moves to, beside its current presentation until that viewer
+/// confirms it: by adopting the page channel, or with its first report for a URL page.
+struct PageCandidate: Equatable, Sendable {
+    let owner: Int
+    let token: String
+    let offer: Int?
+    let claimDeadline: Date
+    var claimed = false
+    /// arriving is the slot a page shown on this Mac takes once the move is confirmed; nil when a viewer shows it.
+    var arriving: RemoteOverlaySlot?
+}
+
+/// PageMove is a confirmed page move: the viewer that showed the page before, nil when this Mac did, is told to take
+/// its copy down once the new presentation is in place.
+public struct PageMove: Equatable, Sendable {
+    public let page: UUID
+    let session: UUID
+    let previous: Int?
 }

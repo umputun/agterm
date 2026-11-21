@@ -12,6 +12,17 @@ extension ControlDispatcher {
                                                       select: request.args?.noSelect != true)
         case .sessionCompanionConvert:
             return actions.convertToCompanion(request.target, window: request.args?.window)
+        case .sessionCompanionMove:
+            switch Self.companionMoveArguments(request.args) {
+            case .failure(let rejection): return ControlResponse(ok: false, error: rejection.message)
+            case .success(let move):
+                return await actions.moveCompanion(request.target, parent: move.parent, index: move.index, window: request.args?.window)
+            }
+        case .sessionCompanionPromote:
+            switch Self.companionPromoteArguments(request.args) {
+            case .failure(let rejection): return ControlResponse(ok: false, error: rejection.message)
+            case .success(let placement): return await actions.promoteCompanion(request.target, placement: placement, window: request.args?.window)
+            }
         case .sessionCompanionPageAttach:
             return actions.attachCompanionPage(request.target, window: request.args?.window)
         case .sessionCollapse:
@@ -37,7 +48,7 @@ extension ControlDispatcher {
         }
     }
 
-    private enum PageRowParse {
+    enum PageRowParse {
         case options(ControlSessionOverlayOpenOptions)
         case rejected(ControlResponse)
 
@@ -45,7 +56,7 @@ extension ControlDispatcher {
     }
 
     // a page row's page is the row, so it is always full size and session-wide
-    private static func pageRowOptions(_ args: ControlArgs?, row: String, needsPage: String) -> PageRowParse {
+    static func pageRowOptions(_ args: ControlArgs?, row: String, needsPage: String) -> PageRowParse {
         let page: HtmlSource
         switch overlayContent(command: args?.command ?? "", args: args) {
         case .rejected(let response): return .rejected(response)
@@ -63,6 +74,52 @@ extension ControlDispatcher {
             follow: args?.follow ?? false, pane: nil, page: page, navigation: args?.navigation ?? false,
             javascript: args?.javascript ?? false, chromeless: args?.chromeless ?? false,
             persistent: args?.persistent ?? false, browse: args?.browse ?? false))
+    }
+
+    /// CompanionMove is a validated `session.companion.move`: the new parent and the slot in its group, nil appending.
+    struct CompanionMove: Equatable {
+        let parent: String
+        let index: Int?
+    }
+
+    // the move lands under `parent`, so a raw client's workspace, placement or batch field is refused, not dropped
+    static func companionMoveArguments(_ args: ControlArgs?) -> Result<CompanionMove, ArgumentRejection> {
+        guard let parent = args?.parent?.trimmingCharacters(in: .whitespaces), !parent.isEmpty else {
+            return .failure(ArgumentRejection(message: "session.companion.move needs a parent"))
+        }
+        if args?.workspace != nil || args?.to != nil || args?.after != nil || args?.before != nil {
+            return .failure(ArgumentRejection(message: "session.companion.move takes no workspace, --to, --after or --before"))
+        }
+        if args?.targets != nil {
+            return .failure(ArgumentRejection(message: "session.companion.move moves one session, named by target"))
+        }
+        if let index = args?.index, index < 0 {
+            return .failure(ArgumentRejection(message: "index must be 0 or more"))
+        }
+        return .success(CompanionMove(parent: parent, index: args?.index))
+    }
+
+    /// companionPromotion is `args`' validated placement for a caller that refuses elsewhere, nil when it is refused.
+    public static func companionPromotion(_ args: ControlArgs?) -> ControlCompanionPromotion? {
+        if case .success(let placement) = companionPromoteArguments(args) { return placement }
+        return nil
+    }
+
+    // one session takes at most one placement; a field another form uses is refused, not dropped
+    static func companionPromoteArguments(_ args: ControlArgs?) -> Result<ControlCompanionPromotion, ArgumentRejection> {
+        if args?.parent != nil || args?.index != nil || args?.to != nil {
+            return .failure(ArgumentRejection(message: "session.companion.promote takes no --parent, --index or --to"))
+        }
+        if args?.targets != nil {
+            return .failure(ArgumentRejection(message: "session.companion.promote moves one session, named by target"))
+        }
+        switch (args?.workspace, args?.after, args?.before) {
+        case (nil, nil, nil): return .success(.afterOwnGroup)
+        case (let workspace?, nil, nil): return .success(.workspace(workspace))
+        case (nil, let anchor?, nil): return .success(.beside(anchor, after: true))
+        case (nil, nil, let anchor?): return .success(.beside(anchor, after: false))
+        default: return .failure(ArgumentRejection(message: "session.companion.promote takes one of a workspace, --after or --before"))
+        }
     }
 
     // a companion lands under its parent, so a raw client's workspace or placement field is refused, not dropped
@@ -84,4 +141,11 @@ extension ControlDispatcher {
                                        wait: args?.wait == true, select: args?.noSelect != true, tint: tint)
         return await actions.createCompanion(request.target, options: options, window: args?.window)
     }
+}
+
+/// ControlCompanionPromotion is a validated `session.companion.promote` placement, its workspace or anchor not resolved yet.
+public enum ControlCompanionPromotion: Equatable, Sendable {
+    case afterOwnGroup
+    case workspace(String)
+    case beside(String, after: Bool)
 }

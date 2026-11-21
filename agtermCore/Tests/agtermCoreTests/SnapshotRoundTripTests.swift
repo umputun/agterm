@@ -79,6 +79,30 @@ struct SnapshotRoundTripTests {
         #expect(restored.workspaces[0].sessions[0].splitPaneIdentity == split)
     }
 
+    @Test func aLiveScratchRestoresHiddenWithItsDaemon() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        let identity = UUID()
+        store.recordLiveScratch(session.id, identity: identity)
+        store.toggleScratch(session.id)
+
+        let restored = makeStore()
+        restored.restore(from: store.snapshot())
+
+        let copy = restored.workspaces[0].sessions[0]
+        #expect(copy.scratchDaemon == Session.ScratchDaemon(identity: identity, shown: false))
+        #expect(!copy.scratchActive)
+    }
+
+    @Test func aSnapshotWithoutAScratchRestoresNone() throws {
+        let json = #"{"id":"00000000-0000-0000-0000-000000000001","cwd":"/tmp"}"#
+        let snapshot = try JSONDecoder().decode(SessionSnapshot.self, from: Data(json.utf8))
+        let store = makeStore()
+        store.restore(from: Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: "work", sessions: [snapshot])]))
+        #expect(store.workspaces[0].sessions[0].scratchDaemon == nil)
+    }
+
     @Test func legacySnapshotMintsPaneIdentities() throws {
         let json = #"{"id":"00000000-0000-0000-0000-000000000001","cwd":"/tmp","isSplit":true}"#
         let snapshot = try JSONDecoder().decode(SessionSnapshot.self, from: Data(json.utf8))
@@ -886,4 +910,48 @@ struct SnapshotRoundTripTests {
         #expect(snap.isSplit == nil)
         #expect(snap.fontSize == nil)
     }
+
+    @Test func anEmptyRootRoundTripsAndIsTheOnlyWorkspaceMarkedRoot() throws {
+        let store = makeStore()
+        store.addWorkspace(name: "work")
+        store.ensureRoot()
+        let root = try #require(store.rootWorkspace)
+
+        let snapshot = store.snapshot()
+
+        #expect(snapshot.workspaces.map(\.root) == [nil, true])
+        let restored = makeStore()
+        restored.restore(from: snapshot)
+        #expect(restored.rootWorkspace?.id == root.id)
+        #expect(restored.rootWorkspace?.sessions.isEmpty == true)
+        #expect(restored.namedWorkspaces.map(\.name) == ["work"])
+    }
+
+    @Test func rootSessionsRoundTripInTheRoot() throws {
+        let store = makeStore()
+        store.addWorkspace(name: "work")
+        store.ensureRoot()
+        let root = try #require(store.rootWorkspace)
+        let top = try #require(store.addSession(toWorkspace: root.id, cwd: "/top"))
+        let restored = makeStore()
+
+        restored.restore(from: store.snapshot())
+
+        #expect(restored.rootWorkspace?.sessions.map(\.id) == [top.id])
+    }
+
+    @Test func aLegacyWorkspaceDecodesAsNamedAndEncodesWithoutARootKey() throws {
+        let json = #"{"id":"00000000-0000-0000-0000-000000000001","name":"work","sessions":[]}"#
+        let workspace = try JSONDecoder().decode(WorkspaceSnapshot.self, from: Data(json.utf8))
+        #expect(workspace.root == nil)
+        let encoded = try #require(String(data: try JSONEncoder().encode(workspace), encoding: .utf8))
+        #expect(!encoded.contains("root"))
+    }
+
+    @Test func aMalformedRootKeyDecodesAsNamed() throws {
+        let json = #"{"id":"00000000-0000-0000-0000-000000000001","name":"work","sessions":[],"root":"yes"}"#
+        let workspace = try JSONDecoder().decode(WorkspaceSnapshot.self, from: Data(json.utf8))
+        #expect(workspace.root == nil)
+    }
+
 }

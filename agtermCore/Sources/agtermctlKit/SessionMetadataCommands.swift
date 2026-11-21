@@ -127,6 +127,7 @@ extension Session {
         @Option(name: .long, help: "With move: the flagged session to place the target right after.") var after: String?
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
+        @OptionGroup var operation: OperationOptions
 
         func validate() throws {
             guard ["on", "off", "toggle", "clear", "move"].contains(mode) else {
@@ -145,7 +146,7 @@ extension Session {
             var args = ControlArgs(mode: mode)
             args.before = before
             args.after = after
-            return ControlRequest(cmd: .sessionFlag, target: target.target, args: options.withWindow(args))
+            return operation.stamp(ControlRequest(cmd: .sessionFlag, target: target.target, args: options.withWindow(args)))
         }
     }
 

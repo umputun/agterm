@@ -99,6 +99,15 @@ public final class PickController {
         return await withCheckedContinuation { pickWaiter = (pick.id, $0) }
     }
 
+    /// takePick releases the modal slot's pick with no result, for a pick moving to another place; nil when the slot
+    /// holds none, or a caller inside the app waits on it.
+    public func takePick() -> PendingPick? {
+        guard let taken = pending, pickWaiter?.id != taken.id else { return nil }
+        pending = nil
+        SessionPickBook.shared.drain(self)
+        return taken
+    }
+
     /// Completes the pending picker as cancelled.
     public func cancel() {
         resolve(ControlPickResult(result: .cancelled))
@@ -145,6 +154,15 @@ public final class PickController {
         self.pendingAsk = nil
         askDraft = nil
         SessionPickBook.shared.drain(self)
+    }
+
+    /// takeAsk releases the modal slot's GUI ask with no result, for an ask moving to another place.
+    public func takeAsk() -> PendingAsk? {
+        guard let taken = pendingAsk else { return nil }
+        pendingAsk = nil
+        askDraft = nil
+        SessionPickBook.shared.drain(self)
+        return taken
     }
 
     /// cancelAsk cancels without synthesizing a named button answer.

@@ -85,7 +85,8 @@ extension ControlServer: ControlActions {
         if let refusal = textLogRefusal(in: store, sessionID: id, options: options) { return refusal }
         let overlay = HtmlOverlay(source: page, navigation: options.navigation, javascript: options.javascript,
                                   chromeless: options.chromeless, persistent: options.persistent, browse: options.browse,
-                                  clicked: options.clicked, textLog: options.textLog, markdownLinks: options.markdownLinks)
+                                  clicked: options.clicked, textLog: options.textLog, markdownLinks: options.markdownLinks,
+                                  imagePixels: options.imagePixels)
         switch store.openRemotePage(id, overlay: overlay, options: options) {
         case .opened:
             if page.kind != .url { schedulePageClaimExpiry(after: AppStore.pageClaimWindow) }
@@ -273,10 +274,8 @@ extension ControlServer: ControlActions {
                 }
                 return makeSessionResponse(in: store, workspaceID: workspace.id, options: options, tint: tint)
             }
-            // id addressing (default `active`): the canonical prefix/active resolver.
-            let target = options.workspace ?? "active"
-            return resolver.resolve(target, candidates: store.workspaces.map(\.id),
-                           active: store.currentWorkspaceID, noun: "workspace") { workspaceID in
+            // id addressing (default `active`): the canonical prefix/active resolver, `root` included.
+            return resolver.resolveWorkspace(options.workspace ?? "active", in: store) { workspaceID in
                 makeSessionResponse(in: store, workspaceID: workspaceID, options: options, tint: tint)
             }
         }
@@ -355,6 +354,12 @@ extension ControlServer: ControlActions {
     /// the current axis. `on|off|toggle` is computed against `isSplit` and keeps a hidden pane alive;
     /// `session.split.close` is the teardown verb.
     func splitSession(_ target: String?, window: String?, mode: String?, axis: SplitAxis?) -> ControlResponse {
+        splitSession(target, window: window, mode: mode, axis: axis, focus: true)
+    }
+
+    /// splitSession with `focus` false leaves first responder and a new split's pane focus alone, for a split
+    /// another Mac asked for.
+    func splitSession(_ target: String?, window: String?, mode: String?, axis: SplitAxis?, focus: Bool) -> ControlResponse {
         return resolver.resolveSession(target, window: window) { store, id in
             guard let session = store.session(withID: id) else {
                 return ControlResponse(ok: false, error: "no such session: \(target ?? "active")")
@@ -364,13 +369,13 @@ extension ControlServer: ControlActions {
             }
             switch parsedMode {
             case .on:
-                store.setSplitVisibility(id, shown: true, axis: axis)
+                store.setSplitVisibility(id, shown: true, axis: axis, focusesNewSplit: focus)
             case .off:
                 store.setSplitVisibility(id, shown: false)
             case .toggle:
-                store.toggleSplit(id, axis: axis)
+                store.toggleSplit(id, axis: axis, focusesNewSplit: focus)
             }
-            actions.focusSplitPane(session, wantSplit: session.splitFocused)
+            if focus { actions.focusSplitPane(session, wantSplit: session.splitFocused) }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
     }
@@ -422,8 +427,9 @@ extension ControlServer: ControlActions {
             let respawningVisible = want && session.scratchActive && session.scratchSurface != nil
                 && !(command ?? "").isEmpty
             if want, let command, !command.isEmpty {
-                // closeScratch clears scratchActive, so the toggle below re-shows it and the factory uses it.
-                if session.scratchSurface != nil { store.closeScratch(id, emitVisibility: !respawningVisible) }
+                // replaceScratch clears scratchActive and ends a Live scratch's daemon, so the toggle below re-shows
+                // it and the factory starts the command in a new one.
+                store.replaceScratch(id, emitVisibility: !respawningVisible)
                 session.scratchCommand = command
             }
             if want, follow, store.selectedSessionID != id { store.selectSession(id) }
@@ -498,9 +504,8 @@ extension ControlServer: ControlActions {
     /// ride the EPHEMERAL indicator, lasting only until the next `session.status` without them.
     /// `update.pane` (`StatusPane`, dispatcher-validated, nil = `left`/main) records the pane that set the
     /// status, driving the pane-scoped keystroke-clear and pane-aware reveal. Renders on every non-idle one.
-    /// While a session is blocked, a write from ANOTHER pane that is not itself `blocked` is refused
-    /// whole (`AppStore.applyControlStatus`) with a `blocked status owned by pane` error and no sound — one
-    /// pane's `active`/`completed` must not erase the other's block.
+    /// `AppStore.applyControlStatus` decides what the row shows from every pane's report; a write the row does not
+    /// show, under another pane's block or beside its work, is still accepted and plays its sound.
     func setSessionStatus(_ target: String?, window: String?, update: ControlSessionStatusUpdate) async -> ControlResponse {
         // bind active/prefix targets before suspension, but preserve unknown-sound error precedence.
         let captured = resolver.resolveSessionTarget(target, window: window)
@@ -529,15 +534,9 @@ extension ControlServer: ControlActions {
         let indicator = AgentIndicator(status: update.status, blink: update.blink ?? false,
                                        autoReset: update.autoReset ?? false,
                                        color: update.color, shape: update.shape, statusPane: resolvedPane)
-        // rejected writes must return before playback: no status change means no sound.
-        switch store.applyControlStatus(indicator, forSession: id, ifIdle: update.ifIdle) {
-        case .refused(let owner):
-            return ControlResponse(ok: false, error: "blocked status owned by pane \(owner.rawValue) " +
-                "(write from that pane to change it)")
-        case .skipped:
+        // a skipped write must return before playback: no status change means no sound.
+        if store.applyControlStatus(indicator, forSession: id, ifIdle: update.ifIdle) == .skipped {
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
-        case .applied:
-            break
         }
         // the blocked marker goes even when this Mac has no blocked sound: the presenter plays its own setting
         let explicit = prepared == nil ? nil : update.sound
@@ -667,7 +666,7 @@ extension ControlServer: ControlActions {
     /// is ephemeral so it triggers no save.
     func markSessionSeen(_ target: String?, window: String?) -> ControlResponse {
         resolver.resolveSession(target, window: window) { store, id in
-            store.clearUnseen(id)
+            store.markSeen(id)
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
     }
@@ -685,8 +684,7 @@ extension ControlServer: ControlActions {
         case .workspace(let workspace):
             // both must live in the same store: resolve the session first (fixing it), then the workspace.
             return resolver.resolveSession(target, window: window) { store, sessionID in
-                resolver.resolve(workspace, candidates: store.workspaces.map(\.id),
-                        active: store.currentWorkspaceID, noun: "workspace") { workspaceID in
+                resolver.resolveWorkspace(workspace, in: store) { workspaceID in
                     guard store.moveSession(sessionID, toWorkspace: workspaceID) else {
                         return ControlResponse(ok: false, error: Self.companionMoveError)
                     }
@@ -704,8 +702,7 @@ extension ControlServer: ControlActions {
             return ControlResponse(ok: false, error: "session.move --target can be repeated only with a workspace or --after/--before")
         case .workspace(let workspace):
             return resolveBatchSessions(targets, window: window) { store, ids in
-                resolver.resolve(workspace, candidates: store.workspaces.map(\.id),
-                        active: store.currentWorkspaceID, noun: "workspace") { workspaceID in
+                resolver.resolveWorkspace(workspace, in: store) { workspaceID in
                     let affected = store.moveSessions(ids, toWorkspace: workspaceID)
                     if affected == 0, refusesCompanionMove(ids, in: store) {
                         return ControlResponse(ok: false, error: Self.companionMoveError)

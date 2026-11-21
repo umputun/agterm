@@ -8,13 +8,15 @@ final class HtmlReplicaRevision {
 }
 
 /// HtmlReplicaLink is how a page shown for another Mac reaches that Mac: `fetch` its files, for the load
-/// `HtmlReplicaRevision` names, and `bridge` a file page's requests, answered with the reply JSON text that Mac sent.
+/// `HtmlReplicaRevision` names, `bridge` a file page's requests, answered with the reply JSON text that Mac sent, and
+/// `logTail` a log page's end, nil while the file keeps the given stamp.
 struct HtmlReplicaLink {
     /// ownPageCommandsLocal keeps a page's reload and navigation of itself on this Mac: a page companion's viewers each
     /// show their own copy, so those act on the copy that asked.
     var ownPageCommandsLocal = false
     let fetch: @MainActor @Sendable (_ path: String, _ revision: HtmlReplicaRevision) async throws -> HtmlPageResource
     let bridge: @MainActor @Sendable (_ request: Data) async throws -> String
+    let logTail: @MainActor @Sendable (_ since: BoundedFile.FileStamp?) async throws -> BoundedFile.TailRead?
 
     /// ReadFailure is why `read` returned no bytes, worded for the page's error panel.
     struct ReadFailure: Error {

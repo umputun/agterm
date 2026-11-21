@@ -42,6 +42,44 @@ struct RemoteTreeTests {
         #expect(tree.sessions[0].workspaceName == "work")
     }
 
+    @Test func aRootSessionIsDiscoveredMarkedAsTheRootAndLabeledByItsWindowAlone() throws {
+        let page = ControlSessionNode(id: "p1", name: "doc", cwd: "/repo", active: false, split: false, backedByZmx: nil, content: "page")
+        let pageCompanion = ControlSessionNode(id: "p2", name: "notes", cwd: "/repo", active: false, split: false, backedByZmx: nil,
+                                               parent: "s1", content: "page")
+        let root = ControlWorkspaceNode(id: "root", name: "", active: false, root: true,
+                                        sessions: [node(id: "s1", name: "top", cwd: "/repo"), pageCompanion, page])
+        let named = ControlWorkspaceNode(id: "ws", name: "work", active: true, sessions: [node(id: "s2", name: "build", cwd: "/repo")])
+        let windows = [RemoteWindowProjection(id: "w-1", name: "main", tree: ControlTree(workspaces: [named, root]))]
+
+        let tree = try RemoteTreeMerger.candidates(windows: windows,
+                                                   inventory: inventory(entries: [
+                                                       entry(session: "s1", pane: "left", daemon: Self.left),
+                                                       entry(session: "s2", pane: "left", daemon: Self.right),
+                                                   ]))
+
+        let byID = Dictionary(uniqueKeysWithValues: tree.sessions.map { ($0.id, $0) })
+        #expect(byID["s1"]?.workspaceRoot == true)
+        #expect(byID["p1"]?.workspaceRoot == true)
+        #expect(byID["p2"]?.placeLabel == "main")
+        #expect(byID["s2"]?.workspaceRoot == nil)
+        #expect(byID["s1"]?.placeLabel == "main")
+        #expect(byID["s2"]?.placeLabel == "main/work")
+    }
+
+    @Test func aSessionCarriesItsRunningLiveScratch() throws {
+        let windows = [window(name: "main", workspace: "work",
+                              sessions: [node(id: "s1", name: "build", cwd: "/repo"), node(id: "s2", name: "logs", cwd: "/repo")])]
+
+        let tree = try RemoteTreeMerger.candidates(windows: windows, inventory: inventory(entries: [
+            entry(session: "s1", pane: "left", daemon: Self.left),
+            entry(session: "s1", pane: "scratch", daemon: Self.other),
+            entry(session: "s2", pane: "left", daemon: Self.right),
+        ]))
+
+        #expect(tree.sessions.map(\.scratch) == [ControlRemotePane(pane: "scratch", daemon: Self.other), nil])
+        #expect(tree.sessions[0].panes == [ControlRemotePane(pane: "left", daemon: Self.left)])
+    }
+
     @Test func aPageCompanionIsListedWithNoPanesOnlyUnderAListedParent() throws {
         let page = ControlSessionNode(id: "pg", name: "report", cwd: "/srv", active: false, split: false, backedByZmx: nil, parent: "s1", content: "page")
         let orphan = ControlSessionNode(id: "pg2", name: "lost", cwd: "/srv", active: false, split: false, backedByZmx: nil, parent: "gone", content: "page")

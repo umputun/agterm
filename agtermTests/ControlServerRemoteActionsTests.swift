@@ -14,6 +14,7 @@ final class ControlServerRemoteActionsTests: XCTestCase {
     private var remoteStore: AppStore!
     private let workspaceID = UUID()
     private let otherWorkspaceID = UUID()
+    private let rootID = UUID()
     private static let endpoint = ControlZmxEndpoint(executable: "/srv/zmx", socketDirectory: "/run/zmx")
 
     private struct Timeout: Error {}
@@ -23,9 +24,20 @@ final class ControlServerRemoteActionsTests: XCTestCase {
         private var recorded: [String] = []
         private var rev = 0
         private let versions: String
+        private var resultReads: [String] = []
+        private var results: [String] = []
         var created: UUID?
+        var createdPage: UUID?
+
+        private var plainRequests: [String] = []
 
         var operations: [String] { lock.withLock { recorded } }
+        var requests: [String] { lock.withLock { plainRequests } }
+        var reads: [String] { lock.withLock { resultReads } }
+
+        func answerResults(_ outcomes: [ControlHtmlPageOutcome]) {
+            lock.withLock { results = outcomes.map { Self.json(ControlResponse(ok: true, result: ControlResult(pageOutcome: $0))) } }
+        }
 
         init() {
             var result = ControlResult()
@@ -38,12 +50,25 @@ final class ControlServerRemoteActionsTests: XCTestCase {
             let line = (argv.last ?? "").replacingOccurrences(of: "'", with: "").replacingOccurrences(of: "\\", with: "")
             if argv.contains("-O") { return RemoteCommandResult(status: 0, stdout: "", stderr: "") }
             if line.contains("agtermctl version") { return RemoteCommandResult(status: 0, stdout: versions, stderr: "") }
+            if line.contains("session overlay result") {
+                return lock.withLock {
+                    resultReads.append(line)
+                    return RemoteCommandResult(status: 0, stdout: results.isEmpty ? "" : results.removeFirst(), stderr: "")
+                }
+            }
+            if line.contains("recent list") || line.contains("recent clear") {
+                return lock.withLock {
+                    plainRequests.append(line)
+                    return RemoteCommandResult(status: 0, stdout: Self.json(ControlResponse(ok: true, result: ControlResult(recent: []))), stderr: "")
+                }
+            }
             guard let opRange = line.range(of: "--op-id ") else { return RemoteCommandResult(status: 0, stdout: "", stderr: "") }
             let opID = String(line[opRange.upperBound...].prefix(36))
             return lock.withLock {
                 recorded.append(line)
                 rev += 1
-                var result = ControlResult(id: line.contains("session new") ? created?.uuidString : nil)
+                var result = ControlResult(id: line.contains("session new") ? created?.uuidString : nil,
+                                           pageID: line.contains("session overlay open") ? createdPage?.uuidString : nil)
                 result.receipt = CatalogReceipt(opID: opID, epoch: "e1", outcome: .applied, rev: rev)
                 return RemoteCommandResult(status: 0, stdout: Self.json(ControlResponse(ok: true, result: result)), stderr: "")
             }
@@ -120,11 +145,13 @@ final class ControlServerRemoteActionsTests: XCTestCase {
                               panes: panes)
     }
 
-    private func open(_ sessions: [CatalogSession]) throws {
+    private func open(_ sessions: [CatalogSession], tint: String? = nil, root: [CatalogSession]? = nil) throws {
+        let workspaces = [CatalogWorkspace(id: workspaceID, name: "main", tint: tint, sessions: sessions),
+                          CatalogWorkspace(id: otherWorkspaceID, name: "spare", tint: tint, sessions: [])]
+            + (root.map { [CatalogWorkspace(id: rootID, name: "", root: true, sessions: $0)] } ?? [])
         try feed(.snapshot(CatalogSnapshot(epoch: "e1", rev: 0, catalogID: UUID(),
                                            versions: CatalogVersions(server: "1", protocolVersion: 1, catalog: 1),
-                                           workspaces: [CatalogWorkspace(id: workspaceID, name: "main", sessions: sessions),
-                                                        CatalogWorkspace(id: otherWorkspaceID, name: "spare", sessions: [])])))
+                                           workspaces: workspaces)))
         XCTAssertEqual(remoteStore.remoteActions?.mirror.state, .connected)
     }
 
@@ -189,6 +216,76 @@ final class ControlServerRemoteActionsTests: XCTestCase {
         XCTAssertEqual(remoteStore.sessionLocation(ofSession: entry.id)?.workspace, workspaceID)
     }
 
+    func testFlagAndTintOfACatalogRowGoToAServerThatKeepsThemAndChangeNothingHere() async throws {
+        let entry = catalogSession()
+        try open([entry], tint: "")
+        let id = entry.id.uuidString
+        var tint = ControlArgs(mode: "set")
+        tint.tint = "red"
+
+        let flag = try await send(.sessionFlag, target: id, args: ControlArgs(mode: "on"))
+        let colored = try await send(.sessionTint, target: id, args: tint)
+        let workspace = try await send(.workspaceFlag, target: workspaceID.uuidString, args: ControlArgs(mode: "toggle"))
+
+        for reply in [flag, colored, workspace] { XCTAssertTrue(reply.ok, reply.error ?? "") }
+        XCTAssertEqual(runner.operations.count, 3)
+        XCTAssertTrue(runner.operations[0].contains("session flag on --target \(id)"))
+        XCTAssertTrue(runner.operations[1].contains("session tint red --target \(id)"))
+        XCTAssertTrue(runner.operations[2].contains("workspace flag on --target \(workspaceID.uuidString)"))
+        let row = try XCTUnwrap(remoteStore.session(withID: entry.id))
+        XCTAssertFalse(row.flagged)
+        XCTAssertNil(row.tint)
+    }
+
+    func testAWorkspaceFlagOfTheRootInANamedWindowGoesToTheServerByTheOwnersRootID() async throws {
+        try open([catalogSession()], tint: "", root: [catalogSession()])
+        var args = ControlArgs(mode: "on")
+        args.window = remoteWindow.uuidString
+        _ = library.newWindow()
+
+        let reply = try await send(.workspaceFlag, target: "root", args: args)
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        XCTAssertEqual(runner.operations.count, 1)
+        XCTAssertTrue(runner.operations[0].contains("workspace flag on --target \(rootID.uuidString)"), runner.operations[0])
+    }
+
+    func testAWorkspaceFlagOfTheRootInTheFrontmostWindowGoesToTheServerByTheOwnersRootID() async throws {
+        try open([catalogSession()], tint: "", root: [catalogSession()])
+        library.frontmostWindowID = remoteWindow
+
+        let reply = try await send(.workspaceFlag, target: "root", args: ControlArgs(mode: "on"))
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        XCTAssertEqual(runner.operations.count, 1)
+        XCTAssertTrue(runner.operations[0].contains("workspace flag on --target \(rootID.uuidString)"), runner.operations[0])
+    }
+
+    func testNamedOnlyWorkspaceCommandsRefuseTheServersRootBeforeAskingIt() async throws {
+        try open([catalogSession()], tint: "", root: [])
+        library.frontmostWindowID = remoteWindow
+        var rename = ControlArgs(name: "x")
+        rename.window = remoteWindow.uuidString
+
+        let renamed = try await send(.workspaceRename, target: "root", args: rename)
+        let deleted = try await send(.workspaceDelete, target: rootID.uuidString)
+
+        XCTAssertEqual(renamed.error, "top-level sessions are not a workspace")
+        XCTAssertEqual(deleted.error, "top-level sessions are not a workspace")
+        XCTAssertTrue(runner.operations.isEmpty, "\(runner.operations)")
+    }
+
+    func testFlagAndTintOfACatalogRowStayHereWithAServerThatDoesNotKeepThem() async throws {
+        let entry = catalogSession()
+        try open([entry])
+
+        let flag = try await send(.sessionFlag, target: entry.id.uuidString, args: ControlArgs(mode: "on"))
+
+        XCTAssertTrue(flag.ok, flag.error ?? "")
+        XCTAssertTrue(runner.operations.isEmpty)
+        XCTAssertEqual(remoteStore.session(withID: entry.id)?.flagged, true)
+    }
+
     func testControlSplitOffOfAShownCatalogSplitAsksTheServerAndKeepsItShownHere() async throws {
         let entry = catalogSession(split: true)
         try open([entry])
@@ -222,15 +319,172 @@ final class ControlServerRemoteActionsTests: XCTestCase {
         XCTAssertEqual(remoteStore.selectedSessionID, created)
     }
 
-    func testACommandThatMakesALocalRowIsRefusedInARemoteWindow() async throws {
+    func testAPageRowAskedForInARemoteWindowIsCreatedByTheServerAndNothingIsMadeHere() async throws {
         let entry = catalogSession()
         try open([entry])
+        let id = entry.id.uuidString
+        var page = ControlArgs()
+        page.url = "https://example.com/docs"
+        page.javascript = true
 
-        let reply = try await send(.sessionCompanionConvert, target: entry.id.uuidString)
+        let session = try await send(.sessionPage, target: id, args: page)
+        let companion = try await send(.sessionCompanionPage, target: id, args: page)
+
+        for reply in [session, companion] { XCTAssertTrue(reply.ok, reply.error ?? "") }
+        XCTAssertEqual(runner.operations.count, 2)
+        XCTAssertTrue(runner.operations[0].contains("session overlay open --page --target \(id) --url=https://example.com/docs --js --op-id"))
+        XCTAssertTrue(runner.operations[1].contains("session overlay open --companion --target \(id) --url=https://example.com/docs --js"))
+        XCTAssertEqual(shownIDs(), [entry.id])
+    }
+
+    func testAnOverlayCloseOfAServerPageRowAsksTheServerToCloseTheRow() async throws {
+        let id = UUID()
+        let page = CatalogPage(kind: "url", identity: "https://example.invalid", endpoint: Self.endpoint)
+        try open([CatalogSession(fields: CatalogSessionFields(id: id, name: "docs", parent: nil, cwd: "/srv", primary: id, axis: nil,
+                                                              shown: false, lifecycle: .live, page: page), panes: [])])
+        try await until { self.remoteStore.session(withID: id)?.overlayActive == true }
+
+        let reply = try await send(.sessionOverlayClose, target: id.uuidString)
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        XCTAssertEqual(runner.operations.count, 1)
+        XCTAssertTrue(runner.operations.first?.contains("session close --target \(id.uuidString)") == true)
+        XCTAssertTrue(shownIDs().contains(id))
+    }
+
+    func testAPageCreatedInARemoteWindowReadsItsResultFromTheServer() async throws {
+        let entry = catalogSession()
+        try open([entry])
+        let page = UUID()
+        runner.createdPage = page
+        runner.answerResults([ControlHtmlPageOutcome(pageID: page.uuidString, outcome: .pending),
+                              ControlHtmlPageOutcome(pageID: page.uuidString, outcome: .submitted, value: "yes")])
+        var html = ControlArgs()
+        html.url = "https://example.com/form"
+        var read = ControlArgs()
+        read.page = page.uuidString
+
+        let created = try await send(.sessionPage, target: entry.id.uuidString, args: html)
+        let pending = try await send(.sessionOverlayResult, args: read)
+        let submitted = try await send(.sessionOverlayResult, args: read)
+
+        XCTAssertEqual(created.result?.pageID, page.uuidString)
+        XCTAssertEqual(pending.result?.pageOutcome?.outcome, .pending)
+        XCTAssertEqual(submitted.result?.pageOutcome, ControlHtmlPageOutcome(pageID: page.uuidString, outcome: .submitted, value: "yes"))
+        XCTAssertEqual(runner.reads.count, 2)
+        XCTAssertTrue(runner.reads.allSatisfy { $0.contains("session overlay result --page \(page.uuidString)") })
+    }
+
+    func testAPageResultIsReadFromTheServerAfterTheWindowThatCreatedItClosed() async throws {
+        let entry = catalogSession()
+        try open([entry])
+        let page = UUID()
+        runner.createdPage = page
+        runner.answerResults([ControlHtmlPageOutcome(pageID: page.uuidString, outcome: .dismissed)])
+        var html = ControlArgs()
+        html.url = "https://example.com/form"
+        var read = ControlArgs()
+        read.page = page.uuidString
+        _ = try await send(.sessionPage, target: entry.id.uuidString, args: html)
+
+        library.closeWindow(remoteWindow)
+        try await until { self.server.remoteCatalogs[self.remoteWindow] == nil }
+        let reply = try await send(.sessionOverlayResult, args: read)
+
+        XCTAssertEqual(reply.result?.pageOutcome?.outcome, .dismissed)
+        XCTAssertEqual(runner.reads.count, 1)
+    }
+
+    func testAnUnknownPageResultIsAnsweredHereAndAsksNoServer() async throws {
+        try open([catalogSession()])
+        var read = ControlArgs()
+        read.page = UUID().uuidString
+
+        let reply = try await send(.sessionOverlayResult, args: read)
 
         XCTAssertFalse(reply.ok)
-        XCTAssertEqual(reply.error, "session.companion.convert is not available in a remote window")
+        XCTAssertEqual(reply.error, OverlayHtmlError.unknownPage)
+        XCTAssertTrue(runner.reads.isEmpty)
+    }
+
+    func testACommandThatMakesALocalRowIsRefusedInARemoteWindow() async throws {
+        try open([catalogSession()])
+        library.frontmostWindowID = remoteWindow
+
+        let reply = try await send(.recentOpen, target: UUID().uuidString)
+
+        XCTAssertFalse(reply.ok)
+        XCTAssertEqual(reply.error, "recent.open is not available in a remote window")
         XCTAssertTrue(runner.operations.isEmpty)
+    }
+
+    func testANewRemoteSessionIsRefusedInARemoteWindowBeforeAnythingIsSent() async throws {
+        try open([catalogSession()])
+        library.frontmostWindowID = remoteWindow
+
+        let reply = try await send(.sessionRemoteNew, args: ControlArgs(host: "buildbox"))
+
+        XCTAssertEqual(reply.error, "session.remote.new is not available in a remote window")
+        XCTAssertTrue(runner.operations.isEmpty)
+    }
+
+    func testPaneLifecycleCommandsOfACatalogRowGoToTheServer() async throws {
+        let entry = catalogSession(split: true)
+        try open([entry])
+        let id = entry.id.uuidString
+
+        let restart = try await send(.sessionRestart, target: id, args: ControlArgs(command: "make", pane: "split"))
+        let duplicate = try await send(.sessionCompanionDuplicate, target: id)
+        let convert = try await send(.sessionCompanionConvert, target: id)
+        let kill = try await send(.zmxKill, target: id, args: ControlArgs(force: true, pane: "left"))
+        let wait = try await send(.sessionCompanionNew, target: id, args: ControlArgs(command: "make", wait: true))
+
+        for reply in [restart, duplicate, convert, kill, wait] { XCTAssertTrue(reply.ok, reply.error ?? "") }
+        XCTAssertEqual(runner.operations.count, 5)
+        XCTAssertTrue(runner.operations[0].contains("session restart --target \(id) --pane right --command=make"))
+        XCTAssertTrue(runner.operations[1].contains("session duplicate --companion --target \(id)"))
+        XCTAssertTrue(runner.operations[2].contains("session convert --companion --target \(id)"))
+        XCTAssertTrue(runner.operations[3].contains("zmx kill --target \(id) --pane left --force"))
+        XCTAssertTrue(runner.operations[4].contains("session new --parent \(id) --command=make --wait"))
+        XCTAssertNil(remoteStore.session(withID: entry.id)?.parentID)
+    }
+
+    func testTerminateOfACatalogRowClosesItOnTheServerAndRestoreIsRefused() async throws {
+        let entry = catalogSession()
+        try open([entry])
+        let id = entry.id.uuidString
+
+        let restore = try await send(.sessionRestore, target: id, args: ControlArgs(mode: "set", command: "make"))
+        let terminate = try await send(.sessionTerminate, target: id)
+
+        XCTAssertEqual(restore.error, "agterm-server keeps every pane running")
+        XCTAssertTrue(terminate.ok, terminate.error ?? "")
+        XCTAssertEqual(runner.operations.count, 1)
+        XCTAssertTrue(runner.operations.first?.contains("session close --target \(id)") == true, runner.operations.first ?? "")
+    }
+
+    func testHistoryCommandsNamingAServerWindowGoToItsServerAndTheBareFormsStayHere() async throws {
+        try open([catalogSession()])
+        let window = remoteWindow.uuidString
+
+        let list = try await send(.recentList, args: ControlArgs(window: window))
+        let clear = try await send(.recentClear, args: ControlArgs(window: window))
+        let undo = try await send(.sessionUndo, target: "u1", args: ControlArgs(window: window))
+        let reopen = try await send(.recentOpen, target: "r1", args: ControlArgs(window: window))
+        let local = try await send(.recentList)
+
+        XCTAssertEqual(list.result?.recent, [])
+        XCTAssertTrue(clear.ok, clear.error ?? "")
+        XCTAssertTrue(undo.ok, undo.error ?? "")
+        XCTAssertTrue(reopen.ok, reopen.error ?? "")
+        XCTAssertTrue(local.ok, local.error ?? "")
+        XCTAssertEqual(runner.requests.count, 2)
+        XCTAssertTrue(runner.requests[0].contains("recent list"), runner.requests[0])
+        XCTAssertTrue(runner.requests[1].contains("recent clear"), runner.requests[1])
+        XCTAssertEqual(runner.operations.count, 2)
+        XCTAssertTrue(runner.operations[0].contains("session undo --target u1"), runner.operations[0])
+        XCTAssertTrue(runner.operations[1].contains("recent open"), runner.operations[1])
+        XCTAssertTrue(runner.operations[1].contains("r1"), runner.operations[1])
     }
 
     func testSessionDetachOfALocalSessionIsRefused() async throws {

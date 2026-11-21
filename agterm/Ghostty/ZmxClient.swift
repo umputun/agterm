@@ -5,11 +5,7 @@ import os
 
 @MainActor
 final class ZmxClient {
-    // zmx list probes daemons one at a time, so its cost grows with the daemon count and their load;
-    // timeout plus kill grace stays below the exit budget.
-    nonisolated static let captureInvocationTimeout: TimeInterval = 0.4
     nonisolated static let terminationGrace = ProcessOutputCapture.terminationGrace
-    nonisolated static let captureWallClockLimit = captureInvocationTimeout + terminationGrace
 
     struct Invocation {
         let executablePath: String
@@ -140,8 +136,8 @@ final class ZmxClient {
         }
     }
 
-    func sessionLeaderPIDs(timeout: TimeInterval? = nil) -> [String: pid_t]? {
-        sessionRecords(timeout: timeout).map(ZmxLeaderMap.leaders(in:))
+    func sessionLeaderPIDs() -> [String: pid_t]? {
+        sessionRecords().map(ZmxLeaderMap.leaders(in:))
     }
 
     /// The parsed listing, unreadable rows included, so a caller can tell an absent daemon from one zmx
@@ -179,28 +175,18 @@ final class ZmxClient {
         }
     }
 
-    /// What a single unforced kill actually did. `staleSocket` is its own case because zmx prints
-    /// `cleaned up stale session` and exits ZERO after merely unlinking a socket it could not connect to —
-    /// the daemon may still be running, unreachable by name, so counting that as a kill would report a
-    /// process gone that is not.
-    enum KillOutcome: Equatable {
-        case killed
-        case staleSocket
-        case failed(String)
-    }
-
     /// Kills daemons the caller's listing observed as unclaimed and detached, one invocation each so the
     /// result can be reported per name.
     ///
     /// Never passes `--force`. Pinned zmx has no kill-if-detached, so this does NOT recheck the client
     /// count — the caller must re-list immediately before calling. What `--force` would add is the
     /// stale-socket unlink above, which is exactly the outcome that cannot be distinguished from success.
-    func killObservedOrphan(names: [String]) -> [String: KillOutcome] {
-        var outcomes: [String: KillOutcome] = [:]
+    func killObservedOrphan(names: [String]) -> [String: ZmxKillOutcome] {
+        var outcomes: [String: ZmxKillOutcome] = [:]
         let jobs = foregroundJobs(of: names)
         for name in Set(names) {
             do {
-                outcomes[name] = Self.outcome(of: try invoke(["kill", name], mergesStderr: true), name: name)
+                outcomes[name] = ZmxKillOutcome.parse(try invoke(["kill", name], mergesStderr: true), name: name)
                 if outcomes[name] == .killed, let job = jobs[name] { sweeper?.send(SIGHUP, to: job) }
             } catch {
                 Self.logger.error("zmx kill failed for \(name, privacy: .public): \(String(describing: error), privacy: .public)")
@@ -210,24 +196,16 @@ final class ZmxClient {
         return outcomes
     }
 
-    /// Exit zero can mean an unreachable daemon; require an exact confirmation line.
-    static func outcome(of output: String, name: String) -> KillOutcome {
-        let lines = output.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
-        if lines.contains("killed session \(name)") { return .killed }
-        if lines.contains("cleaned up stale session \(name)") { return .staleSocket }
-        return .failed(lines.first ?? "no output")
-    }
-
     /// Force-kill ONE daemon and report what zmx actually did.
     ///
     /// Separate from `kill(names:)`, which answers a bare Bool because semantic deletion has already
     /// removed the pane from the model and there is nothing left to be wrong about. Here the caller closes
     /// or promotes a LIVE pane on the strength of this answer, so an exit status is not enough: zmx exits
     /// zero after merely unlinking a socket it could not reach, and that daemon may still be running.
-    func killConfirmed(name: String) -> KillOutcome {
+    func killConfirmed(name: String) -> ZmxKillOutcome {
         let job = foregroundJobs(of: [name])[name]
         do {
-            let outcome = Self.outcome(of: try invoke(["kill", name, "--force"], mergesStderr: true), name: name)
+            let outcome = ZmxKillOutcome.parse(try invoke(["kill", name, "--force"], mergesStderr: true), name: name)
             if outcome == .killed, let job { sweeper?.send(SIGHUP, to: job) }
             return outcome
         } catch {
@@ -244,7 +222,7 @@ final class ZmxClient {
         do {
             let output = try invoke(["kill"] + unique + ["--force"], timeout: timeout, mergesStderr: true)
             // only a name zmx confirmed: a stale-socket cleanup leaves the shell, and its job, running
-            for (name, job) in jobs where Self.outcome(of: output, name: name) == .killed {
+            for (name, job) in jobs where ZmxKillOutcome.parse(output, name: name) == .killed {
                 sweeper?.send(SIGHUP, to: job)
             }
             return true
@@ -278,14 +256,28 @@ final class ZmxClient {
         }
     }
 
+    /// backgroundSessionRecords reads the parsed listing on a detached task through `ZmxClient.run`, never the injected
+    /// runner, which belongs to the main actor. Nil when the listing could not be read or parsed.
+    func backgroundSessionRecords(timeout: TimeInterval) async -> [ZmxSessionRecord]? {
+        let invocation = invocation(["list"], timeout: timeout)
+        let records = await Task.detached { try? ZmxListParser.parse(ZmxClient.run(invocation)) }.value
+        if records == nil { Self.logger.error("zmx list failed in the background") }
+        return records
+    }
+
     private func invoke(_ arguments: [String], timeout timeoutOverride: TimeInterval? = nil,
                         mergesStderr: Bool = false, input: Data? = nil) throws -> String {
+        try runner(invocation(arguments, timeout: timeoutOverride, mergesStderr: mergesStderr, input: input))
+    }
+
+    private func invocation(_ arguments: [String], timeout timeoutOverride: TimeInterval? = nil,
+                            mergesStderr: Bool = false, input: Data? = nil) -> Invocation {
         var environment = ProcessInfo.processInfo.environment
         environment["ZMX_DIR"] = socketDirectory
         environment.removeValue(forKey: "ZMX_SESSION")
         environment.removeValue(forKey: "ZMX_SESSION_PREFIX")
-        return try runner(Invocation(executablePath: executablePath, arguments: arguments, environment: environment,
-                                     timeout: timeoutOverride ?? timeout, mergesStderr: mergesStderr, input: input))
+        return Invocation(executablePath: executablePath, arguments: arguments, environment: environment,
+                          timeout: timeoutOverride ?? timeout, mergesStderr: mergesStderr, input: input)
     }
 
     nonisolated static func run(_ invocation: Invocation) throws -> String {

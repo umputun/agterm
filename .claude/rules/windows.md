@@ -30,14 +30,16 @@ session drag are out of scope.
 
 ## Model and persistence
 
-- A window's `WindowInfo.source` names the agterm-server it mirrors (`WindowSource`); nil is this Mac's own tree.
+- A window's `WindowInfo.source` names the agterm-server or the Mac window (`originWindow`) it mirrors
+  (`WindowSource`); nil is this Mac's own tree. One is raised by host plus origin window, never opened twice.
   A remote window is never seeded and saves no rows: its store loads empty with its saved
   `RemoteWindowViewState` and is filled from the catalog (`WindowLibrary+Remote`, `control-api.md`).
 - Host-free `WindowLibrary` owns ordered `WindowInfo` values, live stores, and `frontmostWindowID`.
   Use `WindowInfo`, not `Window`, to avoid framework name collisions. `WindowsIndex` has its own version,
   independent of `Snapshot.version`; `WindowEntry` stores ID, name, and open state.
 - A window is open when its store is loaded. `loadStore` lazily caches `windows/<id>.json`; `newWindow`
-  seeds workspace 1 and a `$HOME` session. Keep at least one library entry. `openIDs` drives relaunch.
+  seeds a root and a `$HOME` session, in the root when the source window's selected session is a root session and in
+  workspace 1 otherwise; the Dock menu passes no source and a remote source counts as none. Keep at least one library entry. `openIDs` drives relaunch.
   `applyInactiveWindowSidebarHiding` shows the active sidebar and hides other windows' sidebars.
 - `closeWindow` that empties the open set pins `frontmostWindowID` to the closing window.
   The persisted index then has no open entries, so the next launch takes reopen's never-windowless
@@ -57,8 +59,8 @@ session drag are out of scope.
   `agtermCore` imports no `os`, since the agterm-linux fork builds it on Linux.
 - Bootstrap never throws. Load a valid index; otherwise recover every UUID-named per-window file before
   considering legacy migration or an empty seed. Recovered files are appended before `loadStore`, named
-  `window N`, all opened, and the first made frontmost. Missing/corrupt window snapshots open with a
-  default workspace/session. The library is never empty after launch.
+  `window N`, all opened, and the first made frontmost. Missing/corrupt window snapshots open as an
+  empty tree. The library is never empty after launch.
 
 ## Scene lifecycle
 
@@ -92,6 +94,11 @@ session drag are out of scope.
   writes it with `AEPutAttributePtr`. Never switch that read to `paramDescriptor`.
   The GUI-only prompt is keep-in-sync exempt and manually verified.
 - The window-close sheet takes its text from `QuitPrompt.windowCloseMessage` under the same mode rule.
+- Sparkle's Install and Relaunch quits through the same path with no quit reason. After the system-quit and Live-reset
+  guards, `UpdateFlow.quitAlert` picks "Restart to update?" (Restart / Later) once `updaterWillRelaunchApplication` has
+  fired; the mark outlives Later, since Sparkle's retry does not announce again, and clears at the cycle's end or abort.
+  `QuitPrompt.restartMessage` words it from `WindowLibrary.restartCounts` (this Mac's terminal rows; pages excluded)
+  and says to reopen with the same `AGTERM_STATE_DIR` when one is set, since Sparkle's relaunch drops it.
 - A confirmed Live sessions reset (`LiveResetCoordinator.pending`) skips the quit alert, since its own
   dialog or `zmx.reset --force` was the confirmation. `AppDelegate.exitFlush` fixes the order: capture,
   finalize pending closes, then the CHECKED save; only a fully saved snapshot arms the marker and the
@@ -133,7 +140,7 @@ session drag are out of scope.
   split, scratch, and overlay with `deckInteractive && isActive && !quickTerminal.holdsKey`. Read `holdsKey`,
   never `isVisible`: the predicate is app-level, so it inerts EVERY window, and a PINNED panel (a control
   `quick show`) stays on screen after agterm loses key. Gating on visibility there makes
-  `TerminalView.updateNSView` revoke first responder in every window on the next SwiftUI update, so the user
+  `TerminalSurfaceHost.updateNSView` revoke first responder in every window on the next SwiftUI update, so the user
   clicks into a terminal, types, and loses the keyboard again at the next title or status change. The same
   distinction governs `focusActiveSession`, `focusSplitPane`, the scratch's `suppressAutoFocus`,
   `coverHidesActiveSession` and the Command-W rungs. `holdsKey` follows the panel's own
@@ -218,6 +225,16 @@ session drag are out of scope.
   (`agterm-session-host key`). An update or a forced logout therefore starts a new host for new panes
   (#971), and the old one stays the root of its existing daemons, since responsibility cannot be moved.
   The fixed `session-host` directory is a build predating keys; it is never served again.
+- On macOS 27 and later the client starts the host as a launchd job in `gui/<uid>` (`HostJob`), so the host
+  and its daemons get a coalition of their own. A spawned host stays in the coalition of the agterm that
+  started it, and loginwindow force-quitting a program BTM disallows in the background ends that whole
+  coalition, live panes included (#985). Responsibility disclaim does not change the coalition.
+  Each attempt has a unique label, `<bundleID>.session-host.<key>.<nonce>`, and a 0600 plist removed once
+  bootstrap returns. The host takes the key and label as arguments, exits when either is not its own, and
+  tries to boot out its label after serving ends, including on error.
+  A job host ends with the GUI login session, so the forced-logout case above applies to a spawned host only.
+  A definite bootstrap failure falls back to the disclaimed spawn, which keeps the shared coalition;
+  a timed-out one never starts a second host. Older macOS keeps the spawn.
 - A host whose panes are gone is retired, never killed: after every launch's reap `HostRetirer` runs
   `agterm-session-host stop <dir>` off the main thread, which asks every other endpoint to stop and a host
   refuses while it roots a live daemon. Reset Live Sessions… moves panes off an earlier host (`staleHost`),
@@ -298,18 +315,22 @@ session drag are out of scope.
 
 ## Finder open
 
-- Warm `open -a agterm /path` (Discussion #230) resolves folders to themselves and files to parents,
-  queues them, and drains into the active store through `openSession(atDirectory:)`. Gate on a current
-  workspace and retry every 0.1 seconds for at most 50 ticks. After insertion, raise the active window so
+- `open -a agterm /path` (Discussion #230) resolves folders to themselves and files to parents,
+  queues them, and drains into the active store through `openSession(atDirectory:)`. A local destination waits
+  for a current workspace, retrying every 0.1 seconds for at most 50 ticks; a remote one refuses at once
+  without waiting for its catalog. After insertion, raise the active window so
   a minimized target becomes visible.
 - `CFBundleDocumentTypes` with `public.folder` and Viewer role adds Finder's Open With entry; it is not
   required for the `odoc` event itself.
-- Cold `open -a` is deliberately unsupported. SwiftUI fully initializes then retracts its auto-created
-  `WindowGroup` before delivering `odoc`, and macOS reaps the windowless process without
-  `applicationWillTerminate`. Independent bundle IDs reproduce it; preventing last-window termination,
-  forced reopen, untitled/reopen delegates, and in-process claim tricks do not solve it.
-- AppKit terminals create windows manually; Muxy's SwiftUI implementation routes cold opens through its
-  CLI. The clean workaround is an `odoc` to `oapp` relaunch, rejected because it double-launches and
-  flickers for the rare cold case. `defaultLaunchBehavior(.presented)` requires macOS 15 and cannot be
-  conditionally expressed in the macOS 14 `SceneBuilder`.
 - Finder open composes `session.new --cwd` with frontmost placement, so it is keep-in-sync exempt.
+- A cold launch by URL (`GURL`) or document (`odoc`) closes the launch window inside that event, before
+  `applicationDidFinishLaunching`, after it adopted the saved frontmost id; SwiftUI shows the others.
+  `LaunchHandoff.isHandoff` (agtermCore) recognises the close (no user or control close runs inside those events;
+  `NSRunningApplication.isFinishedLaunching` is already true there, hence `AppDelegate.launchFinished`),
+  `WindowRegistry.retire` unregisters that NSWindow and records `launchHandoffID`, every close effect is skipped, and
+  one main-queue hop reopens the id with the same store and surfaces. A retired window posts a second `willClose` and
+  keeps keying while SwiftUI closes it: those closes, its `bringForward` and its frontmost reports are ignored, and
+  the stray reconcile leaves it to SwiftUI, since closing it from there raises inside AppKit.
+- Every restored window then takes key during its attach-time raises, so a cold open waits for all of them
+  (`WindowRegistry.isPresented`) before acting: a session link selects its row, and queued folders target
+  `launchHandoffID`'s window, judged ready by its own store, then open there (or meet the remote refusal) and raise it.

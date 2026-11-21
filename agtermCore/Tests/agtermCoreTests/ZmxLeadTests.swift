@@ -12,6 +12,28 @@ struct ZmxLeadTests {
         #expect(recovering.environment == ["ZMX_MANAGED": "n2"])
     }
 
+    @Test func attachmentEnvironmentNamesTheAttachItTakesTheLeadBackFrom() {
+        let reconnecting = ZmxLeadAttachment(nonce: "n2", claim: false, reclaim: "n1")
+
+        #expect(reconnecting.environment == ["ZMX_MANAGED": "n2", "ZMX_MANAGED_RECLAIM": "n1"])
+        #expect(reconnecting.assignments == ["ZMX_MANAGED=n2", "ZMX_MANAGED_RECLAIM=n1"])
+    }
+
+    @Test func aDropReclaimsFromALeadingAttachOrTheOneAnUnreportedReconnectWasReclaiming() throws {
+        var leading = ZmxLeadState(attachment: ZmxLeadAttachment(nonce: "n1", claim: false))
+        #expect(leading.reclaimAfterDrop == nil)
+        _ = leading.apply(try #require(ZmxLeadNotice(title: "zmx-role;n1:leader:2")))
+        #expect(leading.reclaimAfterDrop == "n1")
+
+        let claiming = ZmxLeadState(attachment: ZmxLeadAttachment(nonce: "n3", claim: true))
+        #expect(claiming.reclaimAfterDrop == "n3")
+
+        var following = ZmxLeadState(attachment: ZmxLeadAttachment(nonce: "n2", claim: false, reclaim: "n1"))
+        #expect(following.reclaimAfterDrop == "n1")
+        _ = following.apply(try #require(ZmxLeadNotice(title: "zmx-role;n2:follower:3")))
+        #expect(following.reclaimAfterDrop == nil)
+    }
+
     @Test func generatedNonceIsAPlainTokenZmxAccepts() {
         let nonce = ZmxLeadAttachment.makeNonce()
 
@@ -77,6 +99,23 @@ struct ZmxLeadTests {
     }
 
     @MainActor
+    @Test func bookReportsEveryChangeAndNothingElse() throws {
+        let book = ZmxLeadBook()
+        var changes = 0
+        book.onChange = { changes += 1 }
+        let pane = UUID()
+        let leader = try #require(ZmxLeadNotice(title: "zmx-role;a:leader:1"))
+
+        book.begin(ZmxLeadAttachment(nonce: "a", claim: true), pane: pane)
+        _ = book.apply(leader, pane: pane)
+        _ = book.apply(leader, pane: pane)
+        _ = book.apply(leader, pane: UUID())
+        book.forget(pane: pane)
+
+        #expect(changes == 3)
+    }
+
+    @MainActor
     @Test func bookTracksEachPaneAndCountsAttachments() throws {
         let book = ZmxLeadBook()
         let left = UUID(), right = UUID()
@@ -123,5 +162,19 @@ struct ZmxLeadTests {
     @Test(arguments: ["", "80 24\ntext", "a b c d e f\ntext", "1 2 3 4 5 -6\ntext", "error: session is unresponsive"])
     func screenRejectsAMalformedReply(output: String) {
         #expect(ZmxScreen(output: output) == nil)
+    }
+
+    @MainActor
+    @Test func aClaimOnReportIsTakenOnceAndForgottenWithItsPane() {
+        let book = ZmxLeadBook()
+        let pane = UUID(), gone = UUID()
+        book.claimOnReport(pane: pane)
+        book.claimOnReport(pane: gone)
+
+        book.forget(pane: gone)
+
+        #expect(book.takeClaim(pane: pane))
+        #expect(!book.takeClaim(pane: pane))
+        #expect(!book.takeClaim(pane: gone))
     }
 }

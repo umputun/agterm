@@ -1,4 +1,5 @@
 import agtermCore
+import GhosttyKit
 import Foundation
 
 extension GhosttySurfaceView {
@@ -11,6 +12,9 @@ extension GhosttySurfaceView {
         setPaneRole(.primary)
     }
 
+    /// `TerminalSurface.childExitHeld`: the program exited and the surface still shows it.
+    var childExitHeld: Bool { surface.map(ghostty_surface_process_exited) ?? false }
+
     /// `PaneRoleMutableSurface`: changes live routing only; the stable token and child environment stay baked.
     func setPaneRole(_ role: SwappablePaneRole) {
         isSplitPane = role == .split
@@ -22,6 +26,12 @@ extension GhosttySurfaceView {
     /// token never changes, so `Session.paneRole(forToken:)` maps a status hook's `--pane-id` to the
     /// surface's CURRENT slot even after a promote + re-split (#199).
     var paneToken: String { env["AGTERM_PANE_ID"] ?? "" }
+
+    /// The session whose live scratch this surface is, nil for every other surface.
+    var scratchOwner: Session? {
+        guard session == nil, let owner = watermarkSession, owner.scratchSurface === self else { return nil }
+        return owner
+    }
 
     var zmxSessionName: String? {
         guard backedByZmx, let paneIdentity = UUID(uuidString: paneToken) else { return nil }

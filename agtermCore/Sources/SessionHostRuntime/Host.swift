@@ -2,6 +2,7 @@ import AgtermResponsibility
 import Darwin
 import Foundation
 import agtermCore
+import os
 
 enum HostChildState {
     case running
@@ -26,6 +27,8 @@ protocol HostBackend: AnyObject {
 }
 
 public final class Host {
+    private static let logger = Logger(subsystem: "com.umputun.agterm", category: "session-host")
+
     struct Configuration {
         let socketDirectory: String
         let identity: SessionHost.Hello
@@ -62,14 +65,40 @@ public final class Host {
         try HostIdentity.endpointKey()
     }
 
-    public static func run(socketDirectory: String) throws {
+    /// run serves the endpoint of this image and login session until a stop is accepted. A launchd host gets
+    /// the `key` its client waits on and its job `label`, which it removes however serving ends.
+    public static func run(socketDirectory: String, job: (key: String, label: String)? = nil) throws {
         let identity = try HostIdentity.read(pid: getpid())
         guard Responsibility.system.isAvailable else { throw Responsibility.SpawnError.unavailable }
+        let key = try HostIdentity.endpointKey()
+        if let job, job.key != key || !job.label.hasPrefix(HostJob.labelPrefix(bundleID: identity.bundleID, key: key)) {
+            logger.error("session host job \(job.label, privacy: .public) with key \(job.key, privacy: .public) is not this host's, key \(key, privacy: .public)")
+            throw HostFailure.invalidIdentity
+        }
+        guard let job else { return try serve(socketDirectory: socketDirectory, identity: identity, key: key) }
+        var failure: (any Error)?
+        do {
+            try serve(socketDirectory: socketDirectory, identity: identity, key: key)
+        } catch {
+            logger.error("session host job \(job.label, privacy: .public) ended: \(String(describing: error), privacy: .public)")
+            failure = error
+        }
+        // the bootout ends this process, so it runs after serve closed the endpoint: a client arriving
+        // meanwhile starts a new host
+        let outcome = HostJob.bootout(label: job.label, deadline: ProcessInfo.processInfo.systemUptime + 2)
+        if outcome != .succeeded {
+            logger.error("session host job \(job.label, privacy: .public) bootout: \(String(describing: outcome), privacy: .public)")
+        }
+        if let failure { throw failure }
+    }
+
+    private static func serve(socketDirectory: String, identity: SessionHost.Hello, key: String) throws {
         let executable = URL(fileURLWithPath: identity.bundlePath).appendingPathComponent("Contents/MacOS/zmx").path
-        let paths = try SessionHost.paths(socketDirectory: socketDirectory, key: HostIdentity.endpointKey())
+        let paths = try SessionHost.paths(socketDirectory: socketDirectory, key: key)
         let endpoint = try HostEndpoint(socketDirectory: socketDirectory, paths: paths)
         defer { endpoint.close() }
-        try hostCheck(setsid())
+        // a launchd job already leads its own process group, where setsid fails with EPERM
+        if getpgrp() != getpid() { try hostCheck(setsid()) }
         try redirectStandardIO(logPath: endpoint.paths.log)
         let backend = NativeHostBackend(socketDirectory: socketDirectory, zmxPath: executable, environment: ProcessInfo.processInfo.environment)
         let host = try Host(configuration: .init(socketDirectory: socketDirectory, identity: identity, zmxPath: executable), backend: backend)

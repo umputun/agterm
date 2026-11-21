@@ -30,10 +30,13 @@ public struct RecentClosedItem: Codable, Identifiable, Equatable, Sendable {
     public let closedAt: Date
     public let session: RecentClosedSession?
     public let workspace: RecentClosedWorkspace?
+    /// window is the window the close happened in; an entry saved before windows were recorded has none and is
+    /// in no window's list.
+    public let window: UUID?
 
     public init(id: UUID = UUID(), kind: RecentClosedKind, title: String, subtitle: String?,
                 closedAt: Date = Date(), session: RecentClosedSession? = nil,
-                workspace: RecentClosedWorkspace? = nil) {
+                workspace: RecentClosedWorkspace? = nil, window: UUID? = nil) {
         self.id = id
         self.kind = kind
         self.title = title
@@ -41,6 +44,7 @@ public struct RecentClosedItem: Codable, Identifiable, Equatable, Sendable {
         self.closedAt = closedAt
         self.session = session
         self.workspace = workspace
+        self.window = window
     }
 }
 
@@ -52,15 +56,19 @@ public struct RecentClosedSession: Codable, Equatable, Sendable {
     public let snapshot: SessionSnapshot
     /// companions are reopened under the parent; optional so an older `recent-closed.json` still decodes.
     public let companions: [SessionSnapshot]?
+    /// root marks a session that sat among the top-level sessions when it closed; standing alone, it reopens among the
+    /// restoring window's own, while a companion still follows its parent. nil is a named workspace's.
+    public let root: Bool?
 
     public init(workspaceID: UUID, workspaceName: String, workspaceIndex: Int, sessionIndex: Int,
-                snapshot: SessionSnapshot, companions: [SessionSnapshot]? = nil) {
+                snapshot: SessionSnapshot, companions: [SessionSnapshot]? = nil, root: Bool? = nil) {
         self.workspaceID = workspaceID
         self.workspaceName = workspaceName
         self.workspaceIndex = workspaceIndex
         self.sessionIndex = sessionIndex
         self.snapshot = snapshot
         self.companions = companions
+        self.root = root
     }
 }
 
@@ -83,15 +91,94 @@ public struct RecentClosedWorkspace: Codable, Equatable, Sendable {
     }
 }
 
+/// AttachedUndo is an undoable terminate of rows attached from `host`, kept so ⌘Z in their window can undo it there
+/// while the host's grace lasts: the host's undo id, the host sessions it ended (parent first) and when it was asked for.
+public struct AttachedUndo: Equatable, Sendable {
+    public let host: String
+    public let undoID: String
+    public let sessions: [String]
+    public let initiated: Date
+
+    public init(host: String, undoID: String, sessions: [String], initiated: Date) {
+        self.host = host
+        self.undoID = undoID
+        self.sessions = sessions
+        self.initiated = initiated
+    }
+}
+
+/// RemoteRecentClosedItem is a closed row that was attached from another host: the session stays the origin's, so the
+/// entry names it there instead of carrying a snapshot.
+public struct RemoteRecentClosedItem: Codable, Identifiable, Equatable, Sendable {
+    public struct Placement: Codable, Equatable, Sendable {
+        public let workspaceID: UUID
+        public let workspaceName: String
+        public let workspaceIndex: Int
+        public let sessionIndex: Int
+        public let parentID: UUID?
+        /// root marks a row that sat among the top-level sessions when it closed; standing alone, it reattaches among
+        /// the destination window's own, while a companion still follows its parent.
+        public let root: Bool?
+
+        public init(workspaceID: UUID, workspaceName: String, workspaceIndex: Int, sessionIndex: Int, parentID: UUID?,
+                    root: Bool? = nil) {
+            self.workspaceID = workspaceID
+            self.workspaceName = workspaceName
+            self.workspaceIndex = workspaceIndex
+            self.sessionIndex = sessionIndex
+            self.parentID = parentID
+            self.root = root
+        }
+
+        func marking(root: Bool) -> Placement {
+            Placement(workspaceID: workspaceID, workspaceName: workspaceName, workspaceIndex: workspaceIndex,
+                      sessionIndex: sessionIndex, parentID: parentID, root: root ? true : nil)
+        }
+    }
+
+    public let id: UUID
+    public let closedAt: Date
+    public let host: String
+    public let originSessionID: String
+    /// originRecentID is the origin's own Recent Closed entry, set when the close ended the session there; nil for a
+    /// detach and for a close that ended several sessions, which the origin's list names by session id.
+    public let originRecentID: String?
+    public let name: String
+    public let placement: Placement
+    /// closeID is the workspace close that wrote the entry, so undoing that close removes it too.
+    public let closeID: UUID?
+
+    public init(id: UUID = UUID(), closedAt: Date = Date(), host: String, originSessionID: String, originRecentID: String? = nil,
+                name: String, placement: Placement, closeID: UUID? = nil) {
+        self.id = id
+        self.closedAt = closedAt
+        self.host = host
+        self.originSessionID = originSessionID
+        self.originRecentID = originRecentID
+        self.name = name
+        self.placement = placement
+        self.closeID = closeID
+    }
+
+    func withOriginRecentID(_ recentID: String) -> RemoteRecentClosedItem {
+        RemoteRecentClosedItem(id: id, closedAt: closedAt, host: host, originSessionID: originSessionID,
+                               originRecentID: recentID, name: name, placement: placement, closeID: closeID)
+    }
+}
+
 public struct RecentClosedState: Codable, Equatable, Sendable {
     public static let currentVersion = 1
 
     public var version: Int
     public var items: [RecentClosedItem]
+    /// remoteItems is optional so a build that predates it decodes the file and keeps `items`.
+    public var remoteItems: [RemoteRecentClosedItem]?
 
-    public init(version: Int = RecentClosedState.currentVersion, items: [RecentClosedItem] = []) {
+    public init(version: Int = RecentClosedState.currentVersion, items: [RecentClosedItem] = [],
+                remoteItems: [RemoteRecentClosedItem]? = nil) {
         self.version = version
         self.items = items
+        self.remoteItems = remoteItems
     }
 }
 
@@ -111,10 +198,35 @@ public struct RecentClosedStore: Sendable {
     }
 
     public func load() -> [RecentClosedItem] {
-        guard let data = try? Data(contentsOf: fileURL) else { return [] }
-        guard let state = try? JSONDecoder().decode(RecentClosedState.self, from: data) else { return [] }
-        guard state.version == RecentClosedState.currentVersion else { return [] }
-        return Array(state.items.prefix(limit))
+        loadState().items
+    }
+
+    public func loadRemote() -> [RemoteRecentClosedItem] {
+        loadState().remoteItems ?? []
+    }
+
+    private func loadState() -> RecentClosedState {
+        guard let data = try? Data(contentsOf: fileURL),
+              let state = try? JSONDecoder().decode(RecentClosedState.self, from: data),
+              state.version == RecentClosedState.currentVersion else { return RecentClosedState() }
+        return RecentClosedState(items: Array(state.items.prefix(limit)),
+                                 remoteItems: state.remoteItems.map { Array($0.prefix(limit)) })
+    }
+
+    /// recordRemote keeps one entry per origin session: a later close of the same session replaces the earlier one.
+    public func recordRemote(_ item: RemoteRecentClosedItem) {
+        var remote = loadRemote()
+        remote.removeAll { $0.id == item.id || ($0.host == item.host && $0.originSessionID == item.originSessionID) }
+        remote.insert(item, at: 0)
+        save(load(), remote: Array(remote.prefix(limit)))
+    }
+
+    /// setOriginRecentID records that the origin's entry `recentID` holds `host`'s session `sessionID`, closed here.
+    public func setOriginRecentID(_ recentID: String, host: String, sessionID: String) {
+        let remote = loadRemote().map {
+            $0.host == host && $0.originSessionID == sessionID ? $0.withOriginRecentID(recentID) : $0
+        }
+        save(load(), remote: remote)
     }
 
     public func record(_ item: RecentClosedItem) {
@@ -131,23 +243,37 @@ public struct RecentClosedStore: Sendable {
             }
         }
         items.insert(item, at: 0)
-        save(Array(items.prefix(limit)))
+        save(Array(items.prefix(limit)), remote: loadRemote())
     }
 
+    /// remove drops entry `id` from both lists. A reopened workspace entry keeps the remote entries its close
+    /// wrote, since its snapshot never held the attached rows.
     public func remove(_ id: UUID) {
-        save(load().filter { $0.id != id })
+        save(load().filter { $0.id != id }, remote: loadRemote().filter { $0.id != id })
+    }
+
+    /// removeClose drops entry `id` and every remote entry the workspace close `id` wrote, for an undo that brings
+    /// those rows back live.
+    public func removeClose(_ id: UUID) {
+        save(load().filter { $0.id != id }, remote: loadRemote().filter { $0.id != id && $0.closeID != id })
     }
 
     public func clear() {
-        save([])
+        save([], remote: [])
     }
 
-    private func save(_ items: [RecentClosedItem]) {
+    /// clear(window:) drops the entries closed in `window`, leaving other windows' entries and every remote one.
+    public func clear(window: UUID) {
+        save(load().filter { $0.window != window }, remote: loadRemote())
+    }
+
+    private func save(_ items: [RecentClosedItem], remote: [RemoteRecentClosedItem]) {
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            try encoder.encode(RecentClosedState(items: items)).write(to: fileURL, options: .atomic)
+            let state = RecentClosedState(items: items, remoteItems: remote.isEmpty ? nil : remote)
+            try encoder.encode(state).write(to: fileURL, options: .atomic)
         } catch {
             NSLog("agterm: save recent closed failed: %@", String(describing: error))
         }

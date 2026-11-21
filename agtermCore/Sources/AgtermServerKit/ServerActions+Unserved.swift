@@ -3,9 +3,6 @@ import agtermCore
 /// The requirements agterm-server does not serve. `ServerCommandPolicy` refuses their commands before dispatch,
 /// so these answer only a caller that reaches the actions directly.
 extension ServerActions {
-    public func readEvents(_ options: ControlEventReadOptions) -> ControlResponse { unserved("readEvents") }
-    public func duplicateSession(_ target: String?, window: String?) -> ControlResponse { unserved("duplicateSession") }
-    public func attachCompanionPage(_ target: String?, window: String?) -> ControlResponse { unserved("attachCompanionPage") }
     public func selectSession(_ target: String?, window: String?) -> ControlResponse { unserved("selectSession") }
     public func goSession(window: String?, direction: SessionNavigation) -> ControlResponse { unserved("goSession") }
     public func revealSession(_ target: String?, window: String?) -> ControlResponse { unserved("revealSession") }
@@ -14,13 +11,10 @@ extension ServerActions {
     public func focusWorkspace(_ target: String?, window: String?, mode: ControlWorkspaceFocusMode) -> ControlResponse { unserved("focusWorkspace") }
     public func setWorkspaceFilter(window: String?, mode: ControlToggleMode) -> ControlResponse { unserved("setWorkspaceFilter") }
     public func setWorkspaceExpansion(_ target: String?, window: String?, expanded: Bool) -> ControlResponse { unserved("setWorkspaceExpansion") }
-    public func setSessionFlag(_ target: String?, window: String?, mode: String?) -> ControlResponse { unserved("setSessionFlag") }
-    public func markSessionSeen(_ target: String?, window: String?) -> ControlResponse { unserved("markSessionSeen") }
     public func setSessionRestore(_ target: String?, window: String?, update: ControlSessionRestoreUpdate) -> ControlResponse { unserved("setSessionRestore") }
     public func focusSessionPane(_ target: String?, window: String?, pane: String?) -> ControlResponse { unserved("focusSessionPane") }
     public func resizeSplit(_ target: String?, window: String?, resize: ControlSplitResize) -> ControlResponse { unserved("resizeSplit") }
     public func setSurfaceZoom(_ target: String?, window: String?, mode: ControlToggleMode) -> ControlResponse { unserved("setSurfaceZoom") }
-    public func readSurfaceCursor(_ target: String?, window: String?) -> ControlResponse { unserved("readSurfaceCursor") }
     public func setDashboard(targets: [String], window: String?, close: Bool, fontMode: DashboardFontMode, mru: Bool) -> ControlResponse { unserved("setDashboard") }
     public func font(_ target: String?, window: String?, pane: StatusPane?, action: String) -> ControlResponse { unserved("font") }
     public func reloadKeymap() -> ControlResponse { unserved("reloadKeymap") }

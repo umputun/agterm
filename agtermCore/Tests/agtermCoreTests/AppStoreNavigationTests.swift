@@ -534,19 +534,43 @@ struct AppStoreNavigationTests {
         #expect(store.selectedSessionID == sessions[0])
     }
 
-    // a lone visible workspace is a dead end only while it is ALREADY current — when the filter hid the
-    // current one, entering the sole survivor is the whole point of the step
-    @Test func navigateWorkspaceEntersTheSoleVisibleWorkspaceWhenCurrentIsHidden() throws {
-        let (store, workspaces, _) = Self.makeWorkspaceNavTree()
+    @Test func navigateWorkspaceEntersTheSoleFocusedWorkspaceWithNothingSelected() throws {
+        let (store, workspaces, sessions) = Self.makeWorkspaceNavTree()
         store.setFocusMembership(workspaces[0], member: true)
         store.setFocusEnabled(true)
         store.selectSession(nil)
         #expect(store.visibleWorkspaces.map(\.id) == [workspaces[0]])
-        #expect(store.currentWorkspaceID == workspaces[2], "the fallback sits outside the visible set")
+        #expect(store.currentWorkspaceID == workspaces[0], "with nothing selected the sole visible workspace is current")
 
         #expect(store.canStepWorkspaces, "the menu item must not go dead on a reachable workspace")
         #expect(try #require(store.navigateWorkspace(.next)).workspaceID == workspaces[0])
+        #expect(store.selectedSessionID == sessions[0], "the step lands on its first session")
         #expect(!store.canStepWorkspaces, "and once inside the sole workspace there is nowhere left to step")
+    }
+
+    @Test func navigateWorkspaceEntersASoleFocusedWorkspaceFilledInTheBackground() throws {
+        let (store, _, sessions) = Self.makeWorkspaceNavTree()
+        store.selectSession(sessions[2])
+        let empty = store.addWorkspace(name: "empty", revealNewWorkspace: false)
+        store.setFocusedWorkspace(empty.id)
+        #expect(store.selectedSessionID == sessions[2])
+        let filled = try #require(store.addSession(toWorkspace: empty.id, cwd: "/e", select: false))
+        #expect(store.currentWorkspaceID == empty.id)
+
+        #expect(store.canStepWorkspaces)
+        #expect(try #require(store.navigateWorkspace(.next)).workspaceID == empty.id)
+        #expect(store.selectedSessionID == filled.id)
+        #expect(!store.canStepWorkspaces)
+    }
+
+    @Test func navigateWorkspaceGoesNowhereInAnEmptySoleFocusedWorkspace() {
+        let (store, _, _) = Self.makeWorkspaceNavTree()
+        let empty = store.addWorkspace(name: "empty")
+        store.setFocusedWorkspace(empty.id)
+        store.selectSession(nil)
+        #expect(store.currentWorkspaceID == empty.id)
+        #expect(!store.canStepWorkspaces)
+        #expect(store.navigateWorkspace(.next) == nil)
     }
 
     @Test func navigateWorkspaceIsANoOpWithOneWorkspace() {

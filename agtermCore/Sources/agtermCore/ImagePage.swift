@@ -20,7 +20,7 @@ public enum ImagePage {
     public static let basePercent = 95
     /// minimumPoints is the narrowest auto-sized panel, wide enough for the strip's name and close button.
     public static let minimumPoints = 240.0
-    /// maxBytes bounds the file a page embeds; a larger one is refused before it is read.
+    /// maxBytes bounds the file a page shows; a larger one is refused before it is read.
     public static let maxBytes = 64 << 20
     /// maxPixels refuses a picture whose header promises more pixels than this, a decompression bomb's tell.
     /// It bounds one decoded frame, about 400 MB at four bytes a pixel, not the page's total memory.
@@ -74,11 +74,21 @@ public enum ImagePage {
 
     /// html shows `data` filling the page with its aspect kept, centered on a transparent canvas.
     public static func html(data: Data, mimeType: String) -> String {
+        page(escapedSrc: "data:\(MarkdownPage.escaped(mimeType));base64,\(data.base64EncodedString())")
+    }
+
+    /// html shows the picture at `src` the same way, for a page that serves the bytes itself.
+    public static func html(src: String) -> String {
+        page(escapedSrc: MarkdownPage.escaped(src))
+    }
+
+    // base64 needs no escaping, so a data URI's payload skips the scalar walk
+    private static func page(escapedSrc: String) -> String {
         """
         <!doctype html><html><head><meta charset="utf-8"><style>
         html,body{margin:0;height:100%;background:transparent;overflow:hidden}
         img{display:block;width:100%;height:100%;object-fit:contain}
-        </style></head><body><img alt="" src="data:\(mimeType);base64,\(data.base64EncodedString())"></body></html>
+        </style></head><body><img alt="" src="\(escapedSrc)"></body></html>
         """
     }
 }

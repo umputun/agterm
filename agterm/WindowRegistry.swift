@@ -8,6 +8,8 @@ import AppKit
 final class WindowRegistry {
     static let shared = WindowRegistry()
     private var windows: [WindowInfo.ID: NSWindow] = [:]
+    private var presented: Set<WindowInfo.ID> = []
+    private let retired = NSHashTable<NSWindow>.weakObjects()
 
     private init() {}
 
@@ -17,6 +19,28 @@ final class WindowRegistry {
         windows[id] = window
         NotificationCenter.default.post(name: .agtermWindowAttachmentChanged, object: nil)
     }
+
+    /// Records that the registered window for `id` ran its attach-time raises, the last time it takes key
+    /// on its own.
+    func markPresented(_ id: WindowInfo.ID, window: NSWindow) {
+        guard windows[id] === window else { return }
+        presented.insert(id)
+    }
+
+    func isPresented(_ id: WindowInfo.ID) -> Bool { presented.contains(id) }
+
+    /// Unregisters a launch window SwiftUI closes on its own after its id moved to a new window. The stray
+    /// reconcile leaves it to SwiftUI while it closes: closing it from here raises inside AppKit.
+    func retire(_ id: WindowInfo.ID, window: NSWindow) {
+        unregister(id)
+        retired.add(window)
+        launchHandoffID = id
+    }
+
+    /// The id of the last window `retire` handed off: the launch window a cold open launched the app with.
+    private(set) var launchHandoffID: WindowInfo.ID?
+
+    func isRetired(_ window: NSWindow) -> Bool { retired.contains(window) }
 
     /// Whether an on-screen window is registered for `id` (i.e. its NSWindow has attached).
     func isRegistered(_ id: WindowInfo.ID) -> Bool { windows[id] != nil }
@@ -31,6 +55,7 @@ final class WindowRegistry {
 
     func unregister(_ id: WindowInfo.ID) {
         windows[id] = nil
+        presented.remove(id)
         NotificationCenter.default.post(name: .agtermWindowAttachmentChanged, object: nil)
     }
 

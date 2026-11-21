@@ -268,6 +268,7 @@ struct AppStoreTreeProjectionTests {
             ControlSessionNode(id: a.id.uuidString, name: "alpha", cwd: "/repo/a",
                                active: false, split: false,
                                backedByZmx: false,
+                               activePanes: [],
                                surfaces: [
                                 ControlSurfaceNode(id: TerminalSurfaceID(sessionID: a.id, surface: .primary).rawValue,
                                                    kind: "left", active: true, visible: true,
@@ -282,7 +283,7 @@ struct AppStoreTreeProjectionTests {
                                hasSplit: true, backedByZmx: false,
                                splitAxis: "vertical", splitFocused: false,
                                overlay: true, scratch: true, flagged: true,
-                               status: "blocked", statusPane: "right", statusChangedAt: 1_700_000_000,
+                               status: "blocked", statusPane: "right", statusChangedAt: 1_700_000_000, activePanes: [],
                                background: BackgroundWatermark(kind: .text, text: "PROD"),
                                surfaces: [
                                 ControlSurfaceNode(id: TerminalSurfaceID(sessionID: b.id, surface: .primary).rawValue,
@@ -795,7 +796,85 @@ struct AppStoreTreeProjectionTests {
                               sink: NullSink()) { store.presentationSnapshot(forSession: session.id) }
         }
 
-        #expect(store.controlTree().workspaces[0].sessions[0].presenters == ControlPresentersNode(mirrors: 2))
+        #expect(store.controlTree().workspaces[0].sessions[0].presenters == ControlPresentersNode(mirrors: 2, viewers: 2))
+    }
+
+    @Test func aRowReportsFollowingItsOriginsCompanionsOnlyWhileItHoldsTheirList() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let row = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp", remoteHost: "buildbox", remoteSessionID: "o1"))
+        store.bindRemote(RemoteBinding(remoteSessionID: "o1", daemonsByLocalPane: [:], presentationVersion: 1), forSession: row.id)
+        let node = { store.controlTree().workspaces[0].sessions[0] }
+        #expect(node().followsCompanions == nil)
+
+        store.setFollowsCompanions(true, forSession: row.id)
+        #expect(node().followsCompanions == true)
+        #expect(String(decoding: try JSONEncoder().encode(store.controlTree()), as: UTF8.self).contains(#""followsCompanions":true"#))
+
+        store.setFollowsCompanions(false, forSession: row.id)
+        #expect(node().followsCompanions == nil)
+        store.setFollowsCompanions(true, forSession: row.id)
+        store.bindRemote(RemoteBinding(remoteSessionID: "o1", daemonsByLocalPane: [:], presentationVersion: 1), forSession: row.id)
+        #expect(node().followsCompanions == nil)
+    }
+
+    @Test func aCompanionRowNeverReportsFollowingEvenWhenMovedUnderAParentWithItsListHeld() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let parent = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        let row = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp", remoteHost: "buildbox", remoteSessionID: "o1"))
+        store.bindRemote(RemoteBinding(remoteSessionID: "o1", daemonsByLocalPane: [:], presentationVersion: 1), forSession: row.id)
+        store.setFollowsCompanions(true, forSession: row.id)
+        let node = { store.controlTree().workspaces[0].sessions.first { $0.id == row.id.uuidString }?.followsCompanions }
+        #expect(node() == true)
+
+        store.nest(row.id, under: parent.id)
+
+        #expect(node() == nil)
+    }
+
+    @Test func aMembershipObserverCountsAsAMirroringViewer() throws {
+        let store = makeStore()
+        let hub = PresentationHub(staleTimeout: 30)
+        store.presentationHub = hub
+        let session = try #require(store.addSession(toWorkspace: store.addWorkspace(name: "work").id, cwd: "/tmp"))
+
+        try hub.subscribe(session: session.id, hello: PresentationHello(version: 1, kinds: RemotePresentationClient.observerKinds, mode: .mirror),
+                          sink: NullSink()) { store.presentationSnapshot(forSession: session.id) }
+
+        #expect(store.controlTree().workspaces[0].sessions[0].presenters == ControlPresentersNode(mirrors: 1, viewers: 1))
+    }
+
+    @Test func anOriginSurfaceIsRemoteExactlyWhenItsNextWorkGoesToAViewer() throws {
+        let store = makeStore()
+        let hub = PresentationHub(staleTimeout: 30)
+        store.presentationHub = hub
+        let workspace = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        store.toggleSplit(session.id)
+        session.surface = SpySurface(paneToken: "left")
+        session.splitSurface = SpySurface(paneToken: "right")
+        let remote = { () -> [String: Bool?] in
+            Dictionary(uniqueKeysWithValues: (store.controlTree().workspaces[0].sessions[0].surfaces ?? []).map { ($0.kind, $0.remote) })
+        }
+        lead(.follower, pane: session.paneIdentity)
+        lead(.leader, pane: try #require(session.splitPaneIdentity))
+        #expect(remote()["left"] == .some(nil))
+
+        let id = try hub.subscribe(session: session.id, hello: PresentationHello(version: 1, kinds: [], mode: .presenter),
+                                   sink: NullSink()) { store.presentationSnapshot(forSession: session.id) }
+        hub.receive(PresentationFrame(gen: 1, rev: 0, body: .presenterAcquire), from: id)
+
+        #expect(remote()["left"] == .some(true))
+        #expect(remote()["right"] == .some(nil))
+    }
+
+    private func lead(_ role: ZmxLeadRole, pane: UUID) {
+        let attachment = ZmxLeadAttachment(claim: false)
+        ZmxLeadBook.shared.begin(attachment, pane: pane)
+        if let notice = ZmxLeadNotice(title: "zmx-role;\(attachment.nonce):\(role.rawValue):1") {
+            _ = ZmxLeadBook.shared.apply(notice, pane: pane)
+        }
     }
 
     @Test func anOriginRowReportsItsPresenterApartFromItsMirrors() throws {
@@ -815,7 +894,7 @@ struct AppStoreTreeProjectionTests {
         hub.receive(PresentationFrame(gen: 1, rev: 0, body: .presenterAcquire), from: presenter)
 
         #expect(store.controlTree().workspaces[0].sessions[0].presenters
-            == ControlPresentersNode(mirrors: 1, presenter: true))
+            == ControlPresentersNode(mirrors: 1, presenter: true, viewers: 2))
     }
 
     @Test func aViewerRowReportsTheModeItWasGranted() throws {
@@ -989,5 +1068,33 @@ struct AppStoreTreeProjectionTests {
         #expect(node.zoom == 1.25)
         let json = String(decoding: try JSONEncoder().encode(node), as: UTF8.self)
         #expect(json.contains(#""zoom":1.25"#))
+    }
+
+    @Test(arguments: [false, true])
+    func scratchCwdReportsTheScratchsOwnOrPrimaryDirectoryEvenWhenHidden(shown: Bool) throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/primary"))
+        session.scratchSurface = SpySurface()
+        session.scratchActive = shown
+        for (reported, expected): (String?, String) in [(nil, "/primary"), ("/primary/docs", "/primary/docs")] {
+            session.scratchCwd = reported
+            let node = store.controlTree().workspaces[0].sessions[0]
+            let data = try JSONEncoder().encode(node)
+            let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            #expect(json["scratchCwd"] as? String == expected)
+            #expect(node.cwd == "/primary")
+            #expect(try JSONDecoder().decode(ControlSessionNode.self, from: data) == node)
+        }
+    }
+
+    @Test func noScratchOmitsTheScratchDirectoryEvenWithAStaleValue() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/primary"))
+        session.scratchCwd = "/stale"
+        let node = store.controlTree().workspaces[0].sessions[0]
+        let json = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(node)) as? [String: Any])
+        #expect(json["scratchCwd"] == nil)
     }
 }

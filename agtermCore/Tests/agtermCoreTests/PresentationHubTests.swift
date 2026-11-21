@@ -17,7 +17,84 @@ struct PresentationHubTests {
 
         func close(_ reason: PresentationHub.CloseReason) { closed = reason }
 
+        var finished: PresentationFrame?
+        func finish(_ frame: PresentationFrame) { finished = frame }
+
         var bodies: [PresentationFrame.Body] { frames.map(\.body) }
+    }
+
+    static let endedHello = PresentationHello(version: 1, kinds: ["status", PresentationHub.endedKind], mode: .mirror)
+
+    @Test func endingASessionFinishesItsViewersWithEndedAndForgetsThem() throws {
+        let hub = makeHub()
+        let viewer = Sink()
+        let other = Sink()
+        let otherSession = UUID()
+        try hub.subscribe(session: Self.session, hello: Self.endedHello, sink: viewer) { Self.empty }
+        try hub.subscribe(session: otherSession, hello: Self.endedHello, sink: other) { Self.empty }
+
+        hub.end(sessions: [Self.session])
+        hub.publish(.status(Self.blocked), session: Self.session)
+
+        let finished = try #require(viewer.finished)
+        #expect(finished.body == .ended)
+        #expect(finished.rev == 2)
+        #expect(finished.gen == viewer.frames.first?.gen)
+        #expect(viewer.bodies.count == 2)
+        #expect(hub.subscriberCount(session: Self.session) == 0)
+        #expect(other.finished == nil)
+        #expect(hub.subscriberCount(session: otherSession) == 1)
+    }
+
+    @Test func anObserversHelloIsAgreedAndItIsFinishedWithEnded() throws {
+        let hub = makeHub()
+        let observer = Sink()
+        try hub.subscribe(session: Self.session, hello: PresentationHello(version: 1, kinds: RemotePresentationClient.observerKinds, mode: .mirror),
+                          sink: observer) { Self.empty }
+
+        hub.end(sessions: [Self.session])
+
+        guard case .hello(let answer) = observer.bodies.first else { Issue.record("no hello"); return }
+        #expect(Set(answer.kinds) == Set(RemotePresentationClient.observerKinds))
+        #expect(answer.mode == .mirror)
+        #expect(observer.finished?.body == .ended)
+    }
+
+    @Test func endingASessionClosesAViewerThatDoesNotListEnded() throws {
+        let hub = makeHub()
+        let viewer = Sink()
+        try hub.subscribe(session: Self.session, hello: Self.hello, sink: viewer) { Self.empty }
+
+        hub.end(sessions: [Self.session])
+
+        #expect(viewer.finished == nil)
+        #expect(viewer.closed == .ended)
+        #expect(hub.subscriberCount(session: Self.session) == 0)
+    }
+
+    @Test func answeringAnEndedSessionSendsHelloThenEndedWithoutSubscribing() throws {
+        let hub = makeHub()
+        let viewer = Sink()
+
+        try hub.answerEnded(session: Self.session, hello: Self.endedHello, sink: viewer)
+
+        #expect(viewer.bodies == [.hello(Self.endedHello)])
+        let finished = try #require(viewer.finished)
+        #expect(finished.body == .ended)
+        #expect(finished.gen == viewer.frames.first?.gen)
+        #expect(finished.rev == 1)
+        #expect(hub.subscriberCount(session: Self.session) == 0)
+    }
+
+    @Test func answeringAnEndedSessionClosesAViewerThatDoesNotListEnded() throws {
+        let hub = makeHub()
+        let viewer = Sink()
+
+        try hub.answerEnded(session: Self.session, hello: Self.hello, sink: viewer)
+
+        #expect(viewer.frames.isEmpty)
+        #expect(viewer.finished == nil)
+        #expect(viewer.closed == .ended)
     }
 
     final class Clock {
@@ -258,8 +335,8 @@ struct PresentationHubTests {
         let ask = PresentationFrame.Body.askRequest(PresentationAsk(
             PendingAsk(id: "a1", title: "deploy?", buttons: [ControlAskButton(id: "y", label: "Yes")]), pane: nil, owner: 1))
 
-        #expect(hub.sendToPresenter(sound, session: Self.session) == advertised)
-        #expect(hub.sendToPresenter(ask, session: Self.session))
+        #expect(hub.send(sound, toOwner: sink.frames[0].gen) == advertised)
+        #expect(hub.send(ask, toOwner: sink.frames[0].gen))
 
         #expect(sink.bodies.contains(sound) == advertised)
         #expect(sink.bodies.last == ask)
@@ -268,7 +345,7 @@ struct PresentationHubTests {
     @Test func onlyThePresentersLinkClickReachesTheHost() throws {
         let hub = makeHub()
         var received: [PresentationFrame.Body] = []
-        hub.onPresenterFrame = { _, body in received.append(body) }
+        hub.onPresenterFrame = { _, _, body in received.append(body) }
         let hello = PresentationHello(version: 1, kinds: [PresentationHub.linkClickKind], mode: .presenter)
         let presenterSink = Sink()
         let presenter = try hub.subscribe(session: Self.session, hello: hello, sink: presenterSink) { Self.empty }
@@ -284,18 +361,39 @@ struct PresentationHubTests {
         #expect(presenterSink.bodies.first == .hello(hello))
     }
 
+    @Test func aPageResultReachesTheHostWithItsSender() throws {
+        let hub = makeHub()
+        var received: [Int] = []
+        hub.onPresenterFrame = { _, sender, _ in received.append(sender) }
+        let hello = PresentationHello(version: 1, kinds: [PresentationHub.pageTextKind], mode: .presenter)
+        let presenterSink = Sink()
+        let presenter = try hub.subscribe(session: Self.session, hello: hello, sink: presenterSink) { Self.empty }
+        hub.receive(PresentationFrame(gen: presenterSink.frames[0].gen, rev: 0, body: .presenterAcquire), from: presenter)
+        let mirrorSink = Sink()
+        let mirror = try hub.subscribe(session: Self.session, hello: hello, sink: mirrorSink) { Self.empty }
+        let result = PresentationFrame.Body.pageResult(PresentationPageResult(page: "p1", seq: 1, ok: true, text: "following"))
+
+        hub.receive(PresentationFrame(gen: mirrorSink.frames[0].gen, rev: 1, body: result), from: mirror)
+        hub.receive(PresentationFrame(gen: presenterSink.frames[0].gen, rev: 1, body: result), from: presenter)
+
+        #expect(received == [mirrorSink.frames[0].gen, presenterSink.frames[0].gen])
+        #expect(PresentationHub.supportedKinds.contains(PresentationHub.pageTextKind))
+        #expect(PresentationHub.supportedKinds.contains(PresentationHub.pageExpandKind))
+    }
+
     @Test(arguments: [true, false])
-    func presenterSupportReflectsTheHelloOfTheCurrentPresenterOnly(advertised: Bool) throws {
+    func supportReflectsTheViewersOwnHello(advertised: Bool) throws {
         let hub = makeHub()
         let sink = Sink()
+        let other = Sink()
         let kinds = advertised ? ["status", PresentationHub.askFormKind] : ["status"]
-        let id = try hub.subscribe(session: Self.session, hello: PresentationHello(version: 1, kinds: kinds, mode: .presenter),
-                                   sink: sink) { Self.empty }
-        #expect(!hub.presenterSupports(PresentationHub.askFormKind, session: Self.session))
+        try hub.subscribe(session: Self.session, hello: PresentationHello(version: 1, kinds: kinds, mode: .presenter),
+                          sink: sink) { Self.empty }
+        try hub.subscribe(session: Self.session, hello: PresentationHello(version: 1, kinds: ["status", PresentationHub.askFormKind],
+                                                                          mode: .presenter), sink: other) { Self.empty }
 
-        hub.receive(PresentationFrame(gen: sink.frames[0].gen, rev: 0, body: .presenterAcquire), from: id)
-
-        #expect(hub.presenterSupports(PresentationHub.askFormKind, session: Self.session) == advertised)
+        #expect(hub.supports(PresentationHub.askFormKind, owner: sink.frames[0].gen) == advertised)
+        #expect(hub.supports(PresentationHub.askFormKind, owner: other.frames[0].gen))
         #expect(sink.bodies.first == .hello(PresentationHello(version: 1, kinds: kinds, mode: .presenter)))
     }
 
@@ -309,9 +407,9 @@ struct PresentationHubTests {
         let big = PresentationNotify(title: "t", body: String(repeating: "y", count: 150 * 1024), pane: nil, source: "osc")
         let before = sink.frames.count
 
-        hub.batchToPresenter(session: Self.session) {
-            for notify in small { hub.sendToPresenter(.notify(notify), session: Self.session) }
-            hub.sendToPresenter(.notify(big), session: Self.session)
+        hub.batch(session: Self.session) {
+            for notify in small { hub.send(.notify(notify), toOwner: sink.frames[0].gen) }
+            hub.send(.notify(big), toOwner: sink.frames[0].gen)
         }
 
         let sent = sink.bodies.dropFirst(before)
@@ -403,5 +501,467 @@ struct PresentationHubTests {
         hub.receive(PresentationFrame(gen: sink.frames[0].gen + 1, rev: 0, body: .ping), from: id)
 
         #expect(sink.frames.count == 2)
+    }
+
+    @Test func onlyThePresentersStatusClearAndSeenReachTheHost() throws {
+        let hub = makeHub()
+        var received: [PresentationFrame.Body] = []
+        hub.onPresenterFrame = { _, _, body in received.append(body) }
+        let hello = PresentationHello(version: 1, kinds: [PresentationHub.statusClearKind], mode: .presenter)
+        let presenterSink = Sink()
+        let presenter = try hub.subscribe(session: Self.session, hello: hello, sink: presenterSink) { Self.empty }
+        hub.receive(PresentationFrame(gen: presenterSink.frames[0].gen, rev: 0, body: .presenterAcquire), from: presenter)
+        let mirrorSink = Sink()
+        let mirror = try hub.subscribe(session: Self.session, hello: hello, sink: mirrorSink) { Self.empty }
+        let clear = PresentationFrame.Body.statusClear(PresentationStatusClear(reason: .manual))
+        let seen = PresentationFrame.Body.statusSeen(PresentationSeen(reason: .viewed))
+
+        hub.receive(PresentationFrame(gen: mirrorSink.frames[0].gen, rev: 1, body: clear), from: mirror)
+        hub.receive(PresentationFrame(gen: presenterSink.frames[0].gen, rev: 1, body: clear), from: presenter)
+        hub.receive(PresentationFrame(gen: presenterSink.frames[0].gen, rev: 2, body: seen), from: presenter)
+
+        #expect(received == [clear, seen])
+        #expect(presenterSink.bodies.first == .hello(hello))
+    }
+
+    static let pane = UUID().uuidString
+
+    static func mail(_ count: Int?) -> PresentationMail { PresentationMail(panes: count.map { [pane: $0] } ?? [:]) }
+
+    static func mailSnapshot(_ count: Int?) -> PresentationSnapshot {
+        PresentationSnapshot(status: nil, hud: nil, mail: mail(count))
+    }
+
+    func lastMail(_ sink: Sink) -> PresentationMail? {
+        sink.bodies.reduce(nil) { last, body in
+            switch body {
+            case .snapshot(let snapshot): return snapshot.mail
+            case .mail(let mail): return mail
+            default: return last
+            }
+        }
+    }
+
+    // regression: a count acked while nobody watched must not hide the next identical count from a new viewer
+    @Test func aViewerArrivingAfterMailWasAckedUnwatchedGetsTheNextCount() throws {
+        let hub = makeHub()
+        let first = Sink()
+        let id = try hub.subscribe(session: Self.session, hello: Self.hello, sink: first) { Self.mailSnapshot(nil) }
+        hub.publishMail(Self.mail(1), session: Self.session)
+        hub.unsubscribe(id)
+
+        let next = Sink()
+        try hub.subscribe(session: Self.session, hello: Self.hello, sink: next) { Self.mailSnapshot(nil) }
+        hub.publishMail(Self.mail(1), session: Self.session)
+
+        #expect(lastMail(next) == Self.mail(1))
+    }
+
+    // regression: a viewer subscribing between an ack and a new send ends at the current count, as does the one before it
+    @Test func everyViewerConvergesWhenOneSubscribesBetweenAnAckAndANewSend() throws {
+        let hub = makeHub()
+        let first = Sink()
+        try hub.subscribe(session: Self.session, hello: Self.hello, sink: first) { Self.mailSnapshot(nil) }
+        hub.publishMail(Self.mail(1), session: Self.session)
+
+        let second = Sink()
+        try hub.subscribe(session: Self.session, hello: Self.hello, sink: second) { Self.mailSnapshot(nil) }
+        hub.publishMail(Self.mail(1), session: Self.session)
+
+        #expect(lastMail(first) == Self.mail(1))
+        #expect(lastMail(second) == Self.mail(1))
+    }
+
+    @Test func anUnchangedMailMapSendsNothing() throws {
+        let hub = makeHub()
+        let sink = Sink()
+        try hub.subscribe(session: Self.session, hello: Self.hello, sink: sink) { Self.mailSnapshot(2) }
+        let sent = sink.frames.count
+
+        hub.publishMail(Self.mail(2), session: Self.session)
+
+        #expect(sink.frames.count == sent)
+    }
+
+    @Test func mailPublishedWhileTheSnapshotIsTakenLandsAfterIt() throws {
+        let hub = makeHub()
+        let sink = Sink()
+        try hub.subscribe(session: Self.session, hello: Self.hello, sink: sink) {
+            hub.publishMail(Self.mail(1), session: Self.session)
+            return Self.mailSnapshot(1)
+        }
+        hub.publishMail(Self.mail(1), session: Self.session)
+
+        #expect(sink.bodies == [.hello(Self.hello), .snapshot(Self.mailSnapshot(1)), .mail(Self.mail(1))])
+    }
+
+    static let companionsHello = PresentationHello(version: 1, kinds: ["status", PresentationHub.companionsKind], mode: .mirror)
+
+    static func companions(_ ids: [UUID]) -> PresentationCompanions {
+        PresentationCompanions(members: ids.map { PresentationCompanions.Member(id: $0, kind: .terminal) })
+    }
+
+    static func companionsSnapshot(_ ids: [UUID]) -> PresentationSnapshot {
+        PresentationSnapshot(status: nil, hud: nil, companions: companions(ids))
+    }
+
+    @Test func companionsGoOnlyToAViewerListingTheKind() throws {
+        let hub = makeHub()
+        let following = Sink()
+        let older = Sink()
+        try hub.subscribe(session: Self.session, hello: Self.companionsHello, sink: following) { Self.companionsSnapshot([]) }
+        try hub.subscribe(session: Self.session, hello: Self.hello, sink: older) { Self.companionsSnapshot([]) }
+        let child = UUID()
+
+        hub.publishCompanions(Self.companions([child]), session: Self.session)
+
+        #expect(following.bodies.last == .companions(Self.companions([child])))
+        #expect(older.bodies.count == 2)
+    }
+
+    @Test func companionsPublishedWhileTheSnapshotIsTakenLandOnlyForAViewerListingTheKind() throws {
+        let hub = makeHub()
+        let following = Sink()
+        let older = Sink()
+        let child = UUID()
+        try hub.subscribe(session: Self.session, hello: Self.companionsHello, sink: following) {
+            hub.publishCompanions(Self.companions([child]), session: Self.session)
+            return Self.companionsSnapshot([])
+        }
+        try hub.subscribe(session: Self.session, hello: Self.hello, sink: older) {
+            hub.publishCompanions(Self.companions([child]), session: Self.session)
+            return Self.companionsSnapshot([])
+        }
+
+        #expect(following.bodies.dropFirst() == [.snapshot(Self.companionsSnapshot([])), .companions(Self.companions([child]))])
+        #expect(older.bodies.count == 2)
+    }
+
+    @Test func aCompanionListAViewerAlreadyHasSendsNothing() throws {
+        let hub = makeHub()
+        let sink = Sink()
+        let child = UUID()
+        try hub.subscribe(session: Self.session, hello: Self.companionsHello, sink: sink) {
+            hub.publishCompanions(Self.companions([child]), session: Self.session)
+            return Self.companionsSnapshot([child])
+        }
+        hub.publishCompanions(Self.companions([child]), session: Self.session)
+        #expect(sink.bodies.count == 2)
+
+        hub.publishCompanions(Self.companions([]), session: Self.session)
+        hub.publishCompanions(Self.companions([]), session: Self.session)
+
+        #expect(sink.bodies.dropFirst(2) == [.companions(Self.companions([]))])
+    }
+
+    @Test func subscribedSessionsListsEverySessionWithAViewer() throws {
+        let hub = makeHub()
+        let other = UUID()
+        try hub.subscribe(session: Self.session, hello: Self.hello, sink: Sink()) { Self.empty }
+        let id = try hub.subscribe(session: other, hello: Self.hello, sink: Sink()) { Self.empty }
+        hub.unsubscribe(id)
+
+        #expect(hub.subscribedSessions == [Self.session])
+    }
+
+    static let leadHello = PresentationHello(version: 1, kinds: ["status", "sound", PresentationHub.leadReportKind], mode: .presenter)
+    static let left = UUID()
+    static let right = UUID()
+    static let split = PresentationSnapshot(status: nil, hud: nil,
+                                            layout: PresentationLayout(panes: [left, right], primary: left, axis: "horizontal", shown: true))
+
+    func viewer(_ hub: PresentationHub, hello: PresentationHello = Self.leadHello,
+                sink: Sink = Sink()) throws -> (id: PresentationHub.SubscriberID, gen: Int) {
+        let id = try hub.subscribe(session: Self.session, hello: hello, sink: sink) { Self.split }
+        return (id, sink.frames[0].gen)
+    }
+
+    func report(_ hub: PresentationHub, _ viewer: (id: PresentationHub.SubscriberID, gen: Int), _ leaders: [UUID]) {
+        hub.receive(PresentationFrame(gen: viewer.gen, rev: 0, body: .leadReport(PresentationLeadReport(leaders: leaders))), from: viewer.id)
+    }
+
+    @Test func aPaneRoutesToTheViewerLeadingIt() throws {
+        let hub = makeHub()
+        let first = try viewer(hub)
+        let second = try viewer(hub)
+
+        report(hub, first, [Self.left])
+        report(hub, second, [Self.right])
+
+        #expect(hub.route(session: Self.session, pane: Self.left) == first.gen)
+        #expect(hub.route(session: Self.session, pane: Self.right) == second.gen)
+    }
+
+    @Test func sessionWideWorkRoutesToThePrimaryPanesLeader() throws {
+        let hub = makeHub()
+        let first = try viewer(hub)
+        let second = try viewer(hub)
+
+        report(hub, second, [Self.left])
+        report(hub, first, [Self.right])
+
+        #expect(hub.route(session: Self.session, pane: nil) == second.gen)
+    }
+
+    @Test func anUnclaimedPaneFallsToTheGrantHolder() throws {
+        let hub = makeHub()
+        let holder = try viewer(hub)
+        let leader = try viewer(hub)
+        hub.receive(PresentationFrame(gen: holder.gen, rev: 0, body: .presenterAcquire), from: holder.id)
+
+        report(hub, leader, [Self.right])
+
+        #expect(hub.route(session: Self.session, pane: Self.left) == holder.gen)
+        #expect(hub.route(session: Self.session, pane: nil) == holder.gen)
+        #expect(hub.route(session: Self.session, pane: Self.right) == leader.gen)
+    }
+
+    @Test func nothingRoutesWithoutAClaimOrAGrant() throws {
+        let hub = makeHub()
+        _ = try viewer(hub)
+
+        #expect(hub.route(session: Self.session, pane: Self.left) == nil)
+        #expect(hub.route(session: Self.session, pane: nil) == nil)
+    }
+
+    @Test func aReportFromAViewerThatDidNotNegotiateTheKindIsIgnored() throws {
+        let hub = makeHub()
+        let older = try viewer(hub, hello: Self.hello)
+
+        report(hub, older, [Self.left])
+
+        #expect(hub.route(session: Self.session, pane: Self.left) == nil)
+    }
+
+    @Test func anEmptyReportClearsTheViewersClaims() throws {
+        let hub = makeHub()
+        let first = try viewer(hub)
+        report(hub, first, [Self.left, Self.right])
+
+        report(hub, first, [])
+
+        #expect(hub.route(session: Self.session, pane: Self.left) == nil)
+        #expect(hub.route(session: Self.session, pane: Self.right) == nil)
+    }
+
+    @Test func aDroppedViewersClaimsVanish() throws {
+        let hub = makeHub()
+        let first = try viewer(hub)
+        report(hub, first, [Self.left])
+
+        hub.unsubscribe(first.id)
+
+        #expect(hub.route(session: Self.session, pane: Self.left) == nil)
+    }
+
+    @Test func aWithdrawnClaimLeavesThePaneWithTheOlderClaimant() throws {
+        let hub = makeHub()
+        let first = try viewer(hub)
+        let second = try viewer(hub)
+
+        report(hub, second, [Self.left])
+        report(hub, first, [Self.left])
+        #expect(hub.route(session: Self.session, pane: Self.left) == first.gen)
+        report(hub, first, [])
+
+        #expect(hub.route(session: Self.session, pane: Self.left) == second.gen)
+    }
+
+    @Test func claimsStayWithinTheirSession() throws {
+        let hub = makeHub()
+        let other = UUID()
+        let sink = Sink()
+        let id = try hub.subscribe(session: other, hello: Self.leadHello, sink: sink) { Self.split }
+        hub.receive(PresentationFrame(gen: sink.frames[0].gen, rev: 0, body: .leadReport(PresentationLeadReport(leaders: [Self.left]))), from: id)
+
+        #expect(hub.route(session: Self.session, pane: Self.left) == nil)
+        #expect(hub.route(session: other, pane: Self.left) == sink.frames[0].gen)
+    }
+
+    @Test func aSendToAnOwnerReachesThatViewerAlone() throws {
+        let hub = makeHub()
+        let firstSink = Sink()
+        let secondSink = Sink()
+        let first = try viewer(hub, sink: firstSink)
+        _ = try viewer(hub, sink: secondSink)
+
+        #expect(hub.send(.sound(PresentationSound(name: nil)), toOwner: first.gen))
+
+        #expect(firstSink.bodies.last == .sound(PresentationSound(name: nil)))
+        #expect(!secondSink.bodies.contains(.sound(PresentationSound(name: nil))))
+    }
+
+    @Test func aSendToAGoneOwnerOrOfAnUnlistedKindIsRefused() throws {
+        let hub = makeHub()
+        let gone = try viewer(hub)
+        let older = try viewer(hub, hello: Self.hello)
+        hub.unsubscribe(gone.id)
+
+        #expect(!hub.send(.sound(PresentationSound(name: nil)), toOwner: gone.gen))
+        #expect(!hub.send(.sound(PresentationSound(name: nil)), toOwner: older.gen))
+        #expect(!hub.isConnected(owner: gone.gen))
+        #expect(hub.isConnected(owner: older.gen))
+        #expect(hub.supports("status", owner: older.gen))
+        #expect(!hub.supports("sound", owner: older.gen))
+    }
+
+    @Test func anAnswerEchoingAnotherViewersOwnerIsDropped() throws {
+        let hub = makeHub()
+        let owner = try viewer(hub)
+        let other = try viewer(hub)
+        var received: [(Int, PresentationFrame.Body)] = []
+        hub.onPresenterFrame = { _, sender, body in received.append((sender, body)) }
+        let answer = PresentationFrame.Body.askResolve(PresentationAskAnswer(id: "a1", owner: owner.gen, button: "y"))
+
+        hub.receive(PresentationFrame(gen: other.gen, rev: 0, body: answer), from: other.id)
+        hub.receive(PresentationFrame(gen: owner.gen, rev: 0, body: answer), from: owner.id)
+
+        #expect(received.map(\.0) == [owner.gen])
+        #expect(received.map(\.1) == [answer])
+    }
+
+    @Test func anOverlayOrPageAnswerArrivesWithItsSender() throws {
+        let hub = makeHub()
+        _ = try viewer(hub)
+        let other = try viewer(hub)
+        var senders: [Int] = []
+        hub.onPresenterFrame = { _, sender, _ in senders.append(sender) }
+
+        hub.receive(PresentationFrame(gen: other.gen, rev: 0, body: .overlayClosed(PresentationOverlayChange(job: "j1"))), from: other.id)
+        hub.receive(PresentationFrame(gen: other.gen, rev: 0, body: .pageClosed(PresentationPageChange(page: "p1"))), from: other.id)
+
+        #expect(senders == [other.gen, other.gen])
+    }
+
+    @Test func clearsSeenAndClicksComeFromTheHolderOrALeader() throws {
+        let hub = makeHub()
+        let holder = try viewer(hub)
+        let leader = try viewer(hub)
+        let bystander = try viewer(hub)
+        hub.receive(PresentationFrame(gen: holder.gen, rev: 0, body: .presenterAcquire), from: holder.id)
+        report(hub, leader, [Self.right])
+        var senders: [Int] = []
+        hub.onPresenterFrame = { _, sender, _ in senders.append(sender) }
+        let bodies: [PresentationFrame.Body] = [
+            .statusSeen(PresentationSeen(reason: .viewed)), .statusClear(PresentationStatusClear(reason: .manual)),
+            .linkClick(PresentationLinkClick(raw: "a.md", pane: Self.right, mode: .overlay)),
+        ]
+
+        for body in bodies {
+            for viewer in [holder, leader, bystander] {
+                hub.receive(PresentationFrame(gen: viewer.gen, rev: 0, body: body), from: viewer.id)
+            }
+        }
+
+        #expect(senders == [holder.gen, leader.gen, holder.gen, leader.gen, holder.gen, leader.gen])
+    }
+
+    @Test func everyDroppedViewerReportsTheLossOfItsOwnWork() throws {
+        let hub = makeHub()
+        let holder = try viewer(hub)
+        let other = try viewer(hub)
+        hub.receive(PresentationFrame(gen: holder.gen, rev: 0, body: .presenterAcquire), from: holder.id)
+        var lost: [Int] = []
+        hub.onOwnerLost = { session, owner in
+            #expect(session == Self.session)
+            lost.append(owner)
+        }
+
+        hub.unsubscribe(other.id)
+        hub.unsubscribe(holder.id)
+
+        #expect(lost == [other.gen, holder.gen])
+    }
+
+    @Test func aSessionBatchCommitsEachViewersShareOnItsOwn() throws {
+        let hub = makeHub()
+        let firstSink = Sink(), secondSink = Sink(), idleSink = Sink(), elsewhereSink = Sink()
+        let first = try viewer(hub, sink: firstSink)
+        let second = try viewer(hub, sink: secondSink)
+        _ = try viewer(hub, sink: idleSink)
+        let elsewhere = try hub.subscribe(session: UUID(), hello: Self.leadHello, sink: elsewhereSink) { Self.split }
+        let sound = PresentationFrame.Body.sound(PresentationSound(name: nil))
+        let idleBefore = idleSink.frames.count
+
+        hub.batch(session: Self.session) {
+            hub.send(sound, toOwner: first.gen)
+            hub.send(.sound(PresentationSound(name: "Glass")), toOwner: second.gen)
+            hub.send(sound, toOwner: elsewhere.generation)
+            #expect(!firstSink.bodies.contains(sound))
+        }
+
+        #expect(try committed(firstSink) == [sound])
+        #expect(try committed(secondSink) == [.sound(PresentationSound(name: "Glass"))])
+        #expect(idleSink.frames.count == idleBefore)
+        #expect(elsewhereSink.bodies.last == sound)
+    }
+
+    final class Passes {
+        var sessions: [UUID] = []
+    }
+
+    private func passes(of hub: PresentationHub, after events: () -> Void) async -> (during: [UUID], later: [UUID]) {
+        let seen = Passes(), sentinel = UUID()
+        hub.onOpenWork = { seen.sessions.append($0) }
+        events()
+        let during = seen.sessions
+        hub.scheduleOpenWork(sentinel)
+        for _ in 0..<400 where !seen.sessions.contains(sentinel) { try? await Task.sleep(for: .milliseconds(5)) }
+        #expect(seen.sessions.last == sentinel)
+        return (during, seen.sessions.filter { $0 != sentinel })
+    }
+
+    @Test(arguments: ["lead", "grant", "layout"])
+    func anEventThatChangesWhereWorkBelongsRunsOnePassOnALaterTurn(event: String) async throws {
+        let hub = makeHub()
+        let first = try viewer(hub)
+
+        let ran = await passes(of: hub) {
+            switch event {
+            case "lead": report(hub, first, [Self.left])
+            case "grant": hub.receive(PresentationFrame(gen: first.gen, rev: 0, body: .presenterAcquire), from: first.id)
+            default: hub.publishLayout(PresentationLayout(panes: [Self.left, Self.right], primary: Self.right, axis: "horizontal",
+                                                          shown: true), session: Self.session)
+            }
+        }
+
+        #expect(ran.during.isEmpty)
+        #expect(ran.later == [Self.session])
+    }
+
+    @Test func eventsInOneTurnRunOnePassPerSession() async throws {
+        let hub = makeHub()
+        let first = try viewer(hub)
+        let second = try viewer(hub)
+
+        let ran = await passes(of: hub) {
+            hub.receive(PresentationFrame(gen: first.gen, rev: 0, body: .presenterAcquire), from: first.id)
+            report(hub, first, [Self.left])
+            report(hub, second, [Self.right])
+            hub.unsubscribe(second.id)
+        }
+
+        #expect(ran.later == [Self.session])
+    }
+
+    @Test func aRepeatedAcquireAndAnUnchangedLayoutRunNoPass() async throws {
+        let hub = makeHub()
+        let first = try viewer(hub)
+        hub.receive(PresentationFrame(gen: first.gen, rev: 0, body: .presenterAcquire), from: first.id)
+        _ = await passes(of: hub) {}
+
+        let ran = await passes(of: hub) {
+            hub.receive(PresentationFrame(gen: first.gen, rev: 0, body: .presenterAcquire), from: first.id)
+            hub.publishLayout(Self.split.layout!, session: Self.session)
+        }
+
+        #expect(ran.later.isEmpty)
+    }
+
+    private func committed(_ sink: Sink) throws -> [PresentationFrame.Body] {
+        #expect(sink.bodies.last == .pendingCommit)
+        var batch = PresentationPendingBatch()
+        for case .pendingChunk(let chunk) in sink.bodies { batch.add(chunk) }
+        return try batch.commit()
     }
 }

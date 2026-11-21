@@ -75,17 +75,18 @@ struct AppStoreStatusTests {
     }
 
     @Test(arguments: [AgentStatus.active, .completed, .idle])
-    func rightPaneCannotReplaceTheLeftPanesBlock(_ status: AgentStatus) {
+    func aWriteFromTheOtherPaneKeepsTheLeftPanesBlockShown(_ status: AgentStatus) {
         let (store, session) = blockedLeftSplitSession()
         let stamp = session.statusChangedAt
 
         let result = store.applyControlStatus(AgentIndicator(status: status, statusPane: .right),
                                               forSession: session.id)
 
-        #expect(result == .refused(owner: .left))
+        #expect(result == .applied)
         #expect(session.agentIndicator.status == .blocked)
         #expect(session.agentIndicator.statusPane == .left)
         #expect(session.statusChangedAt == stamp)
+        #expect((session.paneActivity[.right] != nil) == (status == .active))
     }
 
     @Test(arguments: [AgentStatus.active, .completed, .idle])
@@ -211,7 +212,7 @@ struct AppStoreStatusTests {
         #expect(blocked.agentIndicator.status == .blocked)
     }
 
-    @Test func aRefusedWriteEmitsNoStatusEvent() {
+    @Test func aWriteUnderTheOtherPanesBlockEmitsNoStatusEvent() {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
         let drafts = DraftCollector()
         let store = AppStore(persistence: PersistenceStore(directory: dir),
@@ -220,7 +221,6 @@ struct AppStoreStatusTests {
         let session = store.addSession(toWorkspace: ws.id, cwd: "/repo")!
         store.toggleSplit(session.id)
         store.applyControlStatus(AgentIndicator(status: .blocked, statusPane: .left), forSession: session.id)
-        // an accepted write must reach this sink, or the refusal below proves nothing about the refusal.
         #expect(drafts.kinds.contains(.status))
         drafts.kinds.removeAll()
 
@@ -262,7 +262,7 @@ struct AppStoreStatusTests {
         #expect(drafts.kinds.isEmpty)
     }
 
-    @Test func anIfIdleWriteFromTheOtherPaneIsSkippedNotRefused() {
+    @Test func anIfIdleWriteFromTheOtherPaneIsSkippedAndRecordsNoActivity() {
         let (store, session) = blockedLeftSplitSession()
 
         let result = store.applyControlStatus(AgentIndicator(status: .active, statusPane: .right),
@@ -270,6 +270,188 @@ struct AppStoreStatusTests {
 
         #expect(result == .skipped)
         #expect(session.agentIndicator.status == .blocked)
+        #expect(session.paneActivity.isEmpty)
+    }
+
+    private func splitSession() -> (AppStore, Session) {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/repo")!
+        store.toggleSplit(session.id)
+        return (store, session)
+    }
+
+    private func post(_ status: AgentStatus, _ pane: StatusPane, _ store: AppStore, _ session: Session) {
+        store.applyControlStatus(AgentIndicator(status: status, blink: status == .active, statusPane: pane), forSession: session.id)
+    }
+
+    // the incident: codex's turn end in the right pane idled the row while Claude's background shell still ran
+    @Test(arguments: [AgentStatus.completed, .idle])
+    func anotherPanesTurnEndLeavesTheRowOnTheWorkingPane(_ end: AgentStatus) {
+        let (store, session) = splitSession()
+        post(.active, .left, store, session)
+
+        post(end, .right, store, session)
+
+        #expect(session.agentIndicator == AgentIndicator(status: .active, blink: true, statusPane: .left))
+    }
+
+    @Test(arguments: [(StatusPane.left, StatusPane.right, StatusPane.right, StatusPane.left),
+                      (.right, .left, .right, .left), (.left, .right, .left, .right)])
+    func aPaneFinishingAfterBothStartedLeavesTheRowOnTheOther(_ first: StatusPane, _ second: StatusPane,
+                                                              _ finishing: StatusPane, _ working: StatusPane) {
+        let (store, session) = splitSession()
+        post(.active, first, store, session)
+        post(.active, second, store, session)
+
+        post(.completed, finishing, store, session)
+
+        #expect(session.agentIndicator.status == .active)
+        #expect(session.agentIndicator.statusPane == working)
+        #expect(Array(session.paneActivity.keys) == [working])
+    }
+
+    @Test func aPaneFinishingWithNoOtherWorkShowsItsCompletion() {
+        let (store, session) = splitSession()
+        post(.active, .left, store, session)
+
+        post(.completed, .left, store, session)
+
+        #expect(session.agentIndicator.status == .completed)
+        #expect(session.paneActivity.isEmpty)
+    }
+
+    @Test func aCompletionUnderTheOtherPanesBlockIsNotBroughtBackWhenTheBlockEnds() {
+        let (store, session) = splitSession()
+        post(.active, .left, store, session)
+        post(.blocked, .right, store, session)
+        post(.completed, .left, store, session)
+
+        post(.idle, .right, store, session)
+
+        #expect(session.agentIndicator.status == .idle)
+    }
+
+    @Test func workStartedUnderTheOtherPanesBlockShowsWhenTheBlockEnds() {
+        let (store, session) = splitSession()
+        post(.blocked, .right, store, session)
+        post(.active, .left, store, session)
+
+        post(.idle, .right, store, session)
+
+        #expect(session.agentIndicator == AgentIndicator(status: .active, blink: true, statusPane: .left))
+    }
+
+    @Test func aKeystrokeClearingABlockShowsTheOtherPanesWork() {
+        let (store, session) = splitSession()
+        post(.active, .left, store, session)
+        post(.blocked, .right, store, session)
+
+        store.clearStatus(by: .other, pane: .right, reset: .firstKey, forSession: session.id)
+
+        #expect(session.agentIndicator == AgentIndicator(status: .active, blink: true, statusPane: .left))
+    }
+
+    // an Esc in a pane the row did not show left its cancelled turn to come back when the shown pane finished
+    @Test func anInterruptInAPaneTheRowDoesNotShowEndsThatPanesWork() {
+        let (store, session) = splitSession()
+        post(.active, .left, store, session)
+        post(.active, .right, store, session)
+
+        store.clearStatus(by: .interrupt, pane: .left, reset: .firstKey, forSession: session.id)
+        #expect(session.agentIndicator.statusPane == .right)
+        post(.completed, .right, store, session)
+
+        #expect(session.agentIndicator.status == .completed)
+    }
+
+    @Test func typingInAPaneTheRowDoesNotShowKeepsThatPanesWork() {
+        let (store, session) = splitSession()
+        post(.active, .left, store, session)
+        post(.active, .right, store, session)
+
+        store.clearStatus(by: .submit, pane: .left, reset: .firstKey, forSession: session.id)
+
+        #expect(session.paneActivity[.left] != nil)
+        #expect(session.agentIndicator.statusPane == .right)
+    }
+
+    @Test func aManualClearEndsEveryPanesWork() {
+        let (store, session) = splitSession()
+        post(.active, .left, store, session)
+        post(.active, .right, store, session)
+
+        store.clearStatus(session.id)
+
+        #expect(session.agentIndicator.status == .idle)
+        #expect(session.paneActivity.isEmpty)
+    }
+
+    @Test func aSelectionAutoResetEndsOnlyTheShownPanesWork() {
+        let (store, session) = splitSession()
+        post(.active, .right, store, session)
+        store.applyControlStatus(AgentIndicator(status: .active, autoReset: true, statusPane: .left), forSession: session.id)
+
+        store.clearStatus(session.id, reason: .select)
+
+        #expect(session.agentIndicator == AgentIndicator(status: .active, blink: true, statusPane: .right))
+    }
+
+    @Test func reselectingTheSelectedSessionEndsOnlyTheShownPanesAutoResetWork() {
+        let (store, session) = splitSession()
+        store.selectSession(session.id)
+        store.applyControlStatus(AgentIndicator(status: .active, autoReset: true, statusPane: .right), forSession: session.id)
+        store.applyControlStatus(AgentIndicator(status: .active, autoReset: true, statusPane: .left), forSession: session.id)
+
+        store.selectSession(session.id)
+
+        #expect(session.agentIndicator.status == .active)
+        #expect(session.agentIndicator.statusPane == .right)
+    }
+
+    @Test func aRawIdleSetEndsEveryPanesWork() {
+        let (store, session) = splitSession()
+        post(.active, .left, store, session)
+
+        store.setAgentIndicator(AgentIndicator(), forSession: session.id)
+        post(.completed, .right, store, session)
+
+        #expect(session.agentIndicator.status == .completed)
+        #expect(session.paneActivity.isEmpty)
+    }
+
+    @Test func aPresenterSelectionEndsOnlyTheShownPanesWork() {
+        let (store, session) = splitSession()
+        post(.active, .right, store, session)
+        store.applyControlStatus(AgentIndicator(status: .active, autoReset: true, statusPane: .left), forSession: session.id)
+
+        store.applyPresenterClear(PresentationStatusClear(reason: .select), forSession: session.id, reset: .firstKey)
+
+        #expect(session.agentIndicator.statusPane == .right)
+    }
+
+    @Test func aPresenterInterruptInAPaneTheRowDoesNotShowEndsThatPanesWork() {
+        let (store, session) = splitSession()
+        post(.active, .left, store, session)
+        post(.active, .right, store, session)
+
+        store.applyPresenterClear(PresentationStatusClear(reason: .interrupt, pane: .identity(session.paneIdentity)),
+                                  forSession: session.id, reset: .firstKey)
+
+        #expect(session.paneActivity[.left] == nil)
+        #expect(session.agentIndicator.statusPane == .right)
+    }
+
+    @Test func controlTreeReportsTheWorkingPanesInPaneOrder() throws {
+        let (store, session) = splitSession()
+        #expect(store.controlTree().workspaces[0].sessions[0].activePanes == [])
+
+        post(.active, .right, store, session)
+        post(.active, .left, store, session)
+
+        let node = try #require(store.controlTree().workspaces[0].sessions.first)
+        #expect(node.activePanes == ["left", "right"])
+        #expect(node.statusPane == "left")
     }
 
     @MainActor
@@ -335,13 +517,20 @@ struct AppStoreStatusTests {
         #expect(sink.statuses.last == .some(nil))
     }
 
-    @Test func aRefusedWritePublishesNothing() throws {
+    @Test func workUnderTheOtherPanesBlockReachesTheHubOnlyWhenItStartsOrEnds() throws {
         let (store, session, sink) = try mirroredStore()
+        let split = try #require(session.splitPaneIdentity)
         store.applyControlStatus(AgentIndicator(status: .blocked, statusPane: .left), forSession: session.id)
 
         store.applyControlStatus(AgentIndicator(status: .active, statusPane: .right), forSession: session.id)
+        store.applyControlStatus(AgentIndicator(status: .active, statusPane: .right), forSession: session.id)
+        #expect(sink.statuses.count == 2)
+        #expect((sink.statuses.last ?? nil)?.status == .blocked)
+        #expect((sink.statuses.last ?? nil)?.activePanes == [.identity(split)])
 
-        #expect(sink.statuses.count == 1)
+        store.applyControlStatus(AgentIndicator(status: .completed, statusPane: .right), forSession: session.id)
+        #expect(sink.statuses.count == 3)
+        #expect((sink.statuses.last ?? nil)?.activePanes == [])
     }
 
     @Test func aSkippedWritePublishesNothing() throws {
@@ -369,5 +558,97 @@ struct AppStoreStatusTests {
         let (store, session, _) = try mirroredStore()
 
         #expect(store.presentationSnapshot(forSession: session.id).status == nil)
+    }
+
+    private func blockedSession(split: Bool = false, autoReset: Bool = false) throws -> (AppStore, Session) {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        if split { store.toggleSplit(session.id) }
+        store.setAgentIndicator(AgentIndicator(status: .blocked, autoReset: autoReset, statusPane: .left), forSession: session.id)
+        return (store, session)
+    }
+
+    @Test(arguments: [(PresentationClearReason.key, StatusReset.firstKey, true), (.key, .enter, false), (.submit, .enter, true),
+                      (.interrupt, .enter, true), (.submit, .never, false)])
+    func aPresenterKeystrokeClearsUnderTheOriginsReset(_ reason: PresentationClearReason, _ reset: StatusReset, _ cleared: Bool) throws {
+        let (store, session) = try blockedSession()
+
+        store.applyPresenterClear(PresentationStatusClear(reason: reason, pane: .identity(session.paneIdentity)),
+                                  forSession: session.id, reset: reset)
+
+        #expect((session.agentIndicator.status == .idle) == cleared)
+    }
+
+    @Test func aPresenterKeystrokeInAnotherPaneOrNoPaneOfTheSessionChangesNothing() throws {
+        let (store, session) = try blockedSession(split: true)
+        let split = try #require(session.splitPaneIdentity)
+
+        for pane in [PresentationPane.identity(split), .identity(UUID()), .scratch] {
+            store.applyPresenterClear(PresentationStatusClear(reason: .submit, pane: pane), forSession: session.id, reset: .firstKey)
+        }
+        store.applyPresenterClear(PresentationStatusClear(reason: .submit), forSession: session.id, reset: .firstKey)
+
+        #expect(session.agentIndicator.status == .blocked)
+    }
+
+    @Test func aPresenterSelectionClearsOnlyAnAutoResetStatusAndAManualClearAlways() throws {
+        let (store, session) = try blockedSession()
+        let (autoStore, autoSession) = try blockedSession(autoReset: true)
+
+        store.applyPresenterClear(PresentationStatusClear(reason: .select), forSession: session.id, reset: .firstKey)
+        autoStore.applyPresenterClear(PresentationStatusClear(reason: .select), forSession: autoSession.id, reset: .firstKey)
+        #expect(session.agentIndicator.status == .blocked)
+        #expect(autoSession.agentIndicator.status == .idle)
+
+        store.applyPresenterClear(PresentationStatusClear(reason: .manual), forSession: session.id, reset: .never)
+        #expect(session.agentIndicator.status == .idle)
+    }
+
+    @Test(arguments: [(PresentationClearReason.viewed, StatusReset.never, true), (.key, .firstKey, true), (.key, .enter, false),
+                      (.submit, .enter, true), (.key, .never, false), (.manual, .firstKey, false)])
+    func aPresenterSeenLowersTheBadgeUnderTheOriginsBadgeReset(_ reason: PresentationClearReason, _ reset: StatusReset,
+                                                               _ cleared: Bool) throws {
+        let (store, session) = try blockedSession()
+        session.unseenCount = 2
+
+        store.applyPresenterSeen(PresentationSeen(reason: reason), forSession: session.id, badgeReset: reset)
+
+        #expect((session.unseenCount == 0) == cleared)
+    }
+
+    @Test func aClearOrSeenWithAnUnknownReasonChangesNothing() throws {
+        let (store, session) = try blockedSession()
+        session.unseenCount = 1
+        let clear = try JSONDecoder().decode(PresentationStatusClear.self, from: Data(#"{"reason":"wave"}"#.utf8))
+        let seen = try JSONDecoder().decode(PresentationSeen.self, from: Data(#"{"reason":"wave"}"#.utf8))
+
+        store.applyPresenterClear(clear, forSession: session.id, reset: .firstKey)
+        store.applyPresenterSeen(seen, forSession: session.id, badgeReset: .firstKey)
+
+        #expect(session.agentIndicator.status == .blocked)
+        #expect(session.unseenCount == 1)
+    }
+
+    @Test func aClearedOriginStatusIsGoneFromTheNextSnapshot() throws {
+        let (store, session) = try blockedSession()
+
+        store.applyPresenterClear(PresentationStatusClear(reason: .manual), forSession: session.id, reset: .firstKey)
+
+        #expect(store.presentationSnapshot(forSession: session.id, now: Date()).status == nil)
+    }
+
+    @Test func clearStatusOnALocalRowSendsNothing() throws {
+        let (store, session) = try blockedSession()
+        var sent: [PresentationFrame.Body] = []
+        store.onOriginFrame = { _, body in
+            sent.append(body)
+            return true
+        }
+
+        store.clearStatus(session.id)
+
+        #expect(session.agentIndicator.status == .idle)
+        #expect(sent.isEmpty)
     }
 }

@@ -12,14 +12,8 @@ extension ServerActions {
             let pane = update.paneID.flatMap { session.paneRole(forToken: $0) } ?? update.pane
             let indicator = AgentIndicator(status: update.status, blink: update.blink ?? false, autoReset: update.autoReset ?? false,
                                            color: update.color, shape: update.shape, statusPane: pane)
-            switch store.applyControlStatus(indicator, forSession: session.id, ifIdle: update.ifIdle) {
-            case .refused(let owner):
-                return ControlResponse(ok: false, error: "blocked status owned by pane \(owner.rawValue) " +
-                    "(write from that pane to change it)")
-            case .skipped:
+            if store.applyControlStatus(indicator, forSession: session.id, ifIdle: update.ifIdle) == .skipped {
                 return ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString))
-            case .applied:
-                break
             }
             let explicit = update.sound.flatMap { $0.isEmpty ? nil : $0 }
             if explicit != nil || (update.status == .blocked && !wasBlocked) {
@@ -32,6 +26,14 @@ extension ServerActions {
     public func setSessionContext(_ target: String?, window: String?, context: String?) -> ControlResponse {
         withSession(target, window: window) { session in
             _ = store.setContext(context, forSession: session.id)
+            return ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString))
+        }
+    }
+
+    /// markSessionSeen lowers the badge `notify` raised; the server has no selection or focus to lower it otherwise.
+    public func markSessionSeen(_ target: String?, window: String?) -> ControlResponse {
+        withSession(target, window: window) { session in
+            store.clearUnseen(session.id)
             return ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString))
         }
     }

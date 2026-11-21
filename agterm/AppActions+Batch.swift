@@ -46,6 +46,7 @@ extension AppActions {
         let sessions = sessionIDs.compactMap { store.session(withID: $0) }
         guard !sessions.isEmpty else { return }
         let allFlagged = sessions.allSatisfy(\.flagged)
+        if sendFlag(!allFlagged, forSessions: sessions.map(\.id), in: store) { return }
         store.setFlag(!allFlagged, forSessions: sessions.map(\.id))
     }
 }

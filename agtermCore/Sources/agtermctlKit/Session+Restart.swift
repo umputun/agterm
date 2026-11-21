@@ -28,8 +28,8 @@ extension Session {
             COMMAND starts; read that from `tree` as foreground or splitForeground. An error names the \
             step that did not happen.
 
-            Works only in Live sessions mode, for a local pane. A hidden split and a pane in a background \
-            window are restarted like any other. A background or disowned job of the old \
+            Works in Live sessions mode, for a local pane or a row of an agterm-server window, which its \
+            server restarts. A hidden split and a pane in a background window are restarted like any other. A background or disowned job of the old \
             shell is not ended.
 
             COMMAND is one shell line of at most \(ControlSessionRestartOptions.maxCommandBytes) bytes.
@@ -44,6 +44,7 @@ extension Session {
         var paneID: String?
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
+        @OptionGroup var operation: OperationOptions
 
         func validate() throws {
             guard pane != nil || paneID?.isEmpty == false else {
@@ -53,8 +54,8 @@ extension Session {
         }
 
         func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: .sessionRestart, target: target.target,
-                           args: options.withWindow(ControlArgs(command: command, pane: pane, paneID: paneID)))
+            operation.stamp(ControlRequest(cmd: .sessionRestart, target: target.target,
+                                           args: options.withWindow(ControlArgs(command: command, pane: pane, paneID: paneID))))
         }
     }
 }

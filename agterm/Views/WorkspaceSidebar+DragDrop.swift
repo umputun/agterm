@@ -43,6 +43,22 @@ extension WorkspaceSidebar.Coordinator {
             cancelSpringLoadedExpansion()
             return resolveFlaggedReorder(from: info, item: item, childIndex: index) == nil ? [] : .move
         }
+        if let reparent = resolveCompanionReparent(from: info, item: item, childIndex: index) {
+            if let workspace = store.workspace(forSession: reparent.parent)?.id {
+                scheduleSpringLoadedExpansion(of: workspace, in: outlineView)
+            }
+            outlineView.setDropItem(reparent.dropItem, dropChildIndex: reparent.dropChildIndex)
+            return .move
+        }
+        if isTopLevelNestDrop(from: info, item: item, childIndex: index) {
+            cancelSpringLoadedExpansion()
+            return []
+        }
+        if let promotion = resolveCompanionPromotion(from: info, item: item, childIndex: index) {
+            outlineView.setDropItem(item, dropChildIndex: index)
+            scheduleSpringLoadedExpansion(of: promotion.workspace, in: outlineView)
+            return .move
+        }
         if !draggedSessionIDs(from: info).isEmpty {
             guard store.remoteActions == nil || draggedSessionIDs(from: info).count == 1,
                   let move = resolveSessionMove(from: info, item: item, childIndex: index) else {
@@ -63,7 +79,8 @@ extension WorkspaceSidebar.Coordinator {
             cancelSpringLoadedExpansion()
             return []
         }
-        outlineView.setDropItem(workspaceNode(forID: drop.workspaceID), dropChildIndex: SidebarDrop.onItemIndex)
+        // the root has no row: a drop on one of its sessions keeps that row, which acceptDrop resolves back to it
+        outlineView.setDropItem(workspaceNode(forID: drop.workspaceID) ?? item, dropChildIndex: SidebarDrop.onItemIndex)
         scheduleSpringLoadedExpansion(of: drop.workspaceID, in: outlineView)
         return .copy
     }
@@ -92,6 +109,17 @@ extension WorkspaceSidebar.Coordinator {
             guard let move = resolveFlaggedReorder(from: info, item: item, childIndex: index) else { return false }
             dropSucceeded = store.moveFlagged(move.ids, to: move.placement, of: move.anchor)
             return dropSucceeded
+        }
+        if let reparent = resolveCompanionReparent(from: info, item: item, childIndex: index) {
+            actions.moveCompanion(reparent.companion, under: reparent.parent, at: reparent.slot, in: store)
+            dropSucceeded = true
+            return true
+        }
+        if isTopLevelNestDrop(from: info, item: item, childIndex: index) { return false }
+        if let promotion = resolveCompanionPromotion(from: info, item: item, childIndex: index) {
+            actions.promoteCompanion(promotion.companion, to: .workspace(promotion.workspace, slot: promotion.slot), in: store)
+            dropSucceeded = true
+            return true
         }
         if !draggedSessionIDs(from: info).isEmpty {
             guard let move = resolveSessionMove(from: info, item: item, childIndex: index) else { return false }
@@ -159,14 +187,14 @@ extension WorkspaceSidebar.Coordinator {
     /// post-removal insertion slot, no-op detection) to the host-free `SidebarDrop.resolveSessions`.
     private func resolveSessionMove(from info: NSDraggingInfo, item: Any?, childIndex index: Int) -> SessionMove? {
         let sessionIDs = draggedSessionIDs(from: info)
-        guard !sessionIDs.isEmpty, let node = item as? SidebarNode else { return nil }
+        guard !sessionIDs.isEmpty, let (rowID, rowKind) = dropRow(item: item, childIndex: index) else { return nil }
         let flaggedTree = store.sidebarMode == .flagged
 
         let target: SidebarDrop.SessionDropTarget
         var childIndex = index
         var highlight: Int?
         var dropParent: SidebarNode?
-        switch node.kind {
+        switch rowKind {
         case .workspace:
             // a nested companion has no workspace-level slot unless its parent moves with it
             let moving = Set(sessionIDs)
@@ -174,25 +202,25 @@ extension WorkspaceSidebar.Coordinator {
                sessionIDs.contains(where: { store.session(withID: $0)?.parentID.map { !moving.contains($0) } == true }) {
                 return nil
             }
-            let count = store.workspaces.first(where: { $0.id == node.id })?.sessions.count ?? 0
-            target = .workspaceRow(id: node.id, sessionCount: count)
+            let count = store.workspaces.first(where: { $0.id == rowID })?.sessions.count ?? 0
+            target = .workspaceRow(id: rowID, sessionCount: count)
             // a workspace node's children are its flagged rows in the flagged tree and its top-level rows in
             // the ordinary tree, so the proposed slot counts those, not the flat session list
-            let visible = flaggedTree ? flaggedIndices(inWorkspace: node.id) : topLevelIndices(inWorkspace: node.id)
+            let visible = flaggedTree ? flaggedIndices(inWorkspace: rowID) : topLevelIndices(inWorkspace: rowID)
             if index != SidebarDrop.onItemIndex {
                 childIndex = SidebarDrop.flaggedTreeChildIndex(visibleIndices: visible, slot: index)
                 highlight = index
             }
         case .session where index != SidebarDrop.onItemIndex:
             // a gap among a parent's companions takes only that parent's own companions
-            guard let parent = store.sessionLocation(ofSession: node.id),
-                  sessionIDs.allSatisfy({ store.session(withID: $0)?.parentID == node.id }) else { return nil }
+            guard let parent = store.sessionLocation(ofSession: rowID),
+                  sessionIDs.allSatisfy({ store.session(withID: $0)?.parentID == rowID }) else { return nil }
             target = .workspaceRow(id: parent.workspace, sessionCount: parent.count)
             childIndex = SidebarDrop.companionChildIndex(parentIndex: parent.index, slot: index)
             highlight = index
-            dropParent = node
+            dropParent = item as? SidebarNode
         case .session:
-            guard let drop = store.sessionLocation(ofSession: node.id) else { return nil }
+            guard let drop = store.sessionLocation(ofSession: rowID) else { return nil }
             target = .sessionRow(workspace: drop.workspace, sessionIndex: drop.index, sessionCount: drop.count)
         }
 
@@ -207,15 +235,92 @@ extension WorkspaceSidebar.Coordinator {
         guard store.canMoveSessions(sessionIDs, toWorkspace: move.workspace, at: move.destination) else { return nil }
         // the ordinary tree nests companions, so a flat index is no outline slot: re-resolve through the slot
         // validateDrop sets, which is what acceptDrop reads back
-        if !flaggedTree, node.kind == .session, index == SidebarDrop.onItemIndex {
+        if !flaggedTree, rowKind == .session, index == SidebarDrop.onItemIndex {
             let (parent, slot) = outlineSlot(forFlatIndex: move.dropChildIndex, in: move.workspace, moving: sessionIDs)
+            if parent == nil, move.workspace == store.rootWorkspace?.id {
+                return resolveSessionMove(from: info, item: nil, childIndex: slot)
+            }
             guard let gap = parent ?? workspaceNode(forID: move.workspace) else { return nil }
             return resolveSessionMove(from: info, item: gap, childIndex: slot)
         }
         return SessionMove(sessionIDs: sessionIDs, workspace: move.workspace,
                            dropChildIndex: highlight ?? move.dropChildIndex, destination: move.destination,
-                           onFlaggedTreeRow: flaggedTree && node.kind == .session ? node : nil,
+                           onFlaggedTreeRow: flaggedTree && rowKind == .session ? item as? SidebarNode : nil,
                            dropParent: dropParent)
+    }
+
+    /// dropRow names the row a drop targets: the proposed node, or the root for a gap among the outline's
+    /// top-level rows inside the shown root block, whose container has no row of its own.
+    private func dropRow(item: Any?, childIndex index: Int) -> (UUID, SidebarNode.Kind)? {
+        if let node = item as? SidebarNode { return (node.id, node.kind) }
+        guard let root = store.rootWorkspace, let outline = outlineView else { return nil }
+        let rootRows = (0..<outline.numberOfChildren(ofItem: nil))
+            .filter { (outline.child($0, ofItem: nil) as? SidebarNode)?.kind == .session }.count
+        guard SidebarDrop.isRootGap(childIndex: index, rootRows: rootRows,
+                                    rootShown: workspaceProjection.contains { $0.workspace.id == root.id })
+        else { return nil }
+        return (root.id, .workspace)
+    }
+
+    // dropItem/dropChildIndex is what validateDrop sets and acceptDrop reads back, so both resolve the same move
+    private struct CompanionReparentDrop {
+        let companion: UUID
+        let parent: UUID
+        let slot: Int
+        let dropItem: SidebarNode
+        let dropChildIndex: Int
+    }
+
+    private func resolveCompanionReparent(from info: NSDraggingInfo, item: Any?, childIndex index: Int) -> CompanionReparentDrop? {
+        let ids = draggedSessionIDs(from: info)
+        guard nestsCompanions, ids.count == 1, let id = ids.first, let rowNode = item as? SidebarNode, rowNode.kind == .session,
+              let source = store.session(withID: id), let target = store.session(withID: rowNode.id) else { return nil }
+        guard let current = source.parentID else {
+            guard isTopLevelNestDrop(from: info, item: item, childIndex: index),
+                  case .success = store.canMoveCompanion(id, under: target.id) else { return nil }
+            return CompanionReparentDrop(companion: id, parent: target.id, slot: 0, dropItem: rowNode,
+                                         dropChildIndex: SidebarDrop.onItemIndex)
+        }
+        let row: SidebarDrop.CompanionDropRow
+        if let parent = target.parentID {
+            guard index == SidebarDrop.onItemIndex,
+                  let position = store.companions(of: parent).map(\.id).firstIndex(of: rowNode.id) else { return nil }
+            row = .companion(parent: parent, position: position)
+        } else {
+            row = .parent(rowNode.id)
+        }
+        guard let move = SidebarDrop.companionReparent(from: current, onto: row, childIndex: index),
+              case .success = store.canMoveCompanion(id, under: move.parent) else { return nil }
+        let onParentRow = target.parentID == nil && index == SidebarDrop.onItemIndex
+        return CompanionReparentDrop(companion: id, parent: move.parent, slot: move.slot,
+                                     dropItem: onParentRow ? rowNode : node(for: move.parent, kind: .session),
+                                     dropChildIndex: onParentRow ? SidebarDrop.onItemIndex : move.slot)
+    }
+
+    // a top-level session on another top-level row's center means nest: a refused nest refuses the drop instead of
+    // falling through to resolveSessionMove's reorder
+    private func isTopLevelNestDrop(from info: NSDraggingInfo, item: Any?, childIndex index: Int) -> Bool {
+        let ids = draggedSessionIDs(from: info)
+        guard nestsCompanions, index == SidebarDrop.onItemIndex, ids.count == 1, let rowNode = item as? SidebarNode,
+              rowNode.kind == .session else { return false }
+        return store.session(withID: ids[0])?.parentID == nil && store.session(withID: rowNode.id)?.parentID == nil
+    }
+
+    private struct CompanionPromotionDrop {
+        let companion: UUID
+        let workspace: UUID
+        let slot: Int?
+    }
+
+    // a workspace row's children in the ordinary tree are its top-level sessions, and the root's are the outline's
+    // leading rows, so a proposed gap index is already the top-level slot the companion lands before
+    private func resolveCompanionPromotion(from info: NSDraggingInfo, item: Any?, childIndex index: Int) -> CompanionPromotionDrop? {
+        let ids = draggedSessionIDs(from: info)
+        guard nestsCompanions, ids.count == 1, let id = ids.first, store.session(withID: id)?.parentID != nil,
+              let (rowID, rowKind) = dropRow(item: item, childIndex: index), rowKind == .workspace else { return nil }
+        let slot = index == SidebarDrop.onItemIndex ? nil : index
+        guard case .success = store.canPromoteCompanion(id, to: .workspace(rowID, slot: slot)) else { return nil }
+        return CompanionPromotionDrop(companion: id, workspace: rowID, slot: slot)
     }
 
     private func outlineSlot(forFlatIndex flat: Int, in workspaceID: UUID, moving ids: [UUID]) -> (SidebarNode?, Int) {
@@ -381,8 +486,7 @@ extension WorkspaceSidebar.Coordinator {
 
     /// remoteWorkspaceStep is a remote window's workspace drop as the one server move step that lands it, nil when none.
     private func remoteWorkspaceStep(_ move: (workspaceID: UUID, dropChildIndex: Int, destination: Int)) -> String? {
-        guard let source = store.workspaces.firstIndex(where: { $0.id == move.workspaceID }) else { return nil }
-        return RemoteOperation.workspaceStep(from: source, to: move.destination, count: store.workspaces.count)
+        store.workspaceStep(moving: move.workspaceID, to: move.destination)
     }
 
     /// Resolves a workspace drop into the TOP-LEVEL reorder it would perform, nil when it is a no-op, so
@@ -398,12 +502,13 @@ extension WorkspaceSidebar.Coordinator {
     /// `SidebarDrop.resolveWorkspace`.
     private func resolveWorkspaceMove(from info: NSDraggingInfo, in outlineView: NSOutlineView)
         -> (workspaceID: UUID, dropChildIndex: Int, destination: Int)? {
+        let named = store.namedWorkspaces
         guard let workspaceID = draggedWorkspaceID(from: info),
-              let sourceIndex = store.workspaces.firstIndex(where: { $0.id == workspaceID }) else { return nil }
+              let sourceIndex = named.firstIndex(where: { $0.id == workspaceID }) else { return nil }
         let point = outlineView.convert(info.draggingLocation, from: nil)
         var visibleIndices: [Int] = []
         var slot = 0
-        for (i, workspace) in store.workspaces.enumerated() {
+        for (i, workspace) in named.enumerated() {
             guard let node = workspaceNode(forID: workspace.id) else { continue }
             let row = outlineView.row(forItem: node)
             guard row >= 0 else { continue }
@@ -412,12 +517,12 @@ extension WorkspaceSidebar.Coordinator {
             if point.y > outlineView.rect(ofRow: row).midY { slot = visibleIndices.count }
         }
         let insertIndex = SidebarDrop.workspaceInsertIndex(visibleIndices: visibleIndices, slot: slot)
-        guard let move = SidebarDrop.resolveWorkspace(sourceIndex: sourceIndex, count: store.workspaces.count,
+        guard let move = SidebarDrop.resolveWorkspace(sourceIndex: sourceIndex, count: named.count,
                                                       childIndex: insertIndex) else { return nil }
-        // the highlight rides the OUTLINE's root children — under the focus filter only the rendered
-        // workspaces — so it takes the VISIBLE-space slot, while the store move takes the full-array
-        // destination. The two index spaces coincide only on an unfiltered tree.
-        return (workspaceID, slot, move.destination)
+        // the highlight is an outline slot among the root block's rows and the rendered workspace rows; the move
+        // is an index among named workspaces
+        let rootBlock = outlineView.numberOfChildren(ofItem: nil) - visibleIndices.count
+        return (workspaceID, rootBlock + slot, move.destination)
     }
 
     /// Reads the dragged workspace id from the pasteboard.

@@ -100,6 +100,137 @@ struct TextPageTests {
         #expect(!TextPage.html(text: "-a\n+b\n", language: "diff", line: nil, style: "").contains("data-files"))
     }
 
+    @Test func aGitDiffListsEveryFileSectionInPatchOrder() {
+        let text = """
+            diff --git a/main.go b/main.go
+            index 1..2 100644
+            --- a/main.go
+            +++ b/main.go
+            @@ -1 +1 @@
+            -a
+            +b
+            diff --git a/new.py b/new.py
+            new file mode 100644
+            --- /dev/null
+            +++ b/new.py
+            @@ -0,0 +1 @@
+            +x
+            diff --git a/gone.sql b/gone.sql
+            deleted file mode 100644
+            --- a/gone.sql
+            +++ /dev/null
+            @@ -1 +0,0 @@
+            -y
+            diff --git a/old.txt b/moved.txt
+            similarity index 100%
+            rename from old.txt
+            rename to moved.txt
+            diff --git a/run.sh b/run.sh
+            old mode 100644
+            new mode 100755
+            diff --git a/logo.png b/logo.png
+            Binary files a/logo.png and b/logo.png differ
+            """
+
+        #expect(TextPage.diffSections(in: text) == [
+            DiffSection(path: "main.go", line: 0), DiffSection(path: "new.py", line: 7),
+            DiffSection(path: "gone.sql", line: 13), DiffSection(path: "moved.txt", line: 19),
+            DiffSection(path: "run.sh", line: 23), DiffSection(path: "logo.png", line: 26),
+        ])
+    }
+
+    @Test func aChangedRowThatReadsLikeAHeaderIsNoSection() {
+        let text = """
+            --- a/x.md
+            +++ b/x.md
+            @@ -1,2 +1,2 @@
+             keep
+            --- old rule
+            +++ new rule
+            diff --git a/y b/y
+            --- a/y
+            +++ b/y
+            @@ -1 +1 @@
+            -1
+            +2
+            """
+
+        #expect(TextPage.diffSections(in: text) == [DiffSection(path: "b/x.md", line: 0), DiffSection(path: "y", line: 6)])
+    }
+
+    @Test func aPlainUnifiedDiffKeepsItsPathsAndDropsTheTimestamps() {
+        let text = """
+            --- old/a.c\t2026-11-06 10:00:00
+            +++ new/a.c\t2026-11-06 10:05:00
+            @@ -1 +1 @@
+            -a
+            +b
+            --- old/b.c\t2026-11-06 10:00:00
+            +++ new/b.c\t2026-11-06 10:05:00
+            @@ -1 +1 @@
+            -c
+            +d
+            """
+
+        #expect(TextPage.diffSections(in: text) == [DiffSection(path: "new/a.c", line: 0), DiffSection(path: "new/b.c", line: 5)])
+    }
+
+    @Test func aDashedRowWithNoPlusRowAfterItOpensNoSection() {
+        #expect(TextPage.diffSections(in: "subject\n--- \nnot a header\n").isEmpty)
+    }
+
+    @Test func aQuotedPathIsUnquoted() {
+        let text = """
+            diff --git "a/odd name.py" "b/odd name.py"
+            --- "a/odd name.py"
+            +++ "b/odd name.py"
+            diff --git "a/caf\\303\\251.txt" "b/caf\\303\\251.txt"
+            --- "a/caf\\303\\251.txt"
+            +++ "b/caf\\303\\251.txt"
+            """
+
+        #expect(TextPage.diffSections(in: text) == [DiffSection(path: "odd name.py", line: 0), DiffSection(path: "café.txt", line: 3)])
+    }
+
+    @Test func aNoPrefixGitDiffKeepsItsPaths() {
+        let text = "diff --git b/x.go b/x.go\n--- b/x.go\n+++ b/x.go\ndiff --git y.go y.go\nold mode 100644\nnew mode 100755\n"
+        #expect(TextPage.diffSections(in: text) == [DiffSection(path: "b/x.go", line: 0), DiffSection(path: "y.go", line: 3)])
+    }
+
+    @Test func aCRLFOrColoredDiffListsItsSections() {
+        #expect(TextPage.diffSections(in: "diff --git a/x.go b/x.go\r\n--- a/x.go\r\n+++ b/x.go\r\n") == [DiffSection(path: "x.go", line: 0)])
+        let colored = "\u{1B}[1mdiff --git a/x.go b/x.go\u{1B}[m\n\u{1B}[1m--- a/x.go\u{1B}[m\n\u{1B}[1m+++ b/x.go\u{1B}[m\n"
+        #expect(TextPage.diffSections(in: colored) == [DiffSection(path: "x.go", line: 0)])
+    }
+
+    // the page numbers lines after HTML turned every CR into a line break, so a lone CR shifted every later header
+    @Test func aLoneCarriageReturnStartsALineAsTheParsedPageDoes() {
+        let text = "--- a/x\n+++ b/x\n@@ -1,2 +1 @@\n-a\rb\n+c\ndiff --git a/y b/y\nold mode 100644\n"
+        #expect(TextPage.diffSections(in: text) == [DiffSection(path: "b/x", line: 0), DiffSection(path: "y", line: 6)])
+    }
+
+    @Test func anUnrenamedPathHoldingASpacedBPrefixKeepsItsWholeName() {
+        let text = "diff --git a/docs b/run.sh b/docs b/run.sh\nold mode 100644\nnew mode 100755\n"
+            + "diff --git a/x b/y.bin b/x b/y.bin\nBinary files a/x b/y.bin and b/x b/y.bin differ\n"
+        #expect(TextPage.diffSections(in: text) == [DiffSection(path: "docs b/run.sh", line: 0), DiffSection(path: "x b/y.bin", line: 3)])
+    }
+
+    @Test func aRenameWithOnlyItsDestinationQuotedIsUnquoted() {
+        let text = "diff --git a/old.txt \"b/caf\\303\\251.txt\"\nsimilarity index 100%\nrename from old.txt\nrename to \"caf\\303\\251.txt\"\n"
+        #expect(TextPage.diffSections(in: text) == [DiffSection(path: "café.txt", line: 0)])
+    }
+
+    @Test func aDiffCarriesItsSectionsPastTheHighlightCap() {
+        let text = "--- a/x.go\n+++ b/x.go\n@@ -1 +1 @@\n-a\n+b\n"
+        let overCap = text + String(repeating: " x\n", count: TextPage.maxHighlightBytes / 3 + 1)
+        let sections = #"data-sections="[{&quot;line&quot;:0,&quot;path&quot;:&quot;b\/x.go&quot;}]""#
+
+        #expect(TextPage.html(text: text, language: "diff", line: nil, style: "").contains(sections))
+        #expect(TextPage.html(text: overCap, language: "diff", line: nil, style: "").contains(sections))
+        #expect(!TextPage.html(text: text, language: "go", line: nil, style: "").contains("data-sections"))
+        #expect(!TextPage.html(text: "-a\n+b\n", language: "diff", line: nil, style: "").contains("data-sections"))
+    }
+
     @Test func onlyAPlainDiffPageIsMarked() {
         let log = TextPage.html(text: "x", language: "diff", line: nil, style: "", log: TextLogState(following: true), change: 2)
 
@@ -126,6 +257,7 @@ struct TextPageTests {
         ("a.vb", "vbnet"), ("/x/Makefile", "makefile"), ("/x/GNUmakefile", "makefile"), ("/x/.bashrc", "bash"),
         ("/x/.zshrc", "bash"), ("/x/.profile", "bash"), ("/x/.bash_profile", "bash"), ("/x/.zprofile", "bash"),
         ("/x/.gitconfig", "ini"), ("/x/.editorconfig", "ini"), ("/x/MAIN.GO", "go"), ("/x/y/Lib.Swift", "swift"),
+        ("a.jsonl", "jsonl"), ("/x/A.NDJSON", "jsonl"),
     ])
     func mappedFilesGetTheirLanguage(path: String, language: String) {
         #expect(TextPage.language(forFile: path) == language)
@@ -162,6 +294,75 @@ struct TextPageTests {
                       ("/x/log", false), ("a.swift", false)])
     func onlyLogAndOutFilesAreLogs(path: String, isLog: Bool) {
         #expect(TextPage.isLog(file: path) == isLog)
+    }
+
+    @Test(arguments: [("a.jsonl", "json"), ("/x/A.NDJSON", "json"), ("a.json", "json"), ("a.swift", "swift"), ("a.txt", nil)])
+    func grammarHighlightsJSONLinesAsJSON(path: String, grammar: String?) {
+        #expect(TextPage.grammar(forFile: path) == grammar)
+    }
+
+    @Test func aJSONLinesPageShowsTheFileAsWritten() {
+        let html = TextPage.html(text: "{\"a\":\"<b>\"}\nraw\n", language: "jsonl", line: 2, style: "")
+
+        #expect(html.contains(#"<div id="agterm-text" hidden data-jsonl data-language="json" data-line="2">"#))
+        #expect(html.contains("{&quot;a&quot;:&quot;&lt;b&gt;&quot;}\nraw\n</div>"))
+        #expect(!html.contains("data-records"))
+        #expect(!html.contains("data-expand"))
+    }
+
+    @Test func anExpandedJSONLinesPageLaysItsRecordsOut() {
+        let html = TextPage.html(text: "{\"a\":\"<b>\"}\nraw\n", language: "jsonl", line: 2, style: "", expand: true)
+
+        #expect(html.contains(#"hidden data-jsonl data-expand data-records="0,3,4" data-language="json" data-line="2">"#))
+        #expect(html.contains("{\n  &quot;a&quot;: &quot;&lt;b&gt;&quot;\n}\nraw\n</div>"))
+    }
+
+    @Test func anExpandedPageMeasuresTheLaidOutTextForHighlighting() {
+        let record = "{\"k\":[" + Array(repeating: "1", count: TextPage.maxHighlightBytes / 4).joined(separator: ",") + "]}"
+
+        let raw = TextPage.html(text: record, language: "jsonl", line: nil, style: "")
+        let expanded = TextPage.html(text: record, language: "jsonl", line: nil, style: "", expand: true)
+
+        #expect(record.utf8.count < TextPage.maxHighlightBytes)
+        #expect(raw.contains(#"data-language="json""#))
+        #expect(expanded.contains("data-records="))
+        #expect(!expanded.contains("data-language"))
+        #expect(expanded.contains("[\n    1,\n    1,"))
+    }
+
+    @Test func aRawPageOverTheHighlightLimitKeepsItsMarker() {
+        let text = String(repeating: "{\"a\":1}\n", count: TextPage.maxHighlightBytes / 7)
+        let html = TextPage.html(text: text, language: "jsonl", line: nil, style: "")
+
+        #expect(text.utf8.count > TextPage.maxHighlightBytes)
+        #expect(html.contains("hidden data-jsonl>"))
+    }
+
+    @Test func aJSONLinesLogPageStaysRawAndHighlightsAsJSON() {
+        let log = TextLogState(following: true, report: TextLogReport(lines: 1, clipped: false, waiting: false, unreadable: false))
+        let html = TextPage.html(text: "{\"a\":1}", language: "jsonl", line: nil, style: "", log: log, expand: true, top: 3)
+
+        #expect(!html.contains("data-jsonl"))
+        #expect(!html.contains("data-records"))
+        #expect(!html.contains("data-top"))
+        #expect(html.contains(#"data-language="json""#))
+        #expect(html.contains("{&quot;a&quot;:1}</div>"))
+    }
+
+    @Test func aTopLineReplacesTheAnchorOnAJSONLinesPage() {
+        let topped = TextPage.html(text: "{}", language: "jsonl", line: nil, style: "", anchor: 120, top: 7)
+        let anchored = TextPage.html(text: "{}", language: "jsonl", line: nil, style: "", anchor: 120)
+        let other = TextPage.html(text: "x", language: "swift", line: nil, style: "", anchor: 120, top: 7)
+
+        #expect(topped.contains(#"data-top="7""#))
+        #expect(!topped.contains("data-anchor"))
+        #expect(anchored.contains(#"data-anchor="120.0""#))
+        #expect(other.contains(#"data-anchor="120.0""#))
+        #expect(!other.contains("data-top"))
+    }
+
+    @Test func aDiffHighlightsAJSONLinesFileAsJSON() {
+        #expect(TextPage.diffLanguages(in: "--- a/x.jsonl\n+++ b/x.ndjson\n") == ["a/x.jsonl": "json", "b/x.ndjson": "json"])
     }
 
     @Test func aLogPageCarriesItsStateInsteadOfALine() {

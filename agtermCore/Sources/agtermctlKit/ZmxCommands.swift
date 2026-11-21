@@ -89,7 +89,7 @@ struct Zmx: ParsableCommand {
             list was taken fails rather than handing back a fresh shell wearing its name.
 
             Closing it here ends only this side's connection: the far-side processes keep running, and \
-            nothing this command does can kill them. The session is not restored after a relaunch.
+            nothing this command does can kill them. An open attached session is saved and attached again at the next launch.
             """)
         @Argument(help: "The host, as ssh would take it.")
         var host: String
@@ -99,14 +99,30 @@ struct Zmx: ParsableCommand {
         var window: String?
         @Flag(help: "Also attach every companion of the session, under it; the session must not itself be a companion.")
         var companions = false
+        @Option(help: "Workspace id, unique prefix, active, or root for the top-level sessions (default: the window's current workspace).")
+        var workspace: String?
+        @Option(help: "Workspace by name; errors if not found unless --create-workspace. Mutually exclusive with --workspace.")
+        var workspaceName: String?
+        @Flag(help: "With --workspace-name, create the workspace when it does not exist (reuse it otherwise).")
+        var createWorkspace = false
         @OptionGroup var options: BasicOptions
+
+        func validate() throws {
+            if workspace != nil, workspaceName != nil {
+                throw ValidationError("use either --workspace or --workspace-name, not both")
+            }
+            if createWorkspace, workspaceName == nil {
+                throw ValidationError("--create-workspace requires --workspace-name")
+            }
+        }
 
         /// It creates a local session, so it echoes that session's id like every other create command.
         var echoesResultID: Bool { true }
 
         func makeRequest() throws -> ControlRequest {
             ControlRequest(cmd: companions ? .zmxAttachGroup : .zmxAttach, target: session,
-                           args: ControlArgs(host: host, window: window))
+                           args: ControlArgs(workspace: workspace, workspaceName: workspaceName,
+                                             createWorkspace: createWorkspace ? true : nil, host: host, window: window))
         }
 
         func run() throws {
@@ -260,6 +276,9 @@ struct Zmx: ParsableCommand {
         @Flag(name: .long, help: "Required. Confirms destroying the process running in that pane.")
         var force = false
 
+        @Option(name: .customLong("pane-id"), help: "The pane's stable token ($AGTERM_PANE_ID); refuses, killing nothing, when it is no longer that pane.")
+        var paneID: String?
+
         /// Required and never defaulted, unlike every other command's `--target`: the whole contract here
         /// is that nothing about this destruction falls back to whatever is in front of you.
         @Option(name: .long, help: "Session id or unique prefix. Required; 'active' is not accepted.")
@@ -272,6 +291,7 @@ struct Zmx: ParsableCommand {
         var window: String?
 
         @OptionGroup var options: BasicOptions
+        @OptionGroup var operation: OperationOptions
 
         func validate() throws {
             guard ZmxPaneRole(controlName: pane) != nil else {
@@ -287,8 +307,17 @@ struct Zmx: ParsableCommand {
         }
 
         func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: .zmxKill, target: target,
-                           args: ControlArgs(force: true, window: window, pane: pane))
+            operation.stamp(ControlRequest(cmd: paneID == nil ? .zmxKill : .zmxKillPane, target: target,
+                                           args: ControlArgs(force: true, window: window, pane: pane, paneID: paneID)))
+        }
+
+        func run() throws {
+            guard paneID != nil else { return try defaultRun() }
+            let send = companionSend(SocketClient(path: options.socketPath()).send, json: options.json,
+                                     tooOld: "the running app is too old for a pinned pane kill")
+            let reply = try send(try makeRequest())
+            SocketClient.printResponse(reply, json: options.json)
+            if !reply.response.ok { throw ExitCode.failure }
         }
     }
 }

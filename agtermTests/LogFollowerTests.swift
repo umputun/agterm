@@ -31,9 +31,67 @@ final class LogFollowerTests: XCTestCase {
     }
 
     private func follower(following: Bool = false, interval: Duration = .seconds(60),
-                          read: @escaping LogFollower.Reader = { TextProbe.loadLog(path: $0, tail: $1, unchangedFrom: $2) }) -> LogFollower {
+                          read: @escaping LogFollower.Reader = LogFollower.fileReader) -> LogFollower {
         LogFollower(path: log.path, log: TextLog(tail: 50, follow: following), following: following, pageID: overlay.id,
                     store: store, webView: nil, world: .defaultClient, interval: interval, read: read)
+    }
+
+    private final class SuspendedRead: @unchecked Sendable {
+        private let lock = NSLock()
+        private var waiter: CheckedContinuation<Void, Never>?
+        private var released = false
+
+        var waiting: Bool { lock.withLock { waiter != nil } }
+
+        func wait() async {
+            await withCheckedContinuation { continuation in
+                let resumeNow = lock.withLock { () -> Bool in
+                    if released { return true }
+                    waiter = continuation
+                    return false
+                }
+                if resumeNow { continuation.resume() }
+            }
+        }
+
+        func release() {
+            let waiting = lock.withLock { () -> CheckedContinuation<Void, Never>? in
+                released = true
+                defer { waiter = nil }
+                return waiter
+            }
+            waiting?.resume()
+        }
+    }
+
+    private func suspendedTick(_ follower: LogFollower, _ gate: SuspendedRead) async throws -> Task<Void, Never> {
+        let tick = Task { await follower.tick() }
+        let deadline = Date().addingTimeInterval(5)
+        while !gate.waiting, Date() < deadline { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertTrue(gate.waiting, "the read never started")
+        return tick
+    }
+
+    private func gatedFollower(_ gate: SuspendedRead) -> LogFollower {
+        let follower = follower(following: true) { path, tail, stamp in
+            await gate.wait()
+            return TextProbe.loadLog(path: path, tail: tail, unchangedFrom: stamp)
+        }
+        follower.stop()
+        return follower
+    }
+
+    func testAStopDropsAReadInFlight() async throws {
+        let gate = SuspendedRead()
+        let follower = gatedFollower(gate)
+        let tick = try await suspendedTick(follower, gate)
+
+        follower.stop()
+        gate.release()
+        await tick.value
+
+        XCTAssertNil(follower.snapshot)
+        XCTAssertEqual(report, TextLogReport())
     }
 
     private func write(_ text: String) throws {
@@ -112,36 +170,27 @@ final class LogFollowerTests: XCTestCase {
     }
 
     func testAPauseDropsAReadInFlight() async throws {
-        let gate = DispatchSemaphore(value: 0)
-        let follower = follower(following: true) { path, tail, stamp in
-            gate.wait()
-            return TextProbe.loadLog(path: path, tail: tail, unchangedFrom: stamp)
-        }
-        follower.stop()
+        let gate = SuspendedRead()
+        let follower = gatedFollower(gate)
         try append("b\n")
-        let tick = Task { await follower.tick() }
-        try await Task.sleep(for: .milliseconds(50))
+        let tick = try await suspendedTick(follower, gate)
 
         follower.setFollowing(false)
-        gate.signal()
+        gate.release()
         await tick.value
 
         XCTAssertNil(follower.snapshot)
+        XCTAssertEqual(report, TextLogReport())
     }
 
     func testAUserScrollPauseDropsAReadInFlightBeforeTheModelComesBack() async throws {
-        let gate = DispatchSemaphore(value: 0)
-        let follower = follower(following: true) { path, tail, stamp in
-            gate.wait()
-            return TextProbe.loadLog(path: path, tail: tail, unchangedFrom: stamp)
-        }
-        follower.stop()
+        let gate = SuspendedRead()
+        let follower = gatedFollower(gate)
         try append("b\n")
-        let tick = Task { await follower.tick() }
-        try await Task.sleep(for: .milliseconds(50))
+        let tick = try await suspendedTick(follower, gate)
 
         follower.scrolled(following: false, top: 80)
-        gate.signal()
+        gate.release()
         await tick.value
 
         XCTAssertNil(follower.snapshot)

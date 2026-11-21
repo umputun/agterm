@@ -206,4 +206,103 @@ struct ControlDispatcherCompanionsTests {
         let decoded = try JSONDecoder().decode(ControlRequest.self, from: Data(#"{"cmd":"session.companion.convert"}"#.utf8))
         #expect(decoded.cmd == .sessionCompanionConvert)
     }
+
+    @Test func companionMoveRoutesParentIndexAndWindow() async throws {
+        let actions = MockControlActions()
+        var args = ControlArgs(window: "win")
+        args.parent = " p2 "
+        args.index = 1
+
+        let response = await ControlDispatcher(actions: actions).dispatch(ControlRequest(cmd: .sessionCompanionMove, target: "c1", args: args))
+
+        #expect(response == ControlResponse(ok: true))
+        #expect(actions.calls == [.companionMove(target: "c1", parent: "p2", index: 1, window: "win")])
+        #expect(!ControlDispatcher.refusesArguments(ControlRequest(cmd: .sessionCompanionMove, target: "c1", args: args)))
+        let decoded = try JSONDecoder().decode(ControlRequest.self, from: Data(
+            #"{"cmd":"session.companion.move","target":"c1","args":{"parent":"p2","index":0}}"#.utf8))
+        #expect(decoded.cmd == .sessionCompanionMove)
+        #expect(decoded.args?.parent == "p2")
+        #expect(decoded.args?.index == 0)
+    }
+
+    nonisolated private static func moveArgs(parent: String?, index: Int? = nil, workspace: String? = nil) -> ControlArgs {
+        var args = ControlArgs(workspace: workspace)
+        args.parent = parent
+        args.index = index
+        return args
+    }
+
+    @Test(arguments: [
+        (moveArgs(parent: nil), "session.companion.move needs a parent"),
+        (moveArgs(parent: "  "), "session.companion.move needs a parent"),
+        (moveArgs(parent: "p2", index: -1), "index must be 0 or more"),
+        (moveArgs(parent: "p2", workspace: "w1"), "session.companion.move takes no workspace, --to, --after or --before"),
+    ])
+    func companionMoveRefusesBadArgumentsBeforeActing(args: ControlArgs, error: String) async {
+        let actions = MockControlActions()
+        let request = ControlRequest(cmd: .sessionCompanionMove, target: "c1", args: args)
+
+        let response = await ControlDispatcher(actions: actions).dispatch(request)
+
+        #expect(response == ControlResponse(ok: false, error: error))
+        #expect(ControlDispatcher.refusesArguments(request))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test(arguments: [ControlArgs(to: "up"), ControlArgs(after: "a"), ControlArgs(before: "b"), ControlArgs(targets: ["c1", "c2"]),
+                      ControlArgs(targets: ["c1"]), ControlArgs(targets: [])])
+    func companionMoveRefusesPlacementAndTargetLists(args: ControlArgs) async {
+        let actions = MockControlActions()
+        var args = args
+        args.parent = "p2"
+        let request = ControlRequest(cmd: .sessionCompanionMove, target: "c1", args: args)
+
+        let response = await ControlDispatcher(actions: actions).dispatch(request)
+
+        #expect(response?.ok == false)
+        #expect(ControlDispatcher.refusesArguments(request))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test(arguments: [
+        (ControlArgs(), ControlCompanionPromotion.afterOwnGroup),
+        (ControlArgs(workspace: "w1"), .workspace("w1")),
+        (ControlArgs(after: "a1"), .beside("a1", after: true)),
+        (ControlArgs(before: "b1"), .beside("b1", after: false)),
+    ])
+    func companionPromoteRoutesItsPlacement(args: ControlArgs, placement: ControlCompanionPromotion) async {
+        let actions = MockControlActions()
+        var args = args
+        args.window = "win"
+
+        let response = await ControlDispatcher(actions: actions).dispatch(ControlRequest(cmd: .sessionCompanionPromote, target: "c1", args: args))
+
+        #expect(response == ControlResponse(ok: true))
+        #expect(actions.calls == [.companionPromote(target: "c1", placement: placement, window: "win")])
+    }
+
+    nonisolated private static func promoteArgs(_ edit: (inout ControlArgs) -> Void) -> ControlArgs {
+        var args = ControlArgs()
+        edit(&args)
+        return args
+    }
+
+    @Test(arguments: [
+        (promoteArgs { $0.parent = "p2" }, "session.companion.promote takes no --parent, --index or --to"),
+        (promoteArgs { $0.index = 0 }, "session.companion.promote takes no --parent, --index or --to"),
+        (promoteArgs { $0.to = "up" }, "session.companion.promote takes no --parent, --index or --to"),
+        (promoteArgs { $0.targets = ["c1"] }, "session.companion.promote moves one session, named by target"),
+        (promoteArgs { $0.workspace = "w1"; $0.after = "a1" }, "session.companion.promote takes one of a workspace, --after or --before"),
+        (promoteArgs { $0.after = "a1"; $0.before = "b1" }, "session.companion.promote takes one of a workspace, --after or --before"),
+    ])
+    func companionPromoteRefusesBadArgumentsBeforeActing(args: ControlArgs, error: String) async {
+        let actions = MockControlActions()
+        let request = ControlRequest(cmd: .sessionCompanionPromote, target: "c1", args: args)
+
+        let response = await ControlDispatcher(actions: actions).dispatch(request)
+
+        #expect(response == ControlResponse(ok: false, error: error))
+        #expect(ControlDispatcher.refusesArguments(request))
+        #expect(actions.calls.isEmpty)
+    }
 }

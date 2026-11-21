@@ -230,9 +230,13 @@ public enum CommandRestore {
                            waitAfterCommand: command != nil && inputs.requestedWait)
     }
 
+    /// defaultDenylist is the starter `restore-denylist.conf`'s entries, the terminal multiplexers, which re-run
+    /// only to an empty session. agterm-server, which has no such file, applies it.
+    public static let defaultDenylist: Set<String> = ["tmux", "screen", "zellij"]
+
     /// Parse `restore-denylist.conf` into a set of program basenames NOT to re-run on restore: one entry
-    /// per line, trimmed; blank lines and `#` comments ignored. There is NO built-in list — the file is
-    /// the whole source (seeded with the terminal multiplexers on first launch).
+    /// per line, trimmed; blank lines and `#` comments ignored. Nothing is merged in: on the Mac the file is
+    /// the whole source, its starter listing the same multiplexers as `defaultDenylist`.
     public static func parseDenylist(_ text: String) -> Set<String> {
         var result: Set<String> = []
         for raw in text.split(separator: "\n", omittingEmptySubsequences: false) {

@@ -108,17 +108,72 @@ struct RemotePresentationStateTests {
                                                          shape: .star, statusPane: .right))
     }
 
-    @Test func aMirroredClearFromAnotherPaneIsAppliedWhereTheControlPathWouldRefuseIt() throws {
+    @Test func aMirroredClearFromAnotherPaneIsAppliedWhereTheControlPathWouldKeepTheBlock() throws {
         let (store, session) = try attached()
         store.applyRemoteStatus(status(.blocked, pane: .identity(Self.remoteLeft)), forSession: session.id)
-        #expect(store.applyControlStatus(AgentIndicator(status: .idle, statusPane: .right), forSession: session.id)
-                == .refused(owner: .left))
+        store.applyControlStatus(AgentIndicator(status: .idle, statusPane: .right), forSession: session.id)
+        #expect(session.agentIndicator.status == .blocked)
 
         store.applyRemoteStatus(status(.active, pane: .identity(Self.remoteRight)), forSession: session.id)
         #expect(session.agentIndicator.status == .active)
         store.applyRemoteStatus(nil, forSession: session.id)
 
         #expect(session.agentIndicator.status == .idle)
+    }
+
+    @Test func theOriginsWorkingPanesReadBackOnTheRowMirroringIt() throws {
+        let (store, session) = try attached()
+        var working = status(.active, pane: .identity(Self.remoteLeft))
+        working.activePanes = [.identity(Self.remoteRight), .identity(Self.remoteLeft)]
+
+        store.applyRemoteStatus(working, forSession: session.id)
+        #expect(store.controlTree().workspaces[0].sessions[0].activePanes == ["left", "right"])
+
+        store.applyRemoteStatus(status(.active, pane: .identity(Self.remoteLeft)), forSession: session.id)
+        #expect(store.controlTree().workspaces[0].sessions[0].activePanes == nil)
+
+        store.applyRemoteStatus(nil, forSession: session.id)
+        #expect(store.controlTree().workspaces[0].sessions[0].activePanes == [])
+    }
+
+    // local pane work left under a live origin status came back when a later local write ended the origin's glyph
+    @Test func aLiveOriginStatusReplacesThisMacsPaneWork() throws {
+        let (store, session) = try attached()
+        store.applyControlStatus(AgentIndicator(status: .active, statusPane: .left), forSession: session.id)
+        store.applyControlStatus(AgentIndicator(status: .active, statusPane: .right), forSession: session.id)
+
+        store.applyRemoteStatus(status(.completed, pane: .identity(Self.remoteLeft)), forSession: session.id)
+        store.applyControlStatus(AgentIndicator(status: .idle, statusPane: .left), forSession: session.id)
+
+        #expect(session.paneActivity.isEmpty)
+        #expect(session.agentIndicator.status == .idle)
+    }
+
+    @Test func losingTheStreamWithdrawsTheOriginsWorkingPanes() throws {
+        let (store, session) = try attached()
+        store.setRemoteConnection(.connected, forSession: session.id)
+        var working = status(.active, pane: .identity(Self.remoteLeft))
+        working.activePanes = [.identity(Self.remoteLeft)]
+        store.applyRemoteStatus(working, forSession: session.id)
+
+        store.setRemoteConnection(.failed("gone"), forSession: session.id)
+
+        #expect(session.remotePresentation?.activePanes == nil)
+        #expect(store.controlTree().workspaces[0].sessions[0].activePanes == [])
+    }
+
+    @Test func losingTheStreamLeavesThisMacsOwnWorkOnTheRow() throws {
+        let (store, session) = try attached()
+        store.setRemoteConnection(.connected, forSession: session.id)
+        var blocked = status(.blocked, pane: .identity(Self.remoteLeft))
+        blocked.activePanes = []
+        store.applyRemoteStatus(blocked, forSession: session.id)
+        store.applyControlStatus(AgentIndicator(status: .active, statusPane: .scratch), forSession: session.id)
+
+        store.setRemoteConnection(.failed("gone"), forSession: session.id)
+
+        #expect(session.agentIndicator == AgentIndicator(status: .active, statusPane: .scratch))
+        #expect(store.controlTree().workspaces[0].sessions[0].activePanes == ["scratch"])
     }
 
     @Test(arguments: [PresentationPane.identity(UUID()), .scratch])
@@ -907,5 +962,227 @@ struct RemotePresentationStateTests {
         store.closeReplicaOverlay("j1", forSession: session.id)
 
         #expect(!session.overlayActive)
+    }
+
+    private final class OriginFrames {
+        var bodies: [PresentationFrame.Body] = []
+        var accepts = true
+    }
+
+    private func presenting(_ store: AppStore, _ session: Session, accepts: Bool = true) -> OriginFrames {
+        let frames = OriginFrames()
+        frames.accepts = accepts
+        session.remotePresentation?.mode = .presenter
+        store.onOriginFrame = { _, body in
+            guard frames.accepts else { return false }
+            frames.bodies.append(body)
+            return true
+        }
+        return frames
+    }
+
+    @Test func typingOnABridgedStatusGoesToTheOriginAndClearsNothingHere() throws {
+        let (store, session) = try attached()
+        let frames = presenting(store, session)
+        store.applyRemoteStatus(status(.blocked, pane: .identity(Self.remoteLeft)), forSession: session.id)
+
+        #expect(store.forwardStatusKeystroke(.other, pane: .left, forSession: session.id))
+        #expect(store.forwardStatusKeystroke(.other, pane: .left, forSession: session.id))
+        #expect(store.forwardStatusKeystroke(.submit, pane: .left, forSession: session.id))
+        #expect(!store.forwardStatusKeystroke(.submit, pane: .right, forSession: session.id))
+
+        #expect(session.agentIndicator.status == .blocked)
+        #expect(frames.bodies == [.statusClear(PresentationStatusClear(reason: .key, pane: .identity(Self.remoteLeft))),
+                                  .statusClear(PresentationStatusClear(reason: .submit, pane: .identity(Self.remoteLeft)))])
+    }
+
+    // an Esc in a pane the glyph did not stand for stayed here, and the origin kept that pane's cancelled work
+    @Test func anInterruptInAPaneTheGlyphDoesNotStandForGoesToTheOrigin() throws {
+        let (store, session) = try attached()
+        let frames = presenting(store, session)
+        store.applyRemoteStatus(status(.active, pane: .identity(Self.remoteLeft)), forSession: session.id)
+
+        #expect(store.forwardStatusKeystroke(.interrupt, pane: .right, forSession: session.id))
+
+        #expect(frames.bodies == [.statusClear(PresentationStatusClear(reason: .interrupt, pane: .identity(Self.remoteRight)))])
+    }
+
+    @Test func anInterruptGoesToTheOriginWhenTheGlyphStandsForAPaneWithNoCounterpartHere() throws {
+        let (store, session) = try attached()
+        let frames = presenting(store, session)
+        store.applyRemoteStatus(status(.blocked, pane: .scratch), forSession: session.id)
+
+        #expect(store.forwardStatusKeystroke(.interrupt, pane: .left, forSession: session.id))
+        #expect(!store.forwardStatusKeystroke(.other, pane: .left, forSession: session.id))
+
+        #expect(frames.bodies == [.statusClear(PresentationStatusClear(reason: .interrupt, pane: .identity(Self.remoteLeft)))])
+    }
+
+    @Test(arguments: [AgentStatus.active, .completed])
+    func aLocalReportUnderTheOriginsBlockReadsBack(_ report: AgentStatus) throws {
+        let (store, session) = try attached()
+        var blocked = status(.blocked, pane: .identity(Self.remoteLeft))
+        blocked.activePanes = report == .active ? [] : [.identity(Self.remoteRight)]
+        store.applyRemoteStatus(blocked, forSession: session.id)
+
+        store.applyControlStatus(AgentIndicator(status: report, statusPane: .right), forSession: session.id)
+
+        #expect(session.agentIndicator.status == .blocked)
+        #expect(store.controlTree().workspaces[0].sessions[0].activePanes == (report == .active ? ["right"] : []))
+    }
+
+    @Test func thisMacsOwnScratchWorkReadsBackUnderTheOriginsBlock() throws {
+        let (store, session) = try attached()
+        var blocked = status(.blocked, pane: .identity(Self.remoteLeft))
+        blocked.activePanes = []
+        store.applyRemoteStatus(blocked, forSession: session.id)
+
+        store.applyControlStatus(AgentIndicator(status: .active, statusPane: .scratch), forSession: session.id)
+
+        #expect(session.agentIndicator.status == .blocked)
+        #expect(store.controlTree().workspaces[0].sessions[0].activePanes == ["scratch"])
+    }
+
+    @Test(arguments: [AgentStatus.completed, .idle], [true, false])
+    func thisMacsOwnScratchFinishingKeepsTheOriginsWorkShown(_ end: AgentStatus, originListsPanes: Bool) throws {
+        let (store, session) = try attached()
+        var working = status(.active, pane: .identity(Self.remoteLeft))
+        working.activePanes = originListsPanes ? [.identity(Self.remoteLeft)] : nil
+        store.applyRemoteStatus(working, forSession: session.id)
+
+        store.applyControlStatus(AgentIndicator(status: end, statusPane: .scratch), forSession: session.id)
+
+        #expect(session.agentIndicator.status == .active)
+        #expect(session.agentIndicator.statusPane == .left)
+        #expect(store.controlTree().workspaces[0].sessions[0].activePanes == (originListsPanes ? ["left"] : nil))
+    }
+
+    @Test func theOriginsWorkingPanesFollowASwapHere() throws {
+        let (store, session) = try attached()
+        session.surface = SpySurface()
+        session.splitSurface = SpySurface()
+        var working = status(.active, pane: .identity(Self.remoteRight))
+        working.activePanes = [.identity(Self.remoteRight)]
+        store.applyRemoteStatus(working, forSession: session.id)
+
+        #expect(store.swapPanes(session.id) == nil)
+
+        #expect(session.agentIndicator.statusPane == .left)
+        #expect(store.controlTree().workspaces[0].sessions[0].activePanes == ["left"])
+    }
+
+    // a key in the other pane spent the once-per-status allowance and the owner's first key never reached the origin
+    @Test func typingInTheOtherPaneLeavesTheOwnersFirstKeyToTheOrigin() throws {
+        let (viewer, session) = try attached()
+        let origin = makeStore()
+        let ws = origin.addWorkspace(name: "work")
+        let originSession = try #require(origin.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        origin.toggleSplit(originSession.id)
+        origin.setAgentIndicator(AgentIndicator(status: .blocked, statusPane: .left), forSession: originSession.id)
+        session.remotePresentation?.mode = .presenter
+        viewer.onOriginFrame = { _, body in
+            guard case .statusClear(var clear) = body else { return false }
+            if clear.pane == .identity(Self.remoteLeft) { clear.pane = .identity(originSession.paneIdentity) }
+            if clear.pane == .identity(Self.remoteRight) { clear.pane = originSession.splitPaneIdentity.map { .identity($0) } }
+            origin.applyPresenterClear(clear, forSession: originSession.id, reset: .firstKey)
+            return true
+        }
+        viewer.applyRemoteStatus(status(.blocked, pane: .identity(Self.remoteLeft)), forSession: session.id)
+
+        #expect(!viewer.forwardStatusKeystroke(.other, pane: .right, forSession: session.id))
+        #expect(originSession.agentIndicator.status == .blocked)
+        #expect(viewer.forwardStatusKeystroke(.other, pane: .left, forSession: session.id))
+        #expect(originSession.agentIndicator.status == .idle)
+    }
+
+    @Test func typingOnAStatusOfAPaneThisMacDoesNotHaveStaysHere() throws {
+        let (store, session) = try attached()
+        let frames = presenting(store, session)
+        store.applyRemoteStatus(status(.blocked, pane: .identity(UUID())), forSession: session.id)
+
+        #expect(!store.forwardStatusKeystroke(.other, pane: .left, forSession: session.id))
+        #expect(frames.bodies.isEmpty)
+    }
+
+    @Test func typingStaysWithThisMacWhenTheOriginTakesNoClearOrNothingIsBridged() throws {
+        let (store, session) = try attached()
+        let frames = presenting(store, session, accepts: false)
+
+        #expect(!store.forwardStatusKeystroke(.submit, pane: .left, forSession: session.id))
+        store.applyRemoteStatus(status(.blocked, pane: .identity(Self.remoteLeft)), forSession: session.id)
+        #expect(!store.forwardStatusKeystroke(.submit, pane: .left, forSession: session.id))
+        #expect(frames.bodies.isEmpty)
+    }
+
+    @Test func aMirrorSendsNothingToTheOrigin() throws {
+        let (store, session) = try attached()
+        let frames = presenting(store, session)
+        session.remotePresentation?.mode = .mirror
+        store.applyRemoteStatus(status(.blocked, pane: .identity(Self.remoteLeft)), forSession: session.id)
+
+        #expect(!store.forwardStatusKeystroke(.submit, pane: .left, forSession: session.id))
+        store.markSeen(session.id)
+        #expect(frames.bodies.isEmpty)
+    }
+
+    @Test func selectingAnAutoResetRowClearsItHereAndAtTheOrigin() throws {
+        let (store, session) = try attached()
+        let frames = presenting(store, session)
+        var completed = status(.completed, pane: .identity(Self.remoteLeft))
+        completed.autoReset = true
+        store.applyRemoteStatus(completed, forSession: session.id)
+
+        store.selectSession(session.id)
+
+        #expect(session.agentIndicator.status == .idle)
+        #expect(frames.bodies.contains(.statusClear(PresentationStatusClear(reason: .select))))
+        #expect(frames.bodies.contains(.statusSeen(PresentationSeen(reason: .viewed))))
+    }
+
+    @Test func aManualClearOfABridgedStatusAsksTheOrigin() throws {
+        let (store, session) = try attached()
+        let frames = presenting(store, session)
+        store.applyRemoteStatus(status(.blocked, pane: .identity(Self.remoteLeft)), forSession: session.id)
+
+        store.clearStatus(session.id)
+
+        #expect(session.agentIndicator.status == .idle)
+        #expect(frames.bodies == [.statusClear(PresentationStatusClear(reason: .manual))])
+    }
+
+    @Test func typingReachesTheOriginsBadgeOnceForTheFirstKeyAndTheFirstSubmitAfterANotification() throws {
+        let (store, session) = try attached()
+        let frames = presenting(store, session)
+
+        for keystroke in [StatusKeystroke.other, .other, .submit, .submit] {
+            store.forwardSeenKeystroke(keystroke, forSession: session.id)
+        }
+        store.armRemoteSeen(forSession: session.id)
+        store.forwardSeenKeystroke(.submit, forSession: session.id)
+        store.forwardSeenKeystroke(.other, forSession: session.id)
+
+        #expect(session.unseenCount == 0)
+        #expect(frames.bodies == [.statusSeen(PresentationSeen(reason: .key)), .statusSeen(PresentationSeen(reason: .submit)),
+                                  .statusSeen(PresentationSeen(reason: .submit))])
+    }
+
+    @Test(arguments: [(StatusReset.firstKey, true), (.never, false)])
+    func theOriginsBadgeRuleDecidesWhateverThisMacsCountIs(_ originReset: StatusReset, _ cleared: Bool) throws {
+        let (viewer, session) = try attached()
+        let origin = makeStore()
+        let ws = origin.addWorkspace(name: "work")
+        let originSession = try #require(origin.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        originSession.unseenCount = 3
+        session.remotePresentation?.mode = .presenter
+        viewer.onOriginFrame = { _, body in
+            guard case .statusSeen(let seen) = body else { return false }
+            origin.applyPresenterSeen(seen, forSession: originSession.id, badgeReset: originReset)
+            return true
+        }
+
+        viewer.forwardSeenKeystroke(.other, forSession: session.id)
+
+        #expect(session.unseenCount == 0)
+        #expect((originSession.unseenCount == 0) == cleared)
     }
 }

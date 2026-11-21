@@ -85,6 +85,9 @@ class StateTest(unittest.TestCase):
             mock.patch.object(mc, "STATE_DIR", self.tmp.name),
             mock.patch.object(mc, "AGTERMCTL", "agtermctl"),
             mock.patch.dict(os.environ, {"AGTERM_SESSION_ID": SID, "AGTERM_PANE_ID": LEFT}, clear=False),
+            mock.patch.object(mc, "find_codex_pid", return_value=None),
+            # the real reader calls macOS sysctl, which the Linux CI runner's libc lacks
+            mock.patch.object(mc, "process_argv", return_value=None),
         ]
         for p in patches:
             p.start()
@@ -201,6 +204,14 @@ class ReceiverTest(StateTest):
         mc.write_json(mc.state_path(f"codex-{RIGHT}.json"), {"session": "S2", "thread": "T1", "pid": os.getpid()})
         self.assertIsNone(mc.Courier(SID, RIGHT).registration())
 
+    def test_registration_held_by_the_codex_daemon_is_ignored(self):
+        # regression: a thread the shared app-server registered under the pane that started it took that pane's mail
+        self.register_codex(RIGHT)
+        with mock.patch.object(mc, "is_codex_daemon", return_value=True) as daemon:
+            self.assertEqual(mc.receiver(SID, RIGHT), "none")
+            self.assertIsNone(mc.Courier(SID, RIGHT).registration())
+        daemon.assert_called_with(os.getpid())
+
 
 class SayTest(StateTest):
     def test_say_to_codex_leaves_delivery_to_the_event_hook(self):
@@ -282,6 +293,30 @@ class SayTest(StateTest):
         for argv in (["say"], ["say", "--stdin", "--file", "x"]):
             with self.subTest(argv=argv), mock.patch("sys.stderr", io.StringIO()), self.assertRaises(SystemExit):
                 mc.main(argv)
+
+    def test_identity_under_the_codex_daemon_is_refused(self):
+        fake = self.use(FakeRun())
+        with mock.patch.object(mc, "find_codex_pid", return_value=777), \
+                mock.patch.object(mc, "is_codex_daemon", return_value=True):
+            for call in (lambda: mc.say("hello"), mc.status):
+                with self.subTest(call=call), self.assertRaisesRegex(mc.ChatError, "--no-daemon"):
+                    call()
+        self.assertEqual(fake.calls, [])
+
+    def test_deliver_under_the_codex_daemon_is_refused(self):
+        fake = self.use(FakeRun())
+        for argv in (["deliver"], ["deliver", "--pane", RIGHT]):
+            with self.subTest(argv=argv), mock.patch.object(mc, "find_codex_pid", return_value=777), \
+                    mock.patch.object(mc, "is_codex_daemon", return_value=True), \
+                    mock.patch("sys.stdout", new_callable=io.StringIO) as out:
+                self.assertEqual(mc.main(argv), 1)
+                self.assertIn("--no-daemon", json.loads(out.getvalue())["error"])
+        self.assertEqual(fake.calls, [])
+
+    def test_identity_under_an_interactive_codex_is_kept(self):
+        with mock.patch.object(mc, "find_codex_pid", return_value=777), \
+                mock.patch.object(mc, "is_codex_daemon", return_value=False):
+            self.assertEqual(mc.own_identity(), (SID, LEFT))
 
     def test_status_reports_peer_receiver(self):
         self.use(FakeRun())
@@ -539,10 +574,11 @@ class WaiterTest(StateTest):
 
 
 class CodexHookTest(StateTest):
-    def hook(self, event, pid=4242, exec_run=False):
+    def hook(self, event, pid=4242, exec_run=False, daemon=False):
         with mock.patch("sys.stdin", io.StringIO(json.dumps(event))), \
                 mock.patch.object(mc, "find_codex_pid", return_value=pid), \
                 mock.patch.object(mc, "is_codex_exec", return_value=exec_run), \
+                mock.patch.object(mc, "is_codex_daemon", return_value=daemon), \
                 mock.patch.object(mc, "executable_path", return_value="/opt/codex/bin/codex"), \
                 mock.patch.object(mc.subprocess, "Popen") as popen:
             self.assertEqual(mc.codex_hook(), 0)
@@ -564,6 +600,11 @@ class CodexHookTest(StateTest):
                 self.assertIsNone(mc.read_json(mc.state_path(f"codex-{LEFT}.json")))
                 popen.assert_not_called()
 
+    def test_codex_daemon_start_does_not_register(self):
+        popen = self.hook({"session_id": "T7", "transcript_path": "/r/T7.jsonl"}, daemon=True)
+        self.assertIsNone(mc.read_json(mc.state_path(f"codex-{LEFT}.json")))
+        popen.assert_not_called()
+
     def test_start_without_transcript_keeps_the_registered_thread(self):
         # regression: codex's background memory session starts with no transcript and took the pane's thread
         self.hook({"session_id": "T7", "transcript_path": "/r/T7.jsonl"})
@@ -581,6 +622,14 @@ class CodexHookTest(StateTest):
         for argv, want in cases:
             with self.subTest(argv=argv):
                 self.assertEqual(mc.codex_subcommand(argv), want)
+
+    def test_codex_daemon_is_the_app_server_subcommand(self):
+        cases = [(["codex", "-c", "features.code_mode_host=true", "app-server", "--listen", "unix://"], True),
+                 (["codex", "app-server", "--listen", "unix://", "--managed-daemon"], True),
+                 (["codex", "--no-daemon"], False), (["codex", "exec", "x"], False), (None, False)]
+        for argv, want in cases:
+            with self.subTest(argv=argv), mock.patch.object(mc, "process_argv", return_value=argv):
+                self.assertEqual(mc.is_codex_daemon(4242), want)
 
 
 if __name__ == "__main__":

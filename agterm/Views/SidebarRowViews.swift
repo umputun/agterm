@@ -10,6 +10,11 @@ final class AddSessionButton: NSButton {
     }
 }
 
+struct CompanionStatus: Equatable {
+    let name: String
+    let indicator: AgentIndicator
+}
+
 /// An `NSTableCellView` with a leading icon, the name field, and a trailing badge. The icon is the inherited
 /// `cell.imageView` (2x2 grid for a workspace, outlined terminal for a session), so AppKit re-tints it white on
 /// a selected row; the name is `cell.textField`, which the rename and selection wiring drives.
@@ -20,8 +25,8 @@ class SidebarCellView: NSTableCellView {
     /// Agent-status glyph fed from the session's `agentIndicator`; hidden on `.idle` (workspace rows always idle).
     let statusIcon = StatusIconView()
 
-    /// companionMarker shows on a folded parent whose hidden companions need attention, beside the parent's own
-    /// status glyph rather than replacing it; session cells only.
+    /// companionMarker shows on a folded parent whose hidden companions have an agent status, beside the parent's
+    /// own status glyph rather than replacing it; session cells only.
     var companionMarker: NSImageView?
     var companionMarkerWidthConstraint: NSLayoutConstraint?
 
@@ -29,11 +34,16 @@ class SidebarCellView: NSTableCellView {
     /// configure since a reused cell keeps the density it was built with.
     var titleCenter: NSLayoutConstraint?
 
-    func setCompanionMarker(_ companions: [String]) {
+    /// setCompanionMarker requires companions most urgent first.
+    func setCompanionMarker(_ companions: [CompanionStatus]) {
         guard let companionMarker, let companionMarkerWidthConstraint else { return }
         companionMarker.isHidden = companions.isEmpty
         companionMarkerWidthConstraint.constant = companions.isEmpty ? 0 : 14
-        let label = companions.isEmpty ? nil : "companions need attention: " + companions.joined(separator: ", ")
+        if let lead = companions.first?.indicator {
+            companionMarker.contentTintColor = GhosttyApp.shared.statusColor(for: lead.status, override: lead.color)
+        }
+        let label = companions.isEmpty ? nil
+            : "companions: " + companions.map { "\($0.name) \($0.indicator.status.rawValue)" }.joined(separator: ", ")
         companionMarker.setAccessibilityLabel(label)
         companionMarker.toolTip = label
     }
@@ -137,7 +147,7 @@ class SidebarCellView: NSTableCellView {
     /// a row `tint` colors, which keep it selected or not. Never drive it from `backgroundStyle`, which AppKit
     /// flips only while the table is first responder.
     func setColors(selected: Bool) {
-        let color = themeTextColor(selected: selected)
+        let color = Self.themeTextColor(selected: selected)
         let tintColor = tint.map { NSColor.tint($0.color) }
         textField?.textColor = tint?.shows(.name) == true ? tintColor : color
         let iconAlpha: CGFloat = selected ? 0.85 : 0.6
@@ -146,7 +156,7 @@ class SidebarCellView: NSTableCellView {
     }
 
     /// themeTextColor is the row text color the theme gives for a selection state, never a row tint.
-    func themeTextColor(selected: Bool) -> NSColor {
+    static func themeTextColor(selected: Bool) -> NSColor {
         let app = GhosttyApp.shared
         return selected
             ? (app.terminalSelectionForegroundColor ?? app.terminalForegroundColor ?? .white)
@@ -314,6 +324,7 @@ final class SidebarRowView: NSTableRowView {
             // AppKit won't redraw with selectionHighlightStyle == .none; re-tint the cell from the pill's state.
             needsDisplay = true
             retintCellViews()
+            applyDisclosureAppearance()
         }
     }
 
@@ -322,10 +333,28 @@ final class SidebarRowView: NSTableRowView {
         // a cell materialized into an already-selected row (reload/expand row-map flux can make the cell
         // builder's own selection lookup miss) picks up the row's live state on attach.
         (subview as? SidebarCellView)?.setColors(selected: isSelected)
+        if subview.identifier == NSOutlineView.disclosureButtonIdentifier { applyDisclosureAppearance() }
     }
 
     private func retintCellViews() {
         for case let cell as SidebarCellView in subviews { cell.setColors(selected: isSelected) }
+    }
+
+    /// applyDisclosureAppearance gives a selected row's triangle the appearance that matches the selected row
+    /// text, since AppKit colors it from appearance alone and the outline's pin reads the sidebar background,
+    /// not the pill. An unselected triangle inherits that pin.
+    func applyDisclosureAppearance() {
+        let appearance = isSelected ? Self.selectedTriangleAppearance() : nil
+        for subview in subviews where subview.identifier == NSOutlineView.disclosureButtonIdentifier {
+            subview.appearance = appearance
+        }
+    }
+
+    private static func selectedTriangleAppearance() -> NSAppearance? {
+        guard let text = SidebarCellView.themeTextColor(selected: true).usingColorSpace(.sRGB) else { return nil }
+        let textIsDark = ThemeBrightness.isDark(red: Double(text.redComponent), green: Double(text.greenComponent),
+                                                blue: Double(text.blueComponent))
+        return NSAppearance(named: textIsDark ? .aqua : .darkAqua)
     }
 
     override func drawBackground(in dirtyRect: NSRect) {
@@ -342,7 +371,8 @@ final class SidebarRowView: NSTableRowView {
 
     /// selectionRect is the pill's frame in the row.
     var selectionRect: NSRect {
-        let minX = (superview as? SidebarOutlineView)?.selectionMinX ?? 8
+        let outline = superview as? SidebarOutlineView
+        let minX = outline.map { $0.selectionMinX(atRow: $0.row(for: self)) } ?? 8
         let inset = GhosttyApp.shared.sidebarDensity.selectionInset
         let pill = bounds.insetBy(dx: 0, dy: inset)
         return NSRect(x: pill.minX + minX, y: pill.minY, width: pill.width - minX - 8, height: pill.height)

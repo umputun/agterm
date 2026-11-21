@@ -2,6 +2,7 @@ import AppKit
 import GhosttyKit
 import XCTest
 @testable import agterm
+import agtermCore
 
 @MainActor
 final class GhosttyCallbacksTests: XCTestCase {
@@ -44,6 +45,18 @@ final class GhosttyCallbacksTests: XCTestCase {
         XCTAssertEqual(GhosttyCallbacks.clipboardText(for: GHOSTTY_CLIPBOARD_PRIMARY), "system clipboard")
     }
 
+    func testOnlyAReleasedUnknownKindIsADetectedLinkClick() {
+        let cases: [(ghostty_action_open_url_kind_e, Bool, LinkPolicy.ClickSource)] = [
+            (GHOSTTY_ACTION_OPEN_URL_KIND_UNKNOWN, true, .detected), (GHOSTTY_ACTION_OPEN_URL_KIND_UNKNOWN, false, .other),
+            (GHOSTTY_ACTION_OPEN_URL_KIND_OSC8, true, .osc8), (GHOSTTY_ACTION_OPEN_URL_KIND_OSC8, false, .osc8),
+            (GHOSTTY_ACTION_OPEN_URL_KIND_TEXT, true, .other), (GHOSTTY_ACTION_OPEN_URL_KIND_HTML, true, .other),
+            (ghostty_action_open_url_kind_e(rawValue: 99), true, .other),
+        ]
+        for (kind, released, want) in cases {
+            XCTAssertEqual(LinkPolicy.ClickSource(kind, released: released), want, "kind \(kind.rawValue) released \(released)")
+        }
+    }
+
     func testSelectionPasteboardIsNamedForThisBundle() {
         XCTAssertNotEqual(selection.name, NSPasteboard.general.name)
         XCTAssertEqual(selection.name.rawValue, (Bundle.main.bundleIdentifier ?? "") + ".selection")
@@ -56,6 +69,69 @@ final class GhosttyCallbacksTests: XCTestCase {
                 GhosttyApp.shared.callbacks.writeClipboard(ud: nil, location: location, content: &item, len: 1, confirm: false)
             }
         }
+    }
+
+    func testTheGateAgreesWithTheReaderForImageURLAndEmptyPasteboards() throws {
+        let png = try XCTUnwrap(Self.pngData())
+        let file = URL(fileURLWithPath: "/tmp/my report.pdf")
+        let cases: [(name: String, fill: (NSPasteboard) -> Void, action: PasteOffer.Action?)] = [
+            ("image only", { $0.setData(png, forType: .png) }, .image(png)),
+            ("file url only", { $0.writeObjects([file as NSURL]) }, .urls([file])),
+            ("empty", { _ in }, nil),
+        ]
+        for testCase in cases {
+            let pasteboard = namedPasteboard()
+            testCase.fill(pasteboard)
+
+            XCTAssertEqual(GhosttyCallbacks.pasteOffer(pasteboard).action, testCase.action, testCase.name)
+            XCTAssertEqual(GhosttyCallbacks.hasPasteOffer(pasteboard), testCase.action != nil, testCase.name)
+        }
+    }
+
+    func testATIFFOnlyImageIsOfferedAsPNG() throws {
+        let png = try XCTUnwrap(Self.pngData())
+        let tiff = try XCTUnwrap(NSBitmapImageRep(data: png)?.tiffRepresentation)
+        let pasteboard = namedPasteboard()
+        pasteboard.setData(tiff, forType: .tiff)
+
+        guard case .image(let offered) = GhosttyCallbacks.pasteOffer(pasteboard).action else { return XCTFail("no image offered") }
+        XCTAssertEqual(offered.prefix(4), Data([0x89, 0x50, 0x4E, 0x47]))
+    }
+
+    func testAFileOfferIsHiddenFromAProgramOnAnotherHostAndTextIsNot() {
+        let file = URL(fileURLWithPath: "/Users/me/shot.png")
+        let standard: [(name: String, fill: (NSPasteboard) -> Void, hidden: Bool)] = [
+            ("file urls", { $0.writeObjects([file as NSURL]) }, true),
+            ("file urls and their string", { pb in
+                pb.writeObjects([file as NSURL])
+                pb.setString(file.path, forType: .string)
+            }, true),
+            ("text", { $0.setString("/Users/me/shot.png", forType: .string) }, false),
+            ("web url", { $0.writeObjects([URL(string: "https://example.com")! as NSURL]) }, false),
+        ]
+        for testCase in standard {
+            let pasteboard = namedPasteboard()
+            testCase.fill(pasteboard)
+
+            XCTAssertEqual(GhosttyCallbacks.hidesFilesOnOrigin(pasteboard, location: GHOSTTY_CLIPBOARD_STANDARD), testCase.hidden,
+                           testCase.name)
+        }
+        let selection = namedPasteboard()
+        selection.writeObjects([file as NSURL])
+        XCTAssertFalse(GhosttyCallbacks.hidesFilesOnOrigin(selection, location: GHOSTTY_CLIPBOARD_SELECTION))
+    }
+
+    private func namedPasteboard() -> NSPasteboard {
+        let pasteboard = NSPasteboard(name: .init("agterm-test-\(UUID().uuidString)"))
+        pasteboard.clearContents()
+        addTeardownBlock { pasteboard.releaseGlobally() }
+        return pasteboard
+    }
+
+    private static func pngData() -> Data? {
+        let image = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 2, pixelsHigh: 2, bitsPerSample: 8, samplesPerPixel: 4,
+                                     hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)
+        return image?.representation(using: .png, properties: [:])
     }
 
     private func seed(_ pasteboard: NSPasteboard, _ text: String) {

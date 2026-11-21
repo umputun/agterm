@@ -17,7 +17,8 @@ extension WindowContentView {
 
     /// Feeds the OS window title to `WindowAccessor` from its own body, for the same reason as `titleLabel`.
     var windowTitleSync: WindowTitleSync {
-        WindowTitleSync(store: store, library: library, windowID: windowID, captureOnExit: captureOnExit)
+        WindowTitleSync(store: store, library: library, windowID: windowID, captureOnExit: captureOnExit,
+                        reopenWindow: { actions.openWindow?($0) })
     }
 
     /// The window chrome above the terminal: the full custom titlebar row, or in hidden mode an invisible ~3px
@@ -116,6 +117,7 @@ extension WindowContentView {
             if showDashboard { dashboardButton.labelStyle(.iconOnly) }
             if showQuick { quickTerminalButton.labelStyle(.iconOnly) }
             if showCustom { customCommandsButton.labelStyle(.iconOnly) }
+            if UpdateController.shared.flow.showsIcon(elementShown: shows(.updates)) { updateButton.labelStyle(.iconOnly) }
         }
         .padding(.trailing, 14)
     }
@@ -223,6 +225,26 @@ extension WindowContentView {
         .disabled(pick.modalPending)
         .accessibilityIdentifier("quick-terminal-toggle")
     }
+
+    private var updateButton: some View {
+        Button {
+            UpdateController.shared.checkForUpdates()
+        } label: {
+            Label("Update Available", systemImage: InterfaceElement.updates.symbolName!)
+        }
+        .foregroundStyle(updateTint)
+        // a filled circle reads smaller than the outlined rectangle glyphs beside it
+        .font(.system(size: NSFont.systemFontSize * 1.25))
+        .toolTip("Update Available", isShown: titlebarTipsShown)
+        .disabled(!UpdateController.shared.canCheck)
+        .accessibilityIdentifier("update-available")
+    }
+
+    private var updateTint: Color {
+        let palette = GhosttyApp.shared.terminalPalette
+        guard palette.count > 12, let color = NSColor(agtermHex: palette[12]) else { return .blue }
+        return Color(nsColor: color)
+    }
 }
 
 /// The OS window title: the active session's display name, suffixed as "session — window" for a custom
@@ -234,10 +256,11 @@ struct WindowTitleSync: View {
     let library: WindowLibrary
     let windowID: WindowInfo.ID
     let captureOnExit: AppDelegate.ExitCapture?
+    let reopenWindow: @MainActor (WindowInfo.ID) -> Void
 
     var body: some View {
         WindowAccessor(titleToken: title, windowID: windowID, library: library, store: store,
-                       captureOnExit: captureOnExit)
+                       captureOnExit: captureOnExit, reopenWindow: reopenWindow)
     }
 
     private var title: String {

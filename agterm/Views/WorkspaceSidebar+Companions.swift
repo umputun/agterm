@@ -23,10 +23,9 @@ extension WorkspaceSidebar.Coordinator {
     /// Companions nest under their parent only in the ordinary tree; flagged layouts list them unindented.
     var nestsCompanions: Bool { store.sidebarMode == .tree }
 
-    /// The companions a parent row must surface while its own companion rows are folded away.
-    func foldedAttention(forSession id: UUID) -> [Session] {
+    func foldedAttention(forSession id: UUID) -> [CompanionStatus] {
         guard nestsCompanions, !expandedParentIDs.contains(id) else { return [] }
-        return store.companionsNeedingAttention(of: id)
+        return store.companionsByStatus(of: id).map { CompanionStatus(name: $0.displayName, indicator: $0.agentIndicator) }
     }
 
     /// The session rows of one workspace, each companion nested under the parent row it follows.
@@ -46,11 +45,17 @@ extension WorkspaceSidebar.Coordinator {
 
     // a parent under a folded workspace has no row to expand, so this runs again whenever the workspace opens
     func applyParentExpansion(under workspace: SidebarNode) {
-        guard let outline = outlineView, outline.isItemExpanded(workspace) else { return }
+        guard let outlineView, outlineView.isItemExpanded(workspace) else { return }
+        applyExpansion(ofParents: workspace.children)
+    }
+
+    /// Opens or folds each parent among `nodes` to its tracked state, without persisting.
+    func applyExpansion(ofParents nodes: [SidebarNode]) {
+        guard let outline = outlineView else { return }
         let suppressed = suppressExpansionPersist
         suppressExpansionPersist = true
         defer { suppressExpansionPersist = suppressed }
-        for parent in workspace.children where !parent.children.isEmpty {
+        for parent in nodes where !parent.children.isEmpty {
             let open = expandedParentIDs.contains(parent.id)
             if open, !outline.isItemExpanded(parent) { outline.expandItem(parent) }
             if !open, outline.isItemExpanded(parent) { outline.collapseItem(parent) }
@@ -62,6 +67,6 @@ extension WorkspaceSidebar.Coordinator {
         if !suppressExpansionPersist { store.setSessionExpanded(parent.id, expanded: expanded) }
         guard let outline = outlineView, case let row = outline.row(forItem: parent), row >= 0,
               let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: false) as? SidebarCellView else { return }
-        cell.setCompanionMarker(foldedAttention(forSession: parent.id).map(\.displayName))
+        cell.setCompanionMarker(foldedAttention(forSession: parent.id))
     }
 }

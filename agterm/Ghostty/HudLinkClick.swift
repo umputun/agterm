@@ -23,8 +23,11 @@ enum HudLinkClick {
         guard tracked else { return panels.remove(panel) }
         panels.add(panel)
         guard monitor == nil else { return }
-        monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseUp, .mouseMoved, .flagsChanged]) { event in
-            if event.type == .mouseMoved || event.type == .flagsChanged {
+        // mouseExited comes from the pane beneath: its tracking area is the only report that the pointer
+        // left the window from over a panel
+        let events: NSEvent.EventTypeMask = [.leftMouseDown, .leftMouseUp, .mouseMoved, .mouseExited, .flagsChanged]
+        monitor = NSEvent.addLocalMonitorForEvents(matching: events) { event in
+            if event.type != .leftMouseDown, event.type != .leftMouseUp {
                 hover(event)
                 return event
             }
@@ -36,7 +39,7 @@ enum HudLinkClick {
     /// away again when either stops being true, so libghostty raises and drops its own hovered-link state.
     static func hover(_ event: NSEvent) {
         let held = isLinkChord(event.modifierFlags)
-        let point = event.type == .mouseMoved ? event.locationInWindow : event.window?.mouseLocationOutsideOfEventStream
+        let point = event.type == .flagsChanged ? event.window?.mouseLocationOutsideOfEventStream : event.locationInWindow
         var panel: GhosttySurfaceView?
         if held, let point { panel = Self.panel(in: event.window, at: point) }
         let owned = ownsCursor

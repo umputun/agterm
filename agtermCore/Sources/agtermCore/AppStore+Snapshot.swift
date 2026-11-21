@@ -11,11 +11,15 @@ extension AppStore {
     /// Builds a `Snapshot` of the current tree; each session captures its live `currentCwd` (or `initialCwd`
     /// if no PWD report arrived). Runs on `@MainActor`; the result is `Sendable`, safe to hand to a writer.
     public func snapshot() -> Snapshot {
-        let workspaceSnapshots = workspaces.map(workspaceSnapshot)
+        let workspaceSnapshots = workspaces.map { workspace in
+            var saved = workspaceSnapshot(workspace)
+            saved.attached = attachedSnapshots(of: workspace)
+            return saved
+        }
         // TREE order keeps the on-disk list deterministic (not the Set's hash order); an unmarked store omits
         // both focus keys, matching a file written before the set existed. `focusedWorkspaceID` stays unused.
         let focusIDs = workspaces.map(\.id).filter(focusedWorkspaceIDs.contains)
-        let persistable = Set(workspaceSnapshots.flatMap(\.sessions).map(\.id))
+        let persistable = Set(workspaceSnapshots.flatMap { $0.sessions.map(\.id) + ($0.attached ?? []).map(\.session.id) })
         let recency = sessionRecency.items.filter(persistable.contains)
         let flaggedIDs = orderedFlaggedSessions.map(\.id).filter(persistable.contains)
         var snapshot = Snapshot(selectedSessionID: persistedSelection(among: persistable, recency: recency),
@@ -29,13 +33,13 @@ extension AppStore {
         return snapshot
     }
 
-    /// The selection to write. A remote session is not in the snapshot, so naming it would restore an empty
+    /// The selection to write. A server window's row is not in the snapshot, so naming it would restore an empty
     /// window while local rows sit there; fall back to the most recent surviving session, then the first,
     /// matching the MRU repair `reselectIfSelectionHidden` already does for a narrowed tree.
     private func persistedSelection(among persistable: Set<UUID>, recency: [UUID]) -> UUID? {
         if let selectedSessionID, persistable.contains(selectedSessionID) { return selectedSessionID }
         guard selectedSessionID != nil else { return nil }
-        return recency.first ?? workspaces.flatMap(\.sessions).first { persistable.contains($0.id) }?.id
+        return recency.first ?? displayWorkspaces.flatMap(\.sessions).first { persistable.contains($0.id) }?.id
     }
 
     func sessionSnapshot(_ session: Session) -> SessionSnapshot {
@@ -66,16 +70,18 @@ extension AppStore {
                         context: session.context,
                         lastSelectedAt: session.lastSelectedAt?.timeIntervalSince1970,
                         tint: session.tint, parentID: session.parentID,
-                        collapsed: session.isExpanded ? nil : true, ended: session.ended ? true : nil)
+                        collapsed: session.isExpanded ? nil : true, ended: session.ended ? true : nil,
+                        scratchPaneIdentity: headless ? nil : session.localScratchIdentity)
     }
 
     /// The single workspace-to-disk producer, used by the launch snapshot and by a closed workspace's
     /// Recent Closed record. Only a collapsed workspace writes the flag, so an all-expanded tree matches a
-    /// legacy snapshot.
+    /// legacy snapshot. Rows attached from another host are left out; the launch snapshot adds them as `attached`.
     func workspaceSnapshot(_ workspace: Workspace) -> WorkspaceSnapshot {
         WorkspaceSnapshot(id: workspace.id, name: workspace.name,
                           sessions: workspace.sessions.filter(\.isPersistable).map(sessionSnapshot),
-                          collapsed: workspace.isExpanded ? nil : true, tint: workspace.tint)
+                          collapsed: workspace.isExpanded ? nil : true, tint: workspace.tint,
+                          root: workspace.isRoot ? true : nil)
     }
 
     /// Rebuilds one session from its snapshot. `launchRestore` marks an APP-BOOTSTRAP restore, the only path
@@ -91,6 +97,8 @@ extension AppStore {
     /// A hidden split keeps its identity and restore state so showing it reattaches the surviving daemon;
     /// focus is intentionally not persisted and therefore returns to the primary pane.
     func session(from snapshot: SessionSnapshot, launchRestore: Bool = false) -> Session {
+        // a session reopened under its old id is live again, so a viewer reconnecting to it must not hear ended
+        PresentationEnds.shared.forget([snapshot.id])
         if snapshot.page != nil { return pageSession(from: snapshot) }
         let hasSplit = (snapshot.isSplit ?? false) || (snapshot.hasSplit ?? false)
         let session = Session(id: snapshot.id, initialCwd: snapshot.cwd, customName: snapshot.customName,
@@ -108,6 +116,7 @@ extension AppStore {
         session.parentID = snapshot.parentID
         session.isExpanded = !(snapshot.collapsed ?? false)
         session.ended = snapshot.ended ?? false
+        session.scratchDaemon = snapshot.scratchPaneIdentity.map { Session.ScratchDaemon(identity: $0, shown: false) }
         session.lastSelectedAt = snapshot.lastSelectedAt.map(Date.init(timeIntervalSince1970:))
         session.initialCommand = snapshot.initialCommand
         session.commandWait = snapshot.commandWait ?? false
@@ -161,7 +170,7 @@ extension AppStore {
     func workspace(from snapshot: WorkspaceSnapshot) -> Workspace {
         Workspace(id: snapshot.id, name: snapshot.name,
                   sessions: Self.regroupedCompanions(snapshot.sessions.map { session(from: $0) }),
-                  isExpanded: !(snapshot.collapsed ?? false), tint: snapshot.tint)
+                  isExpanded: !(snapshot.collapsed ?? false), tint: snapshot.tint, isRoot: snapshot.root == true)
     }
 
     /// Rebuilds the tree from a snapshot: fresh `Session`s (surfaces and shells spawn lazily on first
@@ -179,21 +188,22 @@ extension AppStore {
         defer { restoringSelection = false }
         freshWorkspaceID = nil // live create-time state, never restored from disk
         catalogOperations = snapshot.catalogOperations
-        // fold duplicate workspace ids into the first occurrence and keep only the first snapshot of a
-        // repeated session id, else the rest stay unreachable past the first match and get re-saved.
+        // fold duplicate workspace ids, and a second root, into the first occurrence and keep only the first
+        // snapshot of a repeated session id, else the rest stay unreachable past the first match and get re-saved.
         var seenSessionIDs: Set<UUID> = []
         workspaces = snapshot.workspaces.reduce(into: [Workspace]()) { restored, workspaceSnapshot in
-            let sessions = workspaceSnapshot.sessions
+            let local = workspaceSnapshot.sessions
                 .filter { seenSessionIDs.insert($0.id).inserted }
                 .map { session(from: $0, launchRestore: launchRestore) }
-            if let existing = restored.firstIndex(where: { $0.id == workspaceSnapshot.id }) {
+            let sessions = placingAttached(workspaceSnapshot.attached, among: local, seen: &seenSessionIDs)
+            if let existing = restored.firstIndex(where: { $0.id == workspaceSnapshot.id || (workspaceSnapshot.root == true && $0.isRoot) }) {
                 restored[existing].sessions.append(contentsOf: sessions)
                 return
             }
             // absent/nil collapsed → expanded (back-compat with snapshots written before the field existed).
             restored.append(Workspace(id: workspaceSnapshot.id, name: workspaceSnapshot.name, sessions: sessions,
                                       isExpanded: !(workspaceSnapshot.collapsed ?? false),
-                                      tint: workspaceSnapshot.tint))
+                                      tint: workspaceSnapshot.tint, isRoot: workspaceSnapshot.root == true))
         }
         for index in workspaces.indices {
             workspaces[index].sessions = Self.regroupedCompanions(workspaces[index].sessions)

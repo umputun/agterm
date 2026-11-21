@@ -1815,7 +1815,21 @@ struct ControlDispatcherTests {
         #expect(missing?.error == "window.remote.open requires a host")
         #expect(option?.error == "window.remote.open: not a host ssh can be given")
         #expect(spaced?.error == "window.remote.open: not a host ssh can be given")
-        #expect(actions.calls == [.windowRemoteOpen(host: "buildbox")])
+        #expect(actions.calls == [.windowRemoteOpen(host: "buildbox", originWindow: nil)])
+    }
+
+    @Test func windowRemoteOpenPassesTheOriginWindowAndDropsABlankOne() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        var named = ControlArgs(host: "mac")
+        named.originWindow = " 6f1c "
+        var blank = ControlArgs(host: "mac")
+        blank.originWindow = " "
+
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .windowRemoteOpen, args: named))
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .windowRemoteOpen, args: blank))
+
+        #expect(actions.calls == [.windowRemoteOpen(host: "mac", originWindow: "6f1c"), .windowRemoteOpen(host: "mac", originWindow: nil)])
     }
 
     @Test func windowCommandsRejectInvalidInputsBeforeCallingActions() async {

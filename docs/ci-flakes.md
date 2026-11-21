@@ -88,6 +88,19 @@ Each entry separates a demonstrated cause from one that is only consistent with 
   was opened with, `ServerActions` reads the store's registry, and the test harness gives each server its own.
   The app keeps `.shared`. Test: `aFinishedAskIsRetainedInTheStoresRegistryOnly`.
 
+### `ServerStreamsTests.anExpiredAskIsNeverHandedToAConnectedPresenter`
+
+- **Symptom.** `request == nil` fails: the presenter receives the expired ask as an `.askRequest` with an offer.
+- **Runs.** Job 136089544313 (run 44676503256, Linux, PR #1063), in a start-of-run burst where tests took about 32 s.
+- **Cause, demonstrated.** The test set the deadline from `Date()` while the harness freezes `streams.now` at
+  `jobClock`. `openRemoteAsk` checks expiry on the real clock and refuses the ask, so `ServerActions.openAsk`
+  holds it and arms the deadline. A lead report arriving after the open runs `offerPendingInteractions` on the
+  frozen clock, which reads the deadline as ahead once the test started more than 1 s after the harness, and
+  offers the ask before the 50 ms expiry task runs.
+- **Evidence.** A 2 s sleep before the open plus an explicit `onLeadReport` call after it fails at the same
+  assertion locally; either alone passes.
+- **Fix.** The deadline is `harness.jobClock` minus 1 s, expired on both clocks.
+
 ### `ServerStreamsTests.aProgramOpenedOfflineIsOfferedWithATokenThatAClaimMustCarry`
 
 - **Symptom.** The slot owner is nil and the claim is refused (`job not claimable`).
@@ -102,6 +115,24 @@ Each entry separates a demonstrated cause from one that is only consistent with 
   exposes that instant as `jobClock`. `offeredPagesAndJobsReadBackTheirWindows` now expects the deadline to equal
   `jobClock` plus the launch window, with no wall-clock bound.
 
+### `ServerStreamsTests.aPageWithdrawnFromAStallingViewerIsOwnedByTheViewerItIsOfferedTo`
+
+- **Symptom.** After `withdrawRemotePage` the waiting presenter never gets `.pageRequest` (`ServerStreamsTests.swift`
+  `offered != nil`) and never owns the slot; the test fails after about 200 s on its two 60 s waits.
+- **Runs.** Job 135162949010 (run 44406458047, macOS, PR #1051). Not reproduced locally in 20 isolated runs, under
+  `LIBDISPATCH_COOPERATIVE_POOL_STRICT=1`, or with the main actor blocked 25 or 95 s around the withdraw.
+- **Cause, inferred.** The markdown page was opened with a claim deadline of `Date()` plus
+  `AppStore.pageClaimWindow` (30 s), and claims and `ServerStreams.schedulePageClaimExpiry` used `Date()` too;
+  only re-offers read `streams.now`. Nobody claims the page in this test, so a start-of-run queue of more
+  than 30 s between the open and the withdraw lets the sweep remove it, and the withdraw then returns at its
+  first guard with nothing to re-offer. Suite tests with two awaits finished at about 82 s in that run. Blocking
+  the main actor cannot reproduce it, because the expiry Task needs the main actor too; the slot's state at the
+  withdraw was not logged, so expiry is consistent with the failure, not shown to cause it.
+- **Fix.** `ServerStreams` opens, claims and expires a page on its `now()`; the harness sets `streams.now` to
+  `jobClock`, as it does for overlay jobs. Both stalling-viewer tests connect the presenter before the stalling
+  leader opens its work, and the withdraw test requires an owner before withdrawing. Test:
+  `anUnclaimedPagesDeadlineFollowsTheServersClock`, red on the old clocks.
+
 ### `ServerLifecycleTests.aShellThatExitsClosesItsSession`
 
 - **Symptom.** `eventually { session == nil }` false after 8 s.
@@ -110,6 +141,104 @@ Each entry separates a demonstrated cause from one that is only consistent with 
   a product bug, fixed in dd3ff080 after that job's base. (b) The real shell exit, the 1 s observer tick and a
   contended main actor did not fit in 8 s. The log cannot tell them apart.
 - **Fix.** The wait is 60 s, and `#expect(!session.ended)` makes a repeat of (a) name itself.
+
+### `ServerActionsInfoTests.anInfoLineWithHideAfterExpiresOnTheServer`
+
+- **Symptom.** `(session.info → SessionInfo(source: "soon", ...)) == nil` at line 39, after 49 s on Linux and
+  58 s on macOS, in the same run on both.
+- **Runs.** Jobs 132567710924 (Unit tests) and 132567710941 (Linux core tests), PR #999's first run of the test.
+- **Cause, inferred from CI timing, not reproduced locally.** The main actor was saturated by parallel suites for
+  about 50 s: the synchronous `anInfoLineIsSetAndCleared` took 56 s and 66 s, and the failure fired 2 ms before
+  `aRefreshedLineReplacesTheEarlierExpiry` passed. The test polled `session.info` against a 30 s wall-clock
+  deadline, so it could resume after the stall, find the deadline gone and fail before the 0.05 s expiry task,
+  also waiting for the main actor, cleared the line.
+- **Fix.** The test awaits the armed expiry task itself (`infoAutoHide[id]?.task.value`) instead of the clock.
+
+### `RemoteCatalogActionsTests.anUndoIDLeavesByItselfWhenItsGraceEnds`
+
+- **Symptom.** `(actions.undoIDs → ["u1"]).isEmpty → false` at line 180 after 60 s, macOS only.
+- **Runs.** Job 132573096708, PR #999.
+- **Cause, inferred from CI timing, not reproduced locally.** The same main-actor saturation as the entry above
+  outran a 30 s wall-clock poll before the 0.05 s grace task in `noteUndo` removed the id.
+- **Fix.** The poll is bounded by 3000 attempts of 10 ms instead of a deadline, so a long stall spends wall time
+  but not attempts; `noteUndo` keeps no task handle to await.
+
+### `SshConnectionPoolTests` cases waiting in `held()` on Linux
+
+- **Symptom.** `Expectation failed: await held()` in `callersArrivingDuringAStartShareIt`,
+  `closingDuringACheckStartsNothing`, `aConnectionThatFinishesStartingAfterCloseIsEndedAtOnce` and
+  `aPooledStreamOpensOnceItsConnectionAnswersAndKeepsWhatWasSentMeanwhile`, all 29 s after they started.
+- **Runs.** Job 131405859872 (run 43281980528).
+- **Cause, demonstrated.** `held()` gave the stub runner 5 s of wall-clock time to park. Every Linux run starts with
+  a scheduling stall in which trivial `@MainActor` tests report 22 to 33 s, passing runs included, so the deadline
+  could expire before the stub runner parked.
+- **Evidence.** Reproduced in `swift:6.3.2-noble` pinned to 4 CPUs (aarch64, CI is x86_64), unprivileged, full
+  suite with zmx. A trivial `ControlEventRingTests` case was reported started at +1.7 s, entered its body at
+  +20.5 s and ran in microseconds. A nonisolated probe reached the main actor in 0.7 s, but its continuation
+  after `MainActor.run` resumed 14.2 s later. Inside the stall a main-actor 5 ms `Task.sleep` woke after 16.7 s
+  and a `Task.yield` after 5.5 s; afterwards both took milliseconds. The CPUs were saturated until about 14 s.
+  A backtrace at 12 s showed concurrency worker threads held by synchronous test waits: six in
+  `HudHelperTests.Run.waitForExit` (`Thread.sleep`) and one in `OverlayRunJobTests.FakeOrigin.frames`
+  (`DispatchSemaphore.wait`). Skipping those two suites shortened the stall without removing it; one run per
+  configuration was too noisy to size their share. The stall's full cause is not established: neither the worker
+  count nor the number of queued tasks was measured.
+- **Fix.** `held()` gives up after 1000 `Task.yield` retries instead of a deadline, so a stall slows it but cannot
+  expire it. The startup stall itself remains.
+- **Pool waits removed.** `HudHelperTests` and `OverlayRunJobTests` now wait with `Task.sleep` instead of parking
+  worker threads. Three full runs each, same container, 4 pinned CPUs: trivial `ControlEventRingTests` cases
+  reported 17.0, 14.5 and 15.6 s before and 13.1, 14.7 and 13.7 s after; the suite took 44.2, 43.8 and 44.3 s
+  before and 41.7, 41.1 and 44.0 s after. About 2 s of the stall, within the noise of three runs; the rest has
+  another cause.
+
+### `ServerStreamsTests.twoViewsAreServedAtOnceAndBridgeRequestsRunOnTheServer`
+
+- **Symptom.** `no bridge replies: nil, Optional(...reply...)`: the first view's `session.rename` got no reply while
+  the second view's answered.
+- **Runs.** Job 131486876585 (run 43305271745), where every test in the process finished at about 62 s.
+- **Cause, demonstrated.** `LogClient` read each frame with a 10 s `SO_RCVTIMEO`, and a bridge reply needs a main
+  actor hop that thousands of parallel tests share on the runner. Holding the main actor 11 s during the rename
+  reproduces the message locally.
+- **Fix.** `LogClient` waits 60 s, as `Viewer` and `eventually` do; the same 11 s hold then passes.
+
+### `ServerControlSocketTests`: every case reads its reply one step late
+
+- **Symptom.** All four cases fail together: `reply.contains(...)` sees `""` and the next read gets that reply
+  (`echo == "echo:frame"` fails with the ok line), at the same instant 68 to 80 s into the run.
+- **Runs.** Jobs 133141445740 and 133146669623 (run 43820229578, PR #1016), on both attempts.
+- **Cause, demonstrated.** `ServerControlSocket.runBlocking` answered through a `Task` at the default priority,
+  and the pool runs same-priority jobs in arrival order. With coverage on, CI runs every test target in one
+  process, so the reply queued behind the startup backlog of test bodies on 3 threads and outlived the client's
+  60 s read. A probe queuing 3000 2 ms jobs got its reply when the last finished, 6.0 s under a one-thread pool
+  (`LIBDISPATCH_COOPERATIVE_POOL_STRICT=1`), and in 0.00 s with the jobs at background priority or the reply at
+  `.high`. Passing runs of other PRs had the socket suite end 49 to 73 s in, so the margin predates the PR.
+- **Fix.** `runBlocking` starts its task at `.high`, in agterm-server and in the app's `ControlServer`, each
+  pinned by a test that sends a request behind 600 queued same-priority jobs. `ControlAcceptLoopTests` also
+  parked `loop.next()` on the pool through `Task.detached`, which deadlocked the one-thread run; it runs on a
+  plain thread now.
+
+### `ServerActionsRestartTests`: restarts answer "could not be verified in time"
+
+- **Symptom.** Six restart cases that wait for the new shell fail together on the macOS and Linux core jobs:
+  `reply.result?.restart` is nil and the error says the replacement could not be verified in time. Each ran 29
+  to 64 s against the fixture's 5 s reply window.
+- **Runs.** Jobs 135529448616 and 135529448536 (run 44515214921, PR #1057), on the first push.
+- **Cause, inferred from timing.** Suites with nothing to wait on took 51 to 57 s in the same run, the start-of-run
+  burst in the entries above. The reply window (5 s) and the follow window (10 s) count from the launch, and the
+  watch that confirms the shell is a main-actor task, so a stall between the launch and its first lookup can
+  outlast either. Blocking the main actor 6 s there gives the same error locally with those windows and passes with the
+  fix. No actor-hop timestamps were recorded on CI.
+- **Fix.** The harness waits are ceilings, 120 s for the reply and 180 s for the follow, and the restart tests'
+  `eventually` waits 120 s. Every case that expects a timeout or a window end sets its own short windows. The
+  parked-session case takes a 600 s undo grace, so the 3 s default cannot finalize it mid-burst.
+
+### Linux core tests: apt cannot reach the Ubuntu archive
+
+- **Symptom.** The `Install jq, zsh, fish and tcsh` step exits 100 after `Could not connect to archive.ubuntu.com:80
+  ... connection timed out` and `E: Unable to locate package jq`, before any test runs.
+- **Runs.** Job 135549398259 and its rerun 135557548754 (run 44521018331, PR #1057).
+- **Cause, demonstrated.** The archive was down: `archive.ubuntu.com` timed out from a Mac outside GitHub's network
+  at the same time, and answered again about 25 minutes after the first failure.
+- **Fix.** None in the repository. Rerun the failed job once the archive answers.
 
 ### Linux test process killed by SIGPIPE
 
@@ -130,6 +259,39 @@ Each entry separates a demonstrated cause from one that is only consistent with 
   zombie of that group under the container's PID 1 (`tail -f /dev/null`, which never reaps) kept the call
   succeeding forever.
 - **Fix.** Already on master in #949 (b8a96b1b): `OverlayRunJob.onlyZombies` treats a group of zombies as ended.
+
+### Hang in `HudHelperTests.exitsWhenTheOwningProcessIsGone`
+
+- **Symptom.** `swift test` stops printing after the Swift Testing summary; the test helper sits at 0% CPU in
+  `-[NSConcreteTask waitUntilExit]`, in `mach_msg`, and the owner `sh` it waits on is already reaped.
+- **Runs.** A local full run on 2026-11-17; not yet seen on CI, where the watchdog would kill it at 600 s.
+- **Cause, demonstrated.** The test launched the owner, crossed an `await`, then called `waitUntilExit`, which
+  waits on the current thread's run loop. A task can resume on another cooperative thread, and that run loop
+  never hears of the exit. A probe hung within 650 hopped runs; launching and waiting on one thread ran 2400 times
+  without a hang.
+- **Fix.** The test polls `isRunning` with `Task.sleep`; `Process` reaps on its own queue, so
+  `kill -0` sees the owner gone. 2400 hopped probe runs passed. Every other `waitUntilExit` in the tests runs and
+  waits on one thread with no `await` between.
+
+### `HudHelperTests` "hud.sh ignored SIGTERM" on Linux
+
+- **Symptom.** `keepsPaintingWhenTheOwnerFieldIsNotAPid(owner: "")` recorded `hud.sh ignored SIGTERM` from
+  `Run.stop()`, whose process listing showed the helper as a zombie (`Z`, `[sh] <defunct>`).
+- **Runs.** Job 133868067831 (run 44032643699, master `d79b72a0`); the identical tree passed on its PR.
+- **Cause, inferred.** `stop()` gave the helper 2 s of wall-clock time to be reaped. The run had the Linux startup
+  stall from the `SshConnectionPoolTests` entry: 6396 of 6464 passing tests reported over 20 s. The zombie shows
+  the helper had exited by the time of the listing, not that it exited within the 2 s.
+- **Fix.** Every wait in `HudHelperTests` counts 20 ms `Task.sleep` polls instead of a deadline, so a stall slows a
+  wait without expiring it, as `held()` does.
+
+### `AppDelegateCaptureTests.testExitCaptureReadsALiveListingSlowerThanAHundredMilliseconds`
+
+- **Symptom.** `XCTAssertEqual failed: ("0") is not equal to ("1")` at 0.408 s: the 120 ms stub listing
+  missed `ZmxClient.captureInvocationTimeout` (0.4 s) and no command was captured.
+- **Runs.** One local `make test-app` on 2026-11-17, load average about 21 at the time.
+- **Cause, not established.** Ten isolated runs passed in 0.19-0.28 s, and ten more passed under 20 busy-loop
+  processes (load average 113), so CPU contention alone did not reproduce it.
+- **Fix.** The test went with the listing: the quit capture no longer runs `zmx list` (#1042).
 
 ### macOS watchdog hang with no test started
 
@@ -159,7 +321,15 @@ Each entry separates a demonstrated cause from one that is only consistent with 
   neighbours, with `page not claimable` and `end of stream`; the runs took 111 to 116 s.
   Cause unresolved. [Inference] A page claim expiring on the real clock (`AppStore.pageClaimWindow`,
   enforced by `ServerStreams.schedulePageClaimExpiry`) would produce these messages, and so would a defect the
-  branch fixed before the merge. The frozen job clock does not cover page claims.
+  branch fixed before the merge. That real-clock gap is closed: the harness's frozen clock now covers page
+  claims (see `aPageWithdrawnFromAStallingViewerIsOwnedByTheViewerItIsOfferedTo` above).
+  Both before #1051 and during runner stalls, run 43831232607 (#1016) failed `everyPageKindOpensInEveryLinkMode`
+  (`.overlay50`, `.overlay`, `.browser`: close answered `no overlay` after the page request arrived) and
+  `textCommandsReachThePresenterAndAnswerWithItsResult` (the text node gone, the viewer received no page command),
+  and run 43866829158 (#1021) failed `everyPageKindOpensInEveryLinkMode` (`.overlay75`, `no overlay`),
+  `aClickReplacesAHiddenClickedPageOnlyOnceTheNewFileChecksOut` (slot job nil) and
+  `aHeldMarkdownPageOffersItsGrantOnlyToAPresenterThatFollowsLinks` (`page not claimable`) after 117.8 s.
+  [Inference] An unclaimed page expiring on the real clock fits both; the page offer time was not measured.
 - **`ServerLifecycleTests.aFishPaneLoadsTheShellIntegration`** (job 129484718181), at
   `ServerLifecycleTests.swift:191`: after 15 s the screen ends at the typed command with no output and no new
   prompt, so fish had not finished the command. One occurrence; cause unresolved. The test is unchanged since
@@ -173,18 +343,48 @@ Each entry separates a demonstrated cause from one that is only consistent with 
 ### `TextPageRenderingTests.testANearCapFileRendersInBoundedTime`
 
 - **Symptom.** `XCTAssertLessThan failed: ("11.543139667 seconds") is not less than ("10.0 seconds") - big.diff`.
-- **Runs.** 42883406544.
+  Locally: `("41.428951125000005 seconds") is not less than ("30.0 seconds") - colored.log`.
+- **Runs.** 42883406544; one of three initial local full `make test-app` runs, 2026-11-17.
 - **Cause, unresolved at stage level.** The timer covers writing and opening the file, escaping, WebContent
-  startup, rendering and polling, and no stage was measured on the runner.
+  startup, rendering and polling. Three traced local full runs did not reproduce the stall: colored.log matched in
+  1.66-1.79 s, and its script took under 0.5 s from reading the source to ready (ANSI parse about 70 ms, the DOM for
+  399456 runs built in about 270 ms). The JavaScript call that returned the expected length took about 1.4 s.
+  `waitForScript` checks its deadline after a nonmatching evaluation returns; the separate elapsed-time assertion
+  catches a match that arrives after 30 s.
 - **Fix.** The per-file bound and the page wait are 30 s, a coarse end-to-end ceiling for a pathological slowdown
   rather than a latency target.
 
-### Three earlier hosted failures, already fixed on master
+### `ControlServerRemotePageTests.testATextActionOnAPageThatIsNotTextAnswersTheLocalRefusalAndAdvancesNoSequence`
+
+- **Symptom.** `XCTAssertEqual failed: ("5") is not equal to ("1")` on the state frame count.
+- **Runs.** 43224720127 (PR #978); 43230065480 failed the first fix, `the page load fails not reached within 10.0s`.
+- **Cause, demonstrated.** The page was a URL on the restricted port 9. Its own load reports (loading, loading,
+  failed `Not allowed to use restricted network port`, all at sequence 5) arrived after the baseline count;
+  reproduced locally with the frames printed. The refused text actions sent none. Waiting for the failed load
+  did not hold on the runner, where that load never reported `failed` within 10 s.
+- **Fix.** The test shows an HTML file page through the fixture's channel, which needs no network, and waits for
+  a report with the hide's sequence and `loaded` before it takes the baseline.
+
+### `ControlServerRemotePageTests.testTextCommandsOnAReplicaAnswerAsLocallyAndReachTheOrigin`
+
+- **Symptom.** `XCTAssertEqual failed: ("nil") is not equal to ("Optional("1 of 1")")`, then `the origin is told`
+  times out.
+- **Runs.** Local only, once in about 70 class runs.
+- **Cause, demonstrated.** `text.js` posted a diff page's first changes report, and a seeded search's first
+  report, before `ready`. A caller waiting for `textChanges` could step between the two messages while
+  `TextPageBridge` still held its document pending, which answers `page not loaded`. A script polling `tree`
+  for `text.changes` had the same window.
+- **Fix.** The page holds the counts it reports during setup and sends them after `ready`.
+  `TextPageRenderingTests` pins the message order for a diff with changes, one without, and a seeded search.
+
+### Earlier hosted failures, already fixed on master
 
 - `HtmlOverlayViewTests` line 48 read the page title before it arrived; fixed in #949.
 - `testTheBarFitsANarrowPageFollowingAndPaused` overflowed when the runner showed a scroll bar; fixed in b7884db7.
 - `testAWrappedFollowingLogStaysAtItsEndWhenItNarrows` waited for a width a 17 px runner scroll bar never allows;
   fixed in the #934 squash.
+- `testTheFileButtonLeavesTheSearchControlsOnANarrowPage` waited for `clientWidth` 1200 and read 1183 under the same
+  scroll bar; it waits for `window.innerWidth` since #997.
 
 A WebContent crash appears in passing hosted runs as well as failing ones and was not linked to any failure
 above. That it follows the drag and paste tests releasing their named pasteboards is an inference.
@@ -221,8 +421,9 @@ Causes not found, left as backlog items with their capture steps:
 
 - `docs/backlog/hosted-tests-hang-in-ci-until-job-timeout.md`
 - `docs/backlog/fish-seam-payload-test-times-out-under-load.md`
-- `docs/backlog/exit-capture-test-misses-a-120-ms-listing-in-full-runs.md`
 - `docs/backlog/session-host-fixture-start-stalls-before-pidfile.md`
+- `docs/backlog/session-host-sometimes-creates-an-app-rooted-daemon.md`
+- `docs/backlog/overlay-job-cancel-tests-fail-during-ci-stall.md`
 - `docs/backlog/control-calls-stall-under-title-flood-on-ci.md`, the `spam-8` stall, which the retired case no
   longer exercises
 

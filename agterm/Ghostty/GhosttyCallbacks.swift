@@ -77,12 +77,12 @@ final class GhosttyCallbacks: @unchecked Sendable {
             return true
         case GHOSTTY_ACTION_SHOW_CHILD_EXITED:
             // ghostty prints its "Process exited. Press any key to close" fallback unless the host consumes
-            // this action: an overlay that should vanish returns true to suppress the prompt; a wait-opt-in
-            // overlay (and every other surface) returns false, so the prompt shows and close_surface_cb closes.
+            // this action: an overlay that should vanish returns true to suppress the prompt; a held surface
+            // returns its own `consumesHeldExit`, and close_surface_cb closes it on a key either way.
             guard let view = surfaceView(from: target) else { return false }
             guard view.shouldCloseOnChildExitAction else {
                 DispatchQueue.main.async { view.onExitHeld?() }
-                return false
+                return view.consumesHeldExit
             }
             DispatchQueue.main.async { view.handleProcessExit() }
             return true
@@ -140,8 +140,18 @@ final class GhosttyCallbacks: @unchecked Sendable {
             let openURL = action.action.open_url
             guard let view = surfaceView(from: target), let ptr = openURL.url else { return true }
             let link = String(decoding: UnsafeRawBufferPointer(start: ptr, count: Int(openURL.len)), as: UTF8.self)
-            let intent = view.releaseIntent.withLock { $0 }
-            DispatchQueue.main.async { view.openLink(link, intent: intent) }
+            let released = view.releaseIntent.withLock { $0 }
+            let source = LinkPolicy.ClickSource(openURL.kind, released: released != nil)
+            DispatchQueue.main.async { view.openLink(link, intent: released ?? .normal, source: source) }
+            return true
+        case GHOSTTY_ACTION_MOUSE_OVER_LINK:
+            // libghostty applies `link-previews` before sending, and an empty url clears. Length-delimited
+            // like `open_url`, and valid only for this call.
+            guard let view = surfaceView(from: target) else { return true }
+            let hover = action.action.mouse_over_link
+            let link = hover.len == 0 || hover.url == nil ? ""
+                : String(decoding: UnsafeRawBufferPointer(start: hover.url, count: Int(hover.len)), as: UTF8.self)
+            DispatchQueue.main.async { view.applyLinkHover(link) }
             return true
         case GHOSTTY_ACTION_COLOR_CHANGE:
             // a dynamic color set or RESET via OSC 10/11/12 (fg/bg/cursor) or their 110/111/112 resets,
@@ -197,36 +207,70 @@ final class GhosttyCallbacks: @unchecked Sendable {
 
     func readClipboard(_ read: ClipboardRead) -> ghostty_clipboard_read_result_e {
         guard let surface = surface(from: read.userdata) else { return GHOSTTY_CLIPBOARD_READ_UNSUPPORTED }
-        let text = Self.clipboardText(for: read.location)
         let requestsText = (0..<Int(read.mimesLen)).contains { index in
             read.mimes?[index].map { String(cString: $0) == "text/plain" } ?? false
         }
-        // an empty pasteboard still answers a text request with a ZERO-LENGTH representation: an OSC 52
-        // reader is waiting for the reply, and `UNAVAILABLE` means the request never started, so nothing
-        // would reach the pty and the client would hang until its own timeout.
-        let contents = requestsText ? [ClipboardContent(mime: "text/plain", data: Data((text ?? "").utf8))] : []
-        guard !contents.isEmpty || read.list else { return GHOSTTY_CLIPBOARD_READ_UNAVAILABLE }
-        Self.completeClipboardRequest(
-            surface, contents: contents, available: read.list && text != nil ? ["text/plain"] : [], state: read.state)
+        guard requestsText || read.list else { return GHOSTTY_CLIPBOARD_READ_UNAVAILABLE }
+        let text = Self.clipboardText(for: read.location)
+        guard Self.hidesFilesOnOrigin(Self.pasteboard(for: read.location), location: read.location),
+              let ud = read.userdata else {
+            Self.completeClipboardRead(surface, text: text, requestsText: requestsText, list: read.list, state: read.state)
+            return GHOSTTY_CLIPBOARD_READ_STARTED
+        }
+        // where the pane's program runs is main-actor state, so a file offer is answered one main turn later;
+        // the view is captured, not the surface, as in `confirmReadClipboard`
+        let view = Unmanaged<GhosttySurfaceView>.fromOpaque(ud).takeUnretainedValue()
+        nonisolated(unsafe) let state = read.state
+        let list = read.list
+        DispatchQueue.main.async {
+            guard let surface = view.surface else { return }
+            Self.completeClipboardRead(surface, text: view.linkClickRemoteSession == nil ? text : nil,
+                                       requestsText: requestsText, list: list, state: state)
+        }
         return GHOSTTY_CLIPBOARD_READ_STARTED
     }
 
-    /// The text for a pasteboard: file/web URLs (a Finder copy or a drag-drop) become shell-escaped paths,
-    /// space-joined; a plain string comes back verbatim, NOT escaped, since it may be a command the user
-    /// means to run. Shared by the clipboard paste path and the drag-drop handler, so a drop inserts as a paste.
-    static func pasteboardText(_ pb: NSPasteboard) -> String? {
-        if let urls = pb.readObjects(forClasses: [NSURL.self]) as? [URL] {
-            let parts = urls.map(urlText).filter { !$0.isEmpty }
-            if !parts.isEmpty { return parts.joined(separator: " ") }
-        }
-        return pb.string(forType: .string).flatMap { !$0.isEmpty ? $0 : nil }
+    /// completeClipboardRead answers a read with `text`. An empty pasteboard still answers a text request with a
+    /// ZERO-LENGTH representation: an OSC 52 reader is waiting for the reply, and `UNAVAILABLE` means the request never
+    /// started, so nothing would reach the pty and the client would hang until its own timeout.
+    private static func completeClipboardRead(_ surface: ghostty_surface_t, text: String?, requestsText: Bool, list: Bool,
+                                              state: UnsafeMutableRawPointer?) {
+        let contents = requestsText ? [ClipboardContent(mime: "text/plain", data: Data((text ?? "").utf8))] : []
+        completeClipboardRequest(surface, contents: contents, available: list && text != nil ? ["text/plain"] : [],
+                                 state: state)
     }
 
-    /// The text one pasteboard URL contributes: a shell-escaped path for a file URL (so a path with spaces
-    /// lands as one argument), else the escaped absolute string. The SINGLE definition shared by the reader
-    /// and the menu gate, so they cannot drift — untestable in XCUITest (see the Control API rule).
-    private static func urlText(_ url: URL) -> String {
-        ShellEscape.path(url.isFileURL ? url.path(percentEncoded: false) : url.absoluteString)
+    /// hidesFilesOnOrigin is whether a read answers nothing for a program on another host: file paths name this Mac's
+    /// files, which only the paste seam copies there. The selection clipboard holds agterm's own text.
+    static func hidesFilesOnOrigin(_ pb: NSPasteboard, location: ghostty_clipboard_e) -> Bool {
+        location != GHOSTTY_CLIPBOARD_SELECTION && offersFiles(pb)
+    }
+
+    /// offersFiles is whether `pb` holds a file URL a paste would turn into a path.
+    private static func offersFiles(_ pb: NSPasteboard) -> Bool {
+        (pb.readObjects(forClasses: [NSURL.self]) as? [URL])?.contains { $0.isFileURL && !PasteOffer.urlText($0).isEmpty } ?? false
+    }
+
+    /// pasteboardText is the text libghostty's clipboard read gets, `PasteOffer.asIsText` so it matches what a drop
+    /// inserts: shell-escaped paths for file/web URLs, else the string verbatim, since it may be a command to run.
+    static func pasteboardText(_ pb: NSPasteboard) -> String? {
+        PasteOffer(urls: pb.readObjects(forClasses: [NSURL.self]) as? [URL] ?? [], text: pb.string(forType: .string)).asIsText
+    }
+
+    /// pasteOffer is what a paste or drop of `pb` offers. The image is read only when nothing else is offered, since a
+    /// TIFF has to be converted to PNG.
+    static func pasteOffer(_ pb: NSPasteboard) -> PasteOffer {
+        let offer = PasteOffer(urls: pb.readObjects(forClasses: [NSURL.self]) as? [URL] ?? [], text: pb.string(forType: .string))
+        guard offer.action == nil else { return offer }
+        if let png = pb.data(forType: .png) { return PasteOffer(image: png) }
+        guard let tiff = pb.data(forType: .tiff), let image = NSBitmapImageRep(data: tiff) else { return offer }
+        return PasteOffer(image: image.representation(using: .png, properties: [:]))
+    }
+
+    /// hasPasteOffer is whether `pasteOffer` would offer something, probing an image by type so validation converts
+    /// nothing.
+    static func hasPasteOffer(_ pb: NSPasteboard = .general) -> Bool {
+        hasPasteboardText(pb) || pb.availableType(from: [.png, .tiff]) != nil
     }
 
     /// The pasteboard for a libghostty clipboard location: private for selection, general for the rest.
@@ -248,7 +292,7 @@ final class GhosttyCallbacks: @unchecked Sendable {
     /// the reader returns nil (verified with a named pasteboard). Hence the same `urlText` + non-empty filter.
     static func hasPasteboardText(_ pb: NSPasteboard = .general) -> Bool {
         if let urls = pb.readObjects(forClasses: [NSURL.self]) as? [URL],
-           urls.contains(where: { !urlText($0).isEmpty }) {
+           urls.contains(where: { !PasteOffer.urlText($0).isEmpty }) {
             return true
         }
         return pb.string(forType: .string).map { !$0.isEmpty } ?? false
@@ -405,9 +449,10 @@ final class GhosttyCallbacks: @unchecked Sendable {
 
     func closeSurface(ud: UnsafeMutableRawPointer?) {
         guard let ud else { return }
-        // the Session retains the view until destroySurface() runs (the only place ghostty_surface_free is
-        // called), so takeUnretainedValue() is safe. never close or free synchronously from this callback.
+        // the Session retains the view until destroySurface() runs, and SurfaceRetirement retains a retired one
+        // until it frees the surface, so takeUnretainedValue() is safe. never close or free synchronously here.
         let view = Unmanaged<GhosttySurfaceView>.fromOpaque(ud).takeUnretainedValue()
+        guard !view.retired.withLock({ $0 }) else { return }
         DispatchQueue.main.async { view.handleProcessExit() }
     }
 
@@ -416,7 +461,8 @@ final class GhosttyCallbacks: @unchecked Sendable {
               let surface = target.target.surface,
               let ud = ghostty_surface_userdata(surface)
         else { return nil }
-        return Unmanaged<GhosttySurfaceView>.fromOpaque(ud).takeUnretainedValue()
+        let view = Unmanaged<GhosttySurfaceView>.fromOpaque(ud).takeUnretainedValue()
+        return view.retired.withLock { $0 } ? nil : view
     }
 
     private func surface(from ud: UnsafeMutableRawPointer?) -> ghostty_surface_t? {
@@ -438,5 +484,17 @@ extension NSPasteboard.PasteboardType {
             return
         }
         self.init(utType.identifier)
+    }
+}
+
+extension LinkPolicy.ClickSource {
+    /// init names what produced an open-url action. At the pinned libghostty a clicked detected link is `UNKNOWN` and
+    /// an OSC 8 hyperlink `OSC8`; `TEXT` and `HTML` come from `write_screen_file:open`, which no click produces.
+    init(_ kind: ghostty_action_open_url_kind_e, released: Bool) {
+        switch kind {
+        case GHOSTTY_ACTION_OPEN_URL_KIND_UNKNOWN where released: self = .detected
+        case GHOSTTY_ACTION_OPEN_URL_KIND_OSC8: self = .osc8
+        default: self = .other
+        }
     }
 }

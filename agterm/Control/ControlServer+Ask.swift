@@ -106,12 +106,12 @@ extension ControlServer {
         return ControlResponse(ok: true, result: ControlResult(id: ask.id, pane: pane?.rawValue))
     }
 
-    /// Hands a session-associated ask to the viewer presenting that session, or returns nil for the caller to
+    /// Hands a session-associated ask to the viewer its pane routes to, or returns nil for the caller to
     /// handle locally. Visibility here is irrelevant, since nothing is drawn here; the pane only has to exist,
     /// and the viewer refuses one it cannot show. `follow` raises nothing for the same reason.
     private func presentAskRemotely(_ ask: PendingAsk, in store: AppStore, sessionID: UUID,
                                     placement: ControlAskPlacement) -> ControlResponse? {
-        guard store.presentationHub?.hasPresenter(session: sessionID) == true,
+        guard let hub = store.presentationHub, hub.subscriberCount(session: sessionID) > 0,
               let session = store.session(withID: sessionID), let windowID = library.windowID(for: store) else {
             return nil
         }
@@ -128,12 +128,12 @@ extension ControlServer {
         }
     }
 
-    /// Takes back the ask a viewer was presenting for `sessionID`, after the viewer went away or refused it.
+    /// Takes back the ask viewer `owner` was presenting for `sessionID`, after that viewer refused it.
     /// A terminal ask is drawn here from now on; a GUI one moves into its window's slot when its target is
     /// shown and the slot is free, and otherwise ends cancelled with `presentation-lost`.
-    func takeBackRemoteAsk(forSession sessionID: UUID) {
+    func takeBackRemoteAsk(forSession sessionID: UUID, owner: Int) {
         guard let store = library.store(forSession: sessionID),
-              let ask = store.takeBackRemoteAsk(forSession: sessionID) else { return }
+              let ask = store.takeBackRemoteAsk(forSession: sessionID, owner: owner) else { return }
         guard let session = store.session(withID: sessionID), let windowID = library.windowID(for: store),
               let controller = PickRegistry.shared.controller(for: windowID), guiAskFits(session, in: store, windowID: windowID) else {
             store.failHandback(forSession: sessionID)
@@ -150,7 +150,7 @@ extension ControlServer {
     }
 
     /// Whether a GUI ask anchored to `session` could be shown now: the rule `presentAsk` applies at open.
-    private func guiAskFits(_ session: Session, in store: AppStore, windowID: UUID) -> Bool {
+    func guiAskFits(_ session: Session, in store: AppStore, windowID: UUID) -> Bool {
         guard guiTargetShown(session.id, in: store, windowID: windowID) else { return false }
         guard session.askPaneIdentity != nil else { return true }
         guard let pane = session.askTargetPane else { return false }
@@ -164,26 +164,30 @@ extension ControlServer {
             && DashboardControllerRegistry.shared.controller(for: windowID)?.isOpen != true
     }
 
-    /// Applies what a session's presenter sent about work it was handed.
-    func receivePresenterFrame(_ body: PresentationFrame.Body, forSession sessionID: UUID) {
+    /// Applies what viewer `sender` of a session sent about work it was handed.
+    func receivePresenterFrame(_ body: PresentationFrame.Body, forSession sessionID: UUID, from sender: Int) {
         guard let store = library.store(forSession: sessionID) else { return }
         switch body {
         case .askResolve(let answer):
             store.resolveRemoteAsk(answer, forSession: sessionID)
         case .askRejected(let ref) where store.isPresentingRemotely(ref, forSession: sessionID):
-            takeBackRemoteAsk(forSession: sessionID)
+            takeBackRemoteAsk(forSession: sessionID, owner: ref.owner)
         case .pickResolve(let answer):
             SessionPickBook.shared.resolveRemote(answer, session: sessionID)
         case .pickRejected(let ref):
-            takeBackRemotePick(forSession: sessionID, refused: ref)
+            takeBackRemotePick(forSession: sessionID, owner: ref.owner, refused: ref)
         case .overlayRejected(let change):
-            store.rejectRemoteOverlay(change.job, forSession: sessionID)
+            store.rejectRemoteOverlay(change.job, forSession: sessionID, from: sender)
         case .overlayClosed(let change):
-            store.remoteOverlaySurfaceClosed(change.job, forSession: sessionID)
-        case .pageState, .pageClosed, .pageRejected:
-            receiveRemotePageFrame(body, in: store, forSession: sessionID)
+            store.remoteOverlaySurfaceClosed(change.job, forSession: sessionID, from: sender)
+        case .pageState, .pageResult, .pageClosed, .pageRejected:
+            receiveRemotePageFrame(body, in: store, forSession: sessionID, from: sender)
         case .linkClick(let click):
-            receiveForwardedClick(click, forSession: sessionID)
+            receiveForwardedClick(click, forSession: sessionID, from: sender)
+        case .statusClear(let clear):
+            store.applyPresenterClear(clear, forSession: sessionID, reset: GhosttyApp.shared.statusReset)
+        case .statusSeen(let seen):
+            store.applyPresenterSeen(seen, forSession: sessionID, badgeReset: GhosttyApp.shared.badgeReset)
         default:
             break
         }

@@ -83,4 +83,14 @@ struct SessionMetadataCommandsTests {
         #expect(try request(["session", "flag", "off", "--target", "aa"])
             == ControlRequest(cmd: .sessionFlag, target: "aa", args: ControlArgs(mode: "off")))
     }
+
+    @Test(arguments: [(ControlRestoreOverride.pin("-x --resume"), "set", "-x --resume" as String?), (.pinNone, "none", nil), (.unpin, "clear", nil)])
+    func anAttachedRestoreParsesOnItsOrigin(pin: ControlRestoreOverride, mode: String, command: String?) throws {
+        let forward = AttachedForward.restore(session: "s1", paneID: "tok", pin: pin)
+
+        let parsed = try request(forward.originArgv)
+
+        #expect(parsed == ControlRequest(cmd: .sessionRestore, target: "s1", args: ControlArgs(mode: mode, command: command, paneID: "tok")))
+        #expect(parsed.cmd == forward.command)
+    }
 }

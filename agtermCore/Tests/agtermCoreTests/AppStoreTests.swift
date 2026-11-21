@@ -1222,12 +1222,13 @@ struct AppStoreTests {
         #expect(store.selectedSessionID == active.id)
     }
 
-    @Test func removeWorkspaceKeepsAtLeastOne() {
+    @Test func removeWorkspaceDeletesTheLastNamedWorkspace() {
         let store = makeStore()
         let only = store.addWorkspace(name: "only")
-        #expect(store.canRemoveWorkspace == false)
+        #expect(store.canRemoveWorkspace)
         store.removeWorkspace(only.id)
-        #expect(store.workspaces.map(\.id) == [only.id])
+        #expect(store.namedWorkspaces.isEmpty)
+        #expect(!store.canRemoveWorkspace)
     }
 
     @Test func selectionUpdatesRecencyMostRecentFirst() {
@@ -1762,5 +1763,59 @@ extension AppStoreTests {
         store.removeWorkspace(store.workspaces[0].id)
 
         #expect(Set(log.identities) == [first.paneIdentity, second.paneIdentity])
+    }
+
+    @Test func aPreservedSelectionComesBackWithNoSelectionReported() async throws {
+        var selected: [String?] = []
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
+        let store = AppStore(persistence: PersistenceStore(directory: dir), controlEventSink: { event in
+            if event.kind == .sessionSelected { selected.append(event.session) }
+        })
+        let workspace = store.addWorkspace(name: "w")
+        let kept = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/a"))
+        let closed = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/b"))
+        store.selectSession(kept.id)
+        #expect(store.softCloseSession(closed.id))
+        let recency = store.sessionRecency
+        selected = []
+
+        let undone = await store.preservingSelection { store.undoPendingClose() }
+
+        #expect(undone)
+        #expect(store.session(withID: closed.id) != nil)
+        #expect(store.selectedSessionID == kept.id)
+        #expect(store.sessionRecency == recency)
+        #expect(selected.isEmpty)
+    }
+
+    @Test func aNewWorkspacesRevealIsWithdrawnWhileRestoredMembershipStays() async {
+        let store = makeStore()
+        let member = store.addWorkspace(name: "member")
+        store.setFocusMembership(member.id, member: true)
+        store.setFocusEnabled(true)
+
+        let fresh = await store.preservingSelection { store.addWorkspace(name: "fresh") }
+
+        #expect(store.focusEnabled)
+        #expect(store.focusedWorkspaceIDs == [member.id])
+        #expect(store.workspaces.map(\.id).contains(fresh.id))
+    }
+
+    @Test func aPreservedRowRemovedByTheChangeLeavesItsReselectionReported() async throws {
+        var selected: [String?] = []
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
+        let store = AppStore(persistence: PersistenceStore(directory: dir), controlEventSink: { event in
+            if event.kind == .sessionSelected { selected.append(event.session) }
+        })
+        let workspace = store.addWorkspace(name: "w")
+        let first = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/a"))
+        let second = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/b"))
+        store.selectSession(first.id)
+        selected = []
+
+        await store.preservingSelection { _ = store.closeSession(first.id) }
+
+        #expect(store.selectedSessionID == second.id)
+        #expect(selected == [second.id.uuidString])
     }
 }

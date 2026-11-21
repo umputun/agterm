@@ -30,16 +30,38 @@ struct ControlDispatcherRecentTests {
     }
 
     @Test(arguments: [Command.recentList, .recentClear])
-    func listAndClearRefuseATargetOrWindowBeforeAnyAction(_ cmd: Command) async {
+    func listAndClearRefuseATargetBeforeAnyAction(_ cmd: Command) async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
 
         let targeted = await dispatcher.dispatch(ControlRequest(cmd: cmd, target: "active"))
+
+        #expect(targeted == ControlResponse(ok: false, error: "\(cmd.rawValue) takes no target"))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test(arguments: [Command.recentList, .recentClear])
+    func aWindowReachesTheWindowFormWhichAHostWithoutOneRefuses(_ cmd: Command) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
         let windowed = await dispatcher.dispatch(ControlRequest(cmd: cmd, args: ControlArgs(window: "w1")))
 
-        let refusal = ControlResponse(ok: false, error: "\(cmd.rawValue) takes no target or --window")
-        #expect(targeted == refusal)
-        #expect(windowed == refusal)
+        #expect(windowed == ControlResponse(ok: false, error: "\(cmd.rawValue) takes no --window on this control host"))
         #expect(actions.calls.isEmpty)
+    }
+
+    @Test func undoNeedsTheUndoIDAndAHostWithoutUndoRefusesIt() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let missing = await dispatcher.dispatch(ControlRequest(cmd: .sessionUndo))
+        let active = await dispatcher.dispatch(ControlRequest(cmd: .sessionUndo, target: "active"))
+        let unsupported = await dispatcher.dispatch(ControlRequest(cmd: .sessionUndo, target: " u1 "))
+
+        let refusal = ControlResponse(ok: false, error: "session.undo requires --target with the undo id a close answered")
+        #expect(missing == refusal)
+        #expect(active == refusal)
+        #expect(unsupported == ControlResponse(ok: false, error: "session.undo is not supported by this control host"))
     }
 }

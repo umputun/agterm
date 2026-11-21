@@ -12,7 +12,7 @@ final class WindowLibrarySessionLinkTests {
     private final class Binder: RemoteCatalogEffects {
         let bind: (UUID) -> Bool
         init(bind: @escaping (UUID) -> Bool) { self.bind = bind }
-        func attachCommand(host _: String, pane _: CatalogPane) -> String { "attach" }
+        func attachCommand(host _: String, pane _: CatalogPane, claim _: Bool) -> String { "attach" }
         func catalogRowAdded(_: Session) {}
         func catalogRowRemoved(_: UUID) {}
         func catalogRowEnded(_: UUID) {}
@@ -54,6 +54,26 @@ final class WindowLibrarySessionLinkTests {
         let closed = try row(other)
         library.closeWindow(second.id)
         #expect(library.sessionLinkTarget(closed.id, from: .pane(clicked.id), pane: clicked.paneIdentity) == nil)
+    }
+
+    @Test func originRowsMatchAcrossWindowsOnHostEndpointAndAnIdInEitherCase() throws {
+        let library = WindowLibrary(directory: directory)
+        let store = try #require(library.store(for: try #require(library.activeWindowID)))
+        let other = try #require(library.store(for: library.newWindow().id))
+        let shown = UUID()
+        let first = try row(store, host: "buildbox")
+        bind(first, in: store, id: shown)
+        let copy = try row(other, host: "buildbox")
+        bind(copy, in: other, id: shown)
+        let elsewhere = try row(store, host: "buildbox")
+        bind(elsewhere, in: store, id: UUID(), endpoint: ControlZmxEndpoint(executable: "/srv/zmx", socketDirectory: "/run/other"))
+
+        #expect(library.shownOriginSessions(host: "buildbox", endpoint: endpoint) == [shown.uuidString])
+        #expect(library.shownOriginSessions(host: "otherbox", endpoint: endpoint).isEmpty)
+        #expect(Set(library.rowsShowingOrigin(shown.uuidString.lowercased(), host: "buildbox", endpoint: endpoint).map(\.id))
+                == [first.id, copy.id])
+        #expect(other.softCloseSession(copy.id))
+        #expect(library.rowsShowingOrigin(shown.uuidString, host: "buildbox", endpoint: endpoint).map(\.id) == [first.id])
     }
 
     @Test func attachedPanesUseOriginIDsWhileLocalSplitsAndScratchUseLocalIDs() throws {
@@ -190,6 +210,10 @@ final class WindowLibrarySessionLinkTests {
         #expect(library.sessionLinkTarget(b.id, from: .scratch(scratchOnly.id), pane: nil)
                 == SessionLinkTarget(windowID: window.id, sessionID: b.id))
         #expect(library.sessionLinkTarget(localRow.id, from: .scratch(clicked.id), pane: nil) == nil)
+        let scratch = try #require(clicked.originScratch)
+        #expect(library.sessionLinkTarget(b.id, from: .remotePane(clicked.id), pane: scratch)
+                == SessionLinkTarget(windowID: window.id, sessionID: b.id))
+        #expect(library.sessionLinkTarget(localRow.id, from: .remotePane(clicked.id), pane: scratch) == nil)
         #expect(library.sessionLinkTarget(ended.id, from: .pane(clicked.id), pane: clicked.paneIdentity)
                 == SessionLinkTarget(windowID: window.id, sessionID: ended.id))
         #expect(library.sessionLinkTarget(empty.id, from: .pane(clicked.id), pane: clicked.paneIdentity)

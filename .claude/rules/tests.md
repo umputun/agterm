@@ -23,10 +23,19 @@ A newly understood flake gets its entry there, and a rule here only when it show
   `aShellThatExitsClosesItsSession` does with `!session.ended`.
 - Wait for the state you assert, never for time or for layout luck: a page title read before it arrived and a
   width a runner's 17 px scroll bar never allows failed only on CI.
+- A blocking call in a test (a socket read, `poll`, a semaphore) runs on a plain `Thread`, as `offPool` does, never
+  in a `Task`: the shared pool has one thread per CPU, three on CI. A server under test that answers through a
+  `Task` gets `.high`, or its reply queues behind every test body started before it.
+  `LIBDISPATCH_COOPERATIVE_POOL_STRICT=1` shrinks the pool to one thread, so a test that parks a pool thread hangs.
 - A test holding a pty master reads it on every poll while it waits. `zmx attach` exits through
-  `tcsetattr(TCSAFLUSH)`, which on macOS blocks until the master drains, so an unread pty keeps the child alive.
+  `tcsetattr(TCSAFLUSH)`, which on macOS blocks until the master drains, so an unread pty keeps the child alive:
+  after a detach with no bound, after its session ends until zmx patch 0007's close deadline, 2 s from the hangup.
 - A test stub writes sockets through `UnixSocket.write` and never replies to a request cut off before its
   newline. A raw `write` to a closed peer raises SIGPIPE, which can kill the whole Linux test process; the
   writer behind the one recorded SIGPIPE was never identified, and the stubs were the unguarded writes.
+- A fixture app bundle keeps one constant `CFBundleIdentifier`, never one per fixture or run. macOS stores a
+  Local Network rule per bundle ID, and `com.umputun.hosttest.<UUID>` IDs accumulated 3,979 rules on disk;
+  nehelper hit its UUID cache limit and rejected saves of the oversized privacy configuration.
+  `SessionHostClientTests` keeps unique IDs because it loads real launchd jobs and boots them out by label prefix.
 - Keep parameterized arguments short. This one is about diagnosis: `gh run view` stops at a 65 KB argument
   line and drops the failure that follows it.

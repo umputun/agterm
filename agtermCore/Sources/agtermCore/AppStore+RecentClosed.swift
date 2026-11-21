@@ -27,10 +27,14 @@ extension AppStore {
                 // a lone companion goes under its parent wherever the parent lives now, never on its own
                 guard let parent = location(ofSession: parentID) else { return .failed }
                 index = parent.workspaceIndex
+            } else if recent.root == true {
+                // the destination's own top-level sessions, whatever window the entry came from
+                guard let root = workspaces.firstIndex(where: \.isRoot) else { return .failed }
+                index = root
             } else if let existing = workspaces.firstIndex(where: { $0.id == recent.workspaceID }) {
                 index = existing
             } else {
-                let insertAt = max(0, min(recent.workspaceIndex, workspaces.count))
+                let insertAt = max(0, min(recent.workspaceIndex, namedEndIndex))
                 workspaces.insert(rebuiltWorkspaceShell(id: recent.workspaceID, name: recent.workspaceName), at: insertAt)
                 index = insertAt
             }
@@ -69,7 +73,7 @@ extension AppStore {
             workspace.sessions.removeAll { taken.contains($0.id) }
             // persistent Open Recent appends, like most editors' recent-project flow: a reopen brings the
             // workspace back without reshuffling current workspaces.
-            workspaces.append(workspace)
+            workspaces.insert(workspace, at: namedEndIndex)
             for session in workspace.sessions { emitSessionCreated(session, workspace: workspace.id) }
             openRestoredPages(recent.snapshot.sessions)
             appendFlaggedArrivals()
@@ -202,6 +206,32 @@ extension AppStore {
         return nil
     }
 
+    /// recordClosedSession writes what a hard close of `session` leaves in Recent Closed: its remote entry when it was
+    /// attached from another host, and its local entry when `local`; answers the local entry's id.
+    func recordClosedSession(_ session: Session, workspace: Workspace, at location: (workspaceIndex: Int, sessionIndex: Int),
+                             local: Bool, companions: [SessionSnapshot]) -> UUID? {
+        recordRemoteClosed(session, placement: RemoteRecentClosedItem.Placement(
+            workspaceID: workspace.id, workspaceName: workspace.name, workspaceIndex: location.workspaceIndex,
+            sessionIndex: location.sessionIndex, parentID: session.parentID))
+        guard local else { return nil }
+        return recordRecentClosedSession(session, workspaceID: workspace.id, workspaceName: workspace.name,
+                                         workspaceIndex: location.workspaceIndex, sessionIndex: location.sessionIndex,
+                                         companions: companions)
+    }
+
+    /// recordRemoteClosed writes the remote entry of `session` when it was attached from another host. `closeID` is the
+    /// workspace close it left with, whose undo removes the entry.
+    func recordRemoteClosed(_ session: Session, placement: RemoteRecentClosedItem.Placement, id: UUID = UUID(),
+                            closeID: UUID? = nil) {
+        // a session its origin removed for good has nothing left to reattach to
+        guard let recentClosedStore, let origin = session.attachedOrigin, session.remotePresentation?.originEnded != true
+        else { return }
+        let placement = placement.marking(root: rootWorkspace?.id == placement.workspaceID)
+        recentClosedStore.recordRemote(RemoteRecentClosedItem(id: id, host: origin.host, originSessionID: origin.sessionID,
+                                                              name: session.displayName, placement: placement, closeID: closeID))
+        recentClosedDidChange?()
+    }
+
     @discardableResult
     func recordRecentClosedSession(_ session: Session,
                                    workspaceID: UUID,
@@ -211,17 +241,20 @@ extension AppStore {
                                    id: UUID = UUID(),
                                    companions companionSnapshots: [SessionSnapshot] = []) -> UUID? {
         guard let recentClosedStore, session.isPersistable else { return nil }
+        let root = rootWorkspace?.id == workspaceID
         recentClosedStore.record(RecentClosedItem(
             id: id,
             kind: .session,
             title: session.displayName,
-            subtitle: workspaceName,
+            subtitle: root ? nil : workspaceName,
             session: RecentClosedSession(workspaceID: workspaceID,
                                          workspaceName: workspaceName,
                                          workspaceIndex: workspaceIndex,
                                          sessionIndex: sessionIndex,
                                          snapshot: sessionSnapshot(session),
-                                         companions: companionSnapshots.isEmpty ? nil : companionSnapshots)
+                                         companions: companionSnapshots.isEmpty ? nil : companionSnapshots,
+                                         root: root ? true : nil),
+            window: recentClosedWindow
         ))
         recentClosedDidChange?()
         return id
@@ -231,8 +264,14 @@ extension AppStore {
     func recordRecentClosedWorkspace(_ workspace: Workspace,
                                      selectedSessionID: UUID?,
                                      focusMember: Bool,
+                                     workspaceIndex: Int,
                                      id: UUID = UUID()) -> UUID? {
         guard let recentClosedStore else { return nil }
+        for (index, row) in workspace.sessions.enumerated() {
+            recordRemoteClosed(row, placement: RemoteRecentClosedItem.Placement(
+                workspaceID: workspace.id, workspaceName: workspace.name, workspaceIndex: workspaceIndex,
+                sessionIndex: index, parentID: row.parentID), closeID: id)
+        }
         // count and selection describe what Reopen will restore, so both follow the filtered snapshot:
         // remote sessions are not in it, and a selection pointing at one would restore nothing
         let snapshot = workspaceSnapshot(workspace)
@@ -245,7 +284,8 @@ extension AppStore {
             subtitle: "\(sessionCount) session\(sessionCount == 1 ? "" : "s")",
             workspace: RecentClosedWorkspace(snapshot: snapshot,
                                              selectedSessionID: restorable,
-                                             focusMember: focusMember)
+                                             focusMember: focusMember),
+            window: recentClosedWindow
         ))
         recentClosedDidChange?()
         return id
@@ -254,6 +294,12 @@ extension AppStore {
     func removeRecentClosedItem(_ id: UUID) {
         guard let recentClosedStore else { return }
         recentClosedStore.remove(id)
+        recentClosedDidChange?()
+    }
+
+    func removeRecentClosedClose(_ id: UUID) {
+        guard let recentClosedStore else { return }
+        recentClosedStore.removeClose(id)
         recentClosedDidChange?()
     }
 }

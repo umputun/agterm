@@ -42,6 +42,32 @@ Remove the patch when `GHOSTTY_REV` includes PR 13605 or an equivalent upstream 
 `AppearanceFlipUITests.testColorSchemeQueryReportsDarkWithOneThemeForBothAppearances` and
 `testColorSchemeSubscriptionReportsAppearanceFlipWithPlainTheme`.
 
+## 0003: free a surface once its threads have exited
+
+`0003` adds `ghostty_surface_try_free`. It asks the renderer and io threads to stop without joining them, and
+frees the surface only when both have returned from their thread functions, else answers false and leaves it
+valid. `ghostty_surface_free` joins those threads, and their exit polls with short sleeps (the io thread's
+`killPid` 10 ms, `0001`'s drain 1 ms) that App Nap stretches to seconds while the app is hidden, so a pane
+replaced then froze the whole app (#1005). `agtermApp.replacePane` and `reattachScratch` retire the old view
+through `SurfaceRetirement`, which keeps calling it from the main thread, so the free itself stays on the app
+thread.
+The patch also lets `TeardownDrain.finish` wake the drain through an event rather than wait out its pause.
+
+Remove the patch when `GHOSTTY_REV` offers a non-blocking surface teardown with the same guarantee: the surface
+stays allocated until its threads are gone, since agterm keeps its address from being reused
+(`replacePane(spawnFirst:)`). Its Zig tests are named `teardown` and run with `0001`'s; the app side is pinned
+by `SurfaceRetirementTests`.
+
+## 0004: plain-text session links
+
+`0004` adds `agterm://session/` to the URL schemes in `src/config/url.zig`, so a session link printed as plain
+text is clickable. Codex renders an `agterm://` Markdown link as plain `label (url)` text, and
+ghostty's `link` setting, the configurable alternative, returns `NotImplemented`. Only the session form is
+added: `LinkPolicy.sessionLink` ignores every other `agterm://` URL, which should not show a link pointer.
+Its Zig test is `agterm session link regex`, run with the `url regex` test it extends.
+
+Remove the patch when `GHOSTTY_REV` lets the embedder add a link pattern, and add the pattern there.
+
 ## Removing the last patch
 
 Remove `GHOSTTY_PATCH_DIR`, the digest calculation and apply loop in `setup.sh`, and either set

@@ -179,6 +179,27 @@ struct AppStoreMessagesTests {
         #expect(f.store.messageRecipients().map(\.pane) == [f.session.paneIdentity])
     }
 
+    @Test func aRemoteSessionIsRefusedByNameAndAMissingLocalPaneIsNot() throws {
+        let f = try fixture()
+        let remote = try #require(f.store.addSession(toWorkspace: f.work.id, cwd: "/r", remoteHost: "buildbox"))
+        remote.surface = SpySurface(paneToken: remote.paneIdentity.uuidString)
+        let missing = UUID()
+
+        guard case .failure(let refused) = f.store.messagePane(session: remote.id, pane: .role(.left)) else {
+            Issue.record("a remote session resolved")
+            return
+        }
+        guard case .failure(let absent) = f.store.messagePane(session: f.session.id, pane: .id(missing)) else {
+            Issue.record("a missing pane resolved")
+            return
+        }
+
+        #expect(refused == MessagePaneError("session \(remote.id.uuidString) is a remote session: a local pane cannot message it",
+                                            detail: "remote session"))
+        #expect(absent == MessagePaneError("pane \(missing.uuidString) is not a live pane of session \(f.session.id.uuidString)"))
+        #expect(try f.store.messagePane(session: f.session.id, pane: .role(.left)).get().pane == f.session.paneIdentity)
+    }
+
     @Test func broadcastListsEveryLivePaneOrOneWorkspacesPanes() throws {
         let f = try fixture(split: true, scratch: true)
         let elsewhere = try #require(f.store.addSession(toWorkspace: f.store.workspaces[1].id, cwd: "/e"))
@@ -207,6 +228,23 @@ struct AppStoreMessagesTests {
                                                                                 from: "S:Q", messageID: id.uuidString))])
     }
 
+    @Test func aServerMessageEmitsItsEventOnTheRowItArrivedFor() throws {
+        let drafts = DraftCollector()
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
+        let store = AppStore(persistence: PersistenceStore(directory: dir), controlEventSink: { drafts.items.append($0) })
+        let work = store.addWorkspace(name: "work")
+        let row = try #require(store.addSession(toWorkspace: work.id, cwd: "/r", remoteHost: "buildbox"))
+        let message = PresentationMessage(pane: UUID(), from: "S:Q", messageID: UUID())
+        drafts.items.removeAll()
+
+        store.emitRemoteMessage(message, forSession: row.id)
+        store.emitRemoteMessage(message, forSession: UUID())
+
+        #expect(drafts.items == [ControlEventDraft(kind: .message, workspace: work.id.uuidString, session: row.id.uuidString,
+                                                   payload: ControlEventPayload(name: row.displayName, paneID: message.pane.uuidString,
+                                                                                from: "S:Q", messageID: message.messageID.uuidString))])
+    }
+
     @Test func theTreeReportsAPanesPendingCountAndOmitsZero() throws {
         let f = try fixture(split: true)
         let split = try #require(f.session.splitPaneIdentity)
@@ -220,4 +258,48 @@ struct AppStoreMessagesTests {
         MessageBus.shared.dispose(pane: f.session.paneIdentity)
         MessageBus.shared.dispose(pane: split)
     }
+
+    @Test func presentationMailCountsEachLocalPaneByIdentityAndOmitsZero() throws {
+        let f = try fixture(split: true)
+        let split = try #require(f.session.splitPaneIdentity)
+        let scratch = UUID()
+        f.session.scratchDaemon = Session.ScratchDaemon(identity: scratch, shown: false)
+        try deliver(to: [f.session.paneIdentity, f.session.paneIdentity, scratch])
+
+        let mail = f.store.presentationMail(forSession: f.session.id)
+
+        #expect(mail == PresentationMail(panes: [f.session.paneIdentity.uuidString: 2, scratch.uuidString: 1]))
+        #expect(mail?.panes[split.uuidString] == nil)
+        #expect(f.store.presentationSnapshot(forSession: f.session.id).mail == mail)
+        disposeMailboxes([f.session.paneIdentity, scratch])
+    }
+
+    @Test func presentationMailIsEmptyForAQuietSessionAndNilForOneThisStoreDoesNotHost() throws {
+        let f = try fixture()
+        let remote = try #require(f.store.addSession(toWorkspace: f.work.id, cwd: "/r", remoteHost: "buildbox"))
+        try deliver(to: [remote.paneIdentity])
+
+        #expect(f.store.presentationMail(forSession: f.session.id) == PresentationMail(panes: [:]))
+        #expect(f.store.presentationMail(forSession: remote.id) == nil)
+        #expect(f.store.presentationMail(forSession: UUID()) == nil)
+        disposeMailboxes([remote.paneIdentity])
+    }
+
+    @Test func publishPresentationMailReachesTheSessionsViewers() throws {
+        let f = try fixture()
+        let hub = PresentationHub(staleTimeout: 30)
+        f.store.presentationHub = hub
+        let sink = PresentationHubTests.Sink()
+        try hub.subscribe(session: f.session.id, hello: PresentationHubTests.hello, sink: sink) {
+            f.store.presentationSnapshot(forSession: f.session.id)
+        }
+        try deliver(to: [f.session.paneIdentity])
+
+        f.store.publishPresentationMail(forSession: f.session.id)
+
+        #expect(sink.bodies.last == .mail(PresentationMail(panes: [f.session.paneIdentity.uuidString: 1])))
+        disposeMailboxes([f.session.paneIdentity])
+    }
+
+    private func disposeMailboxes(_ panes: [UUID]) { panes.forEach { MessageBus.shared.dispose(pane: $0) } }
 }

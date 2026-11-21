@@ -33,13 +33,43 @@ struct ControlProtocolTests {
         let wrap = ControlRequest(cmd: .sessionOverlayWrap, args: ControlArgs(mode: "on", pane: "right"))
         #expect(try roundTrip(wrap) == wrap)
         #expect(Command.sessionOverlayWrap.rawValue == "session.overlay.wrap")
+        let expand = ControlRequest(cmd: .sessionOverlayExpand, args: ControlArgs(mode: "off", pane: "left"))
+        #expect(try roundTrip(expand) == expand)
+        #expect(Command.sessionOverlayExpand.rawValue == "session.overlay.expand")
         let changes = ControlRequest(cmd: .sessionOverlayChanges, args: ControlArgs(pane: "right", to: "prev"))
         #expect(try roundTrip(changes) == changes)
         #expect(Command.sessionOverlayChanges.rawValue == "session.overlay.changes")
+        let files = ControlRequest(cmd: .sessionOverlayFiles, args: ControlArgs(pane: "right", to: "src/b.go"))
+        #expect(try roundTrip(files) == files)
+        #expect(Command.sessionOverlayFiles.rawValue == "session.overlay.files")
 
         let plain = String(data: try JSONEncoder().encode(ControlArgs(textFile: "/tmp/a.txt")), encoding: .utf8) ?? ""
         #expect(!plain.contains("tail"))
         #expect(!plain.contains("followFile"))
+    }
+
+    @Test func terminateAndThePinnedKillKeepTheirWireNames() {
+        #expect(Command.sessionTerminate.rawValue == "session.terminate")
+        #expect(Command.zmxKillPane.rawValue == "zmx.kill.pane")
+    }
+
+    @Test func closeRecentIDRoundTripsAndIsOmittedWhenNil() throws {
+        let response = ControlResponse(ok: true, result: ControlResult(id: "s1", closed: ["s1"], recentID: "r1"))
+        #expect(try roundTrip(response) == response)
+        #expect(!String(decoding: try JSONEncoder().encode(ControlResult(id: "s1", closed: ["s1"])), as: UTF8.self).contains("recentID"))
+    }
+
+    @Test func catalogViewersRoundTripOnTheTreeAndWindowNodeAndAreOmittedAtNone() throws {
+        var tree = ControlTree(workspaces: [])
+        var node = ControlWindowNode(id: "w1", name: "w", open: true, active: true)
+        let bare = (String(decoding: try JSONEncoder().encode(tree), as: UTF8.self),
+                    String(decoding: try JSONEncoder().encode(node), as: UTF8.self))
+        tree.catalogViewers = 2
+        node.catalogViewers = 2
+
+        #expect(!bare.0.contains("catalogViewers") && !bare.1.contains("catalogViewers"))
+        #expect(try JSONDecoder().decode(ControlTree.self, from: JSONEncoder().encode(tree)).catalogViewers == 2)
+        #expect(try JSONDecoder().decode(ControlWindowNode.self, from: JSONEncoder().encode(node)).catalogViewers == 2)
     }
 
     @Test func treeRequestRoundTrips() throws {

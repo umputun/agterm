@@ -1,12 +1,25 @@
 import agtermCore
 import Foundation
 
+/// RestartFollow is one restart's wait for its new shell, read by the reply and settled by the watch that outlives it.
+@MainActor
+final class RestartFollow {
+    let respawns: Int
+    let deadline: ContinuousClock.Instant
+    var leader: pid_t?
+    var confirmedAt: ContinuousClock.Instant?
+    var ended = false
+
+    init(respawns: Int, deadline: ContinuousClock.Instant) {
+        self.respawns = respawns
+        self.deadline = deadline
+    }
+}
+
 /// `session.restart`: ends a live pane's daemon and builds the pane a new surface whose daemon runs the
 /// caller's line, the way a `session.new --command` pane is created, or the pane's foreground program again. `.claude/rules/control-api.md` owns
 /// the contract.
 extension ControlServer {
-    private static let restartWait: Duration = .seconds(10)
-
     private struct RestartTarget {
         let session: Session
         let view: GhosttySurfaceView
@@ -50,8 +63,11 @@ extension ControlServer {
             return Self.restartFailure("the process table cannot be read, so the old program could not be tracked; "
                 + "nothing was changed")
         }
+        holdOriginRestart(resolved.identity)
+        var heldByFollow = false
+        defer { if !heldByFollow { releaseOriginRestart(resolved.identity) } }
         switch client.killConfirmed(name: resolved.daemon) {
-        case .killed: break
+        case .killed: restartFollows[resolved.identity] = nil
         case .staleSocket: return Self.restartFailure("\(resolved.daemon) did not confirm the kill; nothing was started")
         case .failed(let reason): return Self.restartFailure("could not end the pane's shell: \(reason); nothing was started")
         }
@@ -98,9 +114,10 @@ extension ControlServer {
                 + "created; the pane was closed")
         }
 
-        guard let newPid = await shell(daemon: resolved.daemon, otherThan: oldPid, client: client,
-                                       within: Self.restartWait) else {
-            return Self.restartFailure("the old shell ended (pid \(oldPid)) and no new one was observed")
+        heldByFollow = true
+        guard let newPid = await follow(session, identity: resolved.identity, daemon: resolved.daemon, oldPid: oldPid) else {
+            return Self.restartFailure("the old shell ended (pid \(oldPid)) and the replacement was requested but could not be "
+                + "verified in time")
         }
         let receipt = ControlRestartReceipt(paneID: resolved.identity.uuidString, oldPid: oldPid, newPid: newPid,
                                             replayedArgv: replay?.argv)
@@ -108,6 +125,47 @@ extension ControlServer {
         return ControlResponse(ok: true, result: ControlResult(
             id: session.id.uuidString, text: "restarted \(pane.rawValue) pane: shell \(oldPid) -> \(newPid)\(replayed)",
             pane: pane.rawValue, restart: receipt))
+    }
+
+    /// follow waits for `daemon`'s new shell, taking over the pane's restart hold: up to the reply's wait here, and
+    /// up to the follow window in `watch`, which outlives the reply. Nil unless the shell was seen in time.
+    private func follow(_ session: Session, identity: UUID, daemon: String, oldPid: pid_t) async -> pid_t? {
+        let launched = ContinuousClock.now
+        let entry = RestartFollow(respawns: session.primaryRespawns, deadline: launched + restartWaits.follow)
+        restartFollows[identity] = entry
+        Task { await watch(entry, session: session, identity: identity, daemon: daemon, oldPid: oldPid) }
+        let deadline = launched + restartWaits.shell
+        while entry.confirmedAt == nil, !entry.ended, ContinuousClock.now < deadline {
+            try? await Task.sleep(for: restartWaits.poll)
+        }
+        guard let confirmedAt = entry.confirmedAt, confirmedAt <= deadline else { return nil }
+        return entry.leader
+    }
+
+    /// watch publishes the respawn once a new shell runs under `daemon`, then releases the hold. It gives up silently
+    /// when the window ends, the pane closes past undo or respawns, or a later restart's kill takes the pane; an
+    /// attach-only lead change keeps the pane and its daemon, so it keeps the watch.
+    private func watch(_ entry: RestartFollow, session: Session, identity: UUID, daemon: String, oldPid: pid_t) async {
+        defer {
+            entry.ended = true
+            releaseOriginRestart(identity)
+            if restartFollows[identity] === entry { restartFollows[identity] = nil }
+        }
+        guard let lookup = restartLeader else { return }
+        while ContinuousClock.now < entry.deadline {
+            let pid = await Task.detached { lookup(daemon) }.value
+            guard ContinuousClock.now < entry.deadline, restartFollows[identity] === entry,
+                  heldSession(session.id) === session,
+                  session.paneRole(forIdentity: identity) != nil, session.primaryRespawns == entry.respawns else { return }
+            if let pid, pid != oldPid {
+                entry.leader = pid
+                entry.confirmedAt = .now
+                originPaneConfirmed(identity)
+                publishRespawn(session: session.id, daemon: daemon)
+                return
+            }
+            try? await Task.sleep(for: restartWaits.poll)
+        }
     }
 
     private func replayLaunch(of view: GhosttySurfaceView, leader: pid_t,

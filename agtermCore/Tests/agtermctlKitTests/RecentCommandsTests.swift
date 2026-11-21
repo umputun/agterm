@@ -17,9 +17,24 @@ struct RecentCommandsTests {
         #expect(try request(["recent", "clear"]) == ControlRequest(cmd: .recentClear))
     }
 
-    @Test(arguments: ["list", "clear"])
-    func listAndClearRejectAWindowSelector(_ sub: String) {
-        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["recent", sub, "--window", "w1"]) }
+    @Test func listAndClearCarryAWindow() throws {
+        #expect(try request(["recent", "list", "--window", "w1"]) == ControlRequest(cmd: .recentList, args: ControlArgs(window: "w1")))
+        #expect(try request(["recent", "clear", "--window", "w1"]) == ControlRequest(cmd: .recentClear, args: ControlArgs(window: "w1")))
+    }
+
+    @Test func clearCarriesAnOperationIDForAMacWindow() throws {
+        var args = ControlArgs(window: "w1")
+        args.opID = "op-1"
+        args.epoch = "e1"
+        #expect(try request(["recent", "clear", "--window", "w1", "--op-id", "op-1", "--epoch", "e1"])
+            == ControlRequest(cmd: .recentClear, args: args))
+    }
+
+    @Test func undoCarriesTheUndoIDAndWindow() throws {
+        #expect(try request(["session", "undo", "--target", "u1"]) == ControlRequest(cmd: .sessionUndo, target: "u1"))
+        #expect(try request(["session", "undo", "--target", "u1", "--window", "w1"])
+            == ControlRequest(cmd: .sessionUndo, target: "u1", args: ControlArgs(window: "w1")))
+        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["session", "undo"]) }
     }
 
     @Test func openWithoutAnIdAsksForTheNewestEntry() throws {

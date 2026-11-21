@@ -46,6 +46,28 @@ final class ControlServerRemoteCompanionsTests: XCTestCase {
         }
     }
 
+    // a dash-leading value sent as its own word made the origin exit 64, which read as a too-old agterm
+    func testCompanionValuesReachTheOriginJoinedToTheirFlagsAndAnEmptyOneAsItsOwnWord() {
+        let options = CompanionOptions(cwd: "/srv/-build", command: "-v", name: "-label", wait: true)
+        XCTAssertEqual(RemoteCompanionRequest.terminal(options).arguments(originSession: "origin-1"),
+                       ["session", "new", "--parent", "origin-1", "--no-select", "--cwd=/srv/-build", "--command=-v", "--wait", "--name=-label"])
+        XCTAssertEqual(RemoteCompanionRequest.terminal(CompanionOptions(name: "")).arguments(originSession: "origin-1"),
+                       ["session", "new", "--parent", "origin-1", "--no-select", "--name", ""])
+    }
+
+    func testAnExplicitlyCreatedCompanionClaimsTheLeadWhereverTheOriginListsIt() async throws {
+        let elsewhere = session(created).replacingOccurrences(of: #""cwd""#, with: #""parent":"origin-9","cwd""#)
+        let runner = ScriptedRunner([origin, reply(id: created), tree(sessions: elsewhere)])
+        let (server, store, row) = try makeServer(runner)
+
+        let reply = await server.createCompanion(row.id.uuidString, options: CompanionOptions(), window: nil)
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        let companion = try XCTUnwrap(reply.result?.id.flatMap(UUID.init(uuidString:)).flatMap(store.session(withID:)))
+        XCTAssertEqual(companion.parentID, row.id)
+        XCTAssertEqual(ZmxLeadBook.shared.states[companion.paneIdentity]?.attachment.claim, true)
+    }
+
     func testDuplicateAsCompanionOnARemoteRowAsksTheOriginToDuplicate() async throws {
         let runner = ScriptedRunner([origin, reply(id: created), tree(sessions: session(created))])
         let (server, store, row) = try makeServer(runner)
@@ -92,6 +114,7 @@ final class ControlServerRemoteCompanionsTests: XCTestCase {
         let (pageServer, _, _) = try makeServer(pages, store: store, row: row)
         let endpoint = ControlZmxEndpoint(executable: "/Applications/agterm.app/zmx", socketDirectory: "/tmp/agterm-zmx-abc")
         let page = await pageServer.attachRemotePage(created, origin: RemoteBinding.Origin(host: "buildbox", endpoint: endpoint, sessionName: "c"),
+                                                     presentation: .init(version: nil, headless: false),
                                                      at: .companion(of: row.id), select: false)
         XCTAssertEqual(page.error, "the agterm on buildbox is too old for page companions")
     }
@@ -158,6 +181,24 @@ final class ControlServerRemoteCompanionsTests: XCTestCase {
         XCTAssertNil(store.workspaces.flatMap(\.sessions).first { $0.parentID == row.id })
     }
 
+    func testAParentMovedUnderAnotherDuringTheWaitAttachesTheCompanionInItsNewGroup() async throws {
+        let runner = ScriptedRunner([origin, reply(id: created), tree(sessions: session(created))])
+        let (server, store, row) = try makeServer(runner)
+        let workspace = try XCTUnwrap(store.currentWorkspaceID)
+        let destination = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: NSHomeDirectory(), remoteHost: "buildbox"))
+        store.bindRemote(RemoteBinding(remoteSessionID: "origin-2", daemonsByLocalPane: [:], presentationVersion: nil), forSession: destination.id)
+        runner.beforeCall = { index in
+            if index == 2 { await MainActor.run { store.nest(row.id, under: destination.id) } }
+        }
+
+        let reply = await server.createCompanion(row.id.uuidString, options: CompanionOptions(), window: nil)
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        let companion = try XCTUnwrap(reply.result?.id.flatMap(UUID.init(uuidString:)).flatMap(store.session(withID:)))
+        XCTAssertEqual(row.parentID, destination.id)
+        XCTAssertEqual(companion.parentID, destination.id)
+    }
+
     func testAnAttachFailureAfterCreationNamesTheCreatedCompanion() async throws {
         let unaddressable = tree(sessions: #"{"id":"\#(created)","name":"c","windowID":"w1","windowName":"main","workspaceID":"ws1","#
                                  + #""workspaceName":"work","cwd":"/repo","panes":[{"pane":"middle","daemon":"agterm-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa3"}]}"#)
@@ -212,6 +253,25 @@ final class ControlServerRemoteCompanionsTests: XCTestCase {
         let local = try XCTUnwrap(reply.result?.pageID.flatMap(UUID.init(uuidString:)))
         XCTAssertEqual(local, page.htmlOverlay?.id, "a --block caller polls the view's own page")
         XCTAssertEqual(HtmlPageOutcomes.shared.outcome(for: local)?.outcome, .pending)
+    }
+
+    func testAPageHandedOverAfterItsParentJoinedAnotherGroupLandsInThatGroup() async throws {
+        let runner = ScriptedRunner([pageAttach(created)])
+        let (server, store, row) = try makeServer(runner)
+        server.pageLauncher = FakePageLauncher()
+        let workspace = try XCTUnwrap(store.workspace(forSession: row.id))
+        let holder = try XCTUnwrap(store.addSession(toWorkspace: workspace.id, cwd: "/srv", remoteHost: "buildbox"))
+        runner.beforeCall = { index in
+            if index == 0 { await MainActor.run { store.nest(row.id, under: holder.id) } }
+        }
+        let endpoint = ControlZmxEndpoint(executable: "/Applications/agterm.app/zmx", socketDirectory: "/tmp/agterm-zmx-abc")
+
+        let reply = await server.attachRemotePage(created, origin: RemoteBinding.Origin(host: "buildbox", endpoint: endpoint, sessionName: "c"),
+                                                  presentation: .init(version: nil, headless: false),
+                                                  at: .companion(of: row.id), select: false)
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        XCTAssertEqual(store.companions(of: holder.id).filter { $0.content == .page }.count, 1)
     }
 
     // a --block caller on a remote page companion had no outcome to read once the page ended there
@@ -377,6 +437,7 @@ final class ControlServerRemoteCompanionsTests: XCTestCase {
                                    identity: AppIdentity(version: "9.9.9", commit: "testsha"), remoteRunner: runner,
                                    socketPath: stateDir.appendingPathComponent("control-\(UUID().uuidString).sock").path)
         server.remoteCompanionPause = {}
+        server.remoteTransport = StreamTransport()
         if let store, let row { return (server, store, row) }
         let active = try XCTUnwrap(library.activeStore)
         let workspace = try XCTUnwrap(active.currentWorkspaceID)
@@ -405,9 +466,35 @@ final class ControlServerRemoteCompanionsTests: XCTestCase {
             + #""cwd":"/repo","panes":[{"pane":"left","daemon":"agterm-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa3"}]}"#
     }
 
-    private func tree(sessions: String) -> RemoteCommandResult {
+    private func tree(sessions: String, headless: Bool = false) -> RemoteCommandResult {
         RemoteCommandResult(status: 0, stdout: #"{"ok":true,"result":{"remote":{"#
             + #""endpoint":{"executable":"/Applications/agterm.app/zmx","socketDirectory":"/tmp/agterm-zmx-abc"},"#
+            + (headless ? #""presentation":1,"headless":true,"# : "")
             + #""sessions":[\#(sessions)]}}}"#, stderr: "")
+    }
+
+    @MainActor
+    func testAPageAttachedFromAServerStreamsItsPresentationAndOneFromAMacFollowsOnlyItsMembership() async throws {
+        let root = #"{"id":"page-root","name":"dash","windowID":"w1","windowName":"main","workspaceID":"ws1","#
+            + #""workspaceName":"work","cwd":"/srv","panes":[],"content":"page"}"#
+        for headless in [true, false] {
+            let listing = tree(sessions: root, headless: headless)
+            let (server, store, _) = try makeServer(ScriptedRunner([listing, pageAttach("page-root")]))
+            server.pageLauncher = FakePageLauncher()
+            let transport = StreamTransport()
+            server.remoteTransport = transport
+
+            let attached = await server.attachRemoteSession(host: "buildbox", session: "page-root", window: nil)
+
+            XCTAssertTrue(attached.ok, attached.error ?? "")
+            let rowID = try XCTUnwrap(attached.result?.id.flatMap(UUID.init(uuidString:)))
+            let binding = store.session(withID: rowID)?.remotePresentation?.binding
+            XCTAssertEqual(binding?.originHeadless, headless)
+            XCTAssertEqual(binding?.presentationVersion, headless ? 1 : nil)
+            XCTAssertEqual(transport.lines.count, 1, "headless \(headless)")
+            XCTAssertEqual(transport.hellos.map(\.kinds), [headless ? PresentationHub.supportedKinds : RemotePresentationClient.observerKinds],
+                           "headless \(headless)")
+            server.stopRemotePresentations()
+        }
     }
 }

@@ -89,9 +89,26 @@ To let the user choose, pipe the listing through the picker:
 ```bash
 s=$(agtermctl zmx tree studio.local --json |
   jq '[.result.remote.sessions[] | {id, label: .name,
-        subtitle: (.windowName + "/" + .workspaceName + "  " + .cwd)}]' |
+        subtitle: (.windowName + (if .workspaceRoot then "" else "/" + .workspaceName end) + "  " + .cwd)}]' |
   agtermctl pick --prompt "Attach which session?" | jq -r '.id // empty')
 [ -n "$s" ] && agtermctl zmx attach studio.local "$s"
+```
+
+To bring every session without a parent of the other Mac over at once, each into a local workspace named
+like its workspace there, and one among its top-level sessions among the top-level sessions here:
+
+```bash
+agtermctl zmx tree studio.local --json |
+  jq -c '.result.remote.sessions[] | select(.parent == null) | {id, ws: .workspaceName, root: (.workspaceRoot == true)}' |
+  while read -r row; do
+    id=$(jq -r .id <<<"$row")
+    if [ "$(jq -r .root <<<"$row")" = true ]; then
+      agtermctl zmx attach studio.local "$id" --companions --workspace root
+    else
+      agtermctl zmx attach studio.local "$id" --companions \
+        --workspace-name="$(jq -r .ws <<<"$row")" --create-workspace
+    fi
+  done
 ```
 
 The row is marked remote and carries `remoteHost` in the tree. Closing it ends only this side's connection,
@@ -814,9 +831,11 @@ Without `--pane` the status is treated as coming from the main (`left`) pane, so
 can be wiped by typing in the main pane and the reveal lands on the wrong surface.
 
 The tag also protects a block from the OTHER pane's agent: while the session is `blocked`, a status from a
-different pane that is not itself `blocked` is refused with `blocked status owned by pane <pane>`,
-so an agent reporting `active` after every tool call cannot erase its neighbour's request for input. With
-an agent in each pane, tag both or the second one's ordinary work looks like it comes from the first.
+different pane that is not itself `blocked` leaves the block shown, so an agent reporting `active` after every
+tool call cannot erase its neighbour's request for input. It keeps the row active while either pane works,
+too: one agent finishing leaves the row on the other's work, and `tree`'s `activePanes` says which panes are
+still working. With an agent in each pane, tag both or the second one's ordinary work looks like it comes
+from the first.
 
 ```bash
 # an agent working in the split pane; $AGT_PANE is set in a custom keymap command, else name it

@@ -70,6 +70,27 @@ public struct ControlKeymapCommand: Codable, Sendable, Equatable {
     }
 }
 
+/// One `open` line from `keymap.conf`: the selectors it still owns, its shell text and its line. The failure-panel
+/// fields are set only for a line with `--error-hud`.
+public struct ControlKeymapOpener: Codable, Sendable, Equatable {
+    public var selectors: [String]
+    public var command: String
+    public var line: Int
+    public var errorHud: Bool?
+    public var errorPosition: HudPosition?
+    public var errorPane: OverlayPane?
+
+    public init(selectors: [String], command: String, line: Int, errorHud: Bool? = nil, errorPosition: HudPosition? = nil,
+                errorPane: OverlayPane? = nil) {
+        self.selectors = selectors
+        self.command = command
+        self.line = line
+        self.errorHud = errorHud
+        self.errorPosition = errorPosition
+        self.errorPane = errorPane
+    }
+}
+
 /// A `keymap.conf` parse problem, the same pair the Key Mapping settings tab shows.
 public struct ControlKeymapDiagnostic: Codable, Sendable, Equatable {
     /// 1-based. `0` is the sentinel for a whole-file or cross-section problem (a chord collision between
@@ -121,15 +142,19 @@ public struct ControlKeymap: Codable, Sendable, Equatable {
     public var path: String
     public var actions: [ControlKeymapAction]
     public var commands: [ControlKeymapCommand]
+    /// The `open` rules; omitted when the file has none.
+    public var openers: [ControlKeymapOpener]?
     public var diagnostics: [ControlKeymapDiagnostic]
     /// Live menu key equivalents; omitted when the caller could not read the menu bar.
     public var menu: [ControlKeymapMenuItem]?
 
     public init(path: String, actions: [ControlKeymapAction], commands: [ControlKeymapCommand],
-                diagnostics: [ControlKeymapDiagnostic], menu: [ControlKeymapMenuItem]? = nil) {
+                diagnostics: [ControlKeymapDiagnostic], menu: [ControlKeymapMenuItem]? = nil,
+                openers: [ControlKeymapOpener]? = nil) {
         self.path = path
         self.actions = actions
         self.commands = commands
+        self.openers = openers
         self.diagnostics = diagnostics
         self.menu = menu
     }
@@ -158,8 +183,14 @@ public extension ControlKeymap {
                                 errorHud: $0.errorHud, errorPosition: $0.errorPosition, errorPane: $0.errorPane,
                                 repeats: $0.repeats)
         }
+        let openers = keymap.openers.map {
+            let panel = $0.command.errorHud
+            return ControlKeymapOpener(selectors: $0.selectors.map(\.text), command: $0.command.command, line: $0.line,
+                                       errorHud: panel ? true : nil, errorPosition: panel ? $0.command.errorPosition : nil,
+                                       errorPane: panel ? $0.command.errorPane : nil)
+        }
         return ControlKeymap(path: path, actions: actions, commands: commands,
                              diagnostics: diagnostics.map { ControlKeymapDiagnostic(line: $0.line, message: $0.message) },
-                             menu: menu)
+                             menu: menu, openers: openers.isEmpty ? nil : openers)
     }
 }

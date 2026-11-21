@@ -37,7 +37,7 @@ public struct OverlayJob: Equatable, Sendable {
     public let session: UUID
     /// The pane the overlay covers, nil for the session-wide slot.
     public let pane: OverlayPane?
-    /// The presenter generation the job was handed to, nil while it waits for one.
+    /// owner is the token of the viewer the job was handed to, nil while it waits for one.
     public internal(set) var owner: Int?
     public let context: OverlayLaunchContext
     public internal(set) var state: OverlayJobState

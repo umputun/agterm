@@ -179,6 +179,11 @@ extension ControlServer {
     /// attach, handing back a fresh shell wearing the session's name. Everything that can fail is checked
     /// before the model is touched, so a refusal leaves no half-built row behind.
     func attachRemoteSession(host: String, session: String, window: String?) async -> ControlResponse {
+        await attachRemoteSession(host: host, session: session, window: window, workspace: nil)
+    }
+
+    func attachRemoteSession(host: String, session: String, window: String?,
+                             workspace target: ControlAttachWorkspace?) async -> ControlResponse {
         let discovery = await remoteTree(host: host)
         guard discovery.ok, let tree = discovery.result?.remote else { return discovery }
         // by id only: remote session names are mutable and deliberately non-unique across workspaces, and
@@ -191,17 +196,61 @@ extension ControlServer {
         case .failure(let response): return response
         case .success(let (_, resolved)): store = resolved
         }
-        if remote.content == "page" { return await attachRemotePageRow(remote, tree: tree, host: host, in: store) }
+        if remote.content == "page" { return await attachRemotePageRow(remote, tree: tree, host: host, in: store, workspace: target) }
         // a companion joins its parent's group when exactly one row here shows that parent, else it stands alone
         let parents = remote.parent == nil ? [] : attachedParentRows(of: remote, tree: tree, host: host, in: store)
         if parents.count == 1, let parent = parents.first, let workspace = store.workspace(forSession: parent.id)?.id {
             return attach(remote, from: tree, host: host,
                           placement: RemotePlacement(store: store, workspace: workspace, parent: parent.id))
         }
-        guard let workspace = store.currentWorkspaceID else {
-            return ControlResponse(ok: false, error: "no window to attach into")
+        switch attachWorkspace(target, in: store) {
+        case .failure(let response): return response
+        case .success(let destination):
+            // created only now: discovery and lookup can no longer refuse, only a payload agterm cannot address
+            guard let workspace = destination.workspace(in: store) else { return Self.workspaceNotCreated }
+            return attach(remote, from: tree, host: host, placement: RemotePlacement(store: store, workspace: workspace))
         }
-        return attach(remote, from: tree, host: host, placement: RemotePlacement(store: store, workspace: workspace))
+    }
+
+    static let workspaceNotCreated = ControlResponse(ok: false, error: "the workspace to attach into could not be created")
+
+    /// AttachDestination is the workspace an attach resolved: one that exists, or a name `--create-workspace` adds
+    /// when the row is placed, so a refusal before that adds none.
+    enum AttachDestination {
+        case existing(UUID)
+        case create(String)
+
+        /// workspace is the destination's id in `store`, creating a named one now; nil when the name sanitizes to blank.
+        @MainActor func workspace(in store: AppStore) -> UUID? {
+            switch self {
+            case .existing(let id): return id
+            case .create(let name): return store.ensureWorkspace(named: name)?.id
+            }
+        }
+    }
+
+    /// attachWorkspace is where a row that stands alone lands in `store`: `target`, else the current workspace.
+    func attachWorkspace(_ target: ControlAttachWorkspace?, in store: AppStore) -> ControlTargetResolver.Resolution<AttachDestination> {
+        switch target {
+        case nil:
+            guard let id = store.currentWorkspaceID else {
+                return .failure(ControlResponse(ok: false, error: "no window to attach into"))
+            }
+            return .success(.existing(id))
+        case .id(let raw):
+            let resolution = store.resolveWorkspaceTarget(raw)
+            guard case .resolved(let id) = resolution else {
+                let message = ControlResolve.errorMessage(noun: "workspace", target: raw, resolution: resolution)
+                return .failure(ControlResponse(ok: false, error: message))
+            }
+            return .success(.existing(id))
+        case .name(let name, let create):
+            if let found = store.workspace(named: name) { return .success(.existing(found.id)) }
+            guard create else {
+                return .failure(ControlResponse(ok: false, error: "no workspace named \"\(name)\" (pass --create-workspace to add it)"))
+            }
+            return .success(.create(name))
+        }
     }
 
     /// RemotePlacement is where an attached row goes: a workspace, or under `parent`, a remote row of the same host.
@@ -210,6 +259,10 @@ extension ControlServer {
         let workspace: UUID
         var parent: UUID?
         var select = true
+        /// index is the row's place in the workspace; nil appends it.
+        var index: Int?
+        /// claimLead is the user asking for the session here; a row the origin's membership brought in takes no lead.
+        var claimLead = true
     }
 
     /// attach creates the local row for `remote`, one session of `tree`, and binds its panes. Everything that can
@@ -226,8 +279,7 @@ extension ControlServer {
         let right = byRole[.right]
         let primary: String
         let split: String?
-        // attaching is the user asking for the session HERE, so every pane claims the lead at once
-        let leads = (left: ZmxLeadAttachment(claim: true), right: ZmxLeadAttachment(claim: true))
+        let leads = (left: ZmxLeadAttachment(claim: placement.claimLead), right: ZmxLeadAttachment(claim: placement.claimLead))
         do {
             primary = try RemoteSession.attachPaneCommand(host: host, endpoint: tree.endpoint, daemon: left,
                                                           session: remote.name, pane: .left, lead: leads.left)
@@ -243,7 +295,7 @@ extension ControlServer {
         // path that exists on the far side may not exist on this Mac. The attached shell reports its real
         // cwd through the terminal stream anyway.
         guard let created = store.addSession(toWorkspace: placement.workspace, cwd: NSHomeDirectory(),
-                                             command: primary, name: remote.name, wait: true,
+                                             command: primary, name: remote.name, wait: true, at: placement.index,
                                              select: placement.select, remoteHost: host, remoteSessionID: remote.id,
                                              parentID: placement.parent) else {
             return ControlResponse(ok: false, error: "could not create the session")
@@ -267,7 +319,9 @@ extension ControlServer {
                                        presentationVersion: tree.presentation, origin: origin,
                                        originHeadless: tree.headless == true),
                          forSession: created.id)
-        // the row's created event fired inside `addSession`, before the binding existed
+        if let members = remote.companions { store.baselineCompanions(members.map(\.id), forSession: created.id) }
+        if let parent = remote.parent { library.markOriginCompanionsHandled([remote.id], parent: parent, host: host, endpoint: tree.endpoint) }
+        // the row's created event fired inside `addSession`, before the binding existed; seeded first, so no list beats it
         startRemotePresentation(for: created)
         // a FIXED target, never `focusActiveSession`: it follows `splitFocused`, which the new split's deck
         // re-render can clear from under it through `onFocusChange`.
@@ -316,7 +370,7 @@ extension ControlServer {
 
     /// Reports per daemon rather than a bare count: a stale-socket cleanup is not a kill, and a caller that
     /// cannot tell the two apart would believe a live unresponsive daemon had gone.
-    private func pruneReport(_ outcomes: [String: ZmxClient.KillOutcome]) -> String {
+    private func pruneReport(_ outcomes: [String: ZmxKillOutcome]) -> String {
         outcomes.keys.sorted().map { name in
             switch outcomes[name] {
             case .killed: return "killed \(name)"
@@ -335,6 +389,14 @@ extension ControlServer {
     /// Resolution runs against the INVENTORY rather than `ControlTargetResolver`, which searches open
     /// stores only: this command deliberately reaches closed and unindexed claims no window shows.
     func killZmxDaemon(target: String, window: String?, pane: ZmxPaneRole) -> ControlResponse {
+        killZmxDaemon(target: target, window: window, pane: pane, pinned: nil)
+    }
+
+    func killZmxPane(target: String, window: String?, pane: ZmxPaneRole, paneID: String) -> ControlResponse {
+        killZmxDaemon(target: target, window: window, pane: pane, pinned: paneID)
+    }
+
+    private func killZmxDaemon(target: String, window: String?, pane: ZmxPaneRole, pinned: String?) -> ControlResponse {
         guard let client = zmxClient else {
             return ControlResponse(ok: false, error: ControlZmxError.unavailable)
         }
@@ -373,6 +435,9 @@ extension ControlServer {
             return ControlResponse(ok: false, error: "no \(pane.rawValue) pane daemon for session \(target)")
         }
         if let refusal = ControlZmxError.killRefusal(row) {
+            return ControlResponse(ok: false, error: refusal)
+        }
+        if let pinned, let refusal = ZmxPaneRole.pinRefusal(pinned, identity: claim.paneIdentity, pane: pane) {
             return ControlResponse(ok: false, error: refusal)
         }
 

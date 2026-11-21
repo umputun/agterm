@@ -92,6 +92,8 @@ paths:
 - AppKit draws disclosure triangles from `NSAppearance`, not explicit tint. Pin outline appearance to
   aqua/darkAqua from perceived luminance of the sidebar-tinted theme background, using the 0.5 midpoint.
   Apply at creation and `.agtermAppearanceChanged`. Verify by eye.
+  A selected row's triangle sits on the pill instead, so `SidebarRowView` gives its button the side matching
+  the selected row text, and nil again on deselect.
 - Disable AppKit outline selection immediately after `.plain`, which otherwise restores it. Also clear
   outline/scroll backgrounds; `.plain` avoids source-list's roughly 10px top inset but installs opaque
   control background.
@@ -109,7 +111,8 @@ paths:
   `Contents/Resources/terminfo`. Never set `TERMINFO`; libghostty derives and overwrites it at spawn.
 - Sessions own surfaces. The eager detail deck mounts every session once in a ZStack and toggles only
   opacity, hit testing, and active state. Rehosting through identity changes invalidates Metal drawables.
-- `dismantleNSView` is a no-op. Free only through `destroySurface`. After reading overlay exit status,
+- `dismantleNSView` is a no-op. Free only through `destroySurface`, or `retireSurface` for a pane swapped out
+  while the app may be hidden (scripts/ghostty-patches 0003). After reading overlay exit status,
   nil every store-capturing callback to break the store/session/surface/closure cycle.
 - Create surfaces only with nonzero backing size; otherwise Metal stays blank. Defer through
   `pendingSurfaceCreation` until `setFrameSize`.
@@ -166,8 +169,24 @@ paths:
   container's own lookup.
 - File drop uses `insertPasted`/`ghostty_surface_text`, preserving bracketed-paste behavior. It may still
   submit a trailing newline when the program disables mode 2004. Do not reuse `inject`, which intentionally
-  translates newline/return into Return for `session.type`. `pasteboardText` remains shared with clipboard
-  paste, and `ShellEscape.path` keeps file paths one token; #96 newline escaping remains defense in depth.
+  translates newline/return into Return for `session.type`. `PasteOffer.urlText` is shared with the clipboard
+  read, and `ShellEscape.path` keeps file paths one token; #96 newline escaping remains defense in depth.
+- One seam pastes for ⌘V, Edit ▸ Paste, `session.paste` and a drop: `GhosttySurfaceView.paste(_:drop:)`, fed a
+  `PasteOffer` read synchronously from the pasteboard. `PasteOffer.route(onOrigin:)` decides; what needs no copy
+  takes the exact pre-seam call (`paste_from_clipboard`, or `insertPasted` for a drop), and files or an image are
+  copied by `PasteTransfer.shared.text`, which the app points at `ControlServer.pasteText`. `pasteRefusal` (a lead
+  cover, a copy in flight) is checked before the pasteboard is read, and a cover gained during the copy drops the
+  insert. `keyDown` sends exactly-Command ⌘V to the seam by the keymap's chord rule (`isPasteChord`, the produced
+  character through the Command table, per [[keymap]]), so a non-Latin layout's V position reaches it. On a Latin
+  alternative layout the V position types its own letter and falls to the bundled physical `super+key_v`, which
+  is libghostty's paste and copies no files to a remote pane.
+- `readClipboard` never copies: it runs inside a libghostty tick, and a copy needs ssh and a panel. For a file
+  offer outside the selection clipboard it answers one main turn later and hands a program on another host no
+  text, since the paths name this Mac's files; a ghostty.conf paste binding therefore pastes text only there.
+  Every other read completes synchronously as before.
+- `PasteBundle` is the wire format and `PasteStaging` the landing folder (`agterm/paste` in the user's caches,
+  0700, entries older than `retention` swept on each receive), both host-free so agterm-server stages the same
+  way. `agtermctl paste receive` on the origin reads the bundle from stdin and prints `PasteStaging.Reply`.
 - AX exposure (`axExposed` in `GhosttySurfaceView+Accessibility.swift`) rides on FOUR terms: `!viewOnly`,
   `deckVisible`, `surface != nil`, and `window?.isVisible`. Every one drives
   `postAccessibilityExposureChange` behind the `axPostedExposed` latch, so a new term owes a post site;

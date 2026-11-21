@@ -15,6 +15,26 @@ struct PresentationLayoutTests {
         #expect(layout.isValid)
     }
 
+    @Test func aLayoutCarriesTheOriginsLiveScratch() throws {
+        let primary = UUID()
+        let scratch = UUID()
+        let layout = PresentationLayout(panes: [primary], primary: primary, shown: false, scratch: scratch, scratchShown: true)
+
+        let decoded = try JSONDecoder().decode(PresentationLayout.self, from: JSONEncoder().encode(layout))
+
+        #expect(decoded == layout)
+        #expect(decoded.isValid)
+    }
+
+    @Test func aLayoutFromAnOlderOriginHasNoScratch() throws {
+        let primary = UUID()
+        let json = #"{"panes":["\#(primary.uuidString)"],"primary":"\#(primary.uuidString)","shown":false}"#
+
+        let decoded = try JSONDecoder().decode(PresentationLayout.self, from: Data(json.utf8))
+
+        #expect(decoded == PresentationLayout(panes: [primary], primary: primary, shown: false))
+    }
+
     @Test func invalidMembershipCannotBeApplied() {
         let first = UUID()
         let second = UUID()

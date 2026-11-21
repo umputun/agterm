@@ -25,9 +25,11 @@ final class TerminalInputSource {
     private var observers: [(center: NotificationCenter, token: NSObjectProtocol)] = []
 
     private init() {
-        // the quick terminal takes key without activating the app, so key-window changes are the edge to
-        // watch, never application activation.
-        observe(NotificationCenter.default, [NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification])
+        // activation edges too: a window can keep reporting key after agterm deactivates, so leaving the
+        // app must not wait for a resign-key notification.
+        observe(NotificationCenter.default, [NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification,
+                                             NSApplication.didBecomeActiveNotification,
+                                             NSApplication.didResignActiveNotification])
         observe(DistributedNotificationCenter.default(),
                 [NSNotification.Name(kTISNotifySelectedKeyboardInputSourceChanged as String),
                  NSNotification.Name(kTISNotifyEnabledKeyboardInputSourcesChanged as String)])
@@ -73,7 +75,9 @@ final class TerminalInputSource {
         guard !stopped, target != nil || lock.baseline != nil, let current = Self.currentID() else { return }
         let enabled = Set(Self.enabledSources().map(\.id))
         // nil at launch: the settings model applies the saved source before the application object exists.
-        let appFocused = (NSApp as NSApplication?)?.windows.contains(where: \.isKeyWindow) ?? false
+        // isActive also holds while the quick terminal panel is key over another app.
+        let app = NSApp as NSApplication?
+        let appFocused = (app?.isActive ?? false) && (app?.windows.contains(where: \.isKeyWindow) ?? false)
         guard let wanted = lock.reconcile(terminalFocused: appFocused, target: target,
                                           enabled: enabled, current: current) else { return }
         if !Self.select(wanted) { lock.selectionFailed() }

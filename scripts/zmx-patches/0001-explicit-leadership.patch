@@ -1,28 +1,30 @@
-diff -ruN zmx-orig/src/daemonize.zig zmx/src/daemonize.zig
---- zmx-orig/src/daemonize.zig	2026-09-20 18:03:09.000000000 -0500
-+++ zmx/src/daemonize.zig	2026-09-20 18:28:00.974096830 -0500
-@@ -71,6 +71,11 @@
-         _ = cross.c.putenv(@constCast("TERM=xterm-256color"));
+diff --git a/src/daemonize.zig b/src/daemonize.zig
+index b3bdfea..c872532 100644
+--- a/src/daemonize.zig
++++ b/src/daemonize.zig
+@@ -81,6 +81,11 @@ fn exec(sesh_name: []const u8, cmd: Cmd) !noreturn {
+         _ = cross.putenv(@constCast("TERM=xterm-256color"));
      }
  
 +    // the shell inherits the first attach client's environment, and a nested `zmx attach` run from
 +    // it must not opt in on the outer terminal's behalf or learn its nonce
-+    _ = cross.c.unsetenv("ZMX_MANAGED");
-+    _ = cross.c.unsetenv("ZMX_MANAGED_CLAIM");
++    _ = cross.unsetenv("ZMX_MANAGED");
++    _ = cross.unsetenv("ZMX_MANAGED_CLAIM");
 +
      const err = lib_posix.execvpeZ(cmd.file, cmd.argv_ptr, std.c.environ);
      std.log.err("execvpe failed: cmd={s} err={s}", .{ cmd.file, @errorName(err) });
      lib_posix.exit(1);
-diff -ruN zmx-orig/src/ipc.zig zmx/src/ipc.zig
---- zmx-orig/src/ipc.zig	2026-09-20 18:03:09.000000000 -0500
-+++ zmx/src/ipc.zig	2026-09-20 19:24:39.125329550 -0500
-@@ -26,6 +26,18 @@
-     EnvGet = 19,
-     EnvSet = 20,
-     EnvData = 21,
+diff --git a/src/ipc.zig b/src/ipc.zig
+index ad05c2b..77b17c8 100644
+--- a/src/ipc.zig
++++ b/src/ipc.zig
+@@ -31,6 +31,18 @@ pub const Tag = enum(u8) {
+     /// Scoped history: the active screen plus a bounded number of
+     /// preceding scrollback rows. Request payload is `Capture`.
+     Capture = 22,
 +    /// client -> daemon, before Init: this client takes part in explicit
 +    /// leadership. Payload is one `ManageFlags` byte.
-+    Manage = 22,
++    Manage = 26,
 +    /// daemon -> managed client: its role changed. Payload is a `RoleChange`.
 +    Role = 23,
 +    /// request: one `ScreenMode` byte.
@@ -32,13 +34,14 @@ diff -ruN zmx-orig/src/ipc.zig zmx/src/ipc.zig
 +    /// session's keyboard mode and queued without taking the lead.
 +    /// reply: one `TypeResult` byte. Accepted means queued, not executed.
 +    Type = 25,
+     Unsupported = 255,
      // Non-exhaustive: this enum comes off the wire via bytesToValue and
      // @enumFromInt, so out-of-range values are representable
-     // rather than UB. Switches must handle `_` (unknown tag).
-@@ -75,6 +87,50 @@
-     return .{ .rows = 24, .cols = 120 };
+@@ -98,6 +110,51 @@ pub fn getTerminalSize(fd: i32) Resize {
  }
  
+ pub const MAX_PAYLOAD_LEN: usize = 64 * 1024 * 1024;
++
 +pub const ManageFlags = packed struct(u8) {
 +    /// take the lead when this client's Init arrives, even from a live leader
 +    claim: bool = false,
@@ -86,17 +89,16 @@ diff -ruN zmx-orig/src/ipc.zig zmx/src/ipc.zig
  pub const MAX_CMD_LEN = 256;
  pub const MAX_CWD_LEN = 256;
  
-@@ -344,7 +400,8 @@
-         .{ Tag.Run, 9 },       .{ Tag.Ack, 10 },          .{ Tag.Switch, 11 },
-         .{ Tag.Write, 12 },    .{ Tag.TaskComplete, 13 }, .{ Tag.LabelGet, 14 },
+@@ -357,6 +414,8 @@ test "Tag wire values are frozen" {
          .{ Tag.LabelSet, 15 }, .{ Tag.LabelClear, 16 },   .{ Tag.LabelData, 17 },
--        .{ Tag.Send, 18 },
-+        .{ Tag.Send, 18 },     .{ Tag.Manage, 22 },       .{ Tag.Role, 23 },
-+        .{ Tag.Screen, 24 },   .{ Tag.Type, 25 },
-     }) |p| try std.testing.expectEqual(@as(u8, p[1]), @intFromEnum(p[0]));
+         .{ Tag.Send, 18 },     .{ Tag.EnvGet, 19 },       .{ Tag.EnvSet, 20 },
+         .{ Tag.EnvData, 21 },  .{ Tag.Capture, 22 },      .{ Tag.Unsupported, 255 },
++        .{ Tag.Role, 23 },     .{ Tag.Screen, 24 },       .{ Tag.Type, 25 },
++        .{ Tag.Manage, 26 },
+     }) |p| try std.testing.expectEqual(@as(u8, p[1]), @backingInt(p[0]));
  }
  
-@@ -379,6 +436,40 @@
+@@ -392,6 +451,41 @@ pub fn roundTripForTag(
      return error.Unexpected;
  }
  
@@ -127,6 +129,7 @@ diff -ruN zmx-orig/src/ipc.zig zmx/src/ipc.zig
 +        if (n == 0) return error.Unexpected;
 +
 +        while (sb.next()) |msg| {
++            if (msg.header.tag == .Unsupported) return error.Unsupported;
 +            if (msg.header.tag == expected_tag) {
 +                return alloc.dupe(u8, msg.payload) catch return error.Unexpected;
 +            }
@@ -134,21 +137,22 @@ diff -ruN zmx-orig/src/ipc.zig zmx/src/ipc.zig
 +    }
 +}
 +
- test "appendSizeMessage emits current and legacy encodings" {
-     const alloc = std.testing.allocator;
-     var list = try std.ArrayList(u8).initCapacity(alloc, 64);
-diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
---- zmx-orig/src/loop.zig	2026-09-20 18:03:09.000000000 -0500
-+++ zmx/src/loop.zig	2026-09-20 19:24:04.570664288 -0500
-@@ -6,6 +6,7 @@
- const cross = @import("cross.zig");
+ test "zeroed Info has no stack garbage in wire bytes" {
+     var info = std.mem.zeroes(Info);
+     info.clients_len = 3;
+diff --git a/src/loop.zig b/src/loop.zig
+index f5d6708..5927c5a 100644
+--- a/src/loop.zig
++++ b/src/loop.zig
+@@ -5,6 +5,7 @@ const util = @import("util.zig");
+ const cross = @import("cross");
  const socket = @import("socket.zig");
  const label = @import("label.zig");
 +const role = @import("role.zig");
  const lib_posix = @import("posix.zig");
  const Cfg = @import("cfg.zig");
  const signal = @import("signal.zig");
-@@ -45,6 +46,13 @@
+@@ -50,6 +51,13 @@ pub fn clientLoop(client_sock_fd: i32, env_str: []const u8) !ClientResult {
          try ipc.appendMessage(gpa, &sock_write_buf, .EnvSet, env_str);
      }
  
@@ -161,8 +165,8 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 +
      // Send init message with terminal size (buffered)
      const size = ipc.getTerminalSize(lib_posix.STDOUT_FILENO);
-     try ipc.appendSizeMessage(gpa, &sock_write_buf, .Init, size);
-@@ -99,7 +107,9 @@
+     try ipc.appendMessage(gpa, &sock_write_buf, .Init, std.mem.asBytes(&size));
+@@ -104,7 +112,9 @@ pub fn clientLoop(client_sock_fd: i32, env_str: []const u8) !ClientResult {
              });
          }
  
@@ -172,8 +176,8 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 +        if (relay) |*r| try r.expire(gpa, &stdout_buf, role.nowMs());
  
          if (poll_fds.items[2].revents & lib_posix.POLL.IN != 0) {
-             signal.drainSignalPipe();
-@@ -152,10 +162,18 @@
+             try signal.drainSignalPipe();
+@@ -162,10 +172,18 @@ pub fn clientLoop(client_sock_fd: i32, env_str: []const u8) !ClientResult {
              while (read_buf.next()) |msg| {
                  switch (msg.header.tag) {
                      .Output => {
@@ -193,7 +197,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
                      .Resize => {
                          // daemon is asking for the client's window size usually in response
                          // to this client being set as leader.
-@@ -354,6 +372,7 @@
+@@ -369,6 +387,7 @@ fn daemonLoop(daemon: *Daemon, gpa: std.mem.Allocator, io: std.Io, server_sock_f
                      vt_stream.nextSlice(buf[0..n]);
                      daemon.setPwd(&term);
                      daemon.has_pty_output = true;
@@ -201,19 +205,19 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
  
                      // When no real terminal client has attached yet, respond to
                      // terminal queries (e.g. DA1/DA2) on behalf of the terminal.
-@@ -491,7 +510,10 @@
-                         .EnvSet => try daemon.handleEnvSet(gpa, client, msg.payload),
+@@ -507,7 +526,10 @@ fn daemonLoop(daemon: *Daemon, gpa: std.mem.Allocator, io: std.Io, server_sock_f
                          .History => try daemon.handleHistory(gpa, client, &term, msg.payload),
+                         .Capture => try daemon.handleCapture(gpa, client, &term, msg.payload),
                          .Run => try daemon.handleRun(gpa, io, client, msg.payload),
--                        .Ack, .TaskComplete, .LabelData, .EnvData => {},
+-                        .Ack, .TaskComplete, .LabelData, .EnvData, .Unsupported => {},
 +                        .Manage => daemon.handleManage(client, msg.payload),
 +                        .Type => try daemon.handleType(gpa, client, &term, msg.payload),
 +                        .Screen => try daemon.handleScreen(gpa, client, &term, msg.payload),
-+                        .Ack, .TaskComplete, .LabelData, .EnvData, .Role => {},
++                        .Ack, .TaskComplete, .LabelData, .EnvData, .Role, .Unsupported => {},
                          .Write => try daemon.handleWrite(gpa, client, msg.payload),
-                         _ => std.log.warn(
-                             "ignoring unknown IPC tag={d}",
-@@ -545,6 +567,10 @@
+                         _ => {
+                             std.log.warn(
+@@ -571,6 +593,10 @@ pub const Client = struct {
      socket_fd: i32,
      has_pending_output: bool = false,
      is_terminal: bool = false, // sent .Init (a `zmx attach`), not a run/send/tail client
@@ -224,7 +228,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
      read_buf: ipc.SocketBuffer,
      write_buf: std.ArrayList(u8),
      env_str: ?[]u8 = null,
-@@ -581,6 +607,10 @@
+@@ -607,6 +633,10 @@ pub const Daemon = struct {
      // This control which client is the leader.  The leader controls terminal state and
      // cols/rows of session.
      leader_client_fd: ?i32 = null,
@@ -235,7 +239,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
      running: bool = true,
      pid: i32 = undefined,
      command: ?[]const []const u8 = null,
-@@ -668,10 +698,12 @@
+@@ -694,10 +724,12 @@ pub const Daemon = struct {
                  .{ self.session_name, client.socket_fd },
              );
              self.leader_client_fd = null;
@@ -248,7 +252,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
          std.log.info("client disconnected fd={d} remaining={d}", .{ fd, self.clients.items.len });
          if (shutdown_on_last and self.clients.items.len == 0) {
              self.shutdown(gpa);
-@@ -848,10 +880,67 @@
+@@ -876,10 +908,67 @@ pub const Daemon = struct {
      fn setLeader(self: *Daemon, gpa: std.mem.Allocator, client: *Client) !void {
          std.log.info("setting new leader client_fd={d}", .{client.socket_fd});
          self.leader_client_fd = client.socket_fd;
@@ -301,9 +305,9 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 +        term: *const ghostty_vt.Terminal,
 +        payload: []const u8,
 +    ) !void {
-+        const keys = util.encodeTyped(gpa, term, payload) catch |err| {
++        const keys = terminal.encodeTyped(gpa, term, payload) catch |err| {
 +            std.log.warn("failed to encode typed input err={s}", .{@errorName(err)});
-+            try ipc.appendMessage(gpa, &client.write_buf, .Type, &[_]u8{@intFromEnum(ipc.TypeResult.rejected)});
++            try ipc.appendMessage(gpa, &client.write_buf, .Type, &[_]u8{@backingInt(ipc.TypeResult.rejected)});
 +            client.has_pending_output = true;
 +            return;
 +        };
@@ -311,12 +315,12 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 +        const fits = keys.len > 0 and self.pty_write_buf.items.len + keys.len <= PTY_WRITE_BUF_MAX;
 +        if (fits) self.queuePtyInput(gpa, keys);
 +        const result: ipc.TypeResult = if (fits) .accepted else .rejected;
-+        try ipc.appendMessage(gpa, &client.write_buf, .Type, &[_]u8{@intFromEnum(result)});
++        try ipc.appendMessage(gpa, &client.write_buf, .Type, &[_]u8{@backingInt(result)});
 +        client.has_pending_output = true;
      }
  
      fn getLeaderClient(self: *Daemon) ?*Client {
-@@ -901,6 +990,10 @@
+@@ -929,6 +1018,10 @@ pub const Daemon = struct {
              return;
          }
  
@@ -327,7 +331,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
          // check if leader needs to be updated by detecting any user input
          if (util.isUserInput(payload)) {
              try self.setLeader(gpa, client);
-@@ -916,6 +1009,13 @@
+@@ -944,6 +1037,13 @@ pub const Daemon = struct {
      pub fn handleSwitch(self: *Daemon, gpa: std.mem.Allocator, session_name: []const u8) !void {
          for (self.clients.items) |client| {
              if (self.leader_client_fd == client.socket_fd) {
@@ -341,8 +345,8 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
                  // Include the daemon's current cwd so the new session can start
                  // in the right directory. A remote cwd is left out: it names no
                  // directory here, so the new session is better off with the
-@@ -959,9 +1059,11 @@
- 
+@@ -990,9 +1090,11 @@ pub const Daemon = struct {
+         }
          client.is_terminal = true;
  
 -        if (self.leader_client_fd == null) {
@@ -354,15 +358,24 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
          const is_leader = self.leader_client_fd == client.socket_fd;
          const resize = std.mem.bytesToValue(ipc.Resize, payload);
  
-@@ -973,6 +1075,7 @@
+@@ -1004,6 +1106,7 @@ pub const Daemon = struct {
          // shell's own SIGWINCH redraw still arrives after the snapshot.
          if (is_leader) {
              try resizeTerm(gpa, term, resize.cols, resize.rows);
 +            self.screen_revision +%= 1;
          }
  
-         // Only serialize on re-attach (has_had_client), not first attach, to avoid
-@@ -1032,7 +1135,8 @@
+         if (self.has_pty_output) {
+@@ -1012,7 +1115,7 @@ pub const Daemon = struct {
+                 "cursor before serialize: x={d} y={d} pending_wrap={}",
+                 .{ cursor.x, cursor.y, cursor.pending_wrap },
+             );
+-            if (util.serializeTerminalState(gpa, term)) |term_output| {
++            if (terminal.serializeTerminalState(gpa, term)) |term_output| {
+                 std.log.debug("serialize terminal state", .{});
+                 // Rewrite OSC 133;A to include redraw=0 so the outer terminal
+                 // does not clear prompt lines on resize (issue #111).
+@@ -1058,7 +1161,8 @@ pub const Daemon = struct {
          payload: []const u8,
      ) !void {
          if (payload.len != @sizeOf(ipc.Resize)) return;
@@ -372,20 +385,35 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
              try self.setLeader(gpa, client);
          }
          // only leader can resize
-@@ -1042,6 +1146,7 @@
+@@ -1068,6 +1172,7 @@ pub const Daemon = struct {
          var ws = resize.winsize();
-         _ = cross.c.ioctl(pty_fd, cross.c.TIOCSWINSZ, &ws);
+         _ = cross.ioctl(pty_fd, cross.TIOCSWINSZ, &ws);
          try resizeTerm(gpa, term, resize.cols, resize.rows);
 +        self.screen_revision +%= 1;
          std.log.debug("resize rows={d} cols={d}", .{ resize.rows, resize.cols });
      }
  
-@@ -1148,6 +1253,44 @@
-         }
+@@ -1165,7 +1270,7 @@ pub const Daemon = struct {
+             @fromBackingInt(@intCast(payload[0]))
+         else
+             .plain;
+-        if (util.serializeTerminal(gpa, term, format)) |output| {
++        if (terminal.serializeTerminal(gpa, term, format)) |output| {
+             defer gpa.free(output);
+             try ipc.appendMessage(gpa, &client.write_buf, .History, output);
+             client.has_pending_output = true;
+@@ -1186,12 +1291,49 @@ pub const Daemon = struct {
+         const request = std.mem.bytesToValue(ipc.Capture, payload);
+         const format = std.enums.fromInt(util.HistoryFormat, request.format) orelse return;
+         self.setPwd(term);
+-        const output = util.serializeTerminalRange(gpa, term, format, request.rows);
++        const output = terminal.serializeTerminalRange(gpa, term, format, request.rows);
+         defer if (output) |text| gpa.free(text);
+         try ipc.appendMessage(gpa, &client.write_buf, .Capture, output orelse "");
+         client.has_pending_output = true;
      }
  
-+    /// Text, geometry and cursor of one observation of the daemon's terminal, which always has the
-+    /// leader's layout. It is whatever the program has written so far, not a finished frame.
++    /// Read the daemon terminal using the current leader's layout.
 +    pub fn handleScreen(
 +        self: *Daemon,
 +        gpa: std.mem.Allocator,
@@ -400,7 +428,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 +            .all => true,
 +            _ => return ipc.appendMessage(gpa, &client.write_buf, .Screen, ""),
 +        };
-+        const text = util.serializeScreenText(gpa, term, all) catch |err| {
++        const text = terminal.serializeScreenText(gpa, term, all) catch |err| {
 +            std.log.warn("failed to read screen err={s}", .{@errorName(err)});
 +            return ipc.appendMessage(gpa, &client.write_buf, .Screen, "");
 +        };
@@ -425,7 +453,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
      pub fn handleRun(self: *Daemon, gpa: std.mem.Allocator, io: std.Io, client: *Client, payload: []const u8) !void {
          // Reset task tracking so the new command's exit marker is detected.
          // Without this, a second `zmx run` on the same session is ignored
-@@ -1235,6 +1378,7 @@
+@@ -1278,6 +1420,7 @@ pub const Daemon = struct {
          vt_stream.nextSlice(payload);
          self.setPwd(term);
          self.has_pty_output = true;
@@ -433,7 +461,25 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
          for (self.clients.items) |client| {
              try ipc.appendMessage(gpa, &client.write_buf, .Output, payload);
              client.has_pending_output = true;
-@@ -1450,6 +1594,244 @@
+@@ -1416,7 +1559,7 @@ test "terminal retains the configured scrollback without the default byte cap" {
+     stream.nextSlice("first line\r\n");
+     for (1..cfg.max_scrollback_lines) |_| stream.nextSlice("more output\r\n");
+ 
+-    const history = util.serializeTerminal(alloc, &term, .plain) orelse return error.TestUnexpectedNull;
++    const history = terminal.serializeTerminal(alloc, &term, .plain) orelse return error.TestUnexpectedNull;
+     defer alloc.free(history);
+     try std.testing.expect(std.mem.startsWith(u8, history, "first line\n"));
+ 
+@@ -1424,7 +1567,7 @@ test "terminal retains the configured scrollback without the default byte cap" {
+     for (0..cfg.max_scrollback_lines) |_| stream.nextSlice("more output\r\n");
+     stream.nextSlice("latest line\r\n");
+ 
+-    const pruned_history = util.serializeTerminal(alloc, &term, .plain) orelse return error.TestUnexpectedNull;
++    const pruned_history = terminal.serializeTerminal(alloc, &term, .plain) orelse return error.TestUnexpectedNull;
+     defer alloc.free(pruned_history);
+     try std.testing.expect(std.mem.indexOf(u8, pruned_history, "first line") == null);
+     try std.testing.expect(std.mem.indexOf(u8, pruned_history, "latest line") != null);
+@@ -1495,6 +1638,244 @@ test "send queues PTY input without changing leader" {
      try std.testing.expectEqualStrings("hello", daemon.pty_write_buf.items);
  }
  
@@ -592,13 +638,13 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 +    var stream = term.vtStream();
 +    defer stream.deinit();
 +
-+    const legacy = try util.encodeTyped(alloc, &term, "ls -la\r\rcaf\xc3\xa9");
++    const legacy = try terminal.encodeTyped(alloc, &term, "ls -la\r\rcaf\xc3\xa9");
 +    defer alloc.free(legacy);
 +    try std.testing.expectEqualStrings("ls -la\r\rcaf\xc3\xa9", legacy);
 +
 +    // every kitty flag: Return is reported as a key, with its release
 +    stream.nextSlice("\x1b[>31u");
-+    const kitty = try util.encodeTyped(alloc, &term, "ls\r");
++    const kitty = try terminal.encodeTyped(alloc, &term, "ls\r");
 +    defer alloc.free(kitty);
 +    try std.testing.expect(std.mem.startsWith(u8, kitty, "ls"));
 +    try std.testing.expect(std.mem.indexOf(u8, kitty, "\x1b[13u") != null);
@@ -624,14 +670,14 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 +    try daemon.handleType(alloc, caller, &term, "\r");
 +    try std.testing.expectEqualStrings("\r", daemon.pty_write_buf.items);
 +    try std.testing.expectEqual(@as(?i32, 42), daemon.leader_client_fd);
-+    try std.testing.expectEqual(@intFromEnum(ipc.TypeResult.accepted), caller.write_buf.items[caller.write_buf.items.len - 1]);
++    try std.testing.expectEqual(@backingInt(ipc.TypeResult.accepted), caller.write_buf.items[caller.write_buf.items.len - 1]);
 +
 +    const too_much = try alloc.alloc(u8, Daemon.PTY_WRITE_BUF_MAX);
 +    defer alloc.free(too_much);
 +    @memset(too_much, 'x');
 +    try daemon.handleType(alloc, caller, &term, too_much);
 +    try std.testing.expectEqualStrings("\r", daemon.pty_write_buf.items);
-+    try std.testing.expectEqual(@intFromEnum(ipc.TypeResult.rejected), caller.write_buf.items[caller.write_buf.items.len - 1]);
++    try std.testing.expectEqual(@backingInt(ipc.TypeResult.rejected), caller.write_buf.items[caller.write_buf.items.len - 1]);
 +    _ = daemon.closeClient(alloc, caller, 0, false);
 +}
 +
@@ -650,7 +696,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 +    const caller = try testClient(alloc, a[0], false);
 +    try daemon.clients.append(alloc, caller);
 +
-+    try daemon.handleScreen(alloc, caller, &term, &[_]u8{@intFromEnum(ipc.ScreenMode.active)});
++    try daemon.handleScreen(alloc, caller, &term, &[_]u8{@backingInt(ipc.ScreenMode.active)});
 +    const blank = caller.write_buf.items[@sizeOf(ipc.Header)..];
 +    try std.testing.expectEqual(@as(usize, @sizeOf(ipc.ScreenHeader)), blank.len);
 +
@@ -658,7 +704,7 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
 +    caller.write_buf.clearRetainingCapacity();
 +    stream.nextSlice("0123456789abcdefghijKLMNO\r\n> ab");
 +    daemon.screen_revision = 9;
-+    try daemon.handleScreen(alloc, caller, &term, &[_]u8{@intFromEnum(ipc.ScreenMode.active)});
++    try daemon.handleScreen(alloc, caller, &term, &[_]u8{@backingInt(ipc.ScreenMode.active)});
 +    const reply = caller.write_buf.items[@sizeOf(ipc.Header)..];
 +    const header = std.mem.bytesToValue(ipc.ScreenHeader, reply[0..@sizeOf(ipc.ScreenHeader)]);
 +    try std.testing.expectEqual(@as(u64, 9), header.revision);
@@ -678,10 +724,11 @@ diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
  test "handleEnvGet returns leader client's environment variables including unsets" {
      const alloc = std.testing.allocator;
      var cfg = Cfg{
-diff -ruN zmx-orig/src/main.zig zmx/src/main.zig
---- zmx-orig/src/main.zig	2026-09-20 18:03:09.000000000 -0500
-+++ zmx/src/main.zig	2026-09-20 19:24:44.303400238 -0500
-@@ -249,6 +249,28 @@
+diff --git a/src/main.zig b/src/main.zig
+index 183b736..c018d21 100644
+--- a/src/main.zig
++++ b/src/main.zig
+@@ -278,6 +278,28 @@ fn mainImpl(init: std.process.Init) !void {
              if (err == error.SessionUnresponsive) std.process.exit(1);
              return printError(io, "send failed: {s}", .{@errorName(err)});
          };
@@ -710,16 +757,16 @@ diff -ruN zmx-orig/src/main.zig zmx/src/main.zig
      } else if (std.mem.eql(u8, cmd, "print") or std.mem.eql(u8, cmd, "p")) {
          const session_name = args.next() orelse "";
          if (std.mem.eql(u8, session_name, "--help") or std.mem.eql(u8, session_name, "-h")) {
-@@ -522,6 +544,8 @@
-         \\  print-env [-s] <name> [key]                 Print tracked environment variables
-         \\  [k]ill <name>... [--force]                  Kill session and all attached clients
-         \\  [hi]story <name> [--vt|--html]              Output session scrollback
-+        \\  screen <name> [--all]                       Geometry and cursor on one line, then the screen text
-+        \\  type <name>                                 Type stdin as keys (CR is Return) without taking the lead
-         \\  [w]ait <name>...                            Wait for session tasks to complete
-         \\  [t]ail <name>...                            Follow session output
-         \\  [c]ompletions <shell>                       Shell completions (bash, zsh, fish, nu)
-@@ -660,6 +684,12 @@
+@@ -468,6 +490,8 @@ fn help(io: std.Io) !void {
+         \\  print-env [-s] <name> [key]                                Print tracked environment variables
+         \\  [k]ill <name>... [--force]                                 Kill session and all attached clients
+         \\  [hi]story <name> [--vt|--html] [--screen|--scrollback]     Output session scrollback
++        \\  screen <name> [--all]                                     Geometry and cursor on one line, then the screen text
++        \\  type <name>                                               Type stdin as keys (CR is Return) without taking the lead
+         \\  [w]ait <name>...                                           Wait for session tasks to complete
+         \\  [t]ail <name>...                                           Follow session output
+         \\  [c]ompletions <shell>                                      Shell completions (bash, zsh, fish, nu, yash)
+@@ -612,6 +636,12 @@ fn help(io: std.Io) !void {
          \\  ZMX_DIR_MODE         Sets mode for socket and log directories (octal, defaults to 0750)
          \\  ZMX_LOG_MODE         Sets mode for log files (octal, defaults to 0640)
          \\  ZMX_NO_DETACH_KEY    Disables the ctrl+\ detach shortcut (set to any value)
@@ -732,8 +779,8 @@ diff -ruN zmx-orig/src/main.zig zmx/src/main.zig
          \\
      ;
      var buf: [8192]u8 = undefined;
-@@ -1759,6 +1789,59 @@
-     return error.NoAckReceived;
+@@ -1202,6 +1232,59 @@ fn writeFile(gpa: std.mem.Allocator, io: std.Io, session_name: []const u8, file_
+     try w.interface.flush();
  }
  
 +/// How long `screen` and `type` wait for the daemon. A daemon older than these
@@ -743,7 +790,7 @@ diff -ruN zmx-orig/src/main.zig zmx/src/main.zig
 +/// Prints `revision cols rows cursor_x cursor_y alternate` on the first line,
 +/// then the text. Exits nonzero on any failure, never with a partial answer.
 +fn screen(alloc: std.mem.Allocator, io: std.Io, session_name: []const u8, socket_path: []const u8, mode: ipc.ScreenMode) !void {
-+    const request = [_]u8{@intFromEnum(mode)};
++    const request = [_]u8{@backingInt(mode)};
 +    const reply = ipc.roundTripLarge(alloc, socket_path, .Screen, &request, .Screen, QUERY_TIMEOUT_MS) catch |err| {
 +        return printError(io, "screen failed for \"{s}\": {s}", .{ session_name, @errorName(err) });
 +    };
@@ -784,17 +831,19 @@ diff -ruN zmx-orig/src/main.zig zmx/src/main.zig
 +        return printError(io, "type failed for \"{s}\": {s}", .{ session_name, @errorName(err) });
 +    };
 +    defer alloc.free(reply);
-+    if (reply.len != 1 or reply[0] != @intFromEnum(ipc.TypeResult.accepted)) {
++    if (reply.len != 1 or reply[0] != @backingInt(ipc.TypeResult.accepted)) {
 +        return printError(io, "type rejected by \"{s}\": input queue is full", .{session_name});
 +    }
 +}
 +
- fn send(alloc: std.mem.Allocator, io: std.Io, cfg: *Cfg, session_name: []const u8, socket_path: []const u8, text_parts: [][]const u8, tag: ipc.Tag) !void {
+ fn send(alloc: std.mem.Allocator, io: std.Io, session_name: []const u8, text_parts: [][]const u8, tag: ipc.Tag) !void {
      std.log.info("send session={s}", .{session_name});
  
-diff -ruN zmx-orig/src/role.zig zmx/src/role.zig
---- zmx-orig/src/role.zig	1969-12-31 18:00:00.000000000 -0600
-+++ zmx/src/role.zig	2026-09-20 18:53:51.435402021 -0500
+diff --git a/src/role.zig b/src/role.zig
+new file mode 100644
+index 0000000..ccc004a
+--- /dev/null
++++ b/src/role.zig
 @@ -0,0 +1,219 @@
 +//! Client side of explicit leadership: turns the daemon's Role messages into a
 +//! title with a reserved prefix on the client's own stdout, so the terminal
@@ -862,13 +911,13 @@ diff -ruN zmx-orig/src/role.zig zmx/src/role.zig
 +    pub fn forward(self: *Relay, gpa: std.mem.Allocator, out: *std.ArrayList(u8), output: []const u8) !void {
 +        var rest = output;
 +        if (self.pending != null) {
-+            const boundary = self.stream.nextSliceUntilGround(rest) orelse {
++            const stop = self.stream.nextSliceUntil(rest, .initOne(.ground)) orelse {
 +                try out.appendSlice(gpa, rest);
 +                return;
 +            };
-+            try out.appendSlice(gpa, rest[0..boundary]);
++            try out.appendSlice(gpa, rest[0..stop.consumed]);
 +            try self.flush(gpa, out);
-+            rest = rest[boundary..];
++            rest = rest[stop.consumed..];
 +        }
 +        self.stream.nextSlice(rest);
 +        try out.appendSlice(gpa, rest);
@@ -936,7 +985,7 @@ diff -ruN zmx-orig/src/role.zig zmx/src/role.zig
 +    try testing.expect(!isNonce(""));
 +    try testing.expect(!isNonce("a;b"));
 +    try testing.expect(!isNonce("a b"));
-+    try testing.expect(!isNonce("x" ** (NONCE_MAX + 1)));
++    try testing.expect(!isNonce(&@as([NONCE_MAX + 1]u8, @splat('x'))));
 +}
 +
 +test "role at ground is written at once" {
@@ -1015,19 +1064,11 @@ diff -ruN zmx-orig/src/role.zig zmx/src/role.zig
 +    try testing.expect(relay.stream.ground());
 +    try testing.expectEqual(@as(i32, -1), relay.pollTimeout(350));
 +}
-diff -ruN zmx-orig/src/test.zig zmx/src/test.zig
---- zmx-orig/src/test.zig	2026-09-20 18:03:09.000000000 -0500
-+++ zmx/src/test.zig	2026-09-20 18:31:21.031400063 -0500
-@@ -8,4 +8,5 @@
-     _ = @import("loop.zig");
-     _ = @import("cfg.zig");
-     _ = @import("daemonize.zig");
-+    _ = @import("role.zig");
- }
-diff -ruN zmx-orig/src/util.zig zmx/src/util.zig
---- zmx-orig/src/util.zig	2026-09-20 18:03:09.000000000 -0500
-+++ zmx/src/util.zig	2026-09-20 19:23:48.996833787 -0500
-@@ -941,6 +941,53 @@
+diff --git a/src/terminal.zig b/src/terminal.zig
+index 786764e..7b1d906 100644
+--- a/src/terminal.zig
++++ b/src/terminal.zig
+@@ -330,6 +330,53 @@ pub fn serializeTerminalRange(
      };
  }
  
@@ -1078,6 +1119,16 @@ diff -ruN zmx-orig/src/util.zig zmx/src/util.zig
 +    return alloc.dupe(u8, builder.writer.buffered());
 +}
 +
- /// Formats a session entry for list output (only the name when `short` is
- /// true), adding a prefix to indicate the current session, if there is one.
- pub fn writeSessionLine(
+ test "serializeTerminalState excludes synchronized output replay" {
+     const alloc = testing.allocator;
+     const io = testing.io;
+diff --git a/src/test.zig b/src/test.zig
+index 33334d1..4833350 100644
+--- a/src/test.zig
++++ b/src/test.zig
+@@ -11,4 +11,5 @@ comptime {
+     _ = @import("daemonize.zig");
+     _ = @import("lib.zig");
+     _ = @import("client.zig");
++    _ = @import("role.zig");
+ }

@@ -53,6 +53,8 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
     /// unseen badge. Title falls back to the session name when the program sent none (OSC 9 has only a body).
     func notify(surface: GhosttySurfaceView, title: String, body: String) {
         guard let session = surface.session else { return }
+        // ahead of the focus check: the origin counts this notification whether or not this Mac shows it
+        library?.store(forSession: session.id)?.armRemoteSeen(forSession: session.id)
         let pane = paneRole(of: surface, in: session)
         // the firing surface is always in an open window at fire time, so its window id is known.
         guard let windowID = library?.windowID(forSession: session.id) else {

@@ -235,6 +235,22 @@ struct RemoteSessionTests {
         #expect(throws: (any Error).self) { try RemoteSession.pageServeCommand(host: "-oProxyCommand=x", token: "t1") }
     }
 
+    @Test func pasteReceiveUsesPlainStdioAndReachesTheInstalledCli() throws {
+        let fake = try FakeRemote()
+        defer { fake.cleanUp() }
+        try fake.installAgtermctl(exitCodes: [0])
+
+        let argv = try RemoteSession.pasteReceiveCommand(host: "buildbox", controlPath: "/tmp/m")
+        let run = try fake.runRemote(argv)
+
+        #expect(argv.prefix(2) == ["ssh", "-T"])
+        #expect(argv.contains("ControlPath=/tmp/m"))
+        #expect(argv.last?.contains(RemoteSession.cliPathPrefix) == true)
+        #expect(run.status == 0)
+        #expect(try fake.calls() == [["paste", "receive"]])
+        #expect(throws: (any Error).self) { try RemoteSession.pasteReceiveCommand(host: "-oProxyCommand=x") }
+    }
+
     @Test func attachForcesAPtyAndNeverBoundsItsLifetime() throws {
         let argv = try RemoteSession.attachCommand(host: "buildbox", endpoint: endpoint, daemon: daemon)
         #expect(argv.prefix(9) == ["ssh", "-tt", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
@@ -399,7 +415,10 @@ struct RemoteSessionTests {
 
     // MARK: - the pane command
 
-    @Test func thePaneCommandPrintsWhatDiedAfterTheAttachExits() throws {
+    private static let modeReset = "\u{1B}[0m\u{1B}[?1000l\u{1B}[?1002l\u{1B}[?1003l\u{1B}[?1006l\u{1B}[?1004l\u{1B}[?2004l\u{1B}[?2031l\u{1B}[?2048l"
+        + "\u{1B}[=0u"
+
+    @Test func thePaneCommandPrintsOnlyTheModeResetAfterTheAttachExits() throws {
         let fake = try FakeRemote()
         defer { fake.cleanUp() }
         try fake.installSSH()
@@ -410,8 +429,8 @@ struct RemoteSessionTests {
                                                           daemon: daemon, session: "build", pane: .right)
         let run = try fake.runShell(command)
 
-        #expect(run.stdout.contains("agterm: build (right) on buildbox disconnected, exit"))
-        #expect(try fake.calls().first?.first == "attach", "the diagnostic runs AFTER the attach")
+        #expect(run.stdout == Self.modeReset)
+        #expect(try fake.calls().first?.first == "attach", "the reset runs AFTER the attach")
     }
 
     private static let keepAlive = ["-o", "ServerAliveInterval=5", "-o", "ServerAliveCountMax=2"]
@@ -456,7 +475,7 @@ struct RemoteSessionTests {
         // libghostty on macOS runs a surface command as `bash -c "exec -l <command>"`
         let run = try fake.runShell("exec -l " + command, shell: "/bin/bash")
 
-        #expect(run.stdout == "agterm: build (left) on buildbox disconnected, exit 23\n")
+        #expect(run.stdout == Self.modeReset)
         #expect(run.status == 23)
     }
 
@@ -470,7 +489,6 @@ struct RemoteSessionTests {
                                                           daemon: daemon, session: "build", pane: .left)
         let run = try fake.runShell(command)
 
-        #expect(run.stdout.hasSuffix("exit 23\n"), "the line must name the real status")
         #expect(run.status == 23, "a failed connection must not read as a clean exit")
     }
 
@@ -490,7 +508,7 @@ struct RemoteSessionTests {
         #expect(!FileManager.default.fileExists(atPath: marker), "the name is data, never shell syntax")
     }
 
-    @Test func aLostConnectionSaysItIsReconnectingReportsItAndWaits() async throws {
+    @Test func aLostConnectionReportsItAndWaitsWithoutPrintingANotice() async throws {
         let fake = try FakeRemote()
         defer { fake.cleanUp() }
         try fake.installSSH(exitCode: 255)
@@ -507,10 +525,8 @@ struct RemoteSessionTests {
         for await _ in run.exited {}
         let text = String(decoding: run.output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
 
-        #expect(text == "\u{1B}[0m\u{1B}[?1000l\u{1B}[?1002l\u{1B}[?1003l\u{1B}[?1006l\u{1B}[?1004l"
-            + "\u{1B}[?2004l\u{1B}[?2031l\u{1B}[?2048l\r\n"
-            + "\u{1B}[30;43m Connection to buildbox lost · reconnecting… · any key retries now \u{1B}[K\u{1B}[0m\n"
-            + "\u{1B}]2;agterm-remote;n1:lost\u{07}\u{1B}[?25l", "echo goes off with the cursor, so no lock glyph")
+        #expect(text == Self.modeReset + "\u{1B}]2;agterm-remote;n1:lost\u{07}\u{1B}[?25l",
+                "echo goes off with the cursor, so no lock glyph")
         #expect(run.process.terminationStatus == 255)
     }
 
@@ -533,7 +549,7 @@ struct RemoteSessionTests {
     }
 
     @Test(arguments: [0, 1, 23] as [Int32])
-    func anyOtherExitKeepsTodaysLineAndStatus(_ code: Int32) throws {
+    func anyOtherExitPrintsOnlyTheModeResetAndKeepsItsStatus(_ code: Int32) throws {
         let fake = try FakeRemote()
         defer { fake.cleanUp() }
         try fake.installSSH(exitCode: code)
@@ -542,11 +558,11 @@ struct RemoteSessionTests {
                                                           lead: ZmxLeadAttachment(nonce: "n1", claim: true))
         let run = try fake.runShell(command)
 
-        #expect(run.stdout == "agterm: build (left) on buildbox disconnected, exit \(code)\n")
+        #expect(run.stdout == Self.modeReset)
         #expect(run.status == code)
     }
 
-    @Test func withoutALeadNonceALostConnectionExitsAsBefore() throws {
+    @Test func withoutALeadNonceALostConnectionExitsWithoutWaiting() throws {
         let fake = try FakeRemote()
         defer { fake.cleanUp() }
         try fake.installSSH(exitCode: 255)
@@ -554,7 +570,7 @@ struct RemoteSessionTests {
                                                           session: "build", pane: .left)
         let run = try fake.runShell(command)
 
-        #expect(run.stdout == "agterm: build (left) on buildbox disconnected, exit 255\n")
+        #expect(run.stdout == Self.modeReset)
         #expect(run.status == 255)
     }
 

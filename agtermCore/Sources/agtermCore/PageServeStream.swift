@@ -17,9 +17,12 @@ public protocol PageServeHost: AnyObject, SendableMetatype {
     func remotePagePlace(_ page: UUID) -> (session: UUID, pane: OverlayPane?, window: UUID?)?
     /// endRemotePage ends page `page` wherever its reservation sits, which also tells the presenter.
     func endRemotePage(_ page: UUID)
-    /// pageChannelLost handles page `page`'s registered channel ending without a close: a Mac ends the page, a headless
-    /// origin keeps it for the next presenter.
+    /// pageChannelLost handles page `page`'s registered channel ending without a close: the page is re-offered when
+    /// `reofferLostPage` takes it, and otherwise ends, or on a headless origin waits for the next viewer.
     func pageChannelLost(_ page: UUID)
+    /// reofferLostPage handles page `page`'s broken connection by the loss rule (`AppStore.remotePageLost`): it is offered
+    /// again or ends. False when that rule does not apply.
+    func reofferLostPage(_ page: UUID) -> Bool
     /// isCurrentPageClaim is whether `token` is still the claim page `page` is offered under.
     func isCurrentPageClaim(_ page: UUID, token: String) -> Bool
     /// dispatchPageBridge runs one bridge request as a local page's would run; nil when control is unavailable.
@@ -32,6 +35,17 @@ public protocol PageServeHost: AnyObject, SendableMetatype {
     func dropPageAttachmentClaim(_ claim: UUID) -> Bool
     func pageAttachmentPlace(_ attachment: PageServeStream.Attachment, page: UUID) -> (session: UUID, pane: OverlayPane?, window: UUID?)?
     func pageAttachmentClosed(_ attachment: PageServeStream.Attachment)
+    /// isPageCandidateClaim is whether `token` is the claimed offer of page `page` to the viewer it moves to.
+    func isPageCandidateClaim(_ page: UUID, token: String) -> Bool
+    /// commitPageCandidate confirms that offer, sending nothing; nil once it no longer stands.
+    func commitPageCandidate(_ page: UUID, token: String) -> PageMove?
+    /// finishPageMove tells the page's previous holder, once its new channel is registered.
+    func finishPageMove(_ move: PageMove)
+    /// pageCandidateFailed drops the offer `token` names, false when it names none.
+    func pageCandidateFailed(_ page: UUID, token: String) -> Bool
+    /// snapshotOffers are the files this host offered for viewers' `open` rules, claimed through the same command;
+    /// nil for a host that offers none.
+    var snapshotOffers: SnapshotOfferBook? { get }
 }
 
 /// PendingPageClaim is a page channel claim answered ok, waiting for its connection.
@@ -41,7 +55,10 @@ public struct PendingPageClaim: Sendable {
 }
 
 extension PageServeHost {
-    public func pageChannelLost(_ page: UUID) { endRemotePage(page) }
+    public func pageChannelLost(_ page: UUID) {
+        guard !reofferLostPage(page) else { return }
+        endRemotePage(page)
+    }
     public func isCurrentPageClaim(_: UUID, token _: String) -> Bool { true }
     public func claimPageAttachment(_ token: String) -> ControlResponse? { nil }
     public func adoptPageAttachment(descriptor: Int32, claim: UUID) -> Bool { false }
@@ -50,6 +67,12 @@ extension PageServeHost {
         nil
     }
     public func pageAttachmentClosed(_ attachment: PageServeStream.Attachment) {}
+    public func isPageCandidateClaim(_ page: UUID, token: String) -> Bool { false }
+    public func commitPageCandidate(_ page: UUID, token: String) -> PageMove? { nil }
+    public func finishPageMove(_ move: PageMove) {}
+    public func pageCandidateFailed(_ page: UUID, token: String) -> Bool { false }
+    public func reofferLostPage(_ page: UUID) -> Bool { false }
+    public var snapshotOffers: SnapshotOfferBook? { nil }
 }
 
 /// PageServeAdmission counts one kind of request a page channel has taken in and not finished. It never
@@ -108,6 +131,7 @@ public final class PageServeStream {
     public let bridgeSlots = PageServeAdmission(limit: PageServeStream.bridgeLimit)
     private let source: HtmlSource
     private let links: MarkdownLinkGrant?
+    private let log: TextLog?
     private let owner: ControlStreamOwner
     private weak var host: (any PageServeHost)?
     private let mimeType: @Sendable (String) -> String
@@ -118,12 +142,13 @@ public final class PageServeStream {
     private let transfers = Locked(Transfers())
     private var ending = false
 
-    init(page: UUID, source: HtmlSource, links: MarkdownLinkGrant? = nil, owner: ControlStreamOwner, host: any PageServeHost,
-         mimeType: @escaping @Sendable (String) -> String, attachment: Attachment?) {
+    init(page: UUID, source: HtmlSource, links: MarkdownLinkGrant? = nil, log: TextLog? = nil, owner: ControlStreamOwner,
+         host: any PageServeHost, mimeType: @escaping @Sendable (String) -> String, attachment: Attachment?) {
         self.page = page
         self.attachment = attachment
         self.source = source
         self.links = links
+        self.log = log
         self.owner = owner
         self.host = host
         self.mimeType = mimeType
@@ -132,7 +157,7 @@ public final class PageServeStream {
     /// adopt starts the channel for page `page` on `descriptor`, or closes the descriptor when `source` is nil: a
     /// page that ended between its claim and this adoption gets no channel.
     public static func adopt(descriptor: Int32, page: UUID, source: HtmlSource?, links: MarkdownLinkGrant? = nil,
-                             attachment: Attachment?, host: some PageServeHost) -> PageServeStream? {
+                             log: TextLog? = nil, attachment: Attachment?, host: some PageServeHost) -> PageServeStream? {
         let owner = ControlStreamOwner(descriptor: descriptor, limits: limits)
         guard let source else {
             owner.start(onLine: { _ in }, onClose: {})
@@ -140,7 +165,7 @@ public final class PageServeStream {
             return nil
         }
         let hostType = type(of: host)
-        let stream = PageServeStream(page: page, source: source, links: links, owner: owner, host: host,
+        let stream = PageServeStream(page: page, source: source, links: links, log: log, owner: owner, host: host,
                                      mimeType: { hostType.pageMimeType($0) }, attachment: attachment)
         owner.start(
             onLine: { [weak stream] line in stream?.take(Data(line)) },
@@ -159,14 +184,14 @@ public final class PageServeStream {
         switch frame {
         case .cancel(let id):
             transfers.withLock { if $0.active.contains(id) { $0.cancelled.insert(id) } }
-        case .resource(let id, _):
+        case .resource(let id, _), .logTail(let id, _):
             guard resourceSlots.tryAcquire() else { return refuse(id) }
             transfers.withLock { _ = $0.active.insert(id) }
             DispatchQueue.main.async { MainActor.assumeIsolated { self.receive(frame) } }
         case .bridge(let id, _):
             guard bridgeSlots.tryAcquire() else { return refuse(id) }
             DispatchQueue.main.async { MainActor.assumeIsolated { self.receive(frame) } }
-        case .head, .chunk, .end, .failure, .reply:
+        case .head, .chunk, .end, .failure, .reply, .logHead, .logUnchanged:
             failOnMain("a frame only this host sends")
         }
     }
@@ -175,8 +200,9 @@ public final class PageServeStream {
     func receive(_ frame: PageServeFrame) {
         switch frame {
         case .resource(let id, let path): serve(id: id, path: path)
+        case .logTail(let id, let stamp): serveLog(id: id, stamp: stamp)
         case .bridge(let id, let request): relay(id: id, request: request)
-        case .cancel, .head, .chunk, .end, .failure, .reply: break
+        case .cancel, .head, .chunk, .end, .failure, .reply, .logHead, .logUnchanged: break
         }
     }
 
@@ -229,6 +255,55 @@ public final class PageServeStream {
             }
             slots.release()
         }
+    }
+
+    private func serveLog(id: Int, stamp: BoundedFile.FileStamp?) {
+        var path: String?
+        if case .text(let file, _) = source, log != nil { path = file }
+        let owner = owner, transfers = transfers, slots = resourceSlots
+        files.async { [path] in
+            Self.transferLog(id: id, stamp: stamp, path: path, owner: owner, transfers: transfers)
+            transfers.withLock {
+                $0.active.remove(id)
+                $0.cancelled.remove(id)
+            }
+            slots.release()
+        }
+    }
+
+    // a log tail is read only from the claimed log page's own file, within the tail cap whatever the file's size; the
+    // viewer builds the snapshot from the raw bytes, so rotation, truncation and binary ends read as they do locally
+    nonisolated private static func transferLog(id: Int, stamp: BoundedFile.FileStamp?, path: String?,
+                                                owner: ControlStreamOwner, transfers: Locked<Transfers>) {
+        let cancelled = { transfers.withLock { $0.cancelled.contains(id) } }
+        guard let path else {
+            _ = sendWaiting(.failure(id: id, error: "not a log page"), owner)
+            return
+        }
+        guard !cancelled() else {
+            _ = sendWaiting(.failure(id: id, error: PageServeFrame.cancelled), owner)
+            return
+        }
+        let read: BoundedFile.TailRead
+        switch BoundedFile.readTail(path: path, maxBytes: TextPage.maxTailBytes, unchangedFrom: stamp) {
+        case .failure:
+            _ = sendWaiting(.failure(id: id, error: "file cannot be read"), owner)
+            return
+        case .success(nil):
+            _ = sendWaiting(.logUnchanged(id: id), owner)
+            return
+        case .success(let fresh?): read = fresh
+        }
+        guard sendWaiting(.logHead(id: id, stamp: read.stamp, offset: read.offset), owner) else { return }
+        for start in stride(from: 0, to: read.data.count, by: PageServeCodec.maxChunkBytes) {
+            guard !cancelled() else {
+                _ = sendWaiting(.failure(id: id, error: PageServeFrame.cancelled), owner)
+                return
+            }
+            let end = min(start + PageServeCodec.maxChunkBytes, read.data.count)
+            guard sendWaiting(.chunk(id: id, data: read.data.subdata(in: start..<end)), owner) else { return }
+        }
+        _ = sendWaiting(.end(id: id), owner)
     }
 
     // every admitted transfer ends in exactly one terminal frame, a cancelled one too, so the viewer frees its
@@ -299,6 +374,8 @@ public final class PageServeStream {
         if [.image, .markdown, .text, .document, .unreadable].contains(source.kind) {
             return .failure(id: id, error: "this page has no bridge")
         }
+        // a retired channel's queued request must not act on the page its replacement now serves
+        if attachment == nil, host?.pageServeStreams[page] !== self || ending { return .failure(id: id, error: "page closed") }
         guard let host, let place = attachment.map({ host.pageAttachmentPlace($0, page: page) }) ?? host.remotePagePlace(page) else {
             return .failure(id: id, error: "page closed")
         }
@@ -360,14 +437,17 @@ public final class PageServeStream {
     }
 }
 
-/// PageServeClaim is what a claimed page's channel serves: its source and, for a markdown page, its link grant.
+/// PageServeClaim is what a claimed page's channel serves: its source and, for a markdown page, its link grant; a log
+/// page's request is what admits its tail reads.
 public struct PageServeClaim: Sendable {
     public let source: HtmlSource
     public let links: MarkdownLinkGrant?
+    public let log: TextLog?
 
-    public init(source: HtmlSource, links: MarkdownLinkGrant? = nil) {
+    public init(source: HtmlSource, links: MarkdownLinkGrant? = nil, log: TextLog? = nil) {
         self.source = source
         self.links = links
+        self.log = log
     }
 }
 
@@ -376,6 +456,7 @@ extension PageServeHost {
     /// connection is then adopted as that page's channel.
     public func claimPageStream(_ token: String) -> ControlResponse {
         if let attachment = claimPageAttachment(token) { return attachment }
+        if let snapshot = snapshotOffers?.claim(token) { return ControlResponse(ok: true, result: ControlResult(id: snapshot.uuidString)) }
         guard let claim = claimRemotePage(token: token) else { return ControlResponse(ok: false, error: "page not claimable") }
         pendingPageClaims[token] = PendingPageClaim(page: claim.page, served: claim.served)
         return ControlResponse(ok: true, result: ControlResult(id: claim.page.uuidString))
@@ -385,11 +466,23 @@ extension PageServeHost {
     /// the page was re-offered past gets no channel.
     public func adoptPageServeStream(descriptor: Int32, page: UUID, token: String) {
         if adoptPageAttachment(descriptor: descriptor, claim: page) { return }
+        if snapshotOffers?.adopt(descriptor: descriptor, claim: page) == true { return }
         let claim = pendingPageClaims.removeValue(forKey: token)
-        let live = claim?.page == page && remotePagePlace(page) != nil && isCurrentPageClaim(page, token: token)
+        let candidate = claim?.page == page && isPageCandidateClaim(page, token: token)
+        let live = candidate || (claim?.page == page && remotePagePlace(page) != nil && isCurrentPageClaim(page, token: token))
         guard let stream = PageServeStream.adopt(descriptor: descriptor, page: page, source: live ? claim?.served.source : nil,
-                                                 links: claim?.served.links, attachment: nil, host: self) else { return }
-        pageServeStreams[page] = stream
+                                                 links: claim?.served.links, log: claim?.served.log, attachment: nil,
+                                                 host: self) else { return }
+        var move: PageMove?
+        if candidate {
+            guard let committed = commitPageCandidate(page, token: token) else { return stream.shutdown() }
+            move = committed
+        }
+        // the page's channel is replaced before its previous holder hears of it, so a stalled send drops a viewer that
+        // no longer holds the page
+        let displaced = pageServeStreams.updateValue(stream, forKey: page)
+        if displaced !== stream { displaced?.shutdown() }
+        move.map(finishPageMove)
     }
 
     /// pageClaimUnanswered handles a claim whose reply never reached its helper, which leaves nobody to load the page,
@@ -397,7 +490,9 @@ extension PageServeHost {
     public func pageClaimUnanswered(_ page: UUID, token: String) {
         // an attachment that never connected leaves the page and its other viewers alone
         if dropPageAttachmentClaim(page) { return }
+        if snapshotOffers?.drop(claim: page) == true { return }
         pendingPageClaims[token] = nil
+        if pageCandidateFailed(page, token: token) { return }
         guard isCurrentPageClaim(page, token: token) else { return }
         pageChannelLost(page)
     }

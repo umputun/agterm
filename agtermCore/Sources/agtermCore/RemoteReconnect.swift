@@ -3,14 +3,14 @@ import Observation
 
 /// The retry schedule every remote link shares. A laptop asleep for the night should not be retried every
 /// thirty seconds, and should never be given up on either.
-enum RemoteRetryBackoff {
+public enum RemoteRetryBackoff {
     static let firstCap: TimeInterval = 30
     static let lateCap: TimeInterval = 300
     /// Failures in a row before the cap grows.
     static let failuresBeforeLateCap = 8
 
     /// The wait after the `failures`th failure in a row, counted from one.
-    static func delay(afterFailures failures: Int) -> TimeInterval {
+    public static func delay(afterFailures failures: Int) -> TimeInterval {
         let cap = failures > failuresBeforeLateCap ? lateCap : firstCap
         return min(pow(2, Double(min(failures - 1, 30))), cap)
     }
@@ -49,6 +49,8 @@ public final class RemoteReconnectBook {
         public let host: String
         /// The origin reported lead roles, so the fresh attach will too and may be covered until it does.
         public let cover: Bool
+        /// The nonce of the attach that led when the link dropped, which the fresh attach takes the lead back from.
+        public let reclaim: String?
         fileprivate(set) var failures = 0
         /// reason is what the last failed probe's ssh said, nil when it said nothing. It describes that
         /// probe only, never the attach that follows a probe that answered.
@@ -68,9 +70,9 @@ public final class RemoteReconnectBook {
     public func waiting(pane: UUID?) -> Bool { pane.flatMap { entries[$0] } != nil }
 
     /// Registers a pane to be reconnected, unless it is already waiting.
-    public func wait(pane: UUID, session: UUID, host: String, cover: Bool, now: Date) {
+    public func wait(pane: UUID, session: UUID, host: String, cover: Bool, reclaim: String? = nil, now: Date) {
         guard entries[pane] == nil else { return }
-        var entry = Entry(session: session, host: host, cover: cover, retryAt: now)
+        var entry = Entry(session: session, host: host, cover: cover, reclaim: reclaim, retryAt: now)
         if let last = resumed.removeValue(forKey: pane), now.timeIntervalSince(last.at) < Self.settle {
             entry.failures = last.failures + 1
             entry.retryAt = now.addingTimeInterval(RemoteRetryBackoff.delay(afterFailures: entry.failures))
@@ -132,4 +134,48 @@ public final class RemoteReconnectBook {
         entries[pane] = nil
         resumed[pane] = nil
     }
+}
+
+/// RemoteEndBook holds remote panes whose attach ended while their origin may still hold the session.
+/// A settling entry waits for the origin's answer and paints nothing, so a session the origin closed on purpose
+/// closes without a notice; a shown one draws "ended" over the pane until it closes or attaches again.
+@Observable
+@MainActor
+public final class RemoteEndBook {
+    public static let shared = RemoteEndBook()
+
+    public struct Entry: Equatable, Sendable {
+        public let session: UUID
+        public let host: String
+        public let name: String
+        public fileprivate(set) var shown: Bool
+    }
+
+    private(set) var entries: [UUID: Entry] = [:]
+
+    init() {}
+
+    /// settle holds a pane's notice back until `resolved` or `clear`.
+    public func settle(pane: UUID, session: UUID, host: String, name: String) {
+        entries[pane] = Entry(session: session, host: host, name: name, shown: false)
+    }
+
+    public func show(pane: UUID, session: UUID, host: String, name: String) {
+        entries[pane] = Entry(session: session, host: host, name: name, shown: true)
+    }
+
+    /// resolved shows every notice of `session` still settling: its origin answered without ending it, or the
+    /// link failed before it said.
+    public func resolved(session: UUID) {
+        for (pane, entry) in entries where entry.session == session { entries[pane]?.shown = true }
+    }
+
+    func settling(session: UUID) -> Bool { entries.values.contains { $0.session == session && !$0.shown } }
+
+    /// notice is the entry a pane draws, nil while it settles or has none.
+    public func notice(pane: UUID?) -> Entry? { pane.flatMap { entries[$0] }.flatMap { $0.shown ? $0 : nil } }
+
+    public func clear(pane: UUID) { entries[pane] = nil }
+
+    public func clear(session: UUID) { entries = entries.filter { $0.value.session != session } }
 }

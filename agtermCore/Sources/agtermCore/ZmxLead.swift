@@ -17,15 +17,21 @@ public struct ZmxLeadAttachment: Equatable, Sendable {
     /// Read by the zmx client, which opts into explicit leadership when it is set.
     public static let nonceVariable = "ZMX_MANAGED"
     public static let claimVariable = "ZMX_MANAGED_CLAIM"
+    public static let reclaimVariable = "ZMX_MANAGED_RECLAIM"
 
     public let nonce: String
     /// False for the automatic re-attach after the leader left: that one leads only if the session is
     /// still unowned when it arrives, so it cannot take a lead someone claimed in the meantime.
     public let claim: Bool
+    /// The nonce of the attach that led when its link dropped. The daemon gives this attach the lead
+    /// only while that attach still holds it, or while the leader took the pane only because it was
+    /// free and has not been typed into or clicked since.
+    public let reclaim: String?
 
-    public init(nonce: String = ZmxLeadAttachment.makeNonce(), claim: Bool) {
+    public init(nonce: String = ZmxLeadAttachment.makeNonce(), claim: Bool, reclaim: String? = nil) {
         self.nonce = nonce
         self.claim = claim
+        self.reclaim = reclaim
     }
 
     public static func makeNonce() -> String {
@@ -35,6 +41,7 @@ public struct ZmxLeadAttachment: Equatable, Sendable {
     public var environment: [String: String] {
         var environment = [Self.nonceVariable: nonce]
         if claim { environment[Self.claimVariable] = "1" }
+        if let reclaim { environment[Self.reclaimVariable] = reclaim }
         return environment
     }
 
@@ -86,6 +93,14 @@ public struct ZmxLeadState: Equatable, Sendable {
     /// True when the pane draws output laid out for another client's grid, or nothing yet, and must be
     /// covered.
     public var covered: Bool { reattaching || role == .follower || role == .unowned }
+
+    /// The nonce a reconnect after this attachment's link dropped takes the lead back from: its own when
+    /// it led or claimed, or the one it was taking back itself when no report arrived before the drop.
+    public var reclaimAfterDrop: String? {
+        if role == .leader { return attachment.nonce }
+        guard role == nil else { return nil }
+        return attachment.claim ? attachment.nonce : attachment.reclaim
+    }
 
     /// Applies `notice` and says whether the role changed. A report for another attachment's nonce is
     /// forged or left over from a surface this pane replaced; an older generation lost a race.
@@ -147,19 +162,32 @@ public final class ZmxLeadBook {
     /// Counts attachments begun. A pane's surface slot is not observed, so a view hosting one reads this
     /// to learn that a fresh attach replaced the surface.
     public private(set) var attachments = 0
+    /// claims are panes whose attach started without the claim this Mac owes them; the first role report takes it.
+    @ObservationIgnored private var claims: Set<UUID> = []
+    /// onChange runs after any pane's state is replaced, changed or forgotten, so an attached row can report
+    /// what it now leads to its origin.
+    @ObservationIgnored public var onChange: (() -> Void)?
 
     init() {}
+
+    /// claimOnReport makes `pane`'s next role report take the lead unless it already leads.
+    public func claimOnReport(pane: UUID) { claims.insert(pane) }
+
+    /// takeClaim answers whether `pane` owes a claim, ending it.
+    public func takeClaim(pane: UUID) -> Bool { claims.remove(pane) != nil }
 
     /// Starts over for `pane`: reports of its previous attachment no longer match and are dropped.
     public func begin(_ attachment: ZmxLeadAttachment, pane: UUID, reattaching: Bool = false) {
         states[pane] = ZmxLeadState(attachment: attachment, reattaching: reattaching)
         attachments &+= 1
+        onChange?()
     }
 
     /// The role `notice` moved `pane` to, nil when it changed nothing.
     public func apply(_ notice: ZmxLeadNotice, pane: UUID) -> ZmxLeadRole? {
         guard var state = states[pane], state.apply(notice) else { return nil }
         states[pane] = state
+        onChange?()
         return state.role
     }
 
@@ -169,28 +197,55 @@ public final class ZmxLeadBook {
 
     public func reattaching(pane: UUID?) -> Bool { pane.flatMap { states[$0]?.reattaching } ?? false }
 
-    public func forget(pane: UUID) { states[pane] = nil }
+    public func forget(pane: UUID) {
+        states[pane] = nil
+        claims.remove(pane)
+        onChange?()
+    }
 }
 
 extension AppStore {
-    /// presentsRemotely is whether a session effect goes to its presenter: always when headless, else when it follows.
+    /// presentsRemotely is whether a session effect goes to a viewer: always when headless, else when it follows.
     func presentsRemotely(_ session: Session, paneIdentity: UUID?) -> Bool {
         headless || session.followsRemotely(paneIdentity: paneIdentity)
+    }
+
+    /// remoteRecipient is the token of the viewer new work for `paneIdentity` of `session`, or for the whole session
+    /// when nil, goes to; nil keeps it on this Mac or, headless, holds it for a viewer to come.
+    func remoteRecipient(_ session: Session, paneIdentity: UUID?) -> Int? {
+        guard let hub = presentationHub, presentsRemotely(session, paneIdentity: paneIdentity) else { return nil }
+        return hub.route(session: session.id, pane: paneIdentity ?? session.paneIdentity)
+    }
+
+    /// pendingRecipient is `remoteRecipient` for work a headless origin holds, nil when that viewer cannot take held
+    /// work and its job tokens; an older one sees only what opens while it is connected.
+    func pendingRecipient(_ session: Session, paneIdentity: UUID?) -> Int? {
+        guard let owner = remoteRecipient(session, paneIdentity: paneIdentity), takesHeldWork(owner) else { return nil }
+        return owner
+    }
+
+    /// takesHeldWork is whether viewer `owner` can be handed work already open, which reaches it in a pending batch
+    /// and may carry a job token.
+    func takesHeldWork(_ owner: Int) -> Bool {
+        guard let hub = presentationHub else { return false }
+        return hub.supports(PresentationHub.pendingSnapshotKind, owner: owner) && hub.supports(PresentationHub.jobTokenKind, owner: owner)
     }
 }
 
 extension Session {
-    /// Remote presentation requires the target pane, or every existing pane, to follow on this Mac.
+    /// Remote presentation requires the target pane, or the primary pane for session-wide work, to follow on this Mac,
+    /// the same pane whose leader the work is routed to.
     func followsRemotely(paneIdentity: UUID?) -> Bool {
-        let panes = paneIdentity.map { [$0] } ?? ([self.paneIdentity] + [splitPaneIdentity].compactMap { $0 })
-        return panes.allSatisfy { ZmxLeadBook.shared.role(pane: $0) == .follower }
+        ZmxLeadBook.shared.role(pane: paneIdentity ?? self.paneIdentity) == .follower
     }
 
-    /// The identity of the pane behind a surface slot, nil for the ephemeral ones, which have no daemon.
+    /// The identity of the pane behind a surface slot, a Live scratch's included; nil for the ephemeral ones, which
+    /// have no daemon.
     public func paneIdentity(for surface: TerminalZoomSurface) -> UUID? {
         switch surface {
         case .primary: paneIdentity
         case .split: splitPaneIdentity
+        case .scratch: scratchClientIdentity
         default: nil
         }
     }
@@ -199,7 +254,7 @@ extension Session {
         switch pane {
         case .left: paneIdentity
         case .right: splitPaneIdentity
-        case .scratch: nil
+        case .scratch: scratchClientIdentity
         }
     }
 }

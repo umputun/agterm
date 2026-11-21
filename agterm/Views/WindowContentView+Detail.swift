@@ -141,6 +141,7 @@ extension WindowContentView {
                              isActive: focusable && !session.coverOverlayVisible,
                              deckVisible: deckInteractive && isActive && !fullOverlay && !quickTerminal.holdsKey,
                              onScreen: deckInteractive && isActive && !fullOverlay)
+                    .overlay { PaneLeadCover(session: session, pane: .scratch, background: terminalColor, foreground: chromeText) }
                     .opacity(fullOverlay ? 0 : 1)
                     .allowsHitTesting(!fullOverlay)
                     .id("\(session.id.uuidString)-scratch-\(session.scratchGeneration)")
@@ -249,32 +250,34 @@ extension WindowContentView {
         // nothing (`SessionTests.lazy creation must not force a second mount`). The split slot has no such
         // revision, so its id needs the token to change when the occupants exchange.
         let hostPrefix = pane == .left ? primarySurfaceID(session) : "\(session.id.uuidString)-split"
-        ZStack {
-            // a page companion has no terminal: its full page panel paints over this empty slot
-            if session.content == .terminal, deckHostsSurface(session: session, surface: pane.paneZoomSurface) {
-                TerminalView(session: session, surfaceKeyPath: slot,
-                             makeSurface: pane == .left ? makeSurface : makeSplitSurface,
-                             isActive: gates.focusable && focused && !gates.overlaid && !covered,
-                             deckVisible: gates.visible && !covered,
-                             onScreen: gates.onScreen && !covered)
-                    .overlay { paneDim(!focused, session: session,
-                                       color: washColor(hex: session.washColorHex(for: pane == .left ? .left : .right))) }
-                    .modifier(PaneOverlayCover(covered: covered))
-                    .id(pane == .left ? hostPrefix
-                        : "\(hostPrefix)-\(PaneHostIdentity.token(for: pane.paneZoomSurface, in: session))")
-            } else {
-                Color.clear
-                    .id("\(session.id.uuidString)-\(pane == .left ? "primary" : "split")-placeholder")
+        DeckPaneInset {
+            ZStack {
+                // a page companion has no terminal: its full page panel paints over this empty slot
+                if session.content == .terminal, deckHostsSurface(session: session, surface: pane.paneZoomSurface) {
+                    TerminalView(session: session, surfaceKeyPath: slot,
+                                 makeSurface: pane == .left ? makeSurface : makeSplitSurface,
+                                 isActive: gates.focusable && focused && !gates.overlaid && !covered,
+                                 deckVisible: gates.visible && !covered,
+                                 onScreen: gates.onScreen && !covered)
+                        .overlay { paneDim(!focused, session: session,
+                                           color: washColor(hex: session.washColorHex(for: pane == .left ? .left : .right))) }
+                        .modifier(PaneOverlayCover(covered: covered))
+                        .id(pane == .left ? hostPrefix
+                            : "\(hostPrefix)-\(PaneHostIdentity.token(for: pane.paneZoomSurface, in: session))")
+                } else {
+                    Color.clear
+                        .id("\(session.id.uuidString)-\(pane == .left ? "primary" : "split")-placeholder")
+                }
+                PaneLeadCover(session: session, pane: pane == .left ? .left : .right, background: terminalColor,
+                              foreground: chromeText, hidden: covered)
+                paneOverlayPanel(session: session, pane: pane, focused: focused, gates: gates)
             }
-            PaneLeadCover(session: session, pane: pane, background: terminalColor, foreground: chromeText,
-                          hidden: covered)
-            paneOverlayPanel(session: session, pane: pane, focused: focused, gates: gates)
-        }
-        .hudPaneAnchor(pane)
-        .anchorPreference(key: AskAnchorPreferenceKey.self, value: .bounds) { anchor in
-            publishesAskAnchor
-                ? AskAnchorPreferences(sessionID: session.id, panes: [pane: anchor])
-                : AskAnchorPreferences()
+            .hudPaneAnchor(pane)
+            .anchorPreference(key: AskAnchorPreferenceKey.self, value: .bounds) { anchor in
+                publishesAskAnchor
+                    ? AskAnchorPreferences(sessionID: session.id, panes: [pane: anchor])
+                    : AskAnchorPreferences()
+            }
         }
     }
 
@@ -331,7 +334,7 @@ extension WindowContentView {
                             TerminalView(session: session, surfaceKeyPath: \.overlaySurface,
                                          makeSurface: { makeOverlaySurface($0, nil) },
                                          isActive: live, deckVisible: live, viewOnly: !style.interactive,
-                                         onScreen: onScreen && shown)
+                                         onScreen: onScreen && shown, labelAbove: session.hudActive)
                         }
                     }
                         .frame(width: panelFrame.width, height: panelFrame.height)
@@ -352,6 +355,13 @@ extension WindowContentView {
                         // without the generation SwiftUI reuses the host: `makeNSView` never re-runs and
                         // `updateNSView` hits a torn-down view with `overlaySurface` nil.
                         .id("\(session.id.uuidString)-overlay-\(session.overlaySlotGeneration)")
+                }
+            }
+            .overlayPreferenceValue(LinkHoverModelKey.self) { model in
+                if let model {
+                    LinkHoverLabel(model: model)
+                        .frame(width: layoutFrame.width, height: layoutFrame.height, alignment: .bottomLeading)
+                        .position(x: layoutFrame.midX, y: layoutFrame.midY)
                 }
             }
             .opacity(shown ? 1 : 0)

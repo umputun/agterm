@@ -36,6 +36,35 @@ struct ServerActionsRemoteTests {
             == ["left": ZmxSupport.daemonName(for: session.paneIdentity), "right": ZmxSupport.daemonName(for: split)])
     }
 
+    @Test func theTreeListsARunningScratchBesideThePanes() async throws {
+        let session = try newSession()
+        _ = harness.actions.scratchSession(session.id.uuidString, window: nil, mode: "on", command: nil)
+        let scratch = try #require(session.scratchDaemon?.identity)
+        running([session.paneIdentity])
+        harness.runner.records = (harness.runner.records ?? [])
+            + [ZmxSessionRecord(name: ZmxSupport.scratchDaemonName(for: scratch), clients: 0, leaderPID: 101)]
+
+        let tree = try #require(await harness.actions.remoteTree(host: nil).result?.remote)
+
+        let listed = try #require(tree.sessions.first { $0.id == session.id.uuidString })
+        #expect(listed.scratch == ControlRemotePane(pane: "scratch", daemon: ZmxSupport.scratchDaemonName(for: scratch)))
+        running([session.paneIdentity])
+        let unlisted = try #require(await harness.actions.remoteTree(host: nil).result?.remote)
+        #expect(unlisted.sessions.first { $0.id == session.id.uuidString }?.scratch == nil)
+    }
+
+    @Test func eachListedPaneCarriesItsForegroundProgram() async throws {
+        let session = try newSession()
+        running([session.paneIdentity])
+        harness.panes.leaders = [session.paneIdentity: 100]
+        harness.actions.foregroundArgv = { _ in ["htop"] }
+
+        let tree = try #require(await harness.actions.remoteTree(host: nil).result?.remote)
+
+        let listed = try #require(tree.sessions.first { $0.id == session.id.uuidString })
+        #expect(listed.panes.first?.foreground == ["htop"])
+    }
+
     @Test func aSessionWhoseDaemonIsNotRunningIsNotListed() async throws {
         let session = try newSession()
         running([])
@@ -88,5 +117,21 @@ struct ServerActionsRemoteTests {
         session.daemonBackedPanes.removeAll()
         #expect(harness.actions.openPresentation(session: session.id.uuidString)
             == ControlResponse(ok: false, error: "session is not live-backed, so nothing can be attached to it"))
+    }
+
+    @Test func aSessionInItsUndoGraceOrRemovedForGoodCanStillBePresented() throws {
+        let pending = try newSession()
+        let removed = try newSession()
+        let unknown = UUID()
+
+        #expect(harness.store.softCloseSession(pending.id, grace: 60))
+        harness.store.closeSession(removed.id)
+
+        #expect(harness.actions.openPresentation(session: pending.id.uuidString)
+            == ControlResponse(ok: true, result: ControlResult(id: pending.id.uuidString)))
+        #expect(harness.actions.openPresentation(session: removed.id.uuidString)
+            == ControlResponse(ok: true, result: ControlResult(id: removed.id.uuidString)))
+        #expect(harness.actions.openPresentation(session: unknown.uuidString).ok == false)
+        harness.store.finalizeAllPendingCloses()
     }
 }

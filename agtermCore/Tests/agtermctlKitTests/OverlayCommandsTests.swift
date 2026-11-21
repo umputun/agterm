@@ -191,6 +191,24 @@ struct OverlayCommandsTests {
         #expect(rejects(argv))
     }
 
+    @Test(arguments: [("--html", true), ("--image", false), ("--markdown", false), ("--text", false)])
+    func aShellDescriptorPathIsRefusedWithAHint(flag: String, mentionsBlock: Bool) {
+        do {
+            _ = try Agtermctl.parseAsRoot(["session", "overlay", "open", flag, "/dev/fd/63"])
+            Issue.record("\(flag) /dev/fd/63 was accepted")
+        } catch {
+            let message = Agtermctl.message(for: error)
+            #expect(message.contains("\(flag) /dev/fd/63"))
+            #expect(message.contains("=(...) with --block") == mentionsBlock)
+        }
+    }
+
+    @Test(arguments: ["/dev/fd/x", "/dev/fdx/1", "/tmp/dev/fd/3"])
+    func aPathOnlyResemblingADescriptorIsSent(path: String) throws {
+        let req = try request(["session", "overlay", "open", "--html", path])
+        #expect(req.args?.html == path)
+    }
+
     @Test func imageOpenSendsTheResolvedPathAndNoPageFlags() throws {
         let req = try request(["session", "overlay", "open", "--image", "shots/../shots/a.png", "--follow"])
         let cwd = FileManager.default.currentDirectoryPath
@@ -278,6 +296,21 @@ struct OverlayCommandsTests {
         #expect(rejects(["session", "overlay", "wrap", "on", "--pane", "scratch"]))
     }
 
+    @Test(arguments: ["on", "off", "toggle"])
+    func expandSendsItsModePaneAndTarget(_ mode: String) throws {
+        let req = try request(["session", "overlay", "expand", mode, "--pane", "right", "--target", "s"])
+        #expect(req.cmd == .sessionOverlayExpand)
+        #expect(req.target == "s")
+        #expect(req.args?.mode == mode)
+        #expect(req.args?.pane == "right")
+    }
+
+    @Test func expandRefusesABadModeOrPane() {
+        #expect(rejects(["session", "overlay", "expand", "maybe"]))
+        #expect(rejects(["session", "overlay", "expand"]))
+        #expect(rejects(["session", "overlay", "expand", "on", "--pane", "scratch"]))
+    }
+
     @Test(arguments: [
         (["main()"], "main()" as String?, nil as String?),
         (["--next"], nil as String?, "next" as String?),
@@ -314,6 +347,20 @@ struct OverlayCommandsTests {
         #expect(rejects(["session", "overlay", "changes"]))
         #expect(rejects(["session", "overlay", "changes", "--next", "--prev"]))
         #expect(rejects(["session", "overlay", "changes", "--next", "--pane", "scratch"]))
+    }
+
+    @Test func filesSendsItsTargetPaneAndSession() throws {
+        let req = try request(["session", "overlay", "files", "--go", "src/b.go", "--pane", "right", "--target", "s"])
+        #expect(req.cmd == .sessionOverlayFiles)
+        #expect(req.target == "s")
+        #expect(req.args?.to == "src/b.go")
+        #expect(req.args?.pane == "right")
+    }
+
+    @Test func filesRefusesAMissingOrEmptyTarget() {
+        #expect(rejects(["session", "overlay", "files"]))
+        #expect(rejects(["session", "overlay", "files", "--go", ""]))
+        #expect(rejects(["session", "overlay", "files", "--go", "2", "--pane", "scratch"]))
     }
 
     @Test func openHelpTellsFollowFileFromFollow() {

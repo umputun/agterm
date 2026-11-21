@@ -86,6 +86,43 @@ struct ServerActionsReceiptsTests {
         #expect(second.ok)
     }
 
+    @Test func aRepeatedConvertNestsTheSessionOnce() async throws {
+        let session = try harness.session(await plain(.sessionNew))
+        let first = await serve(.sessionCompanionConvert, target: session.id.uuidString, op: "convert")
+        let count = sessionCount
+
+        let second = await serve(.sessionCompanionConvert, target: session.id.uuidString, op: "convert")
+
+        #expect(first.result?.receipt?.outcome == .applied)
+        #expect(sessionCount == count)
+        #expect(second.result?.receipt == first.result?.receipt)
+    }
+
+    @Test func aRepeatedCompanionMoveIsAnsweredFromItsReceipt() async throws {
+        let first = try harness.session(await plain(.sessionNew))
+        let second = try harness.session(await plain(.sessionNew))
+        let companion = try harness.session(await plain(.sessionCompanionNew, target: first.id.uuidString))
+        var args = ControlArgs()
+        args.parent = second.id.uuidString
+
+        let moved = await serve(.sessionCompanionMove, target: companion.id.uuidString, args, op: "move")
+        let repeated = await serve(.sessionCompanionMove, target: companion.id.uuidString, args, op: "move")
+
+        #expect(moved.result?.receipt?.outcome == .applied)
+        #expect(repeated.result?.receipt == moved.result?.receipt)
+        #expect(companion.parentID == second.id)
+    }
+
+    @Test(arguments: [Command.sessionRestart, .sessionCompanionDuplicate, .sessionCompanionConvert, .sessionCompanionMove, .sessionCompanionPromote,
+                      .zmxKill, .zmxKillPane])
+    func aPaneLifecycleCommandTakesAnOperationId(_ command: Command) {
+        #expect(CatalogOperationBook.receiptCommands.contains(command))
+    }
+
+    @Test func aTerminateTakesAnOperationIdAsACloseDoes() {
+        #expect(CatalogOperationBook.receiptCommands.contains(.sessionTerminate))
+    }
+
     @Test func aRefusalIsRecordedSoTheIdStaysRefused() async throws {
         _ = await serve(.sessionNew, op: "stale", epoch: "an-old-epoch")
         let count = sessionCount
@@ -94,6 +131,39 @@ struct ServerActionsReceiptsTests {
 
         #expect(sessionCount == count)
         #expect(retried.result?.receipt?.outcome == .refused)
+    }
+
+    @Test(arguments: [Command.sessionPage, .sessionCompanionPage])
+    func aPageRowCreatedUnderAnOperationIdIsAppliedOnce(_ cmd: Command) async throws {
+        let anchor = try harness.session(await plain(.sessionNew))
+        var page = ControlArgs()
+        page.url = "https://example.com/"
+        let first = await serve(cmd, target: anchor.id.uuidString, page, op: "page-row")
+        let count = sessionCount
+
+        let repeated = await serve(cmd, target: anchor.id.uuidString, page, op: "page-row")
+
+        #expect(first.result?.receipt?.outcome == .applied)
+        #expect(repeated.result?.receipt == first.result?.receipt)
+        #expect(sessionCount == count)
+        #expect(harness.store.session(withID: try #require(first.result?.id.flatMap(UUID.init)))?.content == .page)
+    }
+
+    @Test func aTerminalCommandOnAPageRowIsARefusedReceiptThatStaysRefused() async throws {
+        let anchor = try harness.session(await plain(.sessionNew))
+        var page = ControlArgs()
+        page.url = "https://example.com/"
+        let row = try harness.session(await plain(.sessionPage, target: anchor.id.uuidString, page)).id.uuidString
+        var split = ControlArgs()
+        split.mode = "on"
+
+        let reply = await serve(.sessionSplit, target: row, split, op: "page-split")
+        let repeated = await serve(.sessionSplit, target: row, split, op: "page-split")
+
+        #expect(reply.result?.receipt?.outcome == .refused)
+        #expect(reply.error == "session.split: not available on a page session")
+        #expect(repeated == reply)
+        #expect(harness.store.session(withID: try #require(UUID(uuidString: row)))?.hasSplit == false)
     }
 
     @Test func anotherEpochIsRefusedBeforeTheCommandRuns() async {
@@ -135,6 +205,16 @@ struct ServerActionsReceiptsTests {
         #expect(sessionCount == count)
         #expect(!arrival.ok)
         #expect(arrival.result?.receipt?.outcome == .fenced)
+    }
+
+    @Test func aLookupNamingAnotherWindowIsRefusedWithoutFencing() async {
+        var args = ControlArgs()
+        args.window = UUID().uuidString
+
+        let lookup = await plain(.catalogOp, target: "elsewhere", args)
+
+        #expect(lookup.error?.hasPrefix("window not found: ") == true)
+        #expect(harness.store.catalogOperations?.receipt("elsewhere") == nil)
     }
 
     private func lookup(_ opID: String, sent: CatalogPosition?) async -> ControlResponse {

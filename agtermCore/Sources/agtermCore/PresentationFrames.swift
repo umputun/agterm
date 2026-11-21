@@ -8,6 +8,12 @@ public enum PresentationPane: Equatable, Sendable, Codable {
 
     private static let scratchName = "scratch"
 
+    /// identity is the pane's stable identity, nil for the scratch.
+    public var identity: UUID? {
+        if case .identity(let id) = self { return id }
+        return nil
+    }
+
     public init(from decoder: Decoder) throws {
         let text = try decoder.singleValueContainer().decode(String.self)
         if text == Self.scratchName {
@@ -57,15 +63,21 @@ public struct PresentationStatus: Codable, Equatable, Sendable {
     public var pane: PresentationPane?
     /// Epoch seconds on the origin's clock.
     public var changedAt: Double?
+    /// autoReset is true for a status that selection ends; absent from an older origin, which never sent it.
+    public var autoReset: Bool?
+    /// activePanes lists the panes still reporting work, empty when none; absent from an older origin.
+    public var activePanes: [PresentationPane]?
 
     public init(status: AgentStatus, blink: Bool, color: String?, shape: StatusShape?, pane: PresentationPane?,
-                changedAt: Double?) {
+                changedAt: Double?, autoReset: Bool? = nil, activePanes: [PresentationPane]? = nil) {
         self.status = status
         self.blink = blink
         self.color = color
         self.shape = shape
         self.pane = pane
         self.changedAt = changedAt
+        self.autoReset = autoReset
+        self.activePanes = activePanes
     }
 }
 
@@ -103,6 +115,54 @@ public struct PresentationNotify: Codable, Equatable, Sendable {
     }
 }
 
+/// PresentationMessage is mail queued for one of the session's panes on the origin, without its body. A live event,
+/// never part of a snapshot.
+public struct PresentationMessage: Codable, Equatable, Sendable {
+    public var pane: UUID
+    public var from: String?
+    public var messageID: UUID
+
+    public init(pane: UUID, from: String?, messageID: UUID) {
+        self.pane = pane
+        self.from = from
+        self.messageID = messageID
+    }
+}
+
+/// PresentationMail is a session's unacked mail count per origin pane, keyed by the pane's uuidString, zeros
+/// omitted. Always a full replacement: an empty map clears every count.
+public struct PresentationMail: Codable, Equatable, Sendable {
+    public var panes: [String: Int]
+
+    public init(panes: [String: Int]) {
+        self.panes = panes
+    }
+}
+
+/// PresentationCompanions is a session's companion membership in the origin's sidebar order, so a viewer can attach a
+/// member it has not handled yet. Only rows the origin owns are members: one it shows from another host is not its own.
+public struct PresentationCompanions: Codable, Equatable, Sendable {
+    public struct Member: Codable, Equatable, Sendable {
+        public enum Kind: String, Codable, Sendable {
+            case terminal, page
+        }
+
+        public var id: UUID
+        public var kind: Kind
+
+        public init(id: UUID, kind: Kind) {
+            self.id = id
+            self.kind = kind
+        }
+    }
+
+    public var members: [Member]
+
+    public init(members: [Member]) {
+        self.members = members
+    }
+}
+
 /// PresentationSound is a status sound the origin hands its presenter to play instead of playing it itself.
 /// A nil `name` is the presenter's own Settings blocked sound, so each Mac's choice applies where it plays.
 public struct PresentationSound: Codable, Equatable, Sendable {
@@ -113,8 +173,8 @@ public struct PresentationSound: Codable, Equatable, Sendable {
     }
 }
 
-/// PresentationAsk is an ask the origin hands its presenter to draw. `owner` is the presenter generation it
-/// was handed under, and every answer echoes it, so one arriving after a handback is recognisably stale.
+/// PresentationAsk is an ask the origin hands a viewer to draw. `owner` is the token of the viewer it
+/// was handed to, and every answer echoes it, so one arriving after a handback is recognisably stale.
 public struct PresentationAsk: Codable, Equatable, Sendable {
     public var id: String
     public var title: String
@@ -132,8 +192,10 @@ public struct PresentationAsk: Codable, Equatable, Sendable {
     public var input: AskInputForm?
     public var choices: AskChoiceForm?
     public var cancelID: String?
+    /// offer numbers this hand-over under `offer.id`; every reply about it echoes it.
+    public var offer: Int?
 
-    public init(_ ask: PendingAsk, pane: PresentationPane?, owner: Int) {
+    public init(_ ask: PendingAsk, pane: PresentationPane?, owner: Int, offer: Int? = nil) {
         id = ask.id
         title = ask.title
         message = ask.message
@@ -145,6 +207,7 @@ public struct PresentationAsk: Codable, Equatable, Sendable {
         width = ask.width
         self.pane = pane
         self.owner = owner
+        self.offer = offer
         cancelID = ask.cancelID
         switch ask.form {
         case .input(let form): input = form
@@ -196,13 +259,15 @@ public struct PresentationAskAnswer: Codable, Equatable, Sendable {
     public var button: String?
     public var text: String?
     public var selected: [String]?
+    public var offer: Int?
 
-    public init(id: String, owner: Int, button: String?, text: String? = nil, selected: [String]? = nil) {
+    public init(id: String, owner: Int, button: String?, text: String? = nil, selected: [String]? = nil, offer: Int? = nil) {
         self.id = id
         self.owner = owner
         self.button = button
         self.text = text
         self.selected = selected
+        self.offer = offer
     }
 }
 
@@ -210,10 +275,12 @@ public struct PresentationAskAnswer: Codable, Equatable, Sendable {
 public struct PresentationAskRef: Codable, Equatable, Sendable {
     public var id: String
     public var owner: Int
+    public var offer: Int?
 
-    public init(id: String, owner: Int) {
+    public init(id: String, owner: Int, offer: Int? = nil) {
         self.id = id
         self.owner = owner
+        self.offer = offer
     }
 }
 
@@ -337,12 +404,21 @@ public struct PresentationPage: Codable, Equatable, Sendable {
     public var follow: Bool
     /// markdownLinks is the link grant the origin froze at open; nil, and left out of the frame, for any other page.
     public var markdownLinks: MarkdownLinkGrant?
+    /// textLog makes a text page a log page; sent only to a presenter listing `page.text`, which an older one ignores.
+    public var textLog: TextLog?
+    /// textSeed is the text state a re-offered page resumes with, applied before its first render and report.
+    public var textSeed: PresentationTextState?
+    /// offer numbers this hand-over under `offer.id`; every reply about it echoes it.
+    public var offer: Int?
 
     public init(page: String, token: String, source: PresentationPageSource, identity: String, chromeless: Bool,
                 javascript: Bool, navigation: Bool, browse: Bool, persistent: Bool, backgroundColor: String?,
                 pane: PresentationPane?, sizePercent: Int?, points: OverlayPointSize = OverlayPointSize(),
-                follow: Bool, markdownLinks: MarkdownLinkGrant? = nil) {
+                follow: Bool, markdownLinks: MarkdownLinkGrant? = nil, textLog: TextLog? = nil,
+                textSeed: PresentationTextState? = nil) {
         self.markdownLinks = markdownLinks
+        self.textLog = textLog
+        self.textSeed = textSeed
         self.page = page
         self.token = token
         self.source = source
@@ -377,16 +453,34 @@ public struct PresentationPageChange: Codable, Equatable, Sendable {
 
     public var page: String
     public var reason: String?
+    public var offer: Int?
 
-    public init(page: String, reason: String? = nil) {
+    public init(page: String, reason: String? = nil, offer: Int? = nil) {
         self.page = page
         self.reason = reason
+        self.offer = offer
     }
 }
 
-/// PresentationPageAction is what the origin asks of a handed-over page.
+/// PresentationPageAction is what the origin asks of a handed-over page. The text actions go only to a presenter
+/// listing `page.text`, and `files` only to one listing `page.files`: an older one cannot decode them and would end
+/// the stream.
 public enum PresentationPageAction: String, Codable, Sendable {
     case hide, show, reloadOriginal, reloadCurrent, back, forward, browser, resize
+    case follow, search, wrap, expand, changes, files
+
+    /// answersWithResult says the presenter answers this action with a `pageResult` rather than only `appliedSeq`.
+    public var answersWithResult: Bool {
+        switch self {
+        case .follow, .search, .wrap, .expand, .changes, .files: return true
+        case .hide, .show, .reloadOriginal, .reloadCurrent, .back, .forward, .browser, .resize: return false
+        }
+    }
+}
+
+/// PresentationTextStep is a one-shot move on a text page: a search step or close, or a diff change step.
+public enum PresentationTextStep: String, Codable, Sendable {
+    case next, prev, close
 }
 
 /// PresentationPageCommand is one origin request for a handed-over page. `seq` grows per page, and the
@@ -401,9 +495,18 @@ public struct PresentationPageCommand: Codable, Equatable, Sendable {
     /// merge asks a resize to keep the axes it does not name, for a picture the presenter sized itself; nil, and
     /// left out of the frame, for every other command, which replaces the size whole.
     public var merge: Bool?
+    /// toggle is a follow or wrap request's mode.
+    public var toggle: ControlToggleMode?
+    /// query is a search request's new query; a search carries either it or a step.
+    public var query: String?
+    public var step: PresentationTextStep?
+    /// file is a diff page file jump's target, a number from 1 or a path as the page shows it.
+    public var file: String?
 
     public init(page: String, seq: Int, action: PresentationPageAction, sizePercent: Int? = nil,
-                points: OverlayPointSize = OverlayPointSize(), merge: Bool? = nil) {
+                points: OverlayPointSize = OverlayPointSize(), merge: Bool? = nil, toggle: ControlToggleMode? = nil,
+                query: String? = nil, step: PresentationTextStep? = nil, file: String? = nil) {
+        self.file = file
         self.page = page
         self.seq = seq
         self.action = action
@@ -411,6 +514,9 @@ public struct PresentationPageCommand: Codable, Equatable, Sendable {
         width = points.width
         height = points.height
         self.merge = merge
+        self.toggle = toggle
+        self.query = query
+        self.step = step
     }
 
     public var points: OverlayPointSize {
@@ -439,9 +545,13 @@ public struct PresentationPageState: Codable, Equatable, Sendable {
     public var canGoForward: Bool
     public var hidden: Bool
     public var appliedSeq: Int
+    /// text is a text page's live state; an origin predating `page.text` ignores the key.
+    public var text: PresentationTextState?
+    public var offer: Int?
 
     public init(page: String, title: String?, address: String?, load: HtmlLoadState, error: String?,
-                canGoBack: Bool, canGoForward: Bool, hidden: Bool, appliedSeq: Int) {
+                canGoBack: Bool, canGoForward: Bool, hidden: Bool, appliedSeq: Int, text: PresentationTextState? = nil,
+                offer: Int? = nil) {
         self.page = page
         self.title = title.map { String($0.prefix(Self.maxTitle)) }
         self.address = address.map { String($0.prefix(Self.maxAddress)) }
@@ -451,6 +561,68 @@ public struct PresentationPageState: Codable, Equatable, Sendable {
         self.canGoForward = canGoForward
         self.hidden = hidden
         self.appliedSeq = appliedSeq
+        self.text = text
+        self.offer = offer
+    }
+}
+
+/// PresentationTextState is a text page's live state on the presenter: a log page's following and last read, the
+/// search query under the presenter's revision with its counts, wrap, expand, and a diff page's changes.
+public struct PresentationTextState: Codable, Equatable, Sendable {
+    public var following: Bool?
+    public var log: TextLogReport?
+    public var query: String?
+    public var revision: Int
+    public var matches: Int?
+    public var current: Int?
+    public var wrap: Bool
+    /// expand is true while a JSON Lines page is laid out; nil means off, and is all a presenter predating
+    /// `page.expand` ever sends.
+    public var expand: Bool?
+    public var changes: TextChanges?
+    /// files is a diff page's file in view; an origin predating `page.files` ignores the key.
+    public var files: TextFiles?
+
+    public init(following: Bool? = nil, log: TextLogReport? = nil, query: String? = nil, revision: Int = 0,
+                matches: Int? = nil, current: Int? = nil, wrap: Bool = false, changes: TextChanges? = nil,
+                files: TextFiles? = nil, expand: Bool? = nil) {
+        self.files = files.map { TextFiles(count: $0.count, current: $0.current, path: String($0.path.prefix(TextFiles.maxPath))) }
+        self.following = following
+        self.log = log
+        self.query = query.map { String($0.prefix(TextSearch.maxQuery)) }
+        self.revision = revision
+        self.matches = matches
+        self.current = current
+        self.wrap = wrap
+        self.expand = expand
+        self.changes = changes
+    }
+}
+
+/// PresentationPageResult answers one text action by its `seq`, with the page's text state after it, so the origin
+/// replies with state its tree already shows.
+public struct PresentationPageResult: Codable, Equatable, Sendable {
+    public static let maxText = 1024
+    /// deadline is how long the origin waits for a result before answering the caller without one.
+    public static let deadline = Duration.seconds(5)
+
+    public var page: String
+    public var seq: Int
+    public var ok: Bool
+    public var text: String?
+    public var error: String?
+    public var state: PresentationTextState?
+    public var offer: Int?
+
+    public init(page: String, seq: Int, ok: Bool, text: String? = nil, error: String? = nil,
+                state: PresentationTextState? = nil, offer: Int? = nil) {
+        self.page = page
+        self.seq = seq
+        self.ok = ok
+        self.text = text.map { String($0.prefix(Self.maxText)) }
+        self.error = error.map { String($0.prefix(Self.maxText)) }
+        self.state = state
+        self.offer = offer
     }
 }
 
@@ -466,54 +638,12 @@ public struct PresentationRespawns: Codable, Equatable, Sendable {
     }
 }
 
-/// PresentationLinkClick is a path clicked in a pane the presenter shows, for the origin to open. `pane` is the
-/// origin's identity of that pane. The mode decodes leniently, an unknown one as `overlay`, because a frame that
-/// fails to decode closes the whole stream.
-public struct PresentationLinkClick: Codable, Equatable, Sendable {
-    public var raw: String
-    public var pane: UUID
-    public var mode: LinkOpenMode
+/// PresentationLeadReport is the full set of the session's origin panes a viewer leads; each report replaces the last.
+public struct PresentationLeadReport: Codable, Equatable, Sendable {
+    public var leaders: [UUID]
 
-    private enum CodingKeys: String, CodingKey { case raw, pane, mode }
-
-    public init(raw: String, pane: UUID, mode: LinkOpenMode) {
-        self.raw = raw
-        self.pane = pane
-        self.mode = mode
-    }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        raw = try container.decode(String.self, forKey: .raw)
-        pane = try container.decode(UUID.self, forKey: .pane)
-        mode = (try? container.decode(String.self, forKey: .mode)).flatMap(LinkOpenMode.init(rawValue:)) ?? .overlay
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(raw, forKey: .raw)
-        try container.encode(pane, forKey: .pane)
-        try container.encode(mode.rawValue, forKey: .mode)
-    }
-}
-
-/// PresentationLinkRefusal is the origin's answer to a forwarded click it did not open. An unknown reason decodes as
-/// `notOpened`, for the same reason the click's mode decodes leniently.
-public struct PresentationLinkRefusal: Codable, Equatable, Sendable {
-    public var reason: RemoteLinkRefusal
-
-    private enum CodingKeys: String, CodingKey { case reason }
-
-    public init(reason: RemoteLinkRefusal) { self.reason = reason }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        reason = (try? container.decode(String.self, forKey: .reason)).flatMap(RemoteLinkRefusal.init(rawValue:)) ?? .notOpened
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(reason.rawValue, forKey: .reason)
+    public init(leaders: [UUID]) {
+        self.leaders = leaders
     }
 }
 
@@ -541,15 +671,24 @@ public struct PresentationSnapshot: Codable, Equatable, Sendable {
     public var respawns: PresentationRespawns?
     /// info is nil from an origin that predates the info line, or with no local line set.
     public var info: PresentationInfo?
+    /// mail is nil from an origin that predates mail counts.
+    public var mail: PresentationMail?
+    /// companions is nil from an origin that predates the membership, for a row it shows from another host, and for
+    /// a parent in its undo grace. An empty list means no companions the origin owns, though it may still show a
+    /// companion from another host.
+    public var companions: PresentationCompanions?
 
     public init(status: PresentationStatus?, hud: PresentationHud?, context: String? = nil, layout: PresentationLayout? = nil,
-                respawns: PresentationRespawns? = nil, info: PresentationInfo? = nil) {
+                respawns: PresentationRespawns? = nil, info: PresentationInfo? = nil, mail: PresentationMail? = nil,
+                companions: PresentationCompanions? = nil) {
         self.status = status
         self.hud = hud
         self.context = context
         self.layout = layout
         self.respawns = respawns
         self.info = info
+        self.mail = mail
+        self.companions = companions
     }
 }
 
@@ -624,12 +763,23 @@ public struct PresentationFrame: Equatable, Sendable {
         case layout(PresentationLayout)
         case hud(PresentationHud?)
         case notify(PresentationNotify)
+        case message(PresentationMessage)
+        /// mail replaces the session's mail counts; sent only when they changed for that viewer.
+        case mail(PresentationMail)
+        /// companions replaces the session's companion membership; sent only to a viewer listing the kind, when it changed.
+        case companions(PresentationCompanions)
         case sound(PresentationSound)
         /// A viewer asking to be the session's sole presenter. Sent only after the origin's hello offered it.
         case presenterAcquire
         case presenterGranted
-        /// The role is held by another viewer; this one stays a mirror until it reconnects.
+        /// The role is held by another viewer; this one stays a mirror until it reconnects or the role falls vacant.
         case presenterRefused
+        /// The presenter's stream ended, so a mirror may send `presenterAcquire` again; the first to arrive wins.
+        case presenterVacant
+        /// ended: the origin removed the session for good; the stream closes after it and is not retried.
+        case ended
+        /// leadReport: a viewer telling the origin which of the session's panes it leads, so new work for them goes there.
+        case leadReport(PresentationLeadReport)
         case askRequest(PresentationAsk)
         case askResolve(PresentationAskAnswer)
         /// The presenter cannot show the ask, so the origin takes it back.
@@ -657,12 +807,19 @@ public struct PresentationFrame: Equatable, Sendable {
         case pageClosed(PresentationPageChange)
         case pageCommand(PresentationPageCommand)
         case pageState(PresentationPageState)
+        /// pageResult: the presenter's answer to one text action, by its sequence number.
+        case pageResult(PresentationPageResult)
         /// The origin respawned a pane's shell under the same daemon name; carries that pane's new count alone.
         case respawn(PresentationRespawns)
         /// linkClick: the presenter forwards a path clicked in one of the session's panes for the origin to open.
         case linkClick(PresentationLinkClick)
         /// linkRefused: the origin did not open a forwarded click.
         case linkRefused(PresentationLinkRefusal)
+        /// linkSnapshot: the origin offers the file a forwarded click resolved to, for an `open` rule on the viewer.
+        case linkSnapshot(PresentationLinkSnapshot)
+        /// statusClear and statusSeen: the presenter saw what may end the origin's status or unseen badge.
+        case statusClear(PresentationStatusClear)
+        case statusSeen(PresentationSeen)
         /// pendingChunk carries a slice of what a headless origin held for a new presenter, applied only at the commit.
         case pendingChunk(PresentationPendingChunk)
         /// pendingCommit applies every chunk since the presenter was granted, in order.
@@ -682,10 +839,16 @@ public struct PresentationFrame: Equatable, Sendable {
             case .layout: return "layout"
             case .hud: return "hud"
             case .notify: return "notify"
+            case .message: return "message"
+            case .mail: return "mail"
+            case .companions: return "companions"
             case .sound: return "sound"
             case .presenterAcquire: return "presenter.acquire"
             case .presenterGranted: return "presenter.granted"
             case .presenterRefused: return "presenter.refused"
+            case .presenterVacant: return "presenter.vacant"
+            case .ended: return "ended"
+            case .leadReport: return "lead.report"
             case .askRequest: return "ask.request"
             case .askResolve: return "ask.resolve"
             case .askRejected: return "ask.rejected"
@@ -705,9 +868,13 @@ public struct PresentationFrame: Equatable, Sendable {
             case .pageClosed: return "page.closed"
             case .pageCommand: return "page.command"
             case .pageState: return "page.state"
+            case .pageResult: return "page.result"
             case .respawn: return "pane.respawn"
             case .linkClick: return "link.click"
+            case .statusClear: return "status.clear"
+            case .statusSeen: return "status.seen"
             case .linkRefused: return "link.refused"
+            case .linkSnapshot: return "link.snapshot"
             case .pendingChunk: return "pending.chunk"
             case .pendingCommit: return "pending.commit"
             case .unknown(let kind): return kind
@@ -723,100 +890,6 @@ public struct PresentationFrame: Equatable, Sendable {
         self.gen = gen
         self.rev = rev
         self.body = body
-    }
-}
-
-extension PresentationFrame: Codable {
-    private enum CodingKeys: String, CodingKey {
-        case kind, gen, rev, hello, snapshot, status, context, info, layout, hud, notify, sound, ask, pick, overlay, page, respawn, link,
-             pending
-    }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        gen = try container.decode(Int.self, forKey: .gen)
-        rev = try container.decode(Int.self, forKey: .rev)
-        let kind = try container.decode(String.self, forKey: .kind)
-        switch kind {
-        case "hello": body = .hello(try container.decode(PresentationHello.self, forKey: .hello))
-        case "ping": body = .ping
-        case "ack": body = .ack
-        case "snapshot": body = .snapshot(try container.decode(PresentationSnapshot.self, forKey: .snapshot))
-        case "status": body = .status(try container.decodeIfPresent(PresentationStatus.self, forKey: .status))
-        case "context": body = .context(try container.decodeIfPresent(String.self, forKey: .context))
-        case "info": body = .info(try container.decodeIfPresent(PresentationInfo.self, forKey: .info))
-        case "layout": body = .layout((try? container.decode(PresentationLayout.self, forKey: .layout)) ?? .invalid)
-        case "hud": body = .hud(try container.decodeIfPresent(PresentationHud.self, forKey: .hud))
-        case "notify": body = .notify(try container.decode(PresentationNotify.self, forKey: .notify))
-        case "sound": body = .sound(try container.decode(PresentationSound.self, forKey: .sound))
-        case "presenter.acquire": body = .presenterAcquire
-        case "presenter.granted": body = .presenterGranted
-        case "presenter.refused": body = .presenterRefused
-        case "ask.request": body = .askRequest(try container.decode(PresentationAsk.self, forKey: .ask))
-        case "ask.resolve": body = .askResolve(try container.decode(PresentationAskAnswer.self, forKey: .ask))
-        case "ask.rejected": body = .askRejected(try container.decode(PresentationAskRef.self, forKey: .ask))
-        case "ask.dismiss": body = .askDismiss(try container.decode(PresentationAskRef.self, forKey: .ask))
-        case "pick.request": body = .pickRequest(try container.decode(PresentationPick.self, forKey: .pick))
-        case "pick.resolve": body = .pickResolve(try container.decode(PresentationPickAnswer.self, forKey: .pick))
-        case "pick.rejected": body = .pickRejected(try container.decode(PresentationPickRef.self, forKey: .pick))
-        case "pick.dismiss": body = .pickDismiss(try container.decode(PresentationPickRef.self, forKey: .pick))
-        case "overlay.request": body = .overlayRequest(try container.decode(PresentationOverlay.self, forKey: .overlay))
-        case "overlay.rejected":
-            body = .overlayRejected(try container.decode(PresentationOverlayChange.self, forKey: .overlay))
-        case "overlay.close": body = .overlayClose(try container.decode(PresentationOverlayChange.self, forKey: .overlay))
-        case "overlay.resize": body = .overlayResize(try container.decode(PresentationOverlayChange.self, forKey: .overlay))
-        case "overlay.closed": body = .overlayClosed(try container.decode(PresentationOverlayChange.self, forKey: .overlay))
-        case "page.request": body = .pageRequest(try container.decode(PresentationPage.self, forKey: .page))
-        case "page.rejected": body = .pageRejected(try container.decode(PresentationPageChange.self, forKey: .page))
-        case "page.close": body = .pageClose(try container.decode(PresentationPageChange.self, forKey: .page))
-        case "page.closed": body = .pageClosed(try container.decode(PresentationPageChange.self, forKey: .page))
-        case "page.command": body = .pageCommand(try container.decode(PresentationPageCommand.self, forKey: .page))
-        case "page.state": body = .pageState(try container.decode(PresentationPageState.self, forKey: .page))
-        case "pane.respawn": body = .respawn(try container.decode(PresentationRespawns.self, forKey: .respawn))
-        case "link.click": body = .linkClick(try container.decode(PresentationLinkClick.self, forKey: .link))
-        case "link.refused": body = .linkRefused(try container.decode(PresentationLinkRefusal.self, forKey: .link))
-        case "pending.chunk": body = .pendingChunk(try container.decode(PresentationPendingChunk.self, forKey: .pending))
-        case "pending.commit": body = .pendingCommit
-        default: body = .unknown(kind)
-        }
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(body.kind, forKey: .kind)
-        try container.encode(gen, forKey: .gen)
-        try container.encode(rev, forKey: .rev)
-        switch body {
-        case .hello(let hello): try container.encode(hello, forKey: .hello)
-        case .snapshot(let snapshot): try container.encode(snapshot, forKey: .snapshot)
-        case .status(let status): try container.encodeIfPresent(status, forKey: .status)
-        case .context(let context): try container.encodeIfPresent(context, forKey: .context)
-        case .info(let info): try container.encodeIfPresent(info, forKey: .info)
-        case .layout(let layout): try container.encode(layout, forKey: .layout)
-        case .hud(let hud): try container.encodeIfPresent(hud, forKey: .hud)
-        case .notify(let notify): try container.encode(notify, forKey: .notify)
-        case .sound(let sound): try container.encode(sound, forKey: .sound)
-        case .askRequest(let ask): try container.encode(ask, forKey: .ask)
-        case .askResolve(let answer): try container.encode(answer, forKey: .ask)
-        case .askRejected(let ref), .askDismiss(let ref): try container.encode(ref, forKey: .ask)
-        case .pickRequest(let pick): try container.encode(pick, forKey: .pick)
-        case .pickResolve(let answer): try container.encode(answer, forKey: .pick)
-        case .pickRejected(let ref), .pickDismiss(let ref): try container.encode(ref, forKey: .pick)
-        case .overlayRequest(let overlay): try container.encode(overlay, forKey: .overlay)
-        case .overlayRejected(let change), .overlayClose(let change), .overlayResize(let change),
-             .overlayClosed(let change):
-            try container.encode(change, forKey: .overlay)
-        case .pageRequest(let page): try container.encode(page, forKey: .page)
-        case .pageRejected(let change), .pageClose(let change), .pageClosed(let change):
-            try container.encode(change, forKey: .page)
-        case .pageCommand(let command): try container.encode(command, forKey: .page)
-        case .pageState(let state): try container.encode(state, forKey: .page)
-        case .respawn(let respawns): try container.encode(respawns, forKey: .respawn)
-        case .linkClick(let click): try container.encode(click, forKey: .link)
-        case .linkRefused(let refusal): try container.encode(refusal, forKey: .link)
-        case .pendingChunk(let chunk): try container.encode(chunk, forKey: .pending)
-        case .ping, .ack, .presenterAcquire, .presenterGranted, .presenterRefused, .unknown, .pendingCommit: break
-        }
     }
 }
 

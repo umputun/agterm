@@ -49,10 +49,77 @@ extension agtermApp {
         return "\(item.title) - \(subtitle)"
     }
 
+    private func recentTitle(_ item: ControlRecentItem) -> String {
+        guard let subtitle = item.subtitle, !subtitle.isEmpty else { return item.title }
+        return "\(item.title) - \(subtitle)"
+    }
+
+    /// localRecentMenu lists this Mac's closed sessions and workspaces, and the closed rows attached from other hosts.
+    @ViewBuilder private var localRecentMenu: some View {
+        let recentSessions = library.recentClosedItems.filter { $0.kind == .session }
+        let recentWorkspaces = library.recentClosedItems.filter { $0.kind == .workspace }
+        let attached = library.remoteRecentClosedItems
+        if recentSessions.isEmpty && recentWorkspaces.isEmpty && attached.isEmpty {
+            Text("No Recent Items")
+        } else {
+            if !recentSessions.isEmpty {
+                Section("Sessions") {
+                    ForEach(recentSessions) { item in
+                        Button(recentTitle(item)) { actions.openRecentClosed(item.id) }
+                    }
+                }
+            }
+            if !recentWorkspaces.isEmpty {
+                Section("Workspaces") {
+                    ForEach(recentWorkspaces) { item in
+                        Button(recentTitle(item)) { actions.openRecentClosed(item.id) }
+                    }
+                }
+            }
+            if !attached.isEmpty {
+                Section("Remote Sessions") {
+                    ForEach(attached) { item in
+                        Button("\(item.name) - \(item.host)") { actions.openAttachedRecent(item.id) }
+                    }
+                }
+            }
+            Divider()
+            Button("Clear Menu") { actions.clearRecentClosedItems() }
+        }
+    }
+
+    /// serverRecentMenu lists a server window's closed sessions and workspaces, kept by its server.
+    @ViewBuilder private func serverRecentMenu(_ items: [ControlRecentItem]) -> some View {
+        let sessions = items.filter { $0.kind == RecentClosedKind.session.rawValue }
+        let workspaces = items.filter { $0.kind == RecentClosedKind.workspace.rawValue }
+        if items.isEmpty {
+            Text("No Recent Items")
+        } else {
+            if !sessions.isEmpty {
+                Section("Sessions") {
+                    ForEach(sessions, id: \.id) { item in
+                        Button(recentTitle(item)) { actions.openServerRecent(item.id) }
+                    }
+                }
+            }
+            if !workspaces.isEmpty {
+                Section("Workspaces") {
+                    ForEach(workspaces, id: \.id) { item in
+                        Button(recentTitle(item)) { actions.openServerRecent(item.id) }
+                    }
+                }
+            }
+            Divider()
+            Button("Clear Menu") { actions.clearServerRecent() }
+        }
+    }
+
     @CommandsBuilder
     var appCommands: some Commands {
             CommandGroup(replacing: .appInfo) {
                 Button("About Agterm") { showAboutPanel() }
+                Button("Check for Updates…") { updates.checkForUpdates() }
+                    .disabled(!updates.canCheck)
             }
             // the reset quits and reopens the app, so it shares Quit's group rather than sitting in Help beside
             // the installers.
@@ -120,12 +187,18 @@ extension agtermApp {
                 Button("New Session") { actions.newSession() }
                     .keyboardShortcut(shortcut(for: .newSession))
                     .disabled(!PaletteCommand.newSession.isEnabled(in: context))
+                Button("New Top-Level Session") { actions.newRootSession() }
+                    .keyboardShortcut(shortcut(for: .newRootSession))
+                    .disabled(!PaletteCommand.newRootSession.isEnabled(in: context))
                 Button("Open Directory…") { actions.openDirectory() }
                     .keyboardShortcut(shortcut(for: .openDirectory))
                     .disabled(!PaletteCommand.openDirectory.isEnabled(in: context))
                 Button("Attach Remote…") { actions.attachRemote() }
                     .keyboardShortcut(shortcut(for: .attachRemote))
                     .disabled(!PaletteCommand.attachRemote.isEnabled(in: context))
+                Button("New Remote Session…") { actions.newRemoteSession() }
+                    .keyboardShortcut(shortcut(for: .newRemoteSession))
+                    .disabled(!PaletteCommand.newRemoteSession.isEnabled(in: context))
                 Button("Open Remote Window…") { actions.openRemoteWindow() }
                     .keyboardShortcut(shortcut(for: .openRemoteWindow))
                     .disabled(!PaletteCommand.openRemoteWindow.isEnabled(in: context))
@@ -133,30 +206,13 @@ extension agtermApp {
                     .keyboardShortcut(shortcut(for: .detachedSessions))
                     .disabled(!PaletteCommand.detachedSessions.isEnabled(in: context))
                 Menu("Open Recent") {
-                    let recentSessions = library.recentClosedItems.filter { $0.kind == .session }
-                    let recentWorkspaces = library.recentClosedItems.filter { $0.kind == .workspace }
-                    if recentSessions.isEmpty && recentWorkspaces.isEmpty {
-                        Text("No Recent Items")
+                    if let server = actions.serverRecentItems {
+                        serverRecentMenu(server)
                     } else {
-                        if !recentSessions.isEmpty {
-                            Section("Sessions") {
-                                ForEach(recentSessions) { item in
-                                    Button(recentTitle(item)) { actions.openRecentClosed(item.id) }
-                                }
-                            }
-                        }
-                        if !recentWorkspaces.isEmpty {
-                            Section("Workspaces") {
-                                ForEach(recentWorkspaces) { item in
-                                    Button(recentTitle(item)) { actions.openRecentClosed(item.id) }
-                                }
-                            }
-                        }
-                        Divider()
-                        Button("Clear Menu") { actions.clearRecentClosedItems() }
+                        localRecentMenu
                     }
                 }
-                .disabled(library.recentClosedItems.isEmpty || modalActive)
+                .disabled(!context.hasRecentClosed || modalActive)
                 Button("Reopen Last Closed Item") { actions.openLatestRecentClosed() }
                     .keyboardShortcut(shortcut(for: .reopenRecent))
                     .disabled(!PaletteCommand.reopenRecent.isEnabled(in: context))
@@ -296,7 +352,7 @@ extension agtermApp {
                 // keyless, rebindable via focus_workspace; control workspace.focus. the label tracks the toggle.
                 let focusStore = library.activeStore
                 Button { actions.focusActiveWorkspace() } label: {
-                    Label(focusStore?.isCurrentWorkspaceSoleFocus == true ? "Unfocus Workspace" : "Focus Workspace",
+                    Label("\(focusStore?.isCurrentWorkspaceSoleFocus == true ? "Unfocus" : "Focus") \(context.focusNoun)",
                           systemImage: "scope")
                 }
                 .keyboardShortcut(shortcut(for: .focusWorkspace))
@@ -307,7 +363,7 @@ extension agtermApp {
                 // no-op (the row menu flips to "Remove from Focus", having a clicked row). membership is
                 // NOT gated on sidebar mode here or in the palette, matching its focus siblings.
                 Button { actions.addActiveWorkspaceToFocus() } label: {
-                    Label("Add Workspace to Focus", systemImage: "square.grid.2x2")
+                    Label(PaletteCommand.addWorkspaceToFocus.title(in: context), systemImage: "square.grid.2x2")
                 }
                 .disabled(!PaletteCommand.addWorkspaceToFocus.isEnabled(in: context))
                 // apply or suspend the filter without losing the marked set — the menu twin of the bottom-bar

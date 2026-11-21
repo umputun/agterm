@@ -10,8 +10,7 @@ public enum RemotePageOpen: Equatable, Sendable {
     case paneMissing
     /// unsupported: the presenter cannot show pages, so the page is refused.
     case unsupported
-    /// loopback: a URL on the origin's loopback names a server the presenter cannot reach: a Mac origin's always,
-    /// and a headless origin's when its connected presenter cannot forward it.
+    /// loopback: a URL on the origin's loopback names a server the connected presenter cannot forward to.
     case loopback
     /// tooLarge: the request would not fit one presentation frame.
     case tooLarge
@@ -51,37 +50,34 @@ extension AppStore {
     /// pageClaimWindow bounds how long a handed-over page that fetches over a channel waits for it to be claimed.
     public static let pageClaimWindow: TimeInterval = 30
 
-    /// openRemotePage hands a page to the viewer presenting `sessionID` under the program overlay placement rule:
-    /// it reserves the slot, registers the page's outcome as pending and asks the presenter to show it. Nothing
-    /// is mounted here.
+    /// openRemotePage hands a page to the viewer leading its pane under the program overlay placement rule, or for a
+    /// forwarded click to the viewer that clicked: it reserves the slot, registers the page's outcome as pending and
+    /// asks that viewer to show it. Nothing is mounted here.
     public func openRemotePage(_ sessionID: UUID, overlay: HtmlOverlay, options: ControlSessionOverlayOpenOptions,
                                now: Date = Date()) -> RemotePageOpen {
         let pane = options.pane
-        // a headless origin holds the page for a presenter to come; a Mac shows it here
-        guard let hub = presentationHub, hub.hasPresenter(session: sessionID) || headless, let session = session(withID: sessionID),
-              var source = Self.presentationSource(overlay.source, imagePixels: options.imagePixels) else { return .local }
+        // a headless origin holds the page for a viewer to come; a Mac shows it here
+        guard let hub = presentationHub, hub.subscriberCount(session: sessionID) > 0 || headless,
+              let session = session(withID: sessionID),
+              let source = Self.handedSource(overlay, imagePixels: overlay.imagePixels ?? options.imagePixels)
+        else { return .local }
         let replaces = options.forwarded && holdsHiddenClickedRemotePage(pane, in: session)
         guard session.remoteOverlays.slot(pane) == nil || replaces, !localOverlayHolds(pane, in: session) else { return .slotTaken }
         let identity = pane.map { $0 == .right ? session.splitPaneIdentity : session.paneIdentity }
         if case .some(nil) = identity { return .paneMissing }
         guard presentsRemotely(session, paneIdentity: identity.flatMap { $0 }) else { return .local }
-        // a headless origin's loopback URL is reached through the presenter's own forward; a Mac's stays refused
-        if headless, case .url(let url) = overlay.source, HtmlSource.isLoopback(url.absoluteString) {
-            source = .forwarded(url.absoluteString)
-        }
-        let shows = presenterShows(source, session: sessionID)
+        let recipient = options.forwardedTo ?? remoteRecipient(session, paneIdentity: identity.flatMap { $0 })
+        if recipient == nil, !headless { return .local }
+        let shows = recipient.map { presenterShows(source, log: overlay.textLog != nil, owner: $0) } ?? false
+        if case .forwarded = source, recipient != nil, !shows { return .loopback }
         if !shows, !headless { return .unsupported }
-        if case .url(let url) = source, HtmlSource.isLoopback(url) { return .loopback }
-        if case .forwarded = source, hub.hasPresenter(session: sessionID), !shows { return .loopback }
         let token = UUID().uuidString
         let size = pane == nil ? options.sizePercent.map { min(100, max(1, $0)) } : nil
         let points = size == nil ? OverlayPointSize() : options.points
-        let request = PresentationPage(
-            page: overlay.id.uuidString, token: token, source: source, identity: overlay.identity,
-            chromeless: overlay.chromeless, javascript: overlay.javascript, navigation: overlay.navigation,
-            browse: overlay.browse, persistent: overlay.persistent, backgroundColor: options.backgroundColor,
-            pane: identity.flatMap { $0 }.map { .identity($0) }, sizePercent: size,
-            points: presentablePoints(points, session: sessionID), follow: options.follow, markdownLinks: overlay.markdownLinks)
+        let request = Self.pageRequest(overlay, source: source, token: token, backgroundColor: options.backgroundColor,
+                                       pane: identity.flatMap { $0 }, sizePercent: size,
+                                       points: recipient.map { presentablePoints(points, owner: $0) } ?? OverlayPointSize(),
+                                       follow: options.follow)
         // a frame over the cap fails the offer, and the hub then drops the presenter with every page it shows
         guard (try? PresentationCodec.encode(PresentationFrame(gen: .max, rev: .max, body: .pageRequest(request)))) != nil
         else { return .tooLarge }
@@ -95,92 +91,137 @@ extension AppStore {
         if case .image = source, pane == nil, size == nil { reserved = ImagePage.basePercent }
         var held = page
         held.request = request
-        var slot = RemoteOverlaySlot(job: overlay.id.uuidString, pane: pane, owner: shows ? hub.presenterGeneration(session: sessionID) : nil,
-                                     sizePercent: reserved, page: held)
+        let owner = shows ? recipient : nil
+        var slot = RemoteOverlaySlot(job: overlay.id.uuidString, pane: pane, owner: owner, sizePercent: reserved, page: held)
         slot.points = points
         slot.presenterSized = reserved != size
         session.remoteOverlays.reserve(slot)
         clearOverlayExitCode(pane, in: session)
         HtmlPageOutcomes.shared.register(overlay.id)
         scheduleTreeChanged()
-        if shows { sendPageRequest(request, job: slot.job, in: session) }
+        if let owner { sendPageRequest(request, job: slot.job, owner: owner, in: session) }
         return .opened
     }
 
-    /// presenterShows is whether `sessionID`'s presenter speaks the page frames and, for a content page, its sources.
-    private func presenterShows(_ source: PresentationPageSource, session sessionID: UUID) -> Bool {
-        guard let hub = presentationHub, hub.hasPresenter(session: sessionID),
-              PresentationHub.pageKinds.allSatisfy({ hub.presenterSupports($0, session: sessionID) }) else { return false }
-        if source.isContent, !hub.presenterSupports(PresentationHub.pageContentKind, session: sessionID) { return false }
-        if case .document = source { return hub.presenterSupports(PresentationHub.pageDocumentKind, session: sessionID) }
-        if case .forwarded = source { return hub.presenterSupports(PresentationHub.pageForwardKind, session: sessionID) }
+    /// handedSource is how `overlay` travels to another Mac: a loopback URL is reached through that Mac's own forward to
+    /// this host. Nil for a page that cannot be handed over.
+    static func handedSource(_ overlay: HtmlOverlay, imagePixels: ImagePixels?) -> PresentationPageSource? {
+        if case .url(let url) = overlay.source, HtmlSource.isLoopback(url.absoluteString) { return .forwarded(url.absoluteString) }
+        return presentationSource(overlay.source, imagePixels: imagePixels)
+    }
+
+    static func pageRequest(_ overlay: HtmlOverlay, source: PresentationPageSource, token: String, backgroundColor: String? = nil,
+                            pane: UUID? = nil, sizePercent: Int? = nil, points: OverlayPointSize = OverlayPointSize(),
+                            follow: Bool = false) -> PresentationPage {
+        PresentationPage(page: overlay.id.uuidString, token: token, source: source, identity: overlay.identity,
+                         chromeless: overlay.chromeless, javascript: overlay.javascript, navigation: overlay.navigation,
+                         browse: overlay.browse, persistent: overlay.persistent, backgroundColor: backgroundColor,
+                         pane: pane.map { .identity($0) }, sizePercent: sizePercent, points: points, follow: follow,
+                         markdownLinks: overlay.markdownLinks, textLog: overlay.textLog)
+    }
+
+    /// presenterShows is whether viewer `owner` speaks the page frames and, for a content page, its sources; a log page
+    /// also needs live text pages, which an older viewer would show as a static page.
+    func presenterShows(_ source: PresentationPageSource, log: Bool, owner: Int) -> Bool {
+        guard let hub = presentationHub, PresentationHub.pageKinds.allSatisfy({ hub.supports($0, owner: owner) }) else { return false }
+        if log, !hub.supports(PresentationHub.pageTextKind, owner: owner) { return false }
+        if source.isContent, !hub.supports(PresentationHub.pageContentKind, owner: owner) { return false }
+        if case .document = source { return hub.supports(PresentationHub.pageDocumentKind, owner: owner) }
+        if case .forwarded = source { return hub.supports(PresentationHub.pageForwardKind, owner: owner) }
         return true
     }
 
-    /// sendPageRequest offers `request` to the session's presenter as that presenter can show it: one that predates
-    /// links gets the page without its grant, and the record the claim serves from is set to match, so an older
-    /// presenter is served as before links while the held request keeps the grant for the next offer.
-    private func sendPageRequest(_ request: PresentationPage, job: String, in session: Session) {
+    /// sendPageRequest offers `request` to viewer `owner` as that viewer can show it: one that predates links gets the
+    /// page without its grant, and the record the claim serves from is set to match, so an older viewer is served as
+    /// before links while the held request keeps the grant for the next offer.
+    private func sendPageRequest(_ request: PresentationPage, job: String, owner: Int, in session: Session) {
         guard let hub = presentationHub else { return }
         var sent = request
+        sent.offer = hub.newOffer(toOwner: owner)
         session.remoteOverlays.updatePage(job) { page in
+            page.offer = sent.offer
             page.overlay.markdownLinks = request.markdownLinks
             page.overlay.navigation = request.navigation
-            guard request.markdownLinks != nil, !hub.presenterSupports(PresentationHub.pageLinksKind, session: session.id) else { return }
+            guard request.markdownLinks != nil, !hub.supports(PresentationHub.pageLinksKind, owner: owner) else { return }
             page.overlay = page.overlay.withoutLinks()
             sent.markdownLinks = nil
             sent.navigation = page.overlay.navigation
         }
-        hub.sendToPresenter(.pageRequest(sent), session: session.id)
+        hub.send(.pageRequest(sent), toOwner: owner)
     }
 
-    /// offerPendingPage hands the page a headless origin holds in `slot` to the session's presenter under a new token,
-    /// restarting its claim window; false when nothing there waits or the presenter cannot show it.
+    /// offerPendingPage hands the page a headless origin holds in `slot` to the viewer its pane routes to under a new
+    /// token, restarting its claim window; false when nothing there waits or that viewer cannot show it.
     @discardableResult
     func offerPendingPage(_ slot: RemoteOverlaySlot, in session: Session, now: Date) -> Bool {
-        guard slot.owner == nil, var request = slot.page?.request, let hub = presentationHub,
-              presenterShows(request.source, session: session.id) else { return false }
-        let owner = hub.presenterGeneration(session: session.id)
-        request.token = UUID().uuidString
-        // a picture the presenter sizes goes unsized, its point overrides following as the merge resize they were made by
-        let merged = slot.presenterSized ? slot.points : OverlayPointSize()
-        if !slot.presenterSized { request.sizePercent = slot.sizePercent }
-        request.points = slot.presenterSized ? OverlayPointSize() : presentablePoints(slot.points, session: session.id)
+        guard slot.owner == nil, var request = slot.page?.request,
+              let owner = pendingRecipient(session, paneIdentity: request.pane?.identity), mayHandOver(slot.job, to: owner),
+              presenterShows(request.source, log: request.textLog != nil, owner: owner) else { return false }
+        let merged = reoffer(&request, from: slot, token: UUID().uuidString, owner: owner)
         let hidden = slot.page?.effectiveHidden == true
         session.remoteOverlays.update(job: slot.job) { $0.owner = owner }
         session.remoteOverlays.updatePage(slot.job) { page in
             page.token = request.token
             page.claimDeadline = now.addingTimeInterval(Self.pageClaimWindow)
             page.claimed = false
-            page.withdrawnFrom = nil
         }
         scheduleTreeChanged()
-        sendPageRequest(request, job: slot.job, in: session)
+        sendPageRequest(request, job: slot.job, owner: owner, in: session)
         if !merged.isEmpty {
             sendRemotePageCommand(session.id, pane: slot.pane, action: .resize, sizePercent: slot.sizePercent,
-                                  points: presentablePoints(merged, session: session.id), merge: true)
+                                  points: presentablePoints(merged, owner: owner), merge: true)
         }
         if hidden { sendRemotePageCommand(session.id, pane: slot.pane, action: .hide) }
         return true
     }
 
-    /// receiveRemotePageFrame applies what the presenter of `sessionID` reported about one of its pages.
-    public func receiveRemotePageFrame(_ body: PresentationFrame.Body, forSession sessionID: UUID) {
-        guard let session = session(withID: sessionID) else { return }
+    /// reoffer readies `request` for viewer `owner` under `token` at what `slot` shows now: its size and points and a text
+    /// page's state. It returns the point overrides a picture the presenter sizes takes as a merge resize after it.
+    func reoffer(_ request: inout PresentationPage, from slot: RemoteOverlaySlot, token: String, owner: Int) -> OverlayPointSize {
+        request.token = token
+        request.textSeed = slot.page.flatMap { Self.textState($0.overlay) }
+        // a picture the presenter sizes goes unsized, its point overrides following as the merge resize they were made by
+        if !slot.presenterSized { request.sizePercent = slot.sizePercent }
+        request.points = slot.presenterSized ? OverlayPointSize() : presentablePoints(slot.points, owner: owner)
+        return slot.presenterSized ? slot.points : OverlayPointSize()
+    }
+
+    /// receiveRemotePageFrame applies what viewer `sender` reported about a page of `sessionID`; a report about a page
+    /// it was not handed changes nothing.
+    public func receiveRemotePageFrame(_ body: PresentationFrame.Body, forSession sessionID: UUID, from sender: Int) {
+        guard let session = session(withID: sessionID), !receiveCandidateFrame(body, in: session, from: sender) else { return }
         switch body {
         case .pageState(let state):
+            guard let slot = session.remoteOverlays.slot(job: state.page), slot.owner == sender, slot.page?.offer == state.offer
+            else { return }
             var changed = false
             session.remoteOverlays.updatePage(state.page) { changed = $0.apply(state) }
             if changed { scheduleTreeChanged() }
+        case .pageResult(let result):
+            receiveRemoteTextResult(result, in: session, from: sender)
         case .pageRejected(let change), .pageClosed(let change):
+            guard let slot = session.remoteOverlays.slot(job: change.page), let held = slot.page else { return }
+            let lost = change.reason == PresentationPageChange.channelLost
+            // a close of the withdrawn copy that its channel's end overtook still dismisses the page offered since
+            if case .pageClosed = body, !lost, let owner = slot.owner, held.withdrawnFrom == sender, held.withdrawnOffer == change.offer,
+               held.offer != change.offer || owner != sender {
+                presentationHub?.send(.pageClose(PresentationPageChange(page: slot.job)), toOwner: owner)
+                endRemotePage(change.page, in: session)
+                return
+            }
             // only the offer holding the page reports its end; a copy this origin already withdrew says nothing, except
-            // a dismissal its presenter sent before seeing the withdrawal, which the channel's end overtook
-            let generation = presentationHub?.presenterGeneration(session: sessionID)
-            guard let slot = session.remoteOverlays.slot(job: change.page),
-                  slot.owner == generation || (slot.owner == nil && slot.page?.withdrawnFrom == generation
-                      && change.reason != PresentationPageChange.channelLost) else { return }
-            if headless, change.reason == PresentationPageChange.channelLost, let page = UUID(uuidString: change.page) {
+            // a dismissal its viewer sent before seeing the withdrawal, which the channel's end overtook
+            guard held.offer == change.offer, slot.owner == sender || (slot.owner == nil && held.withdrawnFrom == sender && !lost)
+            else { return }
+            if lost, let page = UUID(uuidString: change.page), remotePageLost(page) { return }
+            if headless, lost, let page = UUID(uuidString: change.page) {
                 withdrawRemotePage(page)
+            } else if case .pageRejected = body, !headless, held.recovered, let page = UUID(uuidString: change.page),
+                      mountRemotePageHere(page, forSession: sessionID) {
+                if let hub = presentationHub {
+                    session.remoteOverlays.setRefusal(PageRefusal(owner: sender, lead: hub.leadReports(of: sessionID)), job: change.page)
+                }
+                return
             } else {
                 endRemotePage(change.page, in: session)
             }
@@ -190,13 +231,13 @@ extension AppStore {
     }
 
     /// claimRemotePage admits the page channel `token` names: unclaimed, inside its deadline, and still held by
-    /// the presenter it was handed to. A token claims once.
+    /// the connected viewer it was handed to. A token claims once.
     public func claimRemotePage(token: String, now: Date = Date()) -> RemotePageClaim? {
         for session in workspaces.flatMap(\.sessions) {
+            if let claim = claimPageCandidate(token: token, in: session, now: now) { return claim }
             guard let slot = session.remoteOverlays.slots.first(where: { $0.page?.token == token }),
                   let page = slot.page, !page.claimed, now <= page.claimDeadline,
-                  presentationHub?.hasPresenter(session: session.id) == true,
-                  presentationHub?.presenterGeneration(session: session.id) == slot.owner else { continue }
+                  let owner = slot.owner, presentationHub?.isConnected(owner: owner) == true else { continue }
             session.remoteOverlays.updatePage(slot.job) { $0.claimed = true }
             return RemotePageClaim(sessionID: session.id, pane: slot.pane, overlay: page.overlay)
         }
@@ -207,6 +248,7 @@ extension AppStore {
     /// the presenter with no channel and never expires.
     public func expireRemotePageClaims(now: Date = Date()) {
         for session in workspaces.flatMap(\.sessions) {
+            expirePageCandidates(in: session, now: now)
             for slot in session.remoteOverlays.slots {
                 guard slot.owner != nil, let page = slot.page, !page.claimed, now > page.claimDeadline,
                       page.overlay.source.kind != .url else { continue }
@@ -215,14 +257,14 @@ extension AppStore {
         }
     }
 
-    /// sendRemotePageCommand asks the presenter to act on the page in `pane`'s slot; false when no remote page
+    /// sendRemotePageCommand asks the viewer showing the page in `pane`'s slot to act on it; false when no remote page
     /// sits there or the stream it was handed to is gone.
     @discardableResult
     public func sendRemotePageCommand(_ sessionID: UUID, pane: OverlayPane?, action: PresentationPageAction,
                                       sizePercent: Int? = nil, points: OverlayPointSize = OverlayPointSize(),
                                       merge: Bool? = nil) -> Bool {
         guard let session = session(withID: sessionID), let slot = session.remoteOverlays.slot(pane), slot.page != nil,
-              let hub = presentationHub, hub.presenterGeneration(session: sessionID) == slot.owner else { return false }
+              let owner = slot.owner, let hub = presentationHub, hub.isConnected(owner: owner) else { return false }
         var seq = 0
         session.remoteOverlays.updatePage(slot.job) { page in
             switch action {
@@ -231,9 +273,9 @@ extension AppStore {
             default: seq = page.nextSeq()
             }
         }
-        return hub.sendToPresenter(.pageCommand(PresentationPageCommand(page: slot.job, seq: seq, action: action,
-                                                                        sizePercent: sizePercent, points: points, merge: merge)),
-                                   session: sessionID)
+        return hub.send(.pageCommand(PresentationPageCommand(page: slot.job, seq: seq, action: action,
+                                                             sizePercent: sizePercent, points: points, merge: merge)),
+                        toOwner: owner)
     }
 
     /// navigateRemotePage runs a toolbar navigation on the page in `pane`'s slot when the presenting Mac shows it.
@@ -260,13 +302,17 @@ extension AppStore {
         sendRemotePageCommand(sessionID, pane: pane, action: action) ? .sent : .refused(OverlayResultError.viewerGone)
     }
 
-    /// pageBelongsRemote says the placement rule hands a page in `pane`'s slot to the presenting Mac: a presenter
-    /// exists and the target pane, or every pane for the session-wide slot, follows on this Mac.
+    /// pageBelongsRemote says the placement rule hands a page in `pane`'s slot to an attached Mac: the target pane, or
+    /// the primary pane for the session-wide slot, follows on this Mac and a viewer takes its work.
     func pageBelongsRemote(_ session: Session, pane: OverlayPane?) -> Bool {
-        guard presentationHub?.hasPresenter(session: session.id) == true else { return false }
+        pageRecipient(session, pane: pane) != nil
+    }
+
+    /// pageRecipient is the token of the viewer a page in `pane`'s slot goes to, nil when it opens on this Mac.
+    public func pageRecipient(_ session: Session, pane: OverlayPane?) -> Int? {
         let identity = pane.map { $0 == .right ? session.splitPaneIdentity : session.paneIdentity }
-        if case .some(nil) = identity { return false }
-        return presentsRemotely(session, paneIdentity: identity.flatMap { $0 })
+        if case .some(nil) = identity { return nil }
+        return remoteRecipient(session, paneIdentity: identity.flatMap { $0 })
     }
 
     /// holdsHiddenClickedRemotePage says whether `pane`'s slot holds a clicked page the presenting Mac hides, the one
@@ -279,7 +325,10 @@ extension AppStore {
     /// endRemotePage drops the page's reservation and records it dismissed unless it was already answered.
     func endRemotePage(_ job: String, in session: Session) {
         guard let slot = session.remoteOverlays.slot(job: job), let page = slot.page else { return }
+        dropPageCandidate(job, in: session)
         session.remoteOverlays.remove(job: job)
+        OfferlessHolders.shared.forget(job)
+        settleRemoteTextWaits(job: job)
         HtmlPageOutcomes.shared.dismiss(page.overlay.id)
         scheduleTreeChanged()
         RemotePageEnds.shared.onEnd?(page.overlay.id)
@@ -309,19 +358,22 @@ extension AppStore {
         workspaces.flatMap(\.sessions).lazy.compactMap { $0.remoteOverlays.slot(job: page.uuidString)?.page?.token }.first
     }
 
-    /// withdrawRemotePage takes page `page` back on a headless origin after its channel ended without a close: the
-    /// presenter takes its copy down, and the page waits for the next presenter.
+    /// withdrawRemotePage takes page `page` back from the viewer showing it, which takes its copy down, and drops any
+    /// pending move of it; the page, its outcome still open, waits for the next place to take it.
     public func withdrawRemotePage(_ page: UUID) {
         guard let session = workspaces.flatMap(\.sessions).first(where: { $0.remoteOverlays.slot(job: page.uuidString)?.page != nil }),
-              let slot = session.remoteOverlays.slot(job: page.uuidString), slot.owner != nil else { return }
-        // tagged, so the presenter's reply to this close is not read as a dismissal
-        presentationHub?.sendToPresenter(.pageClose(PresentationPageChange(page: slot.job, reason: PresentationPageChange.channelLost)),
-                                         session: session.id)
+              let slot = session.remoteOverlays.slot(job: page.uuidString), let owner = slot.owner else { return }
+        dropPageCandidate(slot.job, in: session)
+        // tagged, so the viewer's reply to this close is not read as a dismissal
+        presentationHub?.send(.pageClose(PresentationPageChange(page: slot.job, reason: PresentationPageChange.channelLost)),
+                              toOwner: owner)
         session.remoteOverlays.update(job: slot.job) { $0.owner = nil }
         session.remoteOverlays.updatePage(slot.job) { page in
             page.claimed = false
             page.withdrawnFrom = slot.owner
+            page.withdrawnOffer = page.offer
         }
+        settleRemoteTextWaits(job: slot.job)
         RemotePageEnds.shared.onWithdrawn?(page)
         scheduleTreeChanged()
     }

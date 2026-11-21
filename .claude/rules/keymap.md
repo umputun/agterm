@@ -3,6 +3,7 @@ paths:
   - "agtermCore/Sources/agtermCore/Keybind.swift"
   - "agtermCore/Sources/agtermCore/KeybindMatcher.swift"
   - "agtermCore/Sources/agtermCore/Keymap.swift"
+  - "agtermCore/Sources/agtermCore/FileOpener.swift"
   - "agtermCore/Sources/agtermCore/BuiltinAction.swift"
   - "agtermCore/Sources/agtermCore/CustomCommand.swift"
   - "agtermCore/Sources/agtermCore/ConfigPaths.swift"
@@ -43,6 +44,17 @@ paths:
   Empty shell text is invalid. Both verbs split on spaces/tabs. Blank lines and comments are skipped;
   inline `#` starts a comment only after whitespace and outside double quotes. Each bad line yields
   `KeymapDiagnostic{line,message}` without stopping later lines. `{AGT_X}` text remains verbatim.
+- `open <selectors> [failure options] <shell...>` is the fourth verb (`FileOpener.swift`): `*.ext` and exact
+  basenames, comma-separated, last-wins per selector with the earlier line diagnosed; a basename beats an
+  extension in `Keymap.opener(forFile:)`. It shares `parseCommandOptions` with `command`, refuses `--repeat`, a
+  chord and any `{AGT_` token, because its shell text runs verbatim with context in the environment only.
+  `keymap.list` carries it as `openers`, omitted when none.
+- `LinkPolicy.openerFile(for:source:intent:)` is the local gate for an `open` rule: a `.detected` source (ghostty's
+  UNKNOWN kind during a real mouse release), `.normal` intent (the browser and reveal intents keep their routes,
+  whatever chord produced them), an image, markdown, text or document route, and a regular file by
+  `BoundedFile.check`. An OSC 8 target the program chose and a non-regular file keep the built-in route.
+  `CustomCommandRunner.runOpener` names the clicked pane by exact slot membership, since a closed split's
+  retained view keeps its session pointer. A remote pane's click takes the snapshot path in [[control-api]].
 - `|` is the top separator tier: it splits a chord token into alternatives, `>` splits a sequence into
   chords, `+` splits a chord into modifiers and a base key. Both verbs take it, inside the single token
   with no spaces around it — `parseCommandLine` hands everything after that token to the shell.
@@ -70,7 +82,7 @@ paths:
   alternative, `alternative skipped`/`alternative dropped` with more), pinned by
   `KeymapTests.pipeFreeKeymapParsesExactlyAsItDidBeforeAlternatives`.
 - Pure types live in `Keybind.swift`, `KeybindMatcher`, `CustomCommand`/`CommandContext`,
-  `BuiltinAction` (57 cases, pinned by `BuiltinActionTests`), `Keymap`, and `ConfigPaths`.
+  `BuiltinAction` (59 cases, pinned by `BuiltinActionTests`), `Keymap`, and `ConfigPaths`.
   `CommandContext` owns the shared expansion/environment token table.
 - Built-ins use AppKit menu key equivalents from `keymap.equivalent(for:)`; apply only non-nil
   `KeyboardShortcut`s. SwiftUI rebuilds menu shortcuts lazily, on activation or key dispatch rather than on
@@ -147,7 +159,9 @@ paths:
   in `{...}` or `$...` form, no-op with notice; empty `{AGT_SESSION_PWD}` can turn `rm -rf .../*` into a
   root glob. Commands using only `AGT_SOCKET`/`AGT_WINDOW`/`AGT_PANE` may run sessionless.
 - `{AGT_SESSION_HOST}`/`$AGT_SESSION_HOST` is the SSH destination of a `zmx attach` session, empty
-  otherwise; an `ssh` typed into a local session leaves it empty while `AGT_SESSION_PWD` still follows
+  otherwise and from that session's scratch, a local shell (`Session.remoteHost(for:)`); a remote window's
+  scratch attaches the server's shell and keeps it.
+  An `ssh` typed into a local session leaves it empty while `AGT_SESSION_PWD` still follows
   any cwd reports that shell emits. `AGT_SESSION_PWD` stays the pane's reported path, remote or not; the
   command's execution directory comes separately from `Session.localWorkingDirectory`, which returns
   that path for a local session and, for a remote one, only when it exists here as a directory, else

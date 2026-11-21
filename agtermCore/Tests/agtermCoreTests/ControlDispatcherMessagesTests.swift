@@ -42,6 +42,16 @@ struct ControlDispatcherMessagesTests {
         #expect(actions.queuedMessages == [MockControlActions.Queued(id: id, from: nil, recipients: [recipientA])])
     }
 
+    @Test func anUnresolvedRecipientCarriesItsResolverDetailWhileTheRestIsDelivered() async throws {
+        let (actions, bus) = (actions(), MessageBus())
+        actions.messageFailures[MessageAddress(session: "R", pane: .role(.left))] = MessagePaneError("remote", detail: "remote session")
+
+        let response = await dispatch(.msgSend, ControlArgs(body: "hi", recipients: ["R:left", addressA]), actions: actions, bus: bus)
+
+        #expect(response?.result?.delivered == [addressA])
+        #expect(response?.result?.rejected == [MessageRejection(address: "R:left", reason: .unknownPane, detail: "remote session")])
+    }
+
     @Test func broadcastExcludesTheSenderAndStampsItsIdentity() async throws {
         let (actions, bus) = (actions(), MessageBus())
 

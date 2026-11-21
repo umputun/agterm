@@ -31,6 +31,21 @@ final class SettingsModelTests: XCTestCase {
         try await super.tearDown()
     }
 
+    func testKeymapReloadExposesOpenRules() throws {
+        let configDir = stateDir.appendingPathComponent("config", isDirectory: true)
+        try FileManager.default.createDirectory(at: configDir, withIntermediateDirectories: true)
+        try SettingsStore(directory: stateDir).save(AppSettings(configDirectory: configDir.path))
+        let configured = SettingsModel(library: library, settingsStore: SettingsStore(directory: stateDir))
+        XCTAssertTrue(configured.keymap.openers.isEmpty)
+
+        try #"open *.md mdview "$AGT_PATH""#.write(to: ConfigPaths.keymapPath(configDirectory: configDir),
+                                                   atomically: true, encoding: .utf8)
+        configured.reloadKeymap()
+
+        XCTAssertEqual(configured.keymap.opener(forFile: "notes.md")?.command.command, #"mdview "$AGT_PATH""#)
+        XCTAssertTrue(configured.keymapDiagnostics.isEmpty)
+    }
+
     func testStepHtmlOverlayZoomPersistsAndMirrors() {
         model.stepHtmlOverlayZoom("increase_font_size:1")
         model.stepHtmlOverlayZoom("increase_font_size:1")

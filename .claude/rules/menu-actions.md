@@ -19,6 +19,10 @@ paths:
 
 ## Menu bar and actions
 
+- agterm ▸ Check for Updates… sits under About Agterm and is enabled by `UpdateController.canCheck`, Sparkle's
+  `canCheckForUpdates` mirrored through KVO: off in a build without an update feed and while a check runs, on
+  again while a menu check shows its progress. The title-bar icon shares it; `update.check` has its own busy rule
+  (control-api.md).
 - `@MainActor AppActions` shares nontrivial behavior among titlebar/footer, menu, palette, and control:
   placement, directory picking, split/focus, and font. Trivial toggles may call their owner directly.
 - **`PaletteCommand.isEnabled(in:)` is the single owner of menu enablement.** Every menu item backed by a
@@ -60,7 +64,21 @@ paths:
   command: `zmx tree` + `pick` + `zmx attach [--companions]` already script it. A HUD over the starting
   session shows the ssh waits and a failure, the latter hiding itself after `remoteAttachErrorSeconds`;
   a partial group attach moves the failure to the new parent row, and a window with no session or a parent
-  row already gone falls back to `notifyCommandFailure`.
+  row already gone falls back to `notifyCommandFailure`. `RemoteAttachHud` opens only into an empty slot, its own
+  panel, or an error panel an earlier one left: another operation's progress or a script's HUD stays, and the
+  failure goes to the notification. Paste reuses it for its copy panel.
+- File ▸ Open Remote Window… uses the same host list and picker, then a second pick of the Mac's open windows
+  when the host is a Mac with several (`AppActions+RemoteAttach`, `RemoteOriginWindow`); one window or an
+  agterm-server host asks nothing. `window remote open --origin-window` is its control twin.
+- File ▸ New Remote Session… (`new_remote_session`, keyless) follows Attach Remote… with a palette row and shares its
+  enablement plus `localOnly`. `AppActions.newRemoteSession` captures the destination before `pickRemote`, asks a
+  Mac with several windows which one, then calls `RemoteAttaching.createRemoteSession`, the creator
+  `session.remote.new` runs, with failures in the Attach Remote HUD.
+
+- File ▸ New Top-Level Session (`new_root_session`, keyless) follows New Session, with a palette row, through
+  `AppActions.newRootSession`, which shares New Session's path into the root. `PaletteContext.hasRootWorkspace` disables it
+  in a server window whose owner has no root. Focus items read `PaletteContext.focusNoun`, "Top-Level Sessions" while the
+  active container is the root, and the focus editor lists a disabled root row for a rootless owner.
 
 - New Companion (`new_companion`, keyless) sits beside Duplicate Session in the row menu and the Session
   menu, with a palette row. On a remote row it asks the origin through `RemoteAttaching.createRemoteCompanion`,
@@ -70,7 +88,8 @@ paths:
   `CompanionDuplicating`, which `ControlServer` implements, so the GUI and `session.companion.duplicate` share one
   planner; a refusal shows in a timed `RemoteAttachHud` over the session, falling back to `notifyCommandFailure`.
 - Convert to Companion (`convert_companion`, keyless) follows Duplicate as Companion in both menus, with a palette row;
-  a top-level page takes it too, and `PaletteContext.activeSessionIsCompanion`/`activeSessionIsRemote` disable it.
+  a top-level page takes it too. `PaletteContext.activeSessionIsCompanion` disables it; a server window's row is
+  converted by its server and a row attached from another host by its origin.
   `AppActions.convertToCompanion` shares `AppStore.convertToCompanion` with `session.companion.convert`, and a
   refusal reaches the same timed HUD Duplicate as Companion uses.
 
@@ -79,7 +98,7 @@ paths:
 - `applicationDockMenu` exposes New Session, New Window, Quick Terminal, Dashboard, captured-window MRU
   sessions, and attention ordering.
 - New Window alone is app-scoped (Discussion #313): capture nothing, call
-  `newWindow(ignoringModals: true)`, enable only when `actions != nil`, and explicitly unhide/activate.
+  `newWindowFromDock()`, enable only when `actions != nil`, and explicitly unhide/activate.
   Do not mark it always enabled before the action hub is wired. Require `openWindow` before persisting an
   open entry. Menu and palette New Window retain modal gating.
 - Other items capture store and window ID at build time. Recheck per-window modal/controller state, raise
@@ -182,6 +201,14 @@ paths:
   Do not use SwiftUI mask/clipping because it reflows and loses the terminal's top row; do not use an
   opaque cover because it breaks translucency. Key each `HSplitView`/`VSplitView` identity by session and
   keep the terminal surface identities stable when changing axis.
+- That full-height compact split's pane hosts consume the native top inset, which a hidden deck entry
+  reads as 1pt against 32pt shown: its opacity-0 wrapper sits at the deck top. Every switch therefore
+  resized both panes by about 2 rows and showed a stale frame under the titlebar. `DeckPaneInset` lays
+  every pane out from `terminalDeckTop` instead, and the probe's top/bottom inset uses the same value.
+  A zero deck top (hidden toolbar) has no offset wrapper, so both keep the native inset there.
+  SwiftUI still moves a hidden top/bottom divider when the native inset flips, so that change stays a
+  re-arm trigger and leaves a one-frame divider jump on show. Moving the content below the band
+  removed every resize but made the compact toolbar look taller, which was rejected.
 - Sidebar icon follows `hasSplit` and `splitAxis`. The titlebar has seven accessibility states: `none`,
   `both`, `left`, and `right` for the left/right symbols, plus `both-horizontal`, `top`, and `bottom` for
   the top/bottom symbols. A shown split fills both halves; a hidden split fills the visible primary or
@@ -224,7 +251,7 @@ paths:
   close/reopen/filter tests in `AppStoreCloseReselectionTests` pin these scopes.
 - Delete Workspace centralizes confirmation in `AppActions.deleteWorkspace(_:in:)`, then removes surfaces,
   recency, and reselection. Row menus pass their own store because right-clicking a background window does
-  not raise it. Menu/palette target active workspace and enforce `uiActionsEnabled`. Keep at least one workspace.
+  not raise it. Menu/palette target active workspace and enforce `uiActionsEnabled`. The last named workspace may go; the root stays.
 
 ## Navigation
 
@@ -233,8 +260,8 @@ paths:
   Option-Command-Left/Right remains pane focus.
 - `navigateSession` uses `navigableSessions`, wraps previous/next, selects ends for first/last, chooses
   first on nil/invalid selection, and no-ops when empty. Menu, palette, and `session.go` share it.
-- Previous/Next Workspace are the level above: `navigateWorkspace` steps `currentWorkspaceID` through
-  `visibleWorkspaces` and lands on the target's FIRST session, so the keybind, the palette row and
+- Previous/Next Workspace are the level above: `navigateWorkspace` steps `currentWorkspaceID` through the
+  named `visibleWorkspaces`, never the root, and lands on the target's FIRST session, so the keybind, the palette row and
   `workspace.go` mean one thing. Keyless, tree mode only, and it reveals a landed pane off the step's
   captured indicator exactly as plain session nav does. **Collapse is not a navigation filter** —
   `navigableSessions` and `navigateWorkspace` both ignore `isExpanded`, and adding a term to either would

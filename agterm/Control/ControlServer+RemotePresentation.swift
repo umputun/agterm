@@ -12,7 +12,7 @@ extension ControlServer {
     func startRemotePresentation(for session: Session) {
         let id = session.id
         guard remoteClients[id] == nil, let host = session.remoteHost,
-              let binding = session.remotePresentation?.binding else { return }
+              let binding = session.remotePresentation?.binding, session.remotePresentation?.originEnded != true else { return }
         let pool = catalogPool(forSession: id)
         let path = pool?.lease("present:\(id)")
         let argv: [String]
@@ -23,22 +23,81 @@ extension ControlServer {
             return
         }
         let transport = pool.flatMap { pool in path.map { PooledTransport(pool: pool, path: $0, inner: remoteTransport) } }
-        let client = RemotePresentationClient(argv: argv, presentationVersion: binding.presentationVersion,
-                                              transport: transport ?? remoteTransport, effects: remoteEffects(for: id),
-                                              now: hudClock)
+        // a Mac's page root has no stream of its own, so its version is unset; zmx present predates page attachment and
+        // the hello is the capability check
+        let observer = Self.observesMembershipOnly(session, binding: binding)
+        let client = RemotePresentationClient(argv: argv, presentationVersion: observer ? PresentationCodec.version : binding.presentationVersion,
+                                              transport: transport ?? remoteTransport,
+                                              effects: observer ? observerEffects(for: id) : remoteEffects(for: id),
+                                              now: hudClock, observer: observer)
         remoteClients[id] = client
+        renewOpenerConnection(id)
+        // a row back from Undo keeps the flag its old stream set; a new stream follows nothing before its snapshot
+        library.store(forSession: id)?.setFollowsCompanions(false, forSession: id)
+        library.store(forSession: id)?.onOriginFrame = { [weak self] session, body in
+            MainActor.assumeIsolated { self?.sendToOrigin(body, forSession: session) ?? false }
+        }
+        ZmxLeadBook.shared.onChange = { [weak self] in
+            guard let self else { return }
+            for client in remoteClients.values { client.refreshLeads() }
+        }
         client.start()
         startRemoteTick()
     }
 
+    /// sendToOrigin hands a `status.clear` or `status.seen` to an origin that agreed the kind, from the presenter or
+    /// from a Mac the origin knows leads one of its panes.
+    func sendToOrigin(_ body: PresentationFrame.Body, forSession id: UUID) -> Bool {
+        guard let client = remoteClients[id], client.originSupports(PresentationHub.statusClearKind),
+              library.store(forSession: id)?.session(withID: id)?.remotePresentation?.mode == .presenter || client.claimsLead
+        else { return false }
+        client.answer(body)
+        return true
+    }
+
+    /// noteRemotePaneEnded shows the ended notice over a remote pane whose attach ended. A stream up to an origin
+    /// that sends `ended` is pinged first: an `ended` the origin queued ahead of its answer closes the row unseen.
+    func noteRemotePaneEnded(_ pane: UUID, in session: Session) {
+        guard heldSession(session.id) === session, let host = session.remoteHost, !session.ended,
+              let state = session.remotePresentation, !state.originEnded, state.binding.daemonsByPane[pane] != nil
+        else { return }
+        let book = RemoteEndBook.shared
+        // a restored row's origin may no longer have the session; its relaunch check decides, not this exit
+        if session.awaitsOriginCheck {
+            book.settle(pane: pane, session: session.id, host: host, name: session.displayName)
+            return
+        }
+        if !state.binding.catalogOwned, let client = remoteClients[session.id],
+           client.originSupports(PresentationHub.endedKind), client.ping() {
+            book.settle(pane: pane, session: session.id, host: host, name: session.displayName)
+        } else {
+            book.show(pane: pane, session: session.id, host: host, name: session.displayName)
+        }
+    }
+
+    /// resolveRemoteEnd shows the notices `id` holds back, unless its relaunch origin check, which closes a row the
+    /// origin no longer has, is still to answer.
+    func resolveRemoteEnd(_ id: UUID) {
+        guard library.store(forSession: id)?.session(withID: id)?.awaitsOriginCheck != true else { return }
+        RemoteEndBook.shared.resolved(session: id)
+    }
+
     func stopRemotePresentation(_ id: UUID) {
+        // nothing will answer a pending ping now, so its notice shows
+        resolveRemoteEnd(id)
+        forgetCompanionFollow(id)
         remoteClients.removeValue(forKey: id)?.stop()
+        endOpenerConnection(id)
+        linkForwards.release(row: id)
         catalogPool(forSession: id)?.release("present:\(id)")
     }
 
     func stopRemotePresentations() {
         for client in remoteClients.values { client.stop() }
         remoteClients.removeAll()
+        for id in Array(remoteConnectionIDs.keys) { endOpenerConnection(id) }
+        companionFollow.rows.removeAll()
+        linkForwards.stopAll()
         remoteTick?.cancel()
         remoteTick = nil
     }
@@ -53,6 +112,21 @@ extension ControlServer {
         }
     }
 
+    /// observesMembershipOnly says `session` is a page root attached from a Mac: the origin shows the page's asks and
+    /// picks itself, so the row follows only its companion membership and keeps its page channel's state.
+    static func observesMembershipOnly(_ session: Session, binding: RemoteBinding) -> Bool {
+        session.content == .page && session.parentID == nil && !binding.originHeadless && !binding.catalogOwned
+    }
+
+    private func observerEffects(for id: UUID) -> RemotePresentationEffects {
+        RemotePresentationEffects(
+            status: { _ in }, snapshotStatus: { _ in }, hud: { _ in }, notify: { _ in },
+            connection: { [weak self] connection in self?.companionStreamChanged(connection, forSession: id) },
+            companions: { [weak self] companions in self?.applyOriginCompanions(companions, forSession: id) },
+            ended: { [weak self] in self?.forgetCompanionFollow(id) },
+            warn: { reason in remoteLogger.info("membership stream for \(id, privacy: .public): \(reason, privacy: .public)") })
+    }
+
     private func remoteEffects(for id: UUID) -> RemotePresentationEffects {
         RemotePresentationEffects(
             status: { [weak self] status in
@@ -63,12 +137,18 @@ extension ControlServer {
             },
             hud: { [weak self] hud in self?.showRemoteHud(hud, forSession: id) },
             notify: { [weak self] notify in
-                guard let session = self?.library.store(forSession: id)?.session(withID: id) else { return }
+                guard let store = self?.library.store(forSession: id), let session = store.session(withID: id) else { return }
+                store.armRemoteSeen(forSession: id)
                 // `.mirrored`, so this Mac's own hub never relays it onward
                 NotificationManager.shared.send(toSession: session, title: notify.title, body: notify.body,
                                                 origin: .mirrored)
             },
             connection: { [weak self] connection in
+                if case .failed = connection {
+                    self?.resolveRemoteEnd(id)
+                    self?.renewOpenerConnection(id)
+                }
+                self?.companionStreamChanged(connection, forSession: id)
                 self?.library.store(forSession: id)?.setRemoteConnection(connection, forSession: id)
             },
             context: { [weak self] context in
@@ -90,7 +170,7 @@ extension ControlServer {
             sound: { [weak self] sound in self?.playRemoteSound(sound, forSession: id) },
             layout: { [weak self] layout in
                 guard let self, let store = library.store(forSession: id) else { return }
-                agtermApp.applyRemoteLayout(layout, store: store, sessionID: id, library: library)
+                agtermApp.applyRemoteLayout(layout, store: store, sessionID: id, library: library, attach: self)
             },
             pageRequest: { [weak self] page in
                 guard let self else { return "no such session" }
@@ -100,22 +180,46 @@ extension ControlServer {
             pageCommand: { [weak self] command in self?.applyReplicaPageCommand(command, forSession: id) },
             respawns: { [weak self] respawns, seed in self?.applyRemoteRespawns(respawns, seed: seed, forSession: id) },
             linkRefused: { [weak self] reason in self?.refuseRemoteLinkClick(reason, session: id) },
+            linkClickRefused: { [weak self] click in self?.remoteOpeners.finish(click) },
+            linkSnapshot: { [weak self] snapshot in self?.receiveLinkSnapshot(snapshot, forSession: id) },
+            message: { [weak self] message in self?.library.store(forSession: id)?.emitRemoteMessage(message, forSession: id) },
+            mail: { [weak self] mail in self?.library.store(forSession: id)?.applyRemoteMail(mail, forSession: id) },
+            companions: { [weak self] companions in self?.applyOriginCompanions(companions, forSession: id) },
+            leads: { [weak self] in
+                guard let store = self?.library.store(forSession: id), let session = store.session(withID: id) else { return [] }
+                return store.originLeads(of: session)
+            },
+            ended: { [weak self] in
+                guard let self else { return }
+                stopRemotePresentation(id)
+                RemoteEndBook.shared.clear(session: id)
+                guard let store = library.store(forSession: id) else { return }
+                agtermApp.closeEndedRemoteRow(store: store, sessionID: id, library: library)
+            },
+            acked: { [weak self] in self?.resolveRemoteEnd(id) },
             warn: { reason in
                 remoteLogger.warning("presentation stream for \(id, privacy: .public): \(reason, privacy: .public)")
             })
     }
 
     /// showReplicaAsk shows an ask `id`'s origin handed over in the row's own ask slot. A terminal one waits hidden
-    /// until its row is shown. A GUI one is refused for a target not on screen, unless the origin is headless and
-    /// has no screen to take it back to.
+    /// until its row is shown. A GUI one is refused for a target not on screen unless `originHoldsWork`, and then
+    /// waits like a terminal one, as does an ask for a hidden pane of an `offer.id` origin.
     private func showReplicaAsk(_ ask: PresentationAsk, forSession id: UUID) -> Bool {
         guard let store = library.store(forSession: id) else { return false }
-        if ask.style == .gui, store.session(withID: id)?.remotePresentation?.binding.originHeadless != true {
+        if ask.style == .gui, !originHoldsWork(forSession: id, in: store) {
             guard let windowID = library.windowID(for: store), guiTargetShown(id, in: store, windowID: windowID) else {
                 return false
             }
         }
-        return store.presentReplicaAsk(ask, forSession: id) { [weak self] body in self?.remoteClients[id]?.answer(body) }
+        let holds = remoteClients[id]?.originSupports(PresentationHub.offerIdentityKind) == true
+        return store.presentReplicaAsk(ask, forSession: id, holds: holds) { [weak self] body in self?.remoteClients[id]?.answer(body) }
+    }
+
+    /// originHoldsWork is whether session `id`'s origin wants work this Mac cannot show yet held here, not refused.
+    func originHoldsWork(forSession id: UUID, in store: AppStore) -> Bool {
+        store.session(withID: id)?.remotePresentation?.binding.originHeadless == true
+            || remoteClients[id]?.originSupports(PresentationHub.offerIdentityKind) == true
     }
 
     /// Shows an overlay `id`'s origin handed over, running the job's helper on the origin over ssh.
@@ -155,6 +259,7 @@ extension ControlServer {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
                 guard let self, !Task.isCancelled else { return }
+                self.tickRemoteOpeners()
                 // respawn entries keep it alive so the last row's own prune still runs after that row is gone
                 guard !self.remoteClients.isEmpty || !RemoteReconnectBook.shared.isEmpty
                         || !RemoteRespawnBook.shared.entries.isEmpty else {
@@ -163,6 +268,7 @@ extension ControlServer {
                 }
                 for client in self.remoteClients.values { client.tick() }
                 self.tickReconnects()
+                self.tickCompanionFollow()
             }
         }
     }

@@ -4,34 +4,15 @@ import Foundation
 extension ControlServer: CompanionDuplicating {}
 
 extension ControlServer {
-    static let companionMoveError = "a companion moves only among its siblings"
+    static let companionMoveError = "a companion moves only among its siblings; use --parent to move it under another session, "
+        + "or --top-level to make it a top-level session"
 
-    // a page session's page is the row: these act on a terminal, or would cover or float the page
-    private static let pageRefusedCommands: Set<Command> = [
-        .sessionType, .sessionText, .sessionCopy, .sessionPaste, .sessionSelectAll, .sessionSearch, .sessionBackground,
-        .sessionLead, .sessionSwap, .sessionFocus, .sessionResize, .sessionSplit, .sessionSplitClose, .sessionScratch,
-        .sessionRestart, .sessionRestore, .sessionOverlayOpen, .sessionHudOpen,
-    ]
-
-    /// pageCompanionRefusal answers a request a page session cannot take, before any command runs, so a
-    /// socket client and a page's bridge meet one refusal.
+    /// pageCompanionRefusal answers a request a page session cannot take, before any command runs.
     func pageCompanionRefusal(_ request: ControlRequest) -> ControlResponse? {
-        let floats = request.cmd == .sessionOverlayResize && request.args?.full != true
-        let terminalAsk = request.cmd == .askOpen && request.args?.style != "gui"
-        // `active` for these means the window's zoom target, never the selection, and a hide is idempotent
-        let namedSurface = (request.cmd == .surfaceCursor || (request.cmd == .surfaceZoom && request.args?.mode != "hide"))
-            && request.target.map { $0 != "active" } == true
-        guard Self.pageRefusedCommands.contains(request.cmd) || floats || terminalAsk || namedSurface else { return nil }
-        let target = request.target.map(Self.sessionPart(ofSurface:))
-        guard case .success(let (store, id)) = resolver.resolveSessionTarget(target, window: request.args?.window),
-              store.session(withID: id)?.content == .page else { return nil }
-        return ControlResponse(ok: false, error: "\(request.cmd.rawValue): not available on a page session")
-    }
-
-    // a `surface:<session>:<slot>` address names its session in the middle
-    private static func sessionPart(ofSurface target: String) -> String {
-        let parts = target.split(separator: ":", omittingEmptySubsequences: false)
-        return parts.count == 3 && parts[0] == "surface" ? String(parts[1]) : target
+        PageSessionRefusal.refusal(request) { target, window in
+            guard case .success(let (store, id)) = resolver.resolveSessionTarget(target, window: window) else { return false }
+            return store.session(withID: id)?.content == .page
+        }
     }
 
     func createCompanion(_ target: String?, options: CompanionOptions, window: String?) async -> ControlResponse {
@@ -86,8 +67,7 @@ extension ControlServer {
             if options.persistent, let failure = HtmlOverlayRegistry.shared.persistentStoreFailure() {
                 return ControlResponse(ok: false, error: "session.companion.page: \(failure)")
             }
-            let overlay = HtmlOverlay(source: page, navigation: options.navigation, javascript: options.javascript,
-                                      chromeless: options.chromeless, persistent: options.persistent, browse: options.browse)
+            let overlay = HtmlOverlay(pageRow: page, options: options)
             switch store.addPageCompanion(to: id, overlay: overlay, select: options.follow,
                                           backgroundColor: options.backgroundColor) {
             case .failure(.remoteParent):
@@ -111,8 +91,7 @@ extension ControlServer {
             if options.persistent, let failure = HtmlOverlayRegistry.shared.persistentStoreFailure() {
                 return ControlResponse(ok: false, error: "session.page: \(failure)")
             }
-            let overlay = HtmlOverlay(source: page, navigation: options.navigation, javascript: options.javascript,
-                                      chromeless: options.chromeless, persistent: options.persistent, browse: options.browse)
+            let overlay = HtmlOverlay(pageRow: page, options: options)
             switch store.addPageSession(after: id, overlay: overlay, select: options.follow, backgroundColor: options.backgroundColor) {
             case .failure:
                 return ControlResponse(ok: false, error: "could not create page session")
@@ -126,6 +105,11 @@ extension ControlServer {
     }
 
     func convertToCompanion(_ target: String?, window: String?) -> ControlResponse {
+        convertToCompanion(target, window: window, focus: true)
+    }
+
+    /// convertToCompanion with `focus` false leaves first responder alone, for a conversion another Mac asked for.
+    func convertToCompanion(_ target: String?, window: String?, focus: Bool) -> ControlResponse {
         let (store, id): (AppStore, UUID)
         switch resolver.resolveSessionTarget(target, window: window) {
         case .failure(let response): return response
@@ -135,8 +119,63 @@ extension ControlServer {
         case .failure(let refusal):
             return ControlResponse(ok: false, error: refusal.message)
         case .success(let parent):
-            if store === library.activeStore { actions.focusActiveSession() }
+            if focus, store === library.activeStore { actions.focusActiveSession() }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, parent: parent.id.uuidString))
+        }
+    }
+
+    /// moveCompanion resolves the parent in the companion's own window only, as `session.move` resolves its anchor,
+    /// so a short prefix stays unambiguous and a parent in another window reads as `no such session`.
+    func moveCompanion(_ target: String?, parent: String, index: Int?, window: String?) async -> ControlResponse {
+        let (store, id): (AppStore, UUID)
+        switch resolver.resolveSessionTarget(target, window: window) {
+        case .failure(let response): return response
+        case .success(let resolved): (store, id) = resolved
+        }
+        return resolver.resolve(parent, candidates: store.workspaces.flatMap { $0.sessions.map(\.id) },
+                                active: store.selectedSessionID, noun: "session") { parentID in
+            if case .failure(let refusal) = store.moveCompanion(id, under: parentID, at: index) {
+                return ControlResponse(ok: false, error: refusal.message)
+            }
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, parent: parentID.uuidString))
+        }
+    }
+
+    /// promoteCompanion resolves the workspace or anchor in the companion's own window only, as `moveCompanion` does.
+    func promoteCompanion(_ target: String?, placement: ControlCompanionPromotion, window: String?) async -> ControlResponse {
+        let (store, id): (AppStore, UUID)
+        switch resolver.resolveSessionTarget(target, window: window) {
+        case .failure(let response): return response
+        case .success(let resolved): (store, id) = resolved
+        }
+        switch promotionTarget(placement, in: store) {
+        case .failure(let response):
+            return response
+        case .success(let promotion):
+            if case .failure(let refusal) = store.promoteCompanion(id, to: promotion) {
+                return ControlResponse(ok: false, error: refusal.message)
+            }
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
+    /// promotionTarget resolves a promotion's workspace or anchor in `store`, for this handler and the attached route.
+    func promotionTarget(_ placement: ControlCompanionPromotion, in store: AppStore) -> ControlTargetResolver.Resolution<CompanionPromotion> {
+        let refusal = { (noun: String, target: String, resolution: TargetResolution) in
+            ControlResponse(ok: false, error: ControlResolve.errorMessage(noun: noun, target: target, resolution: resolution))
+        }
+        switch placement {
+        case .afterOwnGroup:
+            return .success(.afterOwnGroup)
+        case .workspace(let target):
+            let resolution = store.resolveWorkspaceTarget(target)
+            guard case .resolved(let id) = resolution else { return .failure(refusal("workspace", target, resolution)) }
+            return .success(.workspace(id, slot: nil))
+        case .beside(let anchor, let after):
+            let resolution = ControlResolve.resolve(anchor, candidates: store.workspaces.flatMap { $0.sessions.map(\.id) },
+                                                    active: store.selectedSessionID)
+            guard case .resolved(let id) = resolution else { return .failure(refusal("session", anchor, resolution)) }
+            return .success(.beside(id, after: after))
         }
     }
 

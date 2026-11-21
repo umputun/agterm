@@ -62,6 +62,14 @@ public struct PaletteContext: Sendable, Equatable {
     public let remoteConnected: Bool
     /// remoteHasDetached is whether that window has a detached session or workspace to reattach.
     public let remoteHasDetached: Bool
+    /// marksBlocked is whether flag changes are its server's and it cannot be asked now.
+    public let marksBlocked: Bool
+    /// activeWorkspaceIsRoot is whether new sessions land in the root, which no workspace-only command acts on.
+    public let activeWorkspaceIsRoot: Bool
+    /// hasRootWorkspace is whether the window has a root container, empty or not; a server window's catalog may mark none.
+    public let hasRootWorkspace: Bool
+    /// focusNoun is what the focus commands name.
+    public var focusNoun: String { activeWorkspaceIsRoot ? ControlWorkspaceNode.rootLabel : "Workspace" }
     /// Any cover over the deck. Behind it a keystroke or a menu pick must not mutate what it hides, so all
     /// but a handful of commands go dead; `PaletteCommand.isEnabled(in:)` owns which.
     public var modalActive: Bool { terminalZoomActive || dashboardOpen || pickerActive }
@@ -94,13 +102,19 @@ public struct PaletteContext: Sendable, Equatable {
                 activeSessionIsRemote: Bool = false,
                 remoteWindow: Bool = false,
                 remoteConnected: Bool = false,
-                remoteHasDetached: Bool = false) {
+                remoteHasDetached: Bool = false,
+                marksBlocked: Bool = false,
+                activeWorkspaceIsRoot: Bool = false,
+                hasRootWorkspace: Bool = false) {
         self.activeSessionIsPage = activeSessionIsPage
         self.activeSessionIsCompanion = activeSessionIsCompanion
         self.activeSessionIsRemote = activeSessionIsRemote
         self.remoteWindow = remoteWindow
         self.remoteConnected = remoteConnected
         self.remoteHasDetached = remoteHasDetached
+        self.marksBlocked = marksBlocked
+        self.activeWorkspaceIsRoot = activeWorkspaceIsRoot
+        self.hasRootWorkspace = hasRootWorkspace
         self.canRemoveWorkspace = canRemoveWorkspace
         self.hasFlaggedSessions = hasFlaggedSessions
         self.sidebarShowsWorkspaceTree = sidebarShowsWorkspaceTree
@@ -130,7 +144,7 @@ public struct PaletteContext: Sendable, Equatable {
 
 /// Static action-palette rows, in the same order the macOS palette presents them before dynamic rows.
 public enum PaletteCommand: String, CaseIterable, Sendable {
-    case newSession, newWorkspace, openDirectory
+    case newSession, newRootSession, newWorkspace, openDirectory
     case renameSession, duplicateSession, newCompanion, duplicateCompanion, convertCompanion, renameWorkspace, closeSession, reopenRecent, undoClose, clearStatus
     case previousSession, nextSession, previousAttentionSession, nextAttentionSession
     case previousWorkspace, nextWorkspace
@@ -140,7 +154,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
     case toggleSidebar, toggleFlag, focusWorkspace
     case find, quickTerminal, dashboard, toggleFullscreen
     case increaseFontSize, decreaseFontSize, resetFontSize, selectTheme
-    case attachRemote, openRemoteWindow, detachedSessions
+    case attachRemote, openRemoteWindow, detachedSessions, newRemoteSession
     case editKeymap, reloadKeymap, editHooks, reloadHooks, editGhosttyConfig, reloadConfig
     case deleteWorkspace, toggleFlaggedView, clearFlagged, editFlaggedSessions, clearFocus, editFocusedWorkspaces
     case addWorkspaceToFocus, toggleWorkspaceFilter
@@ -155,6 +169,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         if context.activeSessionIsPage, Self.terminalOnly.contains(self) { return false }
         if context.remoteWindow, Self.localOnly.contains(self) { return false }
         if context.remoteWindow, !context.remoteConnected, Self.sentToServer.contains(self) { return false }
+        if context.marksBlocked, self == .toggleFlag || self == .clearFlagged { return false }
         switch self {
         case .renameSession, .duplicateSession, .clearStatus, .toggleFlag, .toggleSplit,
              .toggleHorizontalSplit, .toggleScratch,
@@ -165,13 +180,20 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .newCompanion, .duplicateCompanion:
             return context.hasActiveSession
         case .convertCompanion:
-            return context.hasActiveSession && !context.activeSessionIsCompanion && !context.activeSessionIsRemote
+            // a remote row is converted where it runs: by its server or by the host it was attached from
+            return context.hasActiveSession && !context.activeSessionIsCompanion
         case .swapPanes:
             return context.hasActiveSession && context.activeSessionHasSplit
         case .toggleOverlay:
             return context.hasActiveSession && context.activeSessionHasOverlay
-        case .renameWorkspace, .focusWorkspace, .addWorkspaceToFocus, .toggleWorkspaceCollapse, .editFocusedWorkspaces:
+        case .renameWorkspace, .toggleWorkspaceCollapse:
+            return context.hasCurrentWorkspace && !context.activeWorkspaceIsRoot
+        case .deleteWorkspace:
+            return !context.activeWorkspaceIsRoot
+        case .focusWorkspace, .addWorkspaceToFocus, .editFocusedWorkspaces:
             return context.hasCurrentWorkspace
+        case .newRootSession:
+            return context.hasRootWorkspace
         case .editFlaggedSessions:
             return context.hasSessions
         case .previousWorkspace, .nextWorkspace:
@@ -180,7 +202,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .previousWindow, .nextWindow:
             // same rule one level up: a single open window has nowhere to step to
             return context.canStepWindows
-        case .attachRemote:
+        case .attachRemote, .newRemoteSession:
             return context.hasRemotes && context.hasCurrentWorkspace
         case .openRemoteWindow:
             return context.hasRemotes
@@ -193,12 +215,12 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
 
     /// sentToServer are the actions a remote window asks its server for; close stays, since detaching needs no server.
     private static let sentToServer: Set<PaletteCommand> = [
-        .newSession, .newWorkspace, .renameSession, .duplicateSession, .newCompanion, .renameWorkspace,
-        .toggleSplit, .toggleHorizontalSplit, .closeSplit, .swapPanes, .toggleScratch,
+        .newSession, .newRootSession, .newWorkspace, .renameSession, .duplicateSession, .newCompanion, .renameWorkspace,
+        .toggleSplit, .toggleHorizontalSplit, .closeSplit, .swapPanes, .toggleScratch, .duplicateCompanion, .convertCompanion,
     ]
 
     /// localOnly make a shell or a row on this Mac, which a remote window shows only from its server.
-    private static let localOnly: Set<PaletteCommand> = [.openDirectory, .duplicateCompanion, .convertCompanion, .attachRemote, .reopenRecent]
+    private static let localOnly: Set<PaletteCommand> = [.openDirectory, .attachRemote, .reopenRecent, .newRemoteSession]
 
     // terminal zoom stays: it exits a zoom of another session's terminal, and entering one over a page finds none
     private static let terminalOnly: Set<PaletteCommand> = [
@@ -272,6 +294,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
     public func title(in context: PaletteContext) -> String {
         switch self {
         case .newSession: return "New Session"
+        case .newRootSession: return "New Top-Level Session"
         case .newWorkspace: return "New Workspace"
         case .openDirectory: return "Open Directory…"
         case .renameSession: return "Rename Session"
@@ -304,7 +327,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .toggleTerminalZoom: return "Toggle Terminal Zoom"
         case .toggleSidebar: return "Toggle Sidebar"
         case .toggleFlag: return context.activeSessionFlagged ? "Unflag Session" : "Flag Session"
-        case .focusWorkspace: return "Focus Workspace"
+        case .focusWorkspace: return "Focus \(context.focusNoun)"
         case .find: return "Find…"
         case .quickTerminal: return "Quick Terminal"
         case .dashboard: return "Dashboard"
@@ -316,6 +339,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .attachRemote: return "Attach Remote…"
         case .openRemoteWindow: return "Open Remote Window…"
         case .detachedSessions: return "Detached Sessions…"
+        case .newRemoteSession: return "New Remote Session…"
         case .editKeymap: return "Edit Keymap"
         case .reloadKeymap: return "Reload Keymap"
         case .editHooks: return "Edit Hooks"
@@ -328,7 +352,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .editFlaggedSessions: return "Edit Flagged Sessions…"
         case .clearFocus: return "Clear Focus"
         case .editFocusedWorkspaces: return "Edit Focused Workspaces…"
-        case .addWorkspaceToFocus: return "Add Workspace to Focus"
+        case .addWorkspaceToFocus: return "Add \(context.focusNoun) to Focus"
         case .toggleWorkspaceFilter: return "Toggle Workspace Filter"
         case .expandWorkspaces: return "Expand Workspaces"
         case .collapseWorkspaces: return "Collapse Workspaces"
@@ -341,6 +365,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
     public var builtinAction: BuiltinAction? {
         switch self {
         case .newSession: return .newSession
+        case .newRootSession: return .newRootSession
         case .newWorkspace: return .newWorkspace
         case .openDirectory: return .openDirectory
         case .renameSession: return .renameSession
@@ -389,6 +414,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .attachRemote: return .attachRemote
         case .openRemoteWindow: return .openRemoteWindow
         case .detachedSessions: return .detachedSessions
+        case .newRemoteSession: return .newRemoteSession
         case .editFlaggedSessions: return .editFlaggedSessions
         case .editFocusedWorkspaces: return .editFocusedWorkspaces
         case .editKeymap, .reloadKeymap, .editHooks, .reloadHooks, .editGhosttyConfig, .reloadConfig,

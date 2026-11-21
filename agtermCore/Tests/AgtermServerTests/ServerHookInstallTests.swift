@@ -75,14 +75,18 @@ struct ServerHookInstallTests {
                                   environment: ["PATH": fixture.bin.path], openCode: nil).run()
 
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/bash")
-        process.arguments = [fixture.home.appendingPathComponent(".config/agterm/agent-status/\(AgentHooksInstall.wrapperName)").path, "active"]
-        process.environment = ["PATH": "/usr/bin:/bin", "AGTERM_SESSION_ID": "s1", "AGTERM_SOCKET": "/tmp/agterm.sock"]
+        process.executableURL = fixture.home.appendingPathComponent(".config/agterm/agent-status/\(AgentHooksInstall.wrapperName)")
+        process.arguments = ["active"]
+        let socket = fixture.root.appendingPathComponent("agterm.sock").path
+        process.environment = ["PATH": "/usr/bin:/bin", "HOME": fixture.home.path, "AGTERM_SESSION_ID": "s1", "AGTERM_SOCKET": socket]
+        let finished = DispatchSemaphore(value: 0)
+        process.terminationHandler = { _ in finished.signal() }
         try process.run()
-        process.waitUntilExit()
+        defer { if process.isRunning { process.terminate() } }
+        try #require(finished.wait(timeout: .now() + 5) == .success)
 
         #expect(process.terminationStatus == 0)
-        #expect(try String(contentsOf: calls, encoding: .utf8) == "session status active --target s1 --socket /tmp/agterm.sock\n")
+        #expect(try String(contentsOf: calls, encoding: .utf8) == "session status active --target s1 --socket \(socket)\n")
     }
 
     @Test func missingJqSkipsCodexAndReportsIncomplete() throws {

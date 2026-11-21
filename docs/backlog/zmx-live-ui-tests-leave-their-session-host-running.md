@@ -17,13 +17,15 @@ host accepts `stop` only from a peer in its own bundle (`HostIdentity.peer`, `ha
 Killing the pidfile's pid would also skip `handleStop`'s rooted-daemon and pending-child checks and
 `HostEndpoint.close()`.
 
-A fix needs a deliberate `agterm-session-host stop` entry point (none in `main.swift`) that sends the
-host's own request without `ClientConnector.ensureRunning()`, which could start a host during cleanup,
-plus a way for the app to run it at tearDown, such as a custom command seeded in the test's keymap. It
-should require `.stopped`, bound the wait for the exit, and keep reap and stop errors. `handleStop` refuses
-a row without a live leader, so if daemons are ever kept after their command ends
-(`fast-live-command-loses-output-in-host-handoff.md`), they have to be reaped first.
+`agterm-session-host stop SOCKET_DIR` exists, but it retires hosts of other builds: `HostRetirement.run`
+skips the endpoint this build and login session create through, which is exactly the test's host. A fix
+needs a form that includes that endpoint, plus a way for the app to run it at tearDown, such as a custom
+command seeded in the test's keymap. `handleStop` refuses a row without a live leader, so if daemons are
+ever kept after their command ends (`fast-live-command-loses-output-in-host-handoff.md`), they have to be
+reaped first.
 
-Not worth it: that entry point ships in the bundled helper and only tests would call it, and the
-project keeps no production code that exists only to serve tests. A leaked test host stays a manual
-cleanup by pid, which the `lsappinfo` check after a hosted or UI test run already catches.
+Not worth it: that form ships in the bundled helper and only tests would call it, and the project keeps
+no production code that exists only to serve tests. A leaked test host stays a manual
+cleanup by pid, which the `lsappinfo` check after a hosted or UI test run already catches. On macOS 27 and
+later the host runs as a launchd job with a coalition of its own and is absent from `lsappinfo`; a leaked
+one shows as a loaded `<bundleID>.session-host.*` job in `launchctl list` instead.

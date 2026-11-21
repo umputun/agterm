@@ -119,7 +119,8 @@ public struct AgentHooksFiles {
         for name in [AgentHooksInstall.wrapperName, AgentHooksInstall.codexWrapperName] {
             let wrapper = destination.appendingPathComponent(name)
             let original = try String(contentsOf: wrapper, encoding: .utf8)
-            try writePreservingSymlink(AgentHooksInstall.bakeAgtermctlPath(into: original, toolPath: toolPath), to: wrapper)
+            let mode = AgentHooksInstall.posixMode(ofFile: (Self.symlinkTarget(of: wrapper) ?? wrapper).path)
+            try writePreservingSymlink(AgentHooksInstall.bakeAgtermctlPath(into: original, toolPath: toolPath), to: wrapper, posixMode: mode)
         }
     }
 
@@ -178,7 +179,8 @@ public struct AgentHooksFiles {
             let scriptName = fish ? AgentHooksInstall.fishIntegrationRelativePath : AgentHooksInstall.integrationRelativePath
             let result = AgentHooksInstall.appendShellRC(existing: existing, scriptDir: destination.path, scriptName: scriptName)
             guard result.changed else { continue }
-            try writePreservingSymlink(result.contents, to: rc)
+            let mode = AgentHooksInstall.posixMode(ofFile: (Self.symlinkTarget(of: rc) ?? rc).path)
+            try writePreservingSymlink(result.contents, to: rc, posixMode: mode)
         }
     }
 

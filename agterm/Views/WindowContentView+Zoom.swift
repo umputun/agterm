@@ -154,6 +154,7 @@ extension WindowContentView {
             TerminalView(session: session, surfaceKeyPath: \.scratchSurface, makeSurface: makeScratchSurface,
                          isActive: true, deckVisible: true, reportsFocusChange: false)
                 .id("\(session.id.uuidString)-zoom-scratch-\(hostToken)")
+                .overlay { PaneLeadCover(session: session, pane: .scratch, background: terminalColor, foreground: chromeText) }
         case .overlay:
             TerminalView(session: session, surfaceKeyPath: \.overlaySurface,
                          makeSurface: { makeOverlaySurface($0, nil) },

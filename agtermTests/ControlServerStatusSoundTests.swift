@@ -118,7 +118,7 @@ final class ControlServerStatusSoundTests: XCTestCase {
         await assertNoPlayback()
     }
 
-    func testPaneRefusalUsesStateAfterResolutionAndDoesNotPlay() async throws {
+    func testABlockSetDuringResolutionStaysShownAndTheWriteStillPlays() async throws {
         makeServer(resolvedSound: sound)
         let store = try XCTUnwrap(library.activeStore)
         let session = try XCTUnwrap(store.activeSession)
@@ -128,10 +128,10 @@ final class ControlServerStatusSoundTests: XCTestCase {
         store.setAgentIndicator(AgentIndicator(status: .blocked, statusPane: .right), forSession: session.id)
         gate.release.signal()
         let response = await pending.value
-        XCTAssertFalse(response.ok)
-        XCTAssertEqual(response.error, "blocked status owned by pane right (write from that pane to change it)")
+        XCTAssertTrue(response.ok)
         XCTAssertEqual(session.agentIndicator.status, .blocked)
-        await assertNoPlayback()
+        XCTAssertEqual(session.agentIndicator.statusPane, .right)
+        await fulfillment(of: [sound.log.playCalled], timeout: 2)
     }
 
     func testInvalidBlockedDefaultDoesNotRejectOrDelayMutation() async throws {
@@ -206,7 +206,7 @@ final class ControlServerStatusSoundTests: XCTestCase {
         await assertNoPlayback()
     }
 
-    func testARefusedStatusSendsNoSound() async throws {
+    func testACompletionUnderAnotherPanesBlockSendsItsSoundOnce() async throws {
         makeServer(resolvedSound: sound)
         let store = try XCTUnwrap(library.activeStore)
         let session = try XCTUnwrap(store.activeSession)
@@ -214,8 +214,9 @@ final class ControlServerStatusSoundTests: XCTestCase {
         let viewer = try present(session)
         store.setAgentIndicator(AgentIndicator(status: .blocked, statusPane: .right), forSession: session.id)
         let response = await update(soundName: "Tink", status: .completed, pane: .left)
-        XCTAssertFalse(response.ok)
-        XCTAssertTrue(viewer.sounds.isEmpty)
+        XCTAssertTrue(response.ok)
+        XCTAssertEqual(session.agentIndicator.status, .blocked)
+        XCTAssertEqual(viewer.sounds, [PresentationSound(name: "Tink")])
         await assertNoPlayback()
     }
 

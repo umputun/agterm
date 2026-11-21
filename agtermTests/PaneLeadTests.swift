@@ -97,6 +97,22 @@ final class PaneLeadTests: XCTestCase {
         XCTAssertFalse(PaneLead.consumes(try key(.keyUp, code: 0), in: fresh))
     }
 
+    func testAKeyOnAReconnectThatClaimsNothingTakesTheLeadOnItsFirstReport() throws {
+        let identity = UUID()
+        panes.append(identity)
+        let view = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(),
+                                      env: ["AGTERM_PANE_ID": identity.uuidString], backedByZmx: true)
+        ZmxLeadBook.shared.begin(ZmxLeadAttachment(nonce: "n", claim: false), pane: identity, reattaching: true)
+
+        XCTAssertTrue(PaneLead.consumes(try key(.keyDown, code: 0), in: view))
+        XCTAssertTrue(PaneLead.consumes(try key(.keyDown, code: 0, repeating: true), in: view))
+        XCTAssertTrue(reattached.isEmpty, "the reattach on its way is not replaced")
+
+        PaneLead.report(try notice("n:follower:1"), from: view)
+        XCTAssertEqual(reattached.map(\.claim), [true])
+        XCTAssertTrue(PaneLead.consumes(try key(.keyUp, code: 0), in: view), "the press stays swallowed until released")
+    }
+
     // the release can land on the destroyed old view and never reach `consumes`.
     func testATakeoverKeyWhoseReleaseWasNeverSeenDoesNotSwallowItsNextPress() throws {
         let (view, identity) = pane()
@@ -131,7 +147,7 @@ final class PaneLeadTests: XCTestCase {
 
     func testALostLinkFromTheCurrentAttachmentParksThePaneCoveredWhenItHadReportedARole() throws {
         var parked: [(GhosttySurfaceView, Bool)] = []
-        PaneLead.waitToReconnect = { parked.append(($0, $1)) }
+        PaneLead.waitToReconnect = { view, cover, _ in parked.append((view, cover)) }
         let (reporting, _) = pane(nonce: "a")
         PaneLead.report(try notice("a:leader:1"), from: reporting)
         let (silent, _) = pane(nonce: "b")
@@ -145,7 +161,7 @@ final class PaneLeadTests: XCTestCase {
 
     func testAReconnectThatLostTheLinkBeforeItsFirstReportStillParksCovered() throws {
         var parked: [Bool] = []
-        PaneLead.waitToReconnect = { parked.append($1) }
+        PaneLead.waitToReconnect = { _, cover, _ in parked.append(cover) }
         let (view, identity) = pane(nonce: "old")
         ZmxLeadBook.shared.begin(ZmxLeadAttachment(nonce: "fresh", claim: false), pane: identity, reattaching: true)
 
@@ -154,9 +170,23 @@ final class PaneLeadTests: XCTestCase {
         XCTAssertEqual(parked, [true])
     }
 
+    func testALostLinkParksWithTheNonceOfTheAttachThatLed() throws {
+        var reclaims: [String?] = []
+        PaneLead.waitToReconnect = { _, _, reclaim in reclaims.append(reclaim) }
+        let (leading, _) = pane(nonce: "a")
+        PaneLead.report(try notice("a:leader:1"), from: leading)
+        let (following, _) = pane(nonce: "b")
+        PaneLead.report(try notice("b:follower:1"), from: following)
+
+        PaneLead.linkLost(try XCTUnwrap(RemoteLinkNotice(title: "agterm-remote;a:lost")), from: leading)
+        PaneLead.linkLost(try XCTUnwrap(RemoteLinkNotice(title: "agterm-remote;b:lost")), from: following)
+
+        XCTAssertEqual(reclaims, ["a", nil])
+    }
+
     func testALostLinkWithAnotherAttachmentsNonceIsDropped() throws {
         var parked = 0
-        PaneLead.waitToReconnect = { _, _ in parked += 1 }
+        PaneLead.waitToReconnect = { _, _, _ in parked += 1 }
         let (view, _) = pane(nonce: "current")
 
         PaneLead.linkLost(try XCTUnwrap(RemoteLinkNotice(title: "agterm-remote;forged:lost")), from: view)
@@ -225,5 +255,26 @@ final class PaneLeadTests: XCTestCase {
         XCTAssertTrue(PaneLead.consumes(try key(.keyUp, code: 0), in: fresh))
         XCTAssertTrue(PaneLead.consumes(try key(.keyDown, code: 0), in: fresh))
         XCTAssertEqual(reattached.map(\.claim), [true], "a fresh press still claims")
+    }
+
+    func testAPaneOwedAClaimTakesItOnItsFirstReportAsAFollower() throws {
+        let (view, identity) = pane()
+        ZmxLeadBook.shared.claimOnReport(pane: identity)
+
+        PaneLead.report(try notice("n:follower:1"), from: view)
+
+        XCTAssertEqual(reattached.map(\.claim), [true])
+        XCTAssertTrue(reattached.first?.view === view)
+        XCTAssertFalse(ZmxLeadBook.shared.takeClaim(pane: identity))
+    }
+
+    func testAPaneOwedAClaimThatAlreadyLeadsSpendsIt() throws {
+        let (view, identity) = pane()
+        ZmxLeadBook.shared.claimOnReport(pane: identity)
+
+        PaneLead.report(try notice("n:leader:1"), from: view)
+
+        XCTAssertTrue(reattached.isEmpty)
+        XCTAssertFalse(ZmxLeadBook.shared.takeClaim(pane: identity))
     }
 }

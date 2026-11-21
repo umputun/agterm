@@ -2,24 +2,43 @@ import Foundation
 import agtermCore
 
 extension ControlServer {
-    /// installRemoteLinkClicks points the link opener's forward and refuse hooks at this server.
+    /// installRemoteLinkClicks points the link opener's forward, refuse and loopback hooks at this server.
     func installRemoteLinkClicks() {
         // optional chaining would fold a sent click's nil into the missing-server case
-        LinkOpener.shared.forward = { [weak self] click in
+        LinkOpener.shared.forward = { [weak self] click, surface in
             guard let self else { return .notOpened }
-            return forwardRemoteLinkClick(click)
+            return forwardRemoteLinkClick(click, surface: surface)
         }
         LinkOpener.shared.refuse = { [weak self] session, reason in self?.refuseRemoteLinkClick(reason, session: session) }
+        LinkOpener.shared.loopback = { [weak self] page, row, done in
+            guard let self else { return done(nil) }
+            forwardLoopback(page, row: row, done: done)
+        }
     }
 
     /// forwardRemoteLinkClick sends a path clicked in an attached pane to its origin; nil when sent, else why not.
-    func forwardRemoteLinkClick(_ click: RemoteLinkClick) -> RemoteLinkRefusal? {
+    /// `surface` is the clicked pane when the click may run an `open` rule: a rule taking a name the path may resolve
+    /// to books it for a snapshot. A booked click goes out even where a page would be hidden, asking for the snapshot
+    /// alone, since a rule shows nothing over the session.
+    func forwardRemoteLinkClick(_ click: RemoteLinkClick, surface: GhosttySurfaceView? = nil) -> RemoteLinkRefusal? {
         guard let store = library.store(forSession: click.session) else { return .notPresenter }
         let client = remoteClients[click.session]
         let supported = client?.originSupports(PresentationHub.linkClickKind) == true
-        switch store.linkClickRequest(click, originSupportsClick: supported, hidden: remoteLinkPageHidden(click.session)) {
+        let hidden = remoteLinkPageHidden(click.session)
+        let snapshots = surface != nil && client?.originSupports(PresentationHub.linkSnapshotKind) == true
+        switch store.linkClickRequest(click, originSupportsClick: supported, hidden: hidden && !snapshots,
+                                      originTakesLeads: client?.claimsLead == true) {
         case .failure(let reason): return reason
-        case .success(let frame):
+        case .success(var frame):
+            if snapshots, let surface, click.pane != nil, let connection = remoteConnectionIDs[click.session],
+               let booked = remoteOpeners.record(raw: click.raw, connection: connection, session: click.session,
+                                                 surface: surface) {
+                frame.click = booked
+                frame.openers = remoteOpeners.book.selectors(for: booked)
+                frame.snapshotOnly = hidden ? true : nil
+            } else if hidden {
+                return .hidden
+            }
             client?.answer(.linkClick(frame))
             return nil
         }

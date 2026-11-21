@@ -17,7 +17,7 @@ extension AppStore {
     /// setTint replaces a workspace's own tint (nil clears) and persists, with the session form's no-op rule.
     @discardableResult
     public func setTint(_ tint: SidebarTint?, forWorkspace id: UUID) -> Bool {
-        guard let index = workspaces.firstIndex(where: { $0.id == id }), workspaces[index].tint != tint else {
+        guard let index = namedWorkspaceIndex(of: id), workspaces[index].tint != tint else {
             return false
         }
         workspaces[index].tint = tint

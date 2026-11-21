@@ -77,9 +77,13 @@ extension RemoteCatalogMirror {
         return items
     }
 
-    /// canTerminateWorkspace is whether the server would delete a workspace: it keeps at least one, counting the ones
-    /// this window detached.
-    public var canTerminateWorkspace: Bool { (catalog?.workspaces.count ?? 0) > 1 }
+    /// canTerminateWorkspace is whether the server would delete a workspace, counting the ones this window detached:
+    /// an owner with top-level sessions deletes its last named one, an older owner keeps one.
+    public var canTerminateWorkspace: Bool {
+        let workspaces = catalog?.workspaces ?? []
+        let named = workspaces.filter { $0.root != true }.count
+        return named > (workspaces.contains { $0.root == true } ? 0 : 1)
+    }
 
     /// closeScope is what closing row `id` reaches on the server, nil for a row the catalog does not hold.
     public func closeScope(session id: UUID) -> RemoteCloseScope? {
@@ -114,7 +118,8 @@ extension RemoteCatalogMirror {
     func shownCatalog(_ catalog: CatalogSnapshot, in store: AppStore) -> [CatalogWorkspace] {
         let all = catalog.workspaces.flatMap(\.sessions)
         let sessions = store.catalogDetachedSessions.intersection(all.map(\.id))
-        let workspaces = store.catalogDetachedWorkspaces.intersection(catalog.workspaces.map(\.id))
+        // the root cannot be detached, so a detach an older build saved for it, as an unnamed workspace, is dropped
+        let workspaces = store.catalogDetachedWorkspaces.intersection(catalog.workspaces.filter { $0.root != true }.map(\.id))
         if sessions != store.catalogDetachedSessions || workspaces != store.catalogDetachedWorkspaces {
             store.catalogDetachedSessions = sessions
             store.catalogDetachedWorkspaces = workspaces
@@ -138,6 +143,11 @@ extension RemoteCatalogMirror {
         }
         let workspaceRecords = Set(catalog.workspaces.map(\.id))
         store.catalogHiddenCollapsed = store.catalogHiddenCollapsed.filter { workspaceRecords.contains($0.key) }
+        for id in workspaces where store.focusedWorkspaceIDs.contains(id) {
+            store.catalogHiddenFocus.insert(id)
+            store.dropFocusMember(id)
+        }
+        store.catalogHiddenFocus.formIntersection(workspaceRecords)
         return shown
     }
 

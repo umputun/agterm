@@ -11,10 +11,10 @@ extension ControlServer {
         Task { @MainActor [weak self] in
             let loaded = await ImageProbe.loadDetached(path: path)
             guard let self, case .success(let (probe, _)) = loaded, canShowLinkOverlay(session: id, forwarded: forward != nil),
-                  forwardIsCurrent(forward, session: id), let store = library.store(forSession: id) else { return completion(false) }
+                  forwardIsCurrent(forward), let store = library.store(forSession: id) else { return completion(false) }
             if forward == nil { releaseHiddenClickedPage(session: id, persistent: false) }
             completion(openImageOverlay(in: store, sessionID: id, path: path, probe: probe,
-                                        options: Self.imageOptions(path: path, forwarded: forward != nil)).ok)
+                                        options: Self.imageOptions(path: path, forwardedTo: forward)).ok)
         }
     }
 
@@ -40,14 +40,14 @@ extension ControlServer {
         let pixels = ImagePixels(width: Int(natural.width), height: Int(natural.height))
         // the presenting Mac sizes an unsized picture for its own screen, so it gets the pixels and no points
         guard options.pane == nil, options.sizePercent == nil, options.points.isEmpty,
-              !store.pageBelongsRemote(id, pane: nil) else {
+              !options.forwarded, !store.pageBelongsRemote(id, pane: nil) else {
             return openHtmlOverlay(in: store, sessionID: id, page: .image(path: path), options: options.with(imagePixels: pixels))
         }
         let points = imagePoints(in: store, sessionID: id, pixels: pixels)
         let sized = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: ImagePage.basePercent,
                                                      backgroundColor: options.backgroundColor, follow: options.follow,
                                                      page: options.page, points: points, clicked: options.clicked,
-                                                     forwarded: options.forwarded)
+                                                     imagePixels: pixels, forwardedTo: options.forwardedTo)
         return openHtmlOverlay(in: store, sessionID: id, page: .image(path: path), options: sized)
     }
 
@@ -61,8 +61,8 @@ extension ControlServer {
                                 bounds: store.session(withID: id)?.hudPaneFrames.detail)
     }
 
-    private static func imageOptions(path: String, forwarded: Bool) -> ControlSessionOverlayOpenOptions {
+    private static func imageOptions(path: String, forwardedTo: Int?) -> ControlSessionOverlayOpenOptions {
         ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil,
-                                         page: .image(path: path), clicked: true, forwarded: forwarded)
+                                         page: .image(path: path), clicked: true, forwardedTo: forwardedTo)
     }
 }

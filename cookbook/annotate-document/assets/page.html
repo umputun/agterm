@@ -89,7 +89,7 @@ button.danger { color: var(--bad); }
 .g.noted .add { background: var(--warn); color: var(--bg); }
 .g.noted .add::before { content: "\270E"; }
 
-#doc { position: relative; z-index: 1; padding: 16px 32px 24px calc(var(--rail) + 16px); line-height: 1.3; }
+#doc { position: relative; z-index: 1; padding: 16px 32px 24px calc(var(--rail) + 16px); line-height: 1.3; overflow-wrap: break-word; }
 #doc [data-ls] { cursor: text; }
 #file-slot:empty { display: none; }
 #file-slot { margin-bottom: 12px; }
@@ -296,6 +296,7 @@ tr.slot > td { border: 0 !important; padding: 0 !important; }
   const storeKey = 'webrev:' + data.nonce;
   let editing = null;
   let cur = null;
+  let paging = 0;
 
   const esc = (s) => s.replace(/[&<>"']/g, (c) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
   const label = (ls, le) => (ls === le ? String(ls) : ls + '-' + le);
@@ -579,6 +580,8 @@ tr.slot > td { border: 0 !important; padding: 0 !important; }
   };
 
   const setCur = (el, scroll = true) => {
+    clearTimeout(paging);
+    paging = 0;
     if (!el || el === cur) return;
     if (cur) mark(cur, 'cur', false);
     cur = el;
@@ -722,14 +725,24 @@ tr.slot > td { border: 0 !important; padding: 0 !important; }
     const r = cur && cur.getBoundingClientRect();
     return r && r.bottom > top && r.top < window.innerHeight ? Number(cur.dataset.ls) : null;
   };
-  // the browser's own page scroll leaves the current line behind, and the next j/k jumps back to it
-  const pageMove = (dir) => {
+  // macOS 26 WebKit stops painting after a scripted instant scroll, so Page Up/Down scroll natively; the current
+  // line then follows the page once it settles, or the next j/k would jump back to it
+  const followPage = () => {
     const top = topEdge();
-    const y = window.scrollY;
-    window.scrollBy({top: dir * (window.innerHeight - top) * 0.9, behavior: 'instant'});
-    if (window.scrollY === y) { setCur(blocks[dir > 0 ? blocks.length - 1 : 0]); return; }
     const inView = (b) => { const r = b.getBoundingClientRect(); return r.top >= top && r.top < window.innerHeight; };
     setCur(blocks.find(inView) || blocks.findLast((b) => b.getBoundingClientRect().top < top), false);
+  };
+  const settlePage = () => { if (paging) followPage(); };
+  window.addEventListener('scroll', () => {
+    if (!paging) return;
+    clearTimeout(paging);
+    paging = setTimeout(followPage, 100);
+  });
+  const pageKey = (ev, dir) => {
+    const room = dir > 0 ? window.scrollY + window.innerHeight < document.documentElement.scrollHeight - 1 : window.scrollY > 0;
+    if (room) { clearTimeout(paging); paging = setTimeout(followPage, 100); return; }
+    ev.preventDefault();
+    setCur(blocks[dir > 0 ? blocks.length - 1 : 0]);
   };
   const openToc = () => {
     const line = curLine();
@@ -790,6 +803,7 @@ tr.slot > td { border: 0 !important; padding: 0 !important; }
   };
 
   document.addEventListener('keydown', (ev) => {
+    settlePage();
     if (!tocEl.hidden) { tocKeys(ev); return; }
     // selecting page text takes focus from an open note; keys go back to it, but copy stays with the selection
     if (editing && !editing.host.contains(document.activeElement)) {
@@ -806,7 +820,7 @@ tr.slot > td { border: 0 !important; padding: 0 !important; }
     const i = cur ? blocks.indexOf(cur) : -1;
     if (ev.key === 'j' || ev.key === 'ArrowDown') { ev.preventDefault(); setCur(blocks[Math.min(i + 1, blocks.length - 1)]); }
     if (ev.key === 'k' || ev.key === 'ArrowUp') { ev.preventDefault(); setCur(blocks[Math.max(i - 1, 0)]); }
-    if (ev.key === 'PageDown' || ev.key === 'PageUp') { ev.preventDefault(); pageMove(ev.key === 'PageDown' ? 1 : -1); }
+    if (ev.key === 'PageDown' || ev.key === 'PageUp') pageKey(ev, ev.key === 'PageDown' ? 1 : -1);
     if (ev.key === 'Home' || ev.key === 'End') {
       ev.preventDefault();
       const end = ev.key === 'End';

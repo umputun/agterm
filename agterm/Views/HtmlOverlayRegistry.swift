@@ -224,9 +224,12 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     // an image, markdown, text or document page reads its file off the main actor; a result is applied only while this still
     // counts the load that started it, so a close or a newer reload drops a slow read's late result
     private var textLoad = 0
+    // navigations show() started, with their load: an older navigation cannot change the current load state
+    private var builtNavigations: [(navigation: WKNavigation, load: Int)] = []
     private(set) var textPage: TextPageBridge?
     private let storageFailure: String?
     private let replica: HtmlReplicaLink?
+    private let images: ImagePageSource?
     private let revision: HtmlReplicaRevision
     /// usesSavedStore is true for a page built on the saved browser store.
     let usesSavedStore: Bool
@@ -235,6 +238,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
          browser: any HtmlBrowser, sharing: any HtmlSharing, storage: Storage, replica: HtmlReplicaLink? = nil) {
         id = overlay.id
         self.replica = replica
+        images = overlay.source.kind == .image ? ImagePageSource(pageID: overlay.id) : nil
         let revision = HtmlReplicaRevision()
         revision.value = overlay.reloadRevision
         self.revision = revision
@@ -258,7 +262,9 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         }
         // the page's own scripts only; the theme user script and app evaluation run either way
         configuration.defaultWebpagePreferences.allowsContentJavaScript = overlay.javascript
-        if case .replica = overlay.source, let replica {
+        if let images {
+            configuration.setURLSchemeHandler(HtmlPageSchemeHandler(pageID: overlay.id, source: images.source), forURLScheme: HtmlPageSchemeHandler.scheme)
+        } else if case .replica = overlay.source, let replica {
             var source: HtmlPageSchemeHandler.Source = { path in try await replica.fetch(path, revision) }
             if overlay.markdownLinks != nil { source = MarkdownPageSource.replicaLinkSource(replica, revision: revision) }
             configuration.setURLSchemeHandler(HtmlPageSchemeHandler(pageID: overlay.id, source: source), forURLScheme: HtmlPageSchemeHandler.scheme)
@@ -311,7 +317,9 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
             webView.observe(\.canGoBack) { [weak self] _, _ in Task { @MainActor in self?.reportPage() } },
             webView.observe(\.canGoForward) { [weak self] _, _ in Task { @MainActor in self?.reportPage() } },
         ]
-        textPage = TextPageBridge.make(for: overlay, webView: webView, store: store, world: Self.markdownWorld) { [weak self] in self?.fail($0) }
+        textPage = textReads().flatMap {
+            TextPageBridge(for: overlay, reads: $0, webView: webView, store: store, world: Self.markdownWorld) { [weak self] in self?.fail($0) }
+        }
         loadOriginal()
     }
 
@@ -481,6 +489,8 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     func close() {
         textLoad += 1
+        images?.clear()
+        builtNavigations.removeAll()
         textPage?.stop()
         endPrompt()
         webView.configuration.userContentController.removeAllScriptMessageHandlers()
@@ -526,6 +536,11 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
                 return fail(OverlayHtmlError.remoteFile)
             }
             webView.load(URLRequest(url: url))
+        case .replica(_, .text) where textPage != nil:
+            textPage?.loadDocument(fresh: true)
+        case .replica(let path, .image):
+            guard replica != nil else { return fail(OverlayHtmlError.remoteFile) }
+            loadImage { [weak self] in await self?.replicaImage(path) ?? .failure(ReplicaContentFailure(message: OverlayHtmlError.remoteFile)) }
         case .replica(let path, let content):
             guard replica != nil else { return fail(OverlayHtmlError.remoteFile) }
             textLoad += 1
@@ -538,7 +553,11 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
                 }
             }
         case .image(let path):
-            loadBuilt { ImageProbe.load(path: path).map { probe, data in ImagePage.html(data: data, mimeType: probe.mimeType) } }
+            loadImage {
+                await Task.detached(priority: .userInitiated) {
+                    ImageProbe.load(path: path).map { probe, data in (probe.mimeType, data) }.mapError { ReplicaContentFailure(message: $0.description) }
+                }.value
+            }
         case .markdown(let path):
             if let grant = overlay.markdownLinks, let url = HtmlPageSchemeHandler.url(pageID: id, path: grant.path) {
                 webView.load(URLRequest(url: url))
@@ -566,10 +585,49 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         }
     }
 
+    private typealias ImageRead = Result<(mimeType: String, data: Data), ReplicaContentFailure>
+
+    private func loadImage(_ read: @escaping @MainActor () async -> ImageRead) {
+        textLoad += 1
+        let load = textLoad
+        Task { @MainActor [weak self] in
+            let image = await read()
+            guard let self, textLoad == load else { return }
+            switch image {
+            case .failure(let failure): fail(failure.message)
+            case .success(let image):
+                guard let url = images?.stage(image.data, mimeType: image.mimeType, load: load) else { return fail(OverlayHtmlError.remoteFile) }
+                await show(ImagePage.html(src: url.absoluteString), load: load)
+            }
+        }
+    }
+
+    // the origin already judged the file, but the bytes are probed again here, since the channel checks no pixel count
+    private func replicaImage(_ path: String) async -> ImageRead {
+        let fetched = await fetchReplica(path, limit: ImagePage.maxBytes,
+                                         local: (ImageFile.Failure.tooLarge(path).description, ImageFile.Failure.unreadable(path).description))
+        guard case .success(let data) = fetched else { return fetched.map { _ in ("", Data()) } }
+        return await Task.detached(priority: .userInitiated) {
+            ImageProbe.probe(data, path: path).map { ($0.mimeType, data) }.mapError { ReplicaContentFailure(message: $0.description) }
+        }.value
+    }
+
     private func show(_ html: String, load: Int) async {
         let filtered = overlay.source.kind != .document ? true : await DocumentRules.shared.install(on: webView.configuration.userContentController)
         guard textLoad == load else { return }
-        if filtered { webView.loadHTMLString(html, baseURL: nil) } else { fail(DocumentRules.unavailable) }
+        guard filtered else { return fail(DocumentRules.unavailable) }
+        if let navigation = webView.loadHTMLString(html, baseURL: nil) { builtNavigations.append((navigation, load)) }
+    }
+
+    private func isStale(_ navigation: WKNavigation?) -> Bool {
+        builtNavigations.first { $0.navigation === navigation }.map { $0.load != textLoad } ?? false
+    }
+
+    // drops a navigation that ended from the record and says whether a newer load overtook it
+    private func endedStale(_ navigation: WKNavigation?) -> Bool {
+        let stale = isStale(navigation)
+        builtNavigations.removeAll { $0.navigation === navigation }
+        return stale
     }
 
     private typealias ReplicaContentFailure = HtmlReplicaLink.ReadFailure
@@ -578,16 +636,9 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     // a file can change between the origin's check and this fetch
     private func replicaContentPage(path: String, content: ReplicaContent) async -> Result<String, ReplicaContentFailure> {
         switch content {
-        case .html:
+        // an html page and a picture load through the scheme handler, a text page through its bridge
+        case .html, .text, .image:
             return .failure(ReplicaContentFailure(message: OverlayHtmlError.remoteFile))
-        case .image:
-            let fetched = await fetchReplica(path, limit: ImagePage.maxBytes,
-                                             local: (ImageFile.Failure.tooLarge(path).description, ImageFile.Failure.unreadable(path).description))
-            guard case .success(let data) = fetched else { return fetched.map { _ in "" } }
-            return await Task.detached(priority: .userInitiated) {
-                ImageProbe.probe(data, path: path).map { ImagePage.html(data: data, mimeType: $0.mimeType) }
-                    .mapError { ReplicaContentFailure(message: $0.description) }
-            }.value
         case .markdown:
             let fetched = await fetchReplica(path, limit: MarkdownPage.maxBytes,
                                              local: (MarkdownFile.Failure.tooLarge(path).description, MarkdownFile.Failure.unreadable(path).description))
@@ -597,20 +648,43 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
             }
             return await MarkdownPageSource.replica(markdown: data, path: path, fetch: fetch)
                 .mapError { ReplicaContentFailure(message: $0.description) }
-        case .text(let line):
-            let fetched = await fetchReplica(path, limit: TextPage.maxBytes,
-                                             local: (TextProbe.Failure.tooLarge(path).description, TextProbe.Failure.unreadable(path).description))
-            guard case .success(let data) = fetched else { return fetched.map { _ in "" } }
-            let style = MarkdownAssets.shared.textStyle
-            return await Task.detached(priority: .userInitiated) {
-                TextProbe.text(data, path: path)
-                    .map { TextPage.html(text: $0, language: TextPage.language(forFile: path), line: line, style: style) }
-                    .mapError { ReplicaContentFailure(message: $0.description) }
-            }.value
         case .document:
             let fetched = await fetchReplica(path, limit: DocumentPage.maxBytes, local: (DocumentProbe.Failure.tooLarge(path).description, DocumentProbe.Failure.unreadable(path).description))
             guard case .success(let data) = fetched else { return fetched.map { _ in "" } }
             return await Task.detached(priority: .userInitiated) { DocumentProbe.html(data, path: path).mapError { ReplicaContentFailure(message: $0.description) } }.value
+        }
+    }
+
+    // a replica's text comes over its channel, judged here as a local file's would be; its log end arrives raw and is
+    // cut into lines here, so a log over the text cap still opens
+    private func textReads() -> TextPageBridge.Reads? {
+        switch overlay.source {
+        case .text(let path, _):
+            return .local(path)
+        case .replica(let path, .text):
+            guard let logTail = replica?.logTail else { return nil }
+            let text: @MainActor () async -> Result<String, ReplicaContentFailure> = { [weak self] in
+                guard let self else { return .failure(ReplicaContentFailure(message: OverlayHtmlError.remoteFile)) }
+                let fetched = await fetchReplica(path, limit: TextPage.maxBytes,
+                                                 local: (TextProbe.Failure.tooLarge(path).description, TextProbe.Failure.unreadable(path).description))
+                guard case .success(let data) = fetched else { return fetched.map { _ in "" } }
+                return await Task.detached(priority: .userInitiated) {
+                    TextProbe.text(data, path: path).mapError { ReplicaContentFailure(message: $0.description) }
+                }.value
+            }
+            // a read cancelled by a hide is no answer about the file, so it never marks the page waiting
+            return TextPageBridge.Reads(text: text, log: { _, tail, stamp in
+                do {
+                    guard let read = try await logTail(stamp) else { return .success(nil) }
+                    return .success(TextProbe.LogRead(read, tail: tail))
+                } catch is CancellationError {
+                    return .success(nil)
+                } catch {
+                    return .failure(.unreadable(path))
+                }
+            })
+        default:
+            return nil
         }
     }
 
@@ -713,7 +787,8 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         return decision == .allow ? .allow : .cancel
     }
 
-    func webView(_: WKWebView, didStartProvisionalNavigation _: WKNavigation!) {
+    func webView(_: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        guard !isStale(navigation) else { return }
         loadPending = true
         store?.setHtmlLoadState(id, state: .loading, error: nil)
     }
@@ -724,21 +799,25 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         reportPage()
     }
 
-    func webView(_: WKWebView, didFinish _: WKNavigation!) {
+    func webView(_: WKWebView, didFinish navigation: WKNavigation!) {
+        guard !endedStale(navigation) else { return }
         loadPending = false
         store?.setHtmlLoadState(id, state: .loaded, error: nil)
         reportPage()
     }
 
-    func webView(_: WKWebView, didFail _: WKNavigation!, withError error: Error) {
+    func webView(_: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        guard !endedStale(navigation) else { return }
         reportFailure(error)
     }
 
-    func webView(_: WKWebView, didFailProvisionalNavigation _: WKNavigation!, withError error: Error) {
+    func webView(_: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        guard !endedStale(navigation) else { return }
         reportFailure(error)
     }
 
     func webViewWebContentProcessDidTerminate(_: WKWebView) {
+        builtNavigations.removeAll()
         committed = false
         shownURL = nil
         fail("web content process terminated")
@@ -766,6 +845,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     private func fail(_ message: String) {
         loadPending = false
+        images?.clear()
         store?.setHtmlLoadState(id, state: .failed, error: message)
     }
 

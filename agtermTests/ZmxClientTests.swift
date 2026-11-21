@@ -59,28 +59,6 @@ final class ZmxClientTests: XCTestCase {
                        "--force would unlink a live daemon's socket and still exit zero")
     }
 
-    func testKillOutcomeTrustsOnlyAnExactConfirmationLine() {
-        let name = "agterm-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-
-        XCTAssertEqual(ZmxClient.outcome(of: "killed session \(name)\n", name: name), .killed)
-        XCTAssertEqual(ZmxClient.outcome(of: "cleaned up stale session \(name)\n", name: name), .staleSocket)
-
-        // zmx exits zero here too, after merely reporting on stderr it could not reach the daemon
-        let unresponsive = "failed to kill session=\(name): SessionUnresponsive\n"
-        XCTAssertEqual(ZmxClient.outcome(of: unresponsive, name: name),
-                       .failed("failed to kill session=\(name): SessionUnresponsive"))
-
-        // a broken pipe after the kill was sent returns with nothing printed
-        XCTAssertEqual(ZmxClient.outcome(of: "", name: name), .failed("no output"))
-
-        XCTAssertEqual(ZmxClient.outcome(of: "not killed session \(name)\n", name: name),
-                       .failed("not killed session \(name)"),
-                       "a line merely containing the confirmation must not count as one")
-        XCTAssertEqual(ZmxClient.outcome(of: "killed session agterm-other\n", name: name),
-                       .failed("killed session agterm-other"),
-                       "another daemon's confirmation is not this one's")
-    }
-
     func testKillInvocationsMergeStderrAndListDoesNot() {
         var invocations: [ZmxClient.Invocation] = []
         let client = ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir") {
@@ -323,19 +301,19 @@ final class ZmxClientTests: XCTestCase {
         XCTAssertEqual(invocations.map(\.arguments), [["list"]])
     }
 
-    func testLeaderRefreshCanOverrideOnlyItsInvocationTimeout() {
+    func testSessionRecordsCanOverrideOnlyItsInvocationTimeout() {
         var invocations: [ZmxClient.Invocation] = []
         let client = ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir", timeout: 3) {
             invocations.append($0)
             return ""
         }
 
-        XCTAssertEqual(client.sessionLeaderPIDs(timeout: 0.1), [:])
+        XCTAssertEqual(client.sessionRecords(timeout: 0.1), [])
         XCTAssertEqual(client.listSessions(), [])
         XCTAssertEqual(invocations.map(\.timeout), [0.1, 3])
     }
 
-    func testLeaderRefreshWallClockIsBoundedByTimeoutPlusTerminationGrace() throws {
+    func testSessionRecordsWallClockIsBoundedByTimeoutPlusTerminationGrace() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("agterm-zmx-timeout-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -347,15 +325,14 @@ final class ZmxClientTests: XCTestCase {
         """.write(to: executable, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: executable.path)
         let client = ZmxClient(executablePath: executable.path, socketDirectory: root.path)
+        let timeout: TimeInterval = 0.1
         let started = Date()
 
-        XCTAssertNil(client.sessionLeaderPIDs(timeout: 0.1))
+        XCTAssertNil(client.sessionRecords(timeout: timeout))
 
         let elapsed = Date().timeIntervalSince(started)
-        XCTAssertEqual(ZmxClient.captureWallClockLimit,
-                       ZmxClient.captureInvocationTimeout + ZmxClient.terminationGrace)
-        XCTAssertGreaterThanOrEqual(elapsed, 0.09)
-        XCTAssertLessThan(elapsed, ZmxClient.captureWallClockLimit + 0.1)
+        XCTAssertGreaterThanOrEqual(elapsed, timeout - 0.01)
+        XCTAssertLessThan(elapsed, timeout + ZmxClient.terminationGrace + 0.4)
     }
 
     private static let sweptDaemon = "agterm-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"

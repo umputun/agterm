@@ -9,37 +9,6 @@ final class ControlServerRemoteLinkClickTests: XCTestCase {
     private var stateDir: URL!
     private var servers: [ControlServer] = []
 
-    private final class Transport: RemotePresentationTransport {
-        final class Link: RemotePresentationLink {
-            var sent: [PresentationFrame.Body] = []
-            func send(_ line: Data) {
-                if let frame = try? PresentationCodec.decode(line.dropLast()) { sent.append(frame.body) }
-            }
-            func stop() {}
-        }
-
-        var links: [Link] = []
-        var deliver: [(Data) -> Void] = []
-        private var rev = 0
-
-        func open(_: [String], onLine: @escaping @MainActor (Data) -> Void,
-                  onClose _: @escaping @MainActor (String) -> Void) -> RemotePresentationLink {
-            deliver.append(onLine)
-            let link = Link()
-            links.append(link)
-            return link
-        }
-
-        func feed(_ body: PresentationFrame.Body) throws {
-            rev += 1
-            deliver.last?(Data(try PresentationCodec.encode(PresentationFrame(gen: 3, rev: rev, body: body)).dropLast()))
-        }
-
-        var clicks: [PresentationLinkClick] {
-            links.last?.sent.compactMap { if case .linkClick(let click) = $0 { click } else { nil } } ?? []
-        }
-    }
-
     private final class Alerts: @unchecked Sendable {
         private let lock = NSLock()
         private var played = 0
@@ -51,7 +20,7 @@ final class ControlServerRemoteLinkClickTests: XCTestCase {
         let server: ControlServer
         let store: AppStore
         let session: Session
-        let transport: Transport
+        let transport: FakePresentationTransport
         let alerts: Alerts
     }
 
@@ -84,7 +53,7 @@ final class ControlServerRemoteLinkClickTests: XCTestCase {
         defer { (LinkOpener.shared.forward, LinkOpener.shared.refuse) = (forward, refuse) }
         fix.server.installRemoteLinkClicks()
 
-        let refusal = LinkOpener.shared.forward(click(fix.session, pane: fix.session.paneIdentity))
+        let refusal = LinkOpener.shared.forward(click(fix.session, pane: fix.session.paneIdentity), nil)
 
         XCTAssertNil(refusal)
         XCTAssertEqual(fix.transport.clicks.count, 1)
@@ -105,6 +74,76 @@ final class ControlServerRemoteLinkClickTests: XCTestCase {
         XCTAssertTrue(fix.server.openHud(fix.session.id.uuidString, window: nil, spec: HudSpec(message: "agent")).ok)
         XCTAssertEqual(fix.server.forwardRemoteLinkClick(click(fix.session, pane: fix.session.paneIdentity)), .hidden)
         XCTAssertTrue(fix.transport.clicks.isEmpty)
+    }
+
+    func testAClickARuleTakesTravelsBookedWithItsSelectorsAndOthersTravelAsBefore() throws {
+        let fix = try connected(kinds: [PresentationHub.linkClickKind, PresentationHub.linkSnapshotKind])
+        fix.server.remoteOpeners.rules = { Self.rules("open *.md,*.go mdview") }
+        let surface = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), command: "/bin/cat")
+
+        XCTAssertNil(fix.server.forwardRemoteLinkClick(click(fix.session, pane: fix.session.paneIdentity, raw: "./notes.md:3"),
+                                                       surface: surface))
+        XCTAssertNil(fix.server.forwardRemoteLinkClick(click(fix.session, pane: fix.session.paneIdentity, raw: "./a.py"),
+                                                       surface: surface))
+        XCTAssertNil(fix.server.forwardRemoteLinkClick(click(fix.session, pane: fix.session.paneIdentity, raw: "./b.md")))
+
+        let sent = fix.transport.clicks
+        XCTAssertEqual(sent.count, 3)
+        XCTAssertNotNil(sent[0].click)
+        XCTAssertEqual(sent[0].openers, ["*.md"])
+        XCTAssertNil(sent[0].snapshotOnly)
+        XCTAssertEqual(sent[1], PresentationLinkClick(raw: "./a.py", pane: Self.remoteLeft, mode: .overlay75))
+        XCTAssertEqual(sent[2], PresentationLinkClick(raw: "./b.md", pane: Self.remoteLeft, mode: .overlay75))
+    }
+
+    func testAnOriginWithoutSnapshotsGetsTodaysFrameForAClickARuleTakes() throws {
+        let fix = try connected()
+        fix.server.remoteOpeners.rules = { Self.rules("open *.md mdview") }
+        let surface = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), command: "/bin/cat")
+
+        XCTAssertNil(fix.server.forwardRemoteLinkClick(click(fix.session, pane: fix.session.paneIdentity, raw: "./notes.md"),
+                                                       surface: surface))
+
+        XCTAssertEqual(fix.transport.clicks, [PresentationLinkClick(raw: "./notes.md", pane: Self.remoteLeft, mode: .overlay75)])
+        XCTAssertTrue(fix.server.remoteOpeners.isIdle)
+    }
+
+    func testUnderAHudAClickARuleTakesAsksForTheSnapshotAloneAndAnyOtherIsRefused() throws {
+        let fix = try connected(kinds: [PresentationHub.linkClickKind, PresentationHub.linkSnapshotKind])
+        fix.server.remoteOpeners.rules = { Self.rules("open *.md mdview") }
+        let surface = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), command: "/bin/cat")
+        XCTAssertTrue(fix.server.openHud(fix.session.id.uuidString, window: nil, spec: HudSpec(message: "agent")).ok)
+
+        XCTAssertNil(fix.server.forwardRemoteLinkClick(click(fix.session, pane: fix.session.paneIdentity, raw: "./notes.md"),
+                                                       surface: surface))
+        XCTAssertEqual(fix.server.forwardRemoteLinkClick(click(fix.session, pane: fix.session.paneIdentity, raw: "./a.py"),
+                                                         surface: surface), .hidden)
+
+        XCTAssertEqual(fix.transport.clicks.count, 1)
+        XCTAssertEqual(fix.transport.clicks.first?.snapshotOnly, true)
+        XCTAssertEqual(fix.session.hudSpec?.message, "agent")
+    }
+
+    func testAMirrorLeadingThePaneForwardsAClickOnlyToAnOriginTakingLeads() throws {
+        let old = try connected(presenter: false)
+        lead(old.session.paneIdentity)
+        XCTAssertEqual(old.server.forwardRemoteLinkClick(click(old.session, pane: old.session.paneIdentity)), .notPresenter)
+
+        let fix = try connected(kinds: [PresentationHub.linkClickKind, PresentationHub.leadReportKind], presenter: false)
+        lead(fix.session.paneIdentity)
+
+        XCTAssertEqual(fix.transport.links.last?.sent.last, .leadReport(PresentationLeadReport(leaders: [Self.remoteLeft])))
+        XCTAssertNil(fix.server.forwardRemoteLinkClick(click(fix.session, pane: fix.session.paneIdentity)))
+        XCTAssertEqual(fix.transport.clicks.count, 1)
+        XCTAssertTrue(old.transport.clicks.isEmpty)
+    }
+
+    private func lead(_ pane: UUID) {
+        let attachment = ZmxLeadAttachment(claim: true)
+        ZmxLeadBook.shared.begin(attachment, pane: pane)
+        if let notice = ZmxLeadNotice(title: "zmx-role;\(attachment.nonce):leader:1") {
+            _ = ZmxLeadBook.shared.apply(notice, pane: pane)
+        }
     }
 
     func testAnOriginRefusalShowsAPanelThatHidesItself() throws {
@@ -228,7 +267,7 @@ final class ControlServerRemoteLinkClickTests: XCTestCase {
         store.bindRemote(RemoteBinding(remoteSessionID: "s1",
                                        daemonsByLocalPane: [session.paneIdentity: ZmxSupport.daemonName(for: Self.remoteLeft)],
                                        presentationVersion: 1), forSession: session.id)
-        let transport = Transport()
+        let transport = FakePresentationTransport()
         server.remoteTransport = transport
         server.startRemotePresentation(for: session)
         try transport.feed(.hello(PresentationHello(version: 1, kinds: kinds, mode: presenter ? .presenter : .mirror)))
@@ -236,9 +275,11 @@ final class ControlServerRemoteLinkClickTests: XCTestCase {
         return Fixture(server: server, store: store, session: session, transport: transport, alerts: alerts)
     }
 
-    private func click(_ session: Session, pane: UUID?) -> RemoteLinkClick {
-        RemoteLinkClick(raw: "src/a.py:3", session: session.id, pane: pane, mode: .overlay75)
+    private func click(_ session: Session, pane: UUID?, raw: String = "src/a.py:3") -> RemoteLinkClick {
+        RemoteLinkClick(raw: raw, session: session.id, pane: pane, mode: .overlay75)
     }
+
+    private static func rules(_ text: String) -> [FileOpener] { parseKeymap(text).0.openers }
 
     private func waitUntil(_ condition: @escaping () -> Bool) async throws {
         let deadline = Date().addingTimeInterval(5)

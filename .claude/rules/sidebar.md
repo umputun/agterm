@@ -99,11 +99,14 @@ paths:
   untouched rather than clearing it. No control form — see `control-api.md`.
 - Rename, Copy Name, Duplicate Session, New Companion, Duplicate as Companion, Convert to Companion, and Reveal in
   Finder appear only for one target. Duplicate as Companion is omitted on a page row; Convert to Companion is omitted
-  on a companion row and disabled on a remote one. Duplicate inserts a fresh
+  on a companion row; a row attached from another host is converted by its origin. Duplicate inserts a fresh
   login-shell session immediately after the source in the same workspace, using only
   `Session.focusedCwd`. It does not copy name, command, panes, status, flag, font size, or watermark.
   `session.duplicate` provides the control form; its `tree.cwd` can differ from focused cwd when a split's
   non-primary pane is focused.
+- Move to lists Top-Level Sessions first, then the workspaces, for top-level rows and batches. On a single companion row it lists the same
+  workspaces first, each promoting it there appended (`AppActions.promoteCompanion`; a rootless owner's Top-Level Sessions disabled), then the
+  window's other top-level sessions under workspace headers, minus the current parent and what `canMoveCompanion` refuses.
 - `SidebarMode` is per-window `.tree` or `.flagged`. `flaggedSessions` is the derived tree-order
   projection; sessions keep one owning workspace and flags survive moves but not deletion.
 - Each store keeps `flaggedOrder`, the saved order the flat and plain layouts render through
@@ -245,7 +248,7 @@ paths:
 - Known gaps are intentional: background `addSession(select: false)` and non-active `moveSession` can
   populate an empty visible set without selecting it. Explicit selection of an unflagged session while
   flagged also remains invisible rather than forcing a mode change.
-- Terminal focus needs no app bridge: `TerminalView.updateNSView` resigns inactive surfaces and
+- Terminal focus needs no app bridge: `TerminalSurfaceHost.updateNSView` resigns inactive surfaces and
   `focusIfNeeded` claims the active one. Auto-follow alone posts a pane-specific notification.
 
 ## Reconciliation and expansion
@@ -281,6 +284,18 @@ paths:
   those the view omits. Menus/palette target frontmost; `sidebar.expand`/`sidebar.collapse` resolve
   `--window` and can target background windows.
 
+## Top-level sessions
+
+- The root container has no row: `workspaceProjection` yields it first and the Coordinator lists its session nodes as
+  level-0 rows ahead of the workspace rows. Without the disclosure strip a root parent's triangle has no room, so
+  `SidebarOutlineView.rootBlockShift` indents the root block one step instead of reserving the strip. With the strip
+  the root rows stay level with the workspace rows and `selectionMinX(atRow:)` starts their pill at 0, over the triangle.
+- A gap among the level-0 session rows, the one above the first workspace row included, drops into the root
+  (`SidebarDrop.isRootGap`); workspace drags count only named workspace rows (`namedWorkspaces`), offset by the
+  root block's row count for the highlight.
+- The root is a focus member like a workspace: hidden under an applied filter unless marked, marked from a root
+  session's row menu, the View menu or the focus editor.
+
 ## Companions
 
 - In the ordinary tree a companion row nests under its parent's row (`sessionNodes(for:)`); every flagged layout
@@ -288,12 +303,22 @@ paths:
 - `expandedParentIDs` tracks open parents the way `expandedWorkspaceIDs` tracks workspaces: only a genuine
   toggle persists, through `setSessionExpanded`. A selection reveal opens the workspace, then the parent, with
   persistence suppressed. `applyParentExpansion(under:)` re-applies parents when their workspace opens.
-- A folded parent shows `companion-marker` for the companions `companionsNeedingAttention` returns, beside its
-  own glyph and badge, with their names as the accessibility label. `RowContent.foldedAttention` reloads it.
-- A companion moves only among its siblings: a gap among them, or a drop on one. It has no workspace-level
-  slot in the ordinary tree, and every drop asks `canMoveSessions` before showing an indicator.
+- A folded parent shows `companion-marker` for the companions `companionsByStatus` returns, beside its own glyph and
+  badge, tinted by the first one's status color (its `--color` override included) and labeled with each name and status.
+  Ties go to sidebar order, never to `statusChangedAt`, which observation ignores. `RowContent.foldedAttention` reloads
+  it on a companion's change and `reapplyStatusGlyphs` on a Settings color change. Unread alone shows no marker.
+  `companionsNeedingAttention` stays public for agterm-linux's sidebar snapshot.
+- In the ordinary tree one dragged companion moves under another top-level session (`SidebarDrop.companionReparent`):
+  a drop on that row puts it first in the group, a gap in another group at that gap, a drop on another group's
+  companion right after it, and each asks `canMoveCompanion`. Within its own group it reorders among its siblings. Dropped on a workspace row or
+  in a gap among top-level rows, the root's included, it becomes top-level there (`resolveCompanionPromotion`, asking `canPromoteCompanion`).
+  Several rows keep the sibling-only rule and ask `canMoveSessions`. One dragged top-level session nests only on the center of
+  another top-level row, first in its group with its own companions; a refused nest refuses the drop rather than reordering. No flagged drag changes a parent: the flagged tree keeps
+  siblings, and the flat and plain lists reorder `flaggedOrder` (`moveFlagged`). Move to is the reparenting path there.
+- `syncSelection` reveals on a change of the selected row's parent as well as of the selection
+  (`lastRevealedParent`), so a companion moved under a folded parent or into another workspace stays in view.
 - Companion rows keep the `session-row` identifier with accessibility label `companion`; the value stays the name.
-- Convert to Companion is the one path that changes a `parentID` after creation. A recorded parent can therefore be
+- Convert to Companion, a companion move, a promotion and a parent's close can change a `parentID` after creation. A recorded parent can therefore be
   a companion by the time its child reopens: both restore paths resolve it through `groupRoot(of:)`, and Recent
   Closed's `restoresSession` finds a parent inside a closed group or workspace, not only as an entry's root.
   A group hard close finalizes the parked companions of every member, not only of the closed parent.

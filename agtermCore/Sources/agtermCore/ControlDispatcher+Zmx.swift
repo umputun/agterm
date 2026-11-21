@@ -24,10 +24,15 @@ extension ControlDispatcher {
                 return ControlResponse(ok: false, error: "invalid remote session")
             }
             let window = request.args?.window?.trimmedOrNil
-            if request.cmd == .zmxAttachGroup {
-                return await actions.attachRemoteGroup(host: host, session: session, window: window)
+            let workspace: ControlAttachWorkspace?
+            switch Self.attachWorkspace(request.args) {
+            case .success(let value): workspace = value
+            case .failure(let rejection): return ControlResponse(ok: false, error: rejection.message)
             }
-            return await actions.attachRemoteSession(host: host, session: session, window: window)
+            if request.cmd == .zmxAttachGroup {
+                return await actions.attachRemoteGroup(host: host, session: session, window: window, workspace: workspace)
+            }
+            return await actions.attachRemoteSession(host: host, session: session, window: window, workspace: workspace)
         case .zmxPresent:
             // no `active` default: a viewer names the session it attached, and a guess would stream another
             guard let session = request.target?.trimmedOrNil else {
@@ -56,19 +61,16 @@ extension ControlDispatcher {
             return actions.listZmxDaemons()
         case .zmxPrune:
             return actions.pruneZmxDaemons()
-        case .zmxKill:
-            // no `active` or left-pane default: this destroys a backend process rather than a model object,
-            // reaching claims no window shows and every client attached to the daemon
-            guard let target = request.target, !target.isEmpty else {
-                return ControlResponse(ok: false, error: "zmx.kill requires an explicit --target")
+        case .zmxKill, .zmxKillPane:
+            switch Self.killArguments(request) {
+            case .failure(let rejection):
+                return ControlResponse(ok: false, error: rejection.message)
+            case .success(let kill):
+                guard let paneID = kill.paneID else {
+                    return actions.killZmxDaemon(target: kill.target, window: request.args?.window, pane: kill.pane)
+                }
+                return actions.killZmxPane(target: kill.target, window: request.args?.window, pane: kill.pane, paneID: paneID)
             }
-            guard let rawPane = request.args?.pane, let pane = ZmxPaneRole(controlName: rawPane) else {
-                return ControlResponse(ok: false, error: "zmx.kill requires --pane left|right")
-            }
-            guard request.args?.force == true else {
-                return ControlResponse(ok: false, error: "zmx.kill requires --force")
-            }
-            return actions.killZmxDaemon(target: target, window: request.args?.window, pane: pane)
         case .zmxScreen:
             // a daemon name, as `zmx list` prints it: the session resolver sees only open windows
             guard let name = request.args?.name?.trimmedOrNil, RemoteSession.isPlain(name) else {
@@ -88,5 +90,53 @@ extension ControlDispatcher {
         default:
             preconditionFailure("unexpected zmx command: \(request.cmd.rawValue)")
         }
+    }
+}
+
+/// ZmxKillArguments is a checked `zmx.kill` or `zmx.kill.pane`; `paneID` is set only for the pinned form.
+struct ZmxKillArguments {
+    let target: String
+    let pane: ZmxPaneRole
+    let paneID: String?
+}
+
+extension ControlDispatcher {
+    /// killArguments checks a kill before any host is asked. There is no `active` or left-pane default: this destroys a
+    /// backend process rather than a model object, reaching claims no window shows and every client attached to it.
+    static func killArguments(_ request: ControlRequest) -> Result<ZmxKillArguments, ArgumentRejection> {
+        let cmd = request.cmd.rawValue
+        guard let target = request.target, !target.isEmpty else {
+            return .failure(ArgumentRejection(message: "\(cmd) requires an explicit --target"))
+        }
+        guard let rawPane = request.args?.pane, let pane = ZmxPaneRole(controlName: rawPane) else {
+            return .failure(ArgumentRejection(message: "\(cmd) requires --pane left|right"))
+        }
+        guard request.args?.force == true else {
+            return .failure(ArgumentRejection(message: "\(cmd) requires --force"))
+        }
+        guard request.cmd == .zmxKillPane else { return .success(ZmxKillArguments(target: target, pane: pane, paneID: nil)) }
+        guard let paneID = request.args?.paneID?.trimmedOrNil else {
+            return .failure(ArgumentRejection(message: "zmx.kill.pane requires --pane-id"))
+        }
+        return .success(ZmxKillArguments(target: target, pane: pane, paneID: paneID))
+    }
+
+    /// attachWorkspace reads an attach's destination workspace with `session.new`'s rules and wording; nil leaves the
+    /// window's current workspace.
+    static func attachWorkspace(_ args: ControlArgs?) -> Result<ControlAttachWorkspace?, ArgumentRejection> {
+        if args?.workspace != nil, args?.workspaceName != nil {
+            return .failure(ArgumentRejection(message: "use either --workspace or --workspace-name, not both"))
+        }
+        if let raw = args?.workspaceName {
+            guard let name = raw.trimmedOrNil else {
+                return .failure(ArgumentRejection(message: "workspace name must not be blank"))
+            }
+            return .success(.name(name, create: args?.createWorkspace == true))
+        }
+        if args?.createWorkspace == true {
+            return .failure(ArgumentRejection(message: "--create-workspace requires --workspace-name"))
+        }
+        // passed as given, so a blank id fails to resolve as on `session.new` instead of reading as omitted
+        return .success(args?.workspace.map(ControlAttachWorkspace.id))
     }
 }

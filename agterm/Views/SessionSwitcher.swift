@@ -208,7 +208,7 @@ struct SessionSwitcherOverlay: View {
     @ViewBuilder private func row(_ id: UUID, selected: Bool) -> some View {
         if let session = store.session(withID: id) {
             SessionSwitcherRow(title: store.listLabel(for: session),
-                               subtitle: "\(store.workspace(forSession: id)?.name ?? "") · \(session.switcherDetail)",
+                               subtitle: store.listSubtitle(forSession: id, detail: session.switcherDetail),
                                status: session.agentIndicator.status, statusColorHex: session.agentIndicator.color,
                                statusShape: session.agentIndicator.shape, remote: session.remoteHost != nil)
                 .background(selected ? Color.accentColor.opacity(0.25) : Color.clear)

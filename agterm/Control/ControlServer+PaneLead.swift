@@ -37,27 +37,39 @@ extension ControlServer {
     /// read-back, with no delivery acknowledgement: a role report trails the daemon by up to 250 ms.
     func coveredRefusal(_ surface: GhosttySurfaceView) -> ControlResponse? {
         guard surface.leadCovered else { return nil }
-        return ControlResponse(ok: false, error: "pane is covered while another Mac leads it; take the lead first (session lead)")
+        return ControlResponse(ok: false, error: PaneLead.coveredRefusal)
     }
 
     /// `session.lead`: what a key press on the pane's cover does. A pane that already leads answers ok, so
     /// a caller can ask without reading `lead` first; one whose zmx never reported a role has no lead to
     /// take and says so rather than answering ok for nothing.
     func takeSessionLead(_ target: String?, window: String?, pane: StatusPane?) -> ControlResponse {
-        guard pane != .scratch else { return ControlResponse(ok: false, error: "the scratch terminal has no lead") }
         return resolver.resolveSession(target, window: window) { store, id in
             let session = store.session(withID: id)
             if pane == .right, session?.splitSurface == nil {
                 return ControlResponse(ok: false, error: "session has no split pane")
             }
-            guard let surface = (pane == .right ? session?.splitSurface : session?.surface) as? GhosttySurfaceView,
+            // only a Live scratch, here or on the origin, runs in a daemon another Mac can lead
+            if pane == .scratch, (session?.scratchSurface as? GhosttySurfaceView)?.backedByZmx != true, session?.originScratch == nil {
+                return ControlResponse(ok: false, error: "the scratch terminal has no lead")
+            }
+            let slot = switch pane {
+            case .right: session?.splitSurface
+            case .scratch: session?.scratchSurface
+            default: session?.surface
+            }
+            guard let surface = slot as? GhosttySurfaceView,
                   let identity = UUID(uuidString: surface.paneToken) else {
                 return ControlResponse(ok: false, error: "session not realized")
             }
             guard ZmxLeadBook.shared.role(pane: identity) != nil || surface.leadCovered else {
                 return ControlResponse(ok: false, error: "pane has no lead to take")
             }
-            if surface.leadCovered, !ZmxLeadBook.shared.reattaching(pane: identity) { PaneLead.reattach?(surface, true) }
+            let book = ZmxLeadBook.shared
+            let reattaching = book.reattaching(pane: identity)
+            if surface.leadCovered, !reattaching { PaneLead.reattach?(surface, true) }
+            // a reconnect or the unowned retry attaches without the claim; its first report takes the lead
+            if reattaching, book.states[identity]?.attachment.claim == false { book.claimOnReport(pane: identity) }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
     }

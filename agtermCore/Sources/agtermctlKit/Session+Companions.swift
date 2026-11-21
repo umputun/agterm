@@ -23,6 +23,54 @@ func runCompanionRequest(_ request: ControlRequest, options: ClientOptions, echo
     if !reply.response.ok { throw ExitCode.failure }
 }
 
+// `session move --parent` and `--top-level` send their own wire commands: an app predating them would drop the field
+// and run a plain move
+extension Session.Move {
+    func validateCompanionMove() throws {
+        guard parent != nil else { throw ValidationError("--index requires --parent") }
+        if workspace != nil || to != nil || after != nil || before != nil {
+            throw ValidationError("--parent takes no workspace, --to, --after or --before")
+        }
+        if target.targets.count > 1 { throw ValidationError("--parent moves one session") }
+        if let index, index < 0 { throw ValidationError("--index must be 0 or more") }
+    }
+
+    func validateCompanionPromotion() throws {
+        if parent != nil || index != nil || to != nil { throw ValidationError("--top-level takes no --parent, --index or --to") }
+        if target.targets.count > 1 { throw ValidationError("--top-level moves one session") }
+        if [workspace, after, before].compactMap({ $0 }).count > 1 {
+            throw ValidationError("--top-level takes one of a workspace, --after or --before")
+        }
+    }
+
+    func run() throws {
+        if topLevel {
+            return try runCompanionRequest(companionPromotionRequest(), options: options, echoID: false,
+                                           tooOld: "the running app is too old for companion promotion")
+        }
+        if parent == nil { return try defaultRun() }
+        try runCompanionRequest(companionMoveRequest(), options: options, echoID: false,
+                                tooOld: "the running app is too old for companion moves")
+    }
+
+    func companionPromotionRequest() -> ControlRequest {
+        var args = ControlArgs()
+        args.workspace = workspace
+        args.after = after
+        args.before = before
+        return operation.stamp(ControlRequest(cmd: .sessionCompanionPromote, target: target.targets.first ?? "active",
+                                              args: options.withWindow(args)))
+    }
+
+    func companionMoveRequest() -> ControlRequest {
+        var args = ControlArgs()
+        args.parent = parent
+        args.index = index
+        return operation.stamp(ControlRequest(cmd: .sessionCompanionMove, target: target.targets.first ?? "active",
+                                              args: options.withWindow(args)))
+    }
+}
+
 extension Session {
     struct Collapse: RequestCommand {
         static let configuration = CommandConfiguration(abstract: "Fold a parent session's companions in the sidebar tree.")
@@ -42,13 +90,14 @@ extension Session {
         var companion = false
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
+        @OptionGroup var operation: OperationOptions
 
         func validate() throws {
             if !companion { throw ValidationError("session convert needs --companion") }
         }
 
         func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: .sessionCompanionConvert, target: target.target, args: options.withWindow())
+            operation.stamp(ControlRequest(cmd: .sessionCompanionConvert, target: target.target, args: options.withWindow()))
         }
 
         func run() throws {

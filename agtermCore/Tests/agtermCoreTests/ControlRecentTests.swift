@@ -48,6 +48,49 @@ struct ControlRecentTests {
             sessionIDs: [first.id.uuidString, second.id.uuidString]))
     }
 
+    private func remoteItem(id: UUID = UUID(), at: TimeInterval) -> RemoteRecentClosedItem {
+        RemoteRecentClosedItem(id: id, closedAt: Date(timeIntervalSince1970: at), host: "box", originSessionID: "S1",
+                               name: "logs", placement: .init(workspaceID: workspaceID, workspaceName: "project",
+                                                              workspaceIndex: 0, sessionIndex: 2, parentID: nil))
+    }
+
+    @Test func anAttachedRowsEntryProjectsItsOriginSessionAndHost() {
+        let item = remoteItem(at: 1_700_000_100)
+
+        #expect(ControlRecentItem(item) == ControlRecentItem(
+            id: item.id.uuidString, kind: "remote", title: "logs", subtitle: "box", closedAt: 1_700_000_100,
+            workspaceID: workspaceID.uuidString, sessionIDs: ["S1"], host: "box"))
+    }
+
+    @Test func bothListsMergeNewestFirstAndALocalOnlyListIsUnchanged() {
+        let local = [workspaceItem(), sessionItem()]
+        let remote = remoteItem(at: 1_700_000_100)
+
+        #expect(ControlRecentItem.merged(local, remote: []) == local.map(ControlRecentItem.init))
+        #expect(ControlRecentItem.merged(local, remote: [remote]).map(\.id)
+            == [local[0].id.uuidString, remote.id.uuidString, local[1].id.uuidString])
+    }
+
+    @Test func noTargetOverBothListsResolvesTheNewestOfEither() {
+        let local = sessionItem()
+        let newer = remoteItem(at: 1_700_000_100), older = remoteItem(at: 1)
+
+        #expect(RecentClosedTarget.resolve(nil, in: [local], remote: [newer]) == .success(.remote(newer.id)))
+        #expect(RecentClosedTarget.resolve(nil, in: [local], remote: [older]) == .success(.local(local.id)))
+        #expect(RecentClosedTarget.resolve(nil, in: [], remote: [older]) == .success(.remote(older.id)))
+        #expect(RecentClosedTarget.resolve(nil, in: [local], remote: []) == .success(.local(local.id)))
+    }
+
+    @Test func aTargetOverBothListsNamesWhichListHoldsIt() {
+        let local = sessionItem(id: UUID(uuidString: "AAAA0000-0000-0000-0000-000000000001")!)
+        let remote = remoteItem(id: UUID(uuidString: "BBBB0000-0000-0000-0000-000000000002")!, at: 1)
+
+        #expect(RecentClosedTarget.resolve("bbbb", in: [local], remote: [remote]) == .success(.remote(remote.id)))
+        #expect(RecentClosedTarget.resolve("aaaa", in: [local], remote: [remote]) == .success(.local(local.id)))
+        #expect(RecentClosedTarget.resolve("cccc", in: [local], remote: [remote])
+            == .failure(RecentClosedTargetError("no such recent item: cccc")))
+    }
+
     @Test func payloadsRoundTripThroughTheWire() throws {
         let item = ControlRecentItem(sessionItem())
         let result = ControlResult(recent: [item],

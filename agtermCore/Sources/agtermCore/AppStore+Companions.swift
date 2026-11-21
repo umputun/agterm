@@ -101,6 +101,40 @@ extension AppStore {
         return .success(parent)
     }
 
+    /// nest moves `id` and its companions under `parentID`, as Convert to Companion regroups a row under its new parent.
+    public func nest(_ id: UUID, under parentID: UUID) {
+        let group = Set([id] + companions(of: id).map(\.id))
+        for session in workspaces.flatMap(\.sessions) where group.contains(session.id) { session.parentID = parentID }
+        scheduleTreeChanged()
+        save()
+    }
+
+    /// closeExactly closes the rows `ids` names and answers the ids it closed. A companion `ids` leaves out stays open at
+    /// the top level, where its closed parent was.
+    public func closeExactly(_ ids: Set<UUID>) -> [UUID] {
+        var closed: [UUID] = []
+        for session in workspaces.flatMap(\.sessions) where ids.contains(session.id) && self.session(withID: session.id) != nil {
+            let group = [session.id] + companions(of: session.id).map(\.id)
+            let survivors = companions(of: session.id).filter { !ids.contains($0.id) }
+            for survivor in survivors { survivor.parentID = nil }
+            closeSession(session.id)
+            for survivor in survivors where survivor.remoteHost != nil { onRemoteRowPromoted?(survivor) }
+            closed += group.filter { ids.contains($0) && self.session(withID: $0) == nil }
+        }
+        return closed
+    }
+
+    /// revertConversion regroups what `convertToCompanion` nested under `parentID` back under `targetID` and restores
+    /// the selection, so the fresh parent, now holding nobody, can be closed alone.
+    public func revertConversion(_ parentID: UUID, target targetID: UUID, selected: UUID?) {
+        for session in workspaces.flatMap(\.sessions) where session.parentID == parentID {
+            session.parentID = session.id == targetID ? nil : targetID
+        }
+        if selectedSessionID != selected { selectSession(selected) }
+        scheduleTreeChanged()
+        save()
+    }
+
     /// addPageCompanion creates a page companion showing `overlay` full size, with no shell under it; a page the
     /// slot refuses removes the row again.
     @discardableResult
@@ -220,6 +254,13 @@ extension AppStore {
         }
     }
 
+    /// companionsByStatus lists a parent's companions that show an agent status, most urgent first by
+    /// `attentionRank` and in sidebar order within one status, so the first decides a folded parent's marker.
+    public func companionsByStatus(of parentID: UUID) -> [Session] {
+        companions(of: parentID).filter { $0.agentIndicator.status != .idle }
+            .sorted { $0.agentIndicator.status.attentionRank < $1.agentIndicator.status.attentionRank }
+    }
+
     /// respawnMinimumUptime is how long a respawned shell must run before its exit respawns it again: one exiting
     /// sooner (a broken shell or profile, a failing Live attach) would otherwise respawn forever.
     static let respawnMinimumUptime: TimeInterval = 2
@@ -256,8 +297,10 @@ extension AppStore {
         session.clearPendingRestoreOverrides()
         session.oscTitle = nil
         session.teardownPaneOverlay(.left)
+        session.paneActivity[.left] = nil
+        session.paneActivity[.right] = nil
         if session.agentIndicator.status != .idle, session.agentIndicator.statusPane != .scratch {
-            setAgentIndicator(AgentIndicator(), forSession: session.id)
+            showRemainingActivity(of: session)
         }
         session.primaryRespawns &+= 1
         scheduleTreeChanged()

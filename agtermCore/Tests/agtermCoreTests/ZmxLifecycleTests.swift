@@ -138,6 +138,36 @@ struct ZmxLifecycleTests {
         #expect(leaders == [ours: 41])
     }
 
+    @Test(arguments: [
+        (children: [Int32(20)], row: ZmxDaemonLeader.Row(parent: 10, ownsTerminal: true, foreground: 30), want: Int32?(30)),
+        (children: [], row: ZmxDaemonLeader.Row(parent: 10, ownsTerminal: true, foreground: 30), want: nil),
+        (children: [20, 21], row: ZmxDaemonLeader.Row(parent: 10, ownsTerminal: true, foreground: 30), want: nil),
+        (children: [20], row: ZmxDaemonLeader.Row(parent: 11, ownsTerminal: true, foreground: 30), want: nil),
+        (children: [20], row: ZmxDaemonLeader.Row(parent: 10, ownsTerminal: false, foreground: 30), want: nil),
+        (children: [20], row: ZmxDaemonLeader.Row(parent: 10, ownsTerminal: true, foreground: 0), want: nil),
+    ])
+    func daemonLeaderNamesOnlyASingleTerminalOwningChildOfTheDaemon(
+        children: [Int32], row: ZmxDaemonLeader.Row, want: Int32?) {
+        #expect(ZmxDaemonLeader.foreground(ofDaemon: 10, children: children, row: { $0 == 20 ? row : nil }) == want)
+    }
+
+    @Test(arguments: [
+        (children: [Int32(20)], row: ZmxDaemonLeader.Row(parent: 10, ownsTerminal: true, foreground: 30), want: Int32?(20)),
+        (children: [20], row: ZmxDaemonLeader.Row(parent: 10, ownsTerminal: true, foreground: 0), want: Int32?(20)),
+        (children: [], row: ZmxDaemonLeader.Row(parent: 10, ownsTerminal: true, foreground: 30), want: nil),
+        (children: [20, 21], row: ZmxDaemonLeader.Row(parent: 10, ownsTerminal: true, foreground: 30), want: nil),
+        (children: [20], row: ZmxDaemonLeader.Row(parent: 11, ownsTerminal: true, foreground: 30), want: nil),
+        (children: [20], row: ZmxDaemonLeader.Row(parent: 10, ownsTerminal: false, foreground: 30), want: nil),
+    ])
+    func daemonLeaderPidIsTheSingleTerminalOwningChildWhateverItsForeground(
+        children: [Int32], row: ZmxDaemonLeader.Row, want: Int32?) {
+        #expect(ZmxDaemonLeader.leader(ofDaemon: 10, children: children, row: { $0 == 20 ? row : nil }) == want)
+    }
+
+    @Test func daemonLeaderIsNilWhenTheChildRowIsGone() {
+        #expect(ZmxDaemonLeader.foreground(ofDaemon: 10, children: [20], row: { _ in nil }) == nil)
+    }
+
     @Test func remoteSessionCloseFinalizesNothingWhileALocalOneStillDoes() throws {
         var finalized: [[UUID]] = []
         let store = AppStore(persistence: temporaryPersistence(),
@@ -411,6 +441,19 @@ struct ZmxLifecycleTests {
                           launchInventorySink: { inventories.append($0) })
 
         #expect(inventories == [nil])
+    }
+
+    @Test func theIdentityUpgradeCountsASavedScratch() {
+        let pane = UUID()
+        let scratch = UUID()
+        var snapshot = Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: "work", sessions: [
+            SessionSnapshot(id: UUID(), paneIdentity: pane, customName: nil, cwd: "/repo", scratchPaneIdentity: scratch),
+        ])])
+
+        let upgrade = PaneIdentityInventory.upgrade(&snapshot)
+
+        #expect(!upgrade.changed)
+        #expect(upgrade.identities == [pane, scratch])
     }
 
     @Test func theIdentityUpgradeLeavesAPageRowWithoutAnIdentity() {

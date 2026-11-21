@@ -13,6 +13,8 @@ public protocol ControlActions {
     func duplicateSession(_ target: String?, window: String?) -> ControlResponse
     /// Creates a companion of the target session, or a sibling when the target is itself a companion.
     func createCompanion(_ target: String?, options: CompanionOptions, window: String?) async -> ControlResponse
+    /// newRemoteSession creates `request`'s session on its host and attaches it into a local window's current workspace.
+    func newRemoteSession(_ request: RemoteSessionCreate) async -> ControlResponse
     /// Creates a page companion of the target session showing `options.page` full size.
     func createPageCompanion(_ target: String?, window: String?, options: ControlSessionOverlayOpenOptions) async -> ControlResponse
     /// createPageSession opens `options.page` as a top-level page session after the target's group.
@@ -21,6 +23,11 @@ public protocol ControlActions {
     func duplicateAsCompanion(_ target: String?, window: String?, select: Bool) async -> ControlResponse
     /// convertToCompanion nests the target and its companions under a fresh session in its slot.
     func convertToCompanion(_ target: String?, window: String?) -> ControlResponse
+    /// moveCompanion puts the target session under `parent`, a top-level one with its companions, at `index` among
+    /// the parent's companions or last.
+    func moveCompanion(_ target: String?, parent: String, index: Int?, window: String?) async -> ControlResponse
+    /// promoteCompanion makes the target companion a top-level session at `placement`.
+    func promoteCompanion(_ target: String?, placement: ControlCompanionPromotion, window: String?) async -> ControlResponse
     /// Hands out one attachment of the target page companion to another Mac.
     func attachCompanionPage(_ target: String?, window: String?) -> ControlResponse
     /// Folds or unfolds a parent's companions in the sidebar tree.
@@ -32,6 +39,11 @@ public protocol ControlActions {
     /// The `session.close --undoable` forms; their defaults refuse an undoable request.
     func closeSession(_ target: String?, window: String?, undoable: Bool) -> ControlResponse
     func closeSessions(_ targets: [String], window: String?, undoable: Bool) -> ControlResponse
+    /// terminateSessions ends sessions where they run: a row attached from another host on its origin, any other
+    /// row as `session.close` does. The default refuses, so a host never detaches what was asked to end.
+    func terminateSessions(_ targets: [String], window: String?, undoable: Bool) -> ControlResponse
+    /// undoClose undoes the pending close an undoable close answered as `undoID`; the default refuses.
+    func undoClose(_ undoID: String) -> ControlResponse
     func renameSession(_ target: String?, window: String?, name: String) -> ControlResponse
     func revealSession(_ target: String?, window: String?) -> ControlResponse
     func createWorkspace(window: String?, name: String?, collapsed: Bool) -> ControlResponse
@@ -122,6 +134,9 @@ public protocol ControlActions {
     /// `recent.list` / `recent.clear`, app-global over the one Recent Closed list.
     func listRecentClosed() -> ControlResponse
     func clearRecentClosed() -> ControlResponse
+    /// The `--window` forms, for a window whose host keeps its own list; the defaults refuse a window.
+    func listRecentClosed(window: String?) -> ControlResponse
+    func clearRecentClosed(window: String?) -> ControlResponse
     /// `recent.open` restores the entry `target` names, the newest when nil, into `window`'s store or the
     /// frontmost one. The host owns resolution and reports the window the entry actually went to.
     func openRecentClosed(_ target: String?, window: String?) -> ControlResponse
@@ -131,6 +146,8 @@ public protocol ControlActions {
     /// the effective mode either way.
     func linkOpenMode(_ mode: LinkOpenMode?) -> ControlResponse
     func appIdentity() -> ControlResponse
+    /// `update.check` asks the app's updater to check now; a host with no updater refuses.
+    func checkForUpdates() async -> ControlResponse
     func reloadGhosttyConfig() -> ControlResponse
     func sendNotification(_ target: String?, window: String?, title: String?, body: String) -> ControlResponse
     func setTheme(args: ControlArgs?) -> ControlResponse
@@ -147,7 +164,7 @@ public protocol ControlActions {
     func readQuickText(all: Bool, lines: Int?) async -> ControlResponse
     func typeSession(_ target: String?, window: String?, options: ControlSessionTypeOptions) async -> ControlResponse
     func copySessionSelection(_ target: String?, window: String?) -> ControlResponse
-    func pasteSession(_ target: String?, window: String?, pane: StatusPane?) -> ControlResponse
+    func pasteSession(_ target: String?, window: String?, pane: StatusPane?) async -> ControlResponse
     func selectAllSession(_ target: String?, window: String?) -> ControlResponse
     func searchSession(_ target: String?, window: String?,
                        text: String?, to: String?) async -> ControlResponse
@@ -159,6 +176,9 @@ public protocol ControlActions {
     /// `N of M`.
     func stepSessionOverlayChanges(_ target: String?, window: String?, pane: OverlayPane?,
                                    forward: Bool) async -> ControlResponse
+    /// goSessionOverlayFiles moves the diff page in the addressed slot to a file, named by its number from 1 or its
+    /// path as the page shows it, and answers `N of M: path`.
+    func goSessionOverlayFiles(_ target: String?, window: String?, pane: OverlayPane?, to: String) async -> ControlResponse
     func openSessionOverlay(_ target: String?, window: String?,
                             options: ControlSessionOverlayOpenOptions) -> ControlResponse
     func closeSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?) -> ControlResponse
@@ -176,11 +196,15 @@ public protocol ControlActions {
     /// setSessionOverlayFollow sets whether the log page in the addressed slot follows its file; `result.text` names
     /// the state left.
     func setSessionOverlayFollow(_ target: String?, window: String?, pane: OverlayPane?,
-                                 mode: ControlToggleMode) -> ControlResponse
+                                 mode: ControlToggleMode) async -> ControlResponse
     /// setSessionOverlayWrap sets whether the text page in the addressed slot wraps long lines; `result.text` names
     /// the state left.
     func setSessionOverlayWrap(_ target: String?, window: String?, pane: OverlayPane?,
-                               mode: ControlToggleMode) -> ControlResponse
+                               mode: ControlToggleMode) async -> ControlResponse
+    /// setSessionOverlayExpand sets whether the JSON Lines page in the addressed slot lays its records out;
+    /// `result.text` names the state left.
+    func setSessionOverlayExpand(_ target: String?, window: String?, pane: OverlayPane?,
+                                 mode: ControlToggleMode) async -> ControlResponse
     /// Answers the page in the addressed slot with `value` and closes it; `session.overlay.result --page` reads it.
     func submitSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?, value: String) -> ControlResponse
     /// The selector outcome of page `pageID`, readable after the page and its session are gone.
@@ -222,6 +246,9 @@ public protocol ControlActions {
     func windowMinimize(_ target: String?, mode: ControlToggleMode) async -> ControlResponse
     /// windowRemoteOpen answers `window.remote.open` with the id of the window showing `host`'s catalog.
     func windowRemoteOpen(host: String) async -> ControlResponse
+    /// windowRemoteOpen opens the window showing `originWindow` of a Mac `host`, or, with none named, the one window
+    /// it has open.
+    func windowRemoteOpen(host: String, originWindow: String?) async -> ControlResponse
     /// Open a native picker. The host owns window resolution, registry lookup, and presentation.
     func openPick(_ pick: PendingPick, window: String?, follow: Bool) -> ControlResponse
     /// openPick bound to `session`: drawn by the session's presenter or in the session's own window.
@@ -256,6 +283,8 @@ public protocol ControlActions {
     /// Destroy ONE pane's daemon. The host resolves the owner against the inventory rather than the open
     /// stores, since this reaches closed and unindexed claims the target resolver cannot see.
     func killZmxDaemon(target: String, window: String?, pane: ZmxPaneRole) -> ControlResponse
+    /// killZmxPane is `killZmxDaemon` refused before any kill unless `paneID` is still that pane's token.
+    func killZmxPane(target: String, window: String?, pane: ZmxPaneRole, paneID: String) -> ControlResponse
     /// Confirm the Live sessions reset without the dialog: the host selects the panes, refuses outside Live
     /// or on an incomplete inventory, answers, and quits only after this reply is written.
     func resetLiveSessions() -> ControlResponse
@@ -268,7 +297,7 @@ public protocol ControlActions {
     /// Accept a viewer's presentation stream. After an ok answer the host speaks frames on that connection.
     func openPresentation(session: String) -> ControlResponse
     /// catalogSubscribe answers `catalog.subscribe`; after an ok answer the connection carries catalog frames.
-    func catalogSubscribe() -> ControlResponse
+    func catalogSubscribe() async -> ControlResponse
     /// detachSessions hides `targets`, rows of one remote window, on this Mac; reattachSession shows a detached one
     /// again. A local window's rows refuse both.
     func detachSessions(_ targets: [String], window: String?) -> ControlResponse
@@ -277,9 +306,9 @@ public protocol ControlActions {
     func reattachWorkspace(_ target: String, window: String?) -> ControlResponse
     /// dismissRemoteUnknown drops window `window`'s marks for actions with an unknown outcome.
     func dismissRemoteUnknown(window: String?) -> ControlResponse
-    /// catalogOperation answers `catalog.op`: what became of `opID`, sent when the catalog stood at `sent`,
-    /// fencing an id the host has not seen.
-    func catalogOperation(_ opID: String, sent: CatalogPosition?) -> ControlResponse
+    /// catalogOperation answers `catalog.op`: what became of `opID`, sent to window `window`'s catalog when it
+    /// stood at `sent`, fencing an id the host has not seen.
+    func catalogOperation(_ opID: String, sent: CatalogPosition?, window: String?) -> ControlResponse
     /// takesOperationReceipts is whether this host answers a structural command's `opID` with a receipt.
     var takesOperationReceipts: Bool { get }
     /// Claim a remote overlay job for the helper asking. After an ok answer the connection carries job frames.
@@ -294,6 +323,10 @@ public protocol ControlActions {
     /// attachRemoteGroup attaches a remote top-level session, then each companion its origin lists, from one
     /// discovery read. A partial attach answers not ok with `result.id` and `result.remoteGroup` still set.
     func attachRemoteGroup(host: String, session: String, window: String?) async -> ControlResponse
+    /// attachRemoteSession into `workspace` of the window rather than its current one; nil is the window form.
+    func attachRemoteSession(host: String, session: String, window: String?, workspace: ControlAttachWorkspace?) async -> ControlResponse
+    /// attachRemoteGroup with its parent row in `workspace`; nil is the window form.
+    func attachRemoteGroup(host: String, session: String, window: String?, workspace: ControlAttachWorkspace?) async -> ControlResponse
     /// resolveMessagePane resolves a bus address to a live pane: a role picks the slot's pane now, a pane id
     /// must be a live pane of the named session. Never falls back to the active pane or another role.
     func resolveMessagePane(_ address: MessageAddress) -> Result<MessageRecipient, MessagePaneError>

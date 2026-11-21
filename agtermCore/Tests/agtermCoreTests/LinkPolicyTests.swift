@@ -406,8 +406,13 @@ struct LinkPolicyTests {
     // regression: a plain-http page the app's web views cannot load was routed to the overlay
     @Test(arguments: [
         ("http://localhost/", true), ("http://LOCALHOST:8080/x", true), ("http://devbox/", true),
-        ("http://mac.local:3000/", true), ("http://127.0.0.1:5173/", true), ("http://93.184.216.34/", true),
-        ("http://[::1]:8080/", true), ("http://[2001:db8::1]/", true),
+        ("http://mac.local:3000/", true), ("http://127.0.0.1:5173/", true), ("http://93.184.216.34/", false),
+        ("http://[::1]:8080/", true), ("http://[2001:db8::1]/", false), ("http://100.101.102.103:8171/", false),
+        ("http://10.0.0.1/", true), ("http://192.168.1.10/", true), ("http://192.169.0.1/", false),
+        ("http://172.16.0.1/", true), ("http://172.31.255.255/", true), ("http://172.15.255.255/", false), ("http://172.32.0.0/", false),
+        ("http://169.254.1.1/", true), ("http://169.253.0.1/", false), ("http://127.255.0.1/", true),
+        ("http://[fc00::1]/", true), ("http://[fdff:ffff::1]/", true), ("http://[fbff::1]/", false),
+        ("http://[fe80::1]/", true), ("http://[febf::1]/", true), ("http://[fec0::1]/", false),
         ("http://example.com/", false), ("http://www.example.com:8080/a", false), ("http://local/", true),
         ("http://notlocal.localx/", false), ("http://1.2.3.example/", false), ("http://999.1.1.1/", false),
         ("https://example.com/", true),
@@ -689,5 +694,70 @@ struct LinkPolicyTests {
                                        sizePercent: nil)
 
         #expect(link.opensAsLog == expected)
+    }
+
+    @Test func openerFileTakesOnlyAPlainClickOnADetectedLinkToAPreviewRoute() {
+        let file = URL(fileURLWithPath: "/tmp/a.md", isDirectory: false)
+        let session = UUID()
+        let previews: [LinkPolicy.Route] = [
+            .image(file, session: session), .markdown(file, session: session, sizePercent: nil),
+            .document(file, session: session, sizePercent: 95),
+            .text(LinkPolicy.TextLink(url: file, line: 3, session: session, sizePercent: nil)),
+        ]
+        for route in previews {
+            #expect(LinkPolicy.openerFile(for: route, source: .detected, intent: .normal) == file)
+            for source in [LinkPolicy.ClickSource.osc8, .other] {
+                #expect(LinkPolicy.openerFile(for: route, source: source, intent: .normal) == nil)
+            }
+            for intent in [LinkPolicy.ClickIntent.browser, .reveal] {
+                #expect(LinkPolicy.openerFile(for: route, source: .detected, intent: intent) == nil)
+            }
+        }
+        let others: [LinkPolicy.Route] = [
+            .reveal(file), .browser(URL(string: "https://example.com")!),
+            .overlay(URL(string: "https://example.com")!, session: session, sizePercent: nil),
+            .forwardRemote("/tmp/a.md", session: session), .selectSession(session), .ignore,
+        ]
+        for route in others {
+            #expect(LinkPolicy.openerFile(for: route, source: .detected, intent: .normal) == nil)
+        }
+    }
+
+    @Test(arguments: [
+        ("/srv/app/notes.md", ["notes.md"]),
+        ("src/Makefile:3", ["Makefile:3", "Makefile"]),
+        ("./main.go:12:4", ["main.go:12:4", "main.go"]),
+        ("~/docs/readme.md.", ["readme.md.", "readme.md"]),
+        ("file:///srv/a%20b.md", ["a b.md"]),
+        ("file://buildbox/srv/x.png", ["x.png"]),
+        ("https://example.com/x.md", []),
+        ("notes.md", []),
+        ("/srv/app/", []),
+    ])
+    func candidateNamesAreTheBasenamesEverySpellingCouldResolveTo(raw: String, names: [String]) {
+        #expect(LinkPolicy.candidateNames(for: raw) == names)
+    }
+
+    @Test func aCandidateNamePicksTheRuleTheResolvedFileWouldTake() {
+        let (keymap, diagnostics) = parseKeymap("""
+            open *.swift view-swift
+            open file.swift view-one
+            open Makefile view-make
+            """)
+        #expect(diagnostics.isEmpty)
+        let pick = { (raw: String) in LinkPolicy.candidateNames(for: raw).compactMap { keymap.opener(forFile: $0) }.first }
+        #expect(pick("src/Makefile:3")?.command.command == "view-make")
+        #expect(pick("src/file.swift:3")?.command.command == "view-one")
+        #expect(pick("src/other.swift")?.command.command == "view-swift")
+        #expect(pick("src/other.txt") == nil)
+    }
+
+    @Test func previewBytesIsTheCapOfThePageAFileNameWouldOpen() {
+        #expect(LinkPolicy.previewBytes(forFileName: "shot.PNG") == ImagePage.maxBytes)
+        #expect(LinkPolicy.previewBytes(forFileName: "notes.md") == MarkdownPage.maxBytes)
+        #expect(LinkPolicy.previewBytes(forFileName: "page.html") == DocumentPage.maxBytes)
+        #expect(LinkPolicy.previewBytes(forFileName: "main.go") == TextPage.maxBytes)
+        #expect(LinkPolicy.previewBytes(forFileName: "Makefile") == TextPage.maxBytes)
+        #expect(LinkPolicy.previewBytes(forFileName: "archive.zip") == nil)
     }
 }

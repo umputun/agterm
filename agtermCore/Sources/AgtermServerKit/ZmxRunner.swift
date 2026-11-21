@@ -21,8 +21,12 @@ public struct PaneLaunch: Equatable, Sendable {
 public protocol ZmxRunner: Sendable {
     /// create starts a detached daemon; the error is zmx's own message.
     func create(_ launch: PaneLaunch) throws
-    /// kill ends the daemon and every process its shell started in the foreground.
+    /// kill ends the daemon and its shell's process group, past an unreachable socket; a foreground job in another
+    /// group is the caller's to hang up.
     func kill(_ name: String) -> Bool
+    /// killConfirmed ends the daemon and reports what zmx printed it did; without `force` an unreachable daemon's
+    /// socket is left in place.
+    func killConfirmed(_ name: String, force: Bool) -> ZmxKillOutcome
     /// list is every daemon in the server's socket directory; it throws rather than return a partial list.
     func list() throws -> [ZmxSessionRecord]
     func screen(_ name: String, all: Bool) -> ZmxScreen?
@@ -100,6 +104,15 @@ public struct ProcessZmxRunner: ZmxRunner {
 
     public func kill(_ name: String) -> Bool {
         (try? invoke(["kill", name, "--force"]).status) == 0
+    }
+
+    public func killConfirmed(_ name: String, force: Bool) -> ZmxKillOutcome {
+        do {
+            let output = try invoke(["kill", name] + (force ? ["--force"] : []))
+            return ZmxKillOutcome.parse(output.stdout + "\n" + output.stderr, name: name)
+        } catch {
+            return .failed(String(describing: error))
+        }
     }
 
     public func list() throws -> [ZmxSessionRecord] {

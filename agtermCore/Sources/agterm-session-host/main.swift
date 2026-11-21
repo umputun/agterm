@@ -6,6 +6,8 @@ do {
     let arguments = CommandLine.arguments
     if arguments.count == 3, arguments[1] == "host" {
         try SessionHostRuntime.Host.run(socketDirectory: arguments[2])
+    } else if arguments.count == 5, arguments[1] == "host" {
+        try SessionHostRuntime.Host.run(socketDirectory: arguments[2], job: (key: arguments[3], label: arguments[4]))
     } else if arguments.count == 2, arguments[1] == "key" {
         print(try SessionHostRuntime.Host.endpointKey())
     } else if arguments.count == 3, arguments[1] == "stop" {
@@ -15,7 +17,9 @@ do {
     } else if arguments.count >= 8, arguments[1] == "client", arguments[3] == "--ends-pane", arguments[4] == "--" {
         try Client.run(name: arguments[2], argv: Array(arguments.dropFirst(5)), endsPane: true)
     } else {
-        try? FileHandle.standardError.write(contentsOf: Data("usage: agterm-session-host host SOCKET_DIR | key | stop SOCKET_DIR | client NAME [--ends-pane] -- ZMX attach NAME [COMMAND...]\n".utf8))
+        let usage = "usage: agterm-session-host host SOCKET_DIR [KEY LABEL] | key | stop SOCKET_DIR"
+            + " | client NAME [--ends-pane] -- ZMX attach NAME [COMMAND...]\n"
+        try? FileHandle.standardError.write(contentsOf: Data(usage.utf8))
         exit(2)
     }
 } catch {

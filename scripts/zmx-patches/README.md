@@ -1,19 +1,16 @@
 # zmx patches
 
-`scripts/setup.sh` applies every `*.patch` here, in name order, to a fresh checkout of `ZMX_REV` before
-building, and every `ghostty/*.patch` to a private checkout of the ghostty revision that `ZMX_REV` pins
-in its `build.zig.zon`. The digest of both sets is part of `.zmx-build-stamp`, so editing one rebuilds
-zmx. A daemon already running keeps the zmx it was started by. `scripts/setup-zmx-linux.sh` builds the same
-patched tree for `aarch64-linux-musl` and `x86_64-linux-musl`, the zmx agterm-server runs, each under its own
-stamp in `build/linux/<arch>/`, so a patch has to build for Linux as well as macOS.
+`scripts/setup.sh` applies the patches in this directory in name order to a fresh checkout of `ZMX_REV`.
+The revision, target, Zig toolchain, and patch digest make up `.zmx-build-stamp`. A daemon already running
+keeps the zmx it was started by. `scripts/setup-zmx-linux.sh` builds the same tree for both Linux musl
+architectures, with a separate stamp under each `build/linux/<arch>/`.
 
-Each patch is a plain `diff -ruN` against a pristine copy of the tree it patches, made so `git apply`
-takes it with `-p1`: the zmx patches against `ZMX_REV`, the `ghostty/` ones against the ghostty revision
-in that `ZMX_REV`'s `build.zig.zon`. To change one, check out both trees side by side as `zmx` and
-`zmx-ghostty`, apply the ghostty patches to `zmx-ghostty` and then the zmx patches to `zmx`, since `0002`
-makes zmx build against `../zmx-ghostty`. Edit, run `zig build test` in `zmx`, then regenerate the file
-against the pristine copy of its own tree. Moving `ZMX_REV` means re-applying them by hand where they no
-longer apply, and re-running `check.py`.
+To update a patch, apply the series at the pinned revision, edit the source, and run
+`env -u ZMX_NO_DETACH_KEY zig build test`: agterm panes export that variable, and an upstream test that
+unsets it aborts Zig 0.17's test runner.
+Generate a diff against the tree with the preceding patches applied. Run `check.py` against the built
+binary after moving `ZMX_REV`. zmx resolves its Ghostty dependency from its own build manifest. That
+Ghostty version preserves skipped cells during VT replay by moving the cursor across them.
 
 - `0001-explicit-leadership.patch` lets a terminal own which client leads a session. A client attached
   with `ZMX_MANAGED=<token>` leads only by claiming at attach (`ZMX_MANAGED_CLAIM`), never by typing, and
@@ -23,10 +20,6 @@ longer apply, and re-running `check.py`.
   A client that does not set the variable behaves as upstream does. `.claude/rules/control-api.md` owns
   how agterm uses it.
 
-- `0002-private-ghostty-dependency.patch` points zmx's ghostty dependency at `../zmx-ghostty`, the
-  private checkout `setup.sh` patches, in place of the zig package cache. Its context names the pinned
-  revision, so a `ZMX_REV` that moves ghostty stops it applying. zmx's build reads the dependency hash
-  as its reported ghostty version, so the patch writes that string in, marked `+agterm`.
 - `0003-atomic-socket-publish.patch` gives a session socket its name only after it listens. Upstream binds
   the session path and then listens, and `zmx list`, attach and the commands that connect to a session
   delete a path that refuses a connection as stale. A probe between bind and listen can unlink the new socket
@@ -44,15 +37,53 @@ longer apply, and re-running `check.py`.
   upstream `run` cannot do it, since it always starts bash and types the command into it. With
   `ZMX_EXIT_FILE` set, a session whose shell exits writes `exited` to that path, atomically, before its socket
   goes, so a session found gone without a record was killed; teardown then ends the shell's process group as
-  upstream does. A killed session writes nothing, and the shell never sees the variable.
+  upstream does. A killed session writes nothing, and the shell never sees the variable. Create and attach
+  hand labels the bare name, since upstream's prefixed one is prefixed again under `ZMX_SESSION_PREFIX`.
 - `0006-single-da-answer.patch` keeps a DA1/DA2 query from being answered twice. Until a client sends
   Init, the daemon answers such queries itself, but upstream also forwards them to an attach it accepted
   and has not yet heard Init from, whose terminal answers again; the program reads the spare reply as the
   answer to its next query. The daemon now drops each query it answered from that output.
-- `ghostty/0001-formatter-unstyled-blanks.patch` fixes the snapshot a re-attach replays. The formatter
-  wrote cells a program skipped with a cursor move as spaces under the previous cell's style, so a gap
-  after a colored run came back painted; a skipped cell now closes the style first. Spaces the program
-  wrote keep their style. Not agterm's `GHOSTTY_REV`: this is the ghostty zmx links, nothing else.
+- `0007-drain-output-on-exit.patch` keeps a session's last output when its shell exits. Upstream's attach
+  client returned at the daemon's hangup, dropping output it had read but not written and output still
+  queued behind the hangup, and the daemon made at most one more write per client at the PTY's EOF before
+  shutdown freed the rest. A hangup with the session's socket still in place, a detach or a daemon that
+  died, returns as before. After any other the client reads the socket to EOF and writes stdout until both
+  are done, reading the socket only while stdout keeps up, under one 2 s deadline; on a terminal it stops
+  200 ms short of it, so the reset still fits under it. On macOS TCSAFLUSH, and the exit's close of the
+  tty, wait for a terminal that may never read, so output it has not taken by then is flushed and termios
+  is restored without TCSAFLUSH; a reset it has not taken by the deadline is flushed too, leaving the
+  terminal in the session's modes. The attach a session switch returns through shares the deadline. On a
+  shell exit the daemon goes on sending what its clients have not read, until none is left or one 2 s
+  deadline shared by all of them passes, and takes no new attach, input or command meanwhile. A kill ends
+  the daemon at once; its clients write only what they already hold, under their deadline.
+- `0008-reclaim-dropped-lead.patch` lets an attach take back a lead it lost with its link. Every managed
+  client sends its `ZMX_MANAGED` token in a new `Identity` message after `Manage`, followed by the token in
+  `ZMX_MANAGED_RECLAIM` when that is set. At Init such a client leads while the leader is the attach that
+  token names, or one that took a vacant session without claiming and has sent no key, paste or mouse
+  press since, control keys, Esc and kitty paste events included and a terminal's own replies not; otherwise it
+  attaches as before. A daemon without the patch ignores the unknown tag.
+- `0009-legacy-ipc.patch` lets the new client reach daemons still running agterm's zmx 0.8.1, so Live
+  sessions survive the upgrade and a reset can end them. It sends an Info request both framings read and
+  keeps the framing the reply uses for that connection, mapping `Manage` and `Identity` to their 0.8.1
+  tags, 22 and 26. A first frame that reads both ways, an 0.8.1 one-byte Output whose header padding is
+  not zero or a current Output of a multiple of 256 bytes, is current when the bytes after it cannot open
+  an 0.8.1 frame, and is otherwise retried on a fresh connection.
+  `tail` and `run` keep upstream framing, because the probe would swallow the one `TaskComplete` a task
+  sends, and refuse an 0.8.1 daemon, which misreads it: `run` sends its task on the fresh connection the
+  probe returns, and `tail` probes on a second connection after subscribing.
+  `write` refuses an 0.8.1 daemon, which drops a file past its input cap and
+  still acknowledges it, and so do `history --screen` and `--scrollback`, which 0.8.1 has no capture for.
+- `0010-caller-owned-socket-path.patch` backports upstream `f5d604e`: the daemon no longer frees the
+  socket path its caller owns, which aborted it at shutdown under Zig 0.17.
+- `0011-init-keeps-frame-boundary.patch` keeps the unsent tail of a frame a short write left half sent
+  when a client's first Init clears what it was sent before attaching, so the client never reads the next
+  frame from inside it.
+- `0012-bounded-signal-cleanup.patch` lets an attach client stopped by a signal exit while nothing reads its
+  terminal. Upstream catches SIGTERM, SIGHUP and SIGINT and leaves through a detach's `TCSAFLUSH` and
+  blocking reset, which on macOS wait for the terminal to read them. The client instead flushes what is
+  queued, restores termios at once and gives the reset 100 ms.
 
-`check.py <zmx>` drives managed clients on ptys of different sizes against one daemon in a throwaway
-`ZMX_DIR`, prints one line per rule, and exits nonzero when any of them is broken.
+`check.py <zmx>` drives managed clients on PTYs of different sizes against one daemon in a throwaway
+`ZMX_DIR` and exits nonzero when a check fails. Pass a second argument pointing to agterm's patched
+zmx 0.8.1 binary to also verify listing, claiming and reclaiming the lead, typing, reading the screen,
+printing, refusing `write`, `run` and `tail`, and killing across the upgrade.

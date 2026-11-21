@@ -33,6 +33,9 @@ struct PresentationFramesTests {
         PresentationFrame(gen: 1, rev: 14, body: .presenterAcquire),
         PresentationFrame(gen: 1, rev: 15, body: .presenterGranted),
         PresentationFrame(gen: 1, rev: 16, body: .presenterRefused),
+        PresentationFrame(gen: 1, rev: 16, body: .presenterVacant),
+        PresentationFrame(gen: 1, rev: 16, body: .ended),
+        PresentationFrame(gen: 1, rev: 16, body: .leadReport(PresentationLeadReport(leaders: [UUID()]))),
         PresentationFrame(gen: 1, rev: 17, body: .askRequest(PresentationAsk(
             PendingAsk(id: "a1", title: "deploy?", message: "to prod", buttons: [ControlAskButton(id: "y", label: "Yes", hotkey: "y")],
                        defaultID: "y", style: .gui, align: .center, width: 40),
@@ -127,7 +130,38 @@ struct PresentationFramesTests {
         PresentationFrame(gen: 1, rev: 52, body: .linkClick(PresentationLinkClick(
             raw: "src/main.py:42", pane: UUID(), mode: .overlay75))),
         PresentationFrame(gen: 1, rev: 53, body: .linkRefused(PresentationLinkRefusal(reason: .notFound))),
+        PresentationFrame(gen: 1, rev: 55, body: .pageRequest(PresentationPage(
+            page: "p10", token: "t10", source: .text(path: "/tmp/app.log", line: nil), identity: "app.log",
+            chromeless: false, javascript: false, navigation: false, browse: false, persistent: false, backgroundColor: nil,
+            pane: nil, sizePercent: 95, follow: false, textLog: TextLog(tail: 200, follow: true),
+            textSeed: PresentationTextState(following: false, query: "error", revision: 3, wrap: true)))),
+        PresentationFrame(gen: 1, rev: 56, body: .pageCommand(PresentationPageCommand(page: "p10", seq: 1, action: .follow, toggle: .toggle))),
+        PresentationFrame(gen: 1, rev: 57, body: .pageCommand(PresentationPageCommand(page: "p10", seq: 2, action: .search, query: "timeout"))),
+        PresentationFrame(gen: 1, rev: 58, body: .pageCommand(PresentationPageCommand(page: "p10", seq: 3, action: .changes, step: .prev))),
+        PresentationFrame(gen: 1, rev: 59, body: .pageState(PresentationPageState(
+            page: "p10", title: nil, address: "/tmp/app.log", load: .loaded, error: nil, canGoBack: false, canGoForward: false,
+            hidden: false, appliedSeq: 3, text: PresentationTextState(
+                following: true, log: TextLogReport(lines: 200, clipped: true), query: "timeout", revision: 4, matches: 7,
+                current: 2, wrap: false, changes: TextChanges(count: 5, current: 1))))),
+        PresentationFrame(gen: 1, rev: 60, body: .pageResult(PresentationPageResult(
+            page: "p10", seq: 2, ok: true, text: "2 of 7", state: PresentationTextState(query: "timeout", revision: 4, matches: 7, current: 2)))),
+        PresentationFrame(gen: 1, rev: 61, body: .pageResult(PresentationPageResult(page: "p10", seq: 3, ok: false, error: "no query"))),
+        PresentationFrame(gen: 1, rev: 62, body: .pageCommand(PresentationPageCommand(page: "p10", seq: 4, action: .files, file: "src/b.go"))),
+        PresentationFrame(gen: 1, rev: 63, body: .pageResult(PresentationPageResult(
+            page: "p10", seq: 4, ok: true, text: "2 of 4: src/b.go",
+            state: PresentationTextState(revision: 4, files: TextFiles(count: 4, current: 2, path: "src/b.go"))))),
+        PresentationFrame(gen: 1, rev: 64, body: .pageCommand(PresentationPageCommand(page: "p10", seq: 5, action: .expand, toggle: .on))),
+        PresentationFrame(gen: 1, rev: 65, body: .pageResult(PresentationPageResult(
+            page: "p10", seq: 5, ok: true, text: "expanded", state: PresentationTextState(revision: 4, expand: true)))),
     ]
+
+    @Test func aTextStateFromAPresenterWithoutExpandDecodesWithNone() throws {
+        let line = #"{"kind":"page.result","gen":1,"rev":1,"page":{"page":"p1","seq":1,"ok":true,"state":{"revision":0,"wrap":true}}}"#
+        guard case .pageResult(let result) = try PresentationCodec.decode(Data(line.utf8)).body else { throw DecodedOtherKind() }
+
+        #expect(result.state?.expand == nil)
+        #expect(result.state?.wrap == true)
+    }
 
     @Test(arguments: [
         #"{"kind":"overlay.request","gen":1,"rev":1,"overlay":{"job":"j1","sizePercent":60,"follow":false,"wait":false}}"#,
@@ -243,6 +277,99 @@ struct PresentationFramesTests {
             < PresentationCodec.maxFrameBytes)
     }
 
+    @Test(arguments: [7, nil] as [Int?])
+    func everyHandOverAndReplyCarriesItsOfferAndOneWithoutItSendsNoKey(offer: Int?) throws {
+        let ask = PendingAsk(id: "a", title: "t", buttons: [ControlAskButton(id: "y", label: "Y")])
+        var page = PresentationPage(page: "p1", token: "t", source: .url("http://h/"), identity: "i", chromeless: false,
+                                    javascript: false, navigation: false, browse: false, persistent: false,
+                                    backgroundColor: nil, pane: nil, sizePercent: nil, follow: false)
+        page.offer = offer
+        let bodies: [PresentationFrame.Body] = [
+            .askRequest(PresentationAsk(ask, pane: nil, owner: 1, offer: offer)),
+            .askResolve(PresentationAskAnswer(id: "a", owner: 1, button: "y", offer: offer)),
+            .askRejected(PresentationAskRef(id: "a", owner: 1, offer: offer)),
+            .pickRequest(PresentationPick(PendingPick(id: "p", items: [ControlPickItem(id: "a", label: "A")]), owner: 1, offer: offer)),
+            .pickResolve(PresentationPickAnswer(id: "p", owner: 1, item: "a", offer: offer)),
+            .pickRejected(PresentationPickRef(id: "p", owner: 1, offer: offer)),
+            .pageRequest(page),
+            .pageClosed(PresentationPageChange(page: "p1", offer: offer)),
+            .pageRejected(PresentationPageChange(page: "p1", reason: "slot taken", offer: offer)),
+            .pageState(PresentationPageState(page: "p1", title: nil, address: nil, load: .loaded, error: nil, canGoBack: false,
+                                             canGoForward: false, hidden: false, appliedSeq: 0, offer: offer)),
+            .pageResult(PresentationPageResult(page: "p1", seq: 1, ok: true, offer: offer)),
+        ]
+
+        for body in bodies {
+            let line = try PresentationCodec.encode(PresentationFrame(gen: 1, rev: 1, body: body))
+            #expect(try PresentationCodec.decode(line.dropLast()).body == body)
+            #expect(String(decoding: line, as: UTF8.self).contains(#""offer""#) == (offer != nil))
+        }
+    }
+
+    @Test func textFieldsFromAnOlderPeerDecodeAsAbsent() throws {
+        let request = #"{"kind":"page.request","gen":1,"rev":1,"page":{"page":"p1","token":"t1","source":{"text":{"path":"/tmp/a.log"}},"#
+            + #""identity":"a.log","chromeless":false,"javascript":false,"navigation":false,"browse":false,"#
+            + #""persistent":false,"follow":false}}"#
+        let state = #"{"kind":"page.state","gen":1,"rev":2,"page":{"page":"p1","load":"loaded","canGoBack":false,"#
+            + #""canGoForward":false,"hidden":false,"appliedSeq":0}}"#
+        let command = #"{"kind":"page.command","gen":1,"rev":3,"page":{"page":"p1","seq":1,"action":"hide"}}"#
+
+        guard case .pageRequest(let page) = try PresentationCodec.decode(Data(request.utf8)).body,
+              case .pageState(let decoded) = try PresentationCodec.decode(Data(state.utf8)).body,
+              case .pageCommand(let hide) = try PresentationCodec.decode(Data(command.utf8)).body else { throw DecodedOtherKind() }
+
+        #expect(page.textLog == nil && page.textSeed == nil)
+        #expect(decoded.text == nil)
+        #expect(hide.toggle == nil && hide.query == nil && hide.step == nil)
+    }
+
+    @Test func aPlainPageSendsNoTextKeys() throws {
+        let page = PresentationPage(page: "p1", token: "t1", source: .text(path: "/tmp/a.go", line: 3), identity: "a.go", chromeless: false,
+                                    javascript: false, navigation: false, browse: false, persistent: false, backgroundColor: nil,
+                                    pane: nil, sizePercent: nil, follow: false)
+        let state = PresentationPageState(page: "p1", title: nil, address: nil, load: .loaded, error: nil, canGoBack: false,
+                                          canGoForward: false, hidden: false, appliedSeq: 0)
+
+        let request = String(decoding: try PresentationCodec.encode(PresentationFrame(gen: 1, rev: 1, body: .pageRequest(page))), as: UTF8.self)
+        let report = String(decoding: try PresentationCodec.encode(PresentationFrame(gen: 1, rev: 2, body: .pageState(state))), as: UTF8.self)
+
+        #expect(!request.contains("textLog") && !request.contains("textSeed"))
+        #expect(!report.contains(#""text""#))
+    }
+
+    @Test func aTextActionIsNotDecodableAsAnOlderAction() {
+        let line = Data(#"{"kind":"page.command","gen":1,"rev":1,"page":{"page":"p1","seq":1,"action":"rewind"}}"#.utf8)
+
+        #expect(throws: (any Error).self) { try PresentationCodec.decode(line) }
+    }
+
+    @Test func onlyTheTextActionsAnswerWithAResult() {
+        let answering = Set([PresentationPageAction.follow, .search, .wrap, .expand, .changes])
+
+        for action in [PresentationPageAction.hide, .show, .reloadOriginal, .reloadCurrent, .back, .forward, .browser, .resize,
+                       .follow, .search, .wrap, .expand, .changes] {
+            #expect(action.answersWithResult == answering.contains(action))
+        }
+    }
+
+    @Test func toggleModesTravelAsTheirWireSpellings() throws {
+        let encoded = try JSONEncoder().encode([ControlToggleMode.on, .off, .toggle])
+
+        #expect(String(decoding: encoded, as: UTF8.self) == #"["on","off","toggle"]"#)
+    }
+
+    @Test func textStateAndResultBoundTheirStrings() throws {
+        let long = String(repeating: "q", count: 100_000)
+        let state = PresentationTextState(query: long, revision: 1)
+        let result = PresentationPageResult(page: "p1", seq: 1, ok: false, text: long, error: long, state: state)
+
+        #expect(state.query?.count == TextSearch.maxQuery)
+        #expect(result.text?.count == PresentationPageResult.maxText)
+        #expect(result.error?.count == PresentationPageResult.maxText)
+        #expect(try PresentationCodec.encode(PresentationFrame(gen: .max, rev: .max, body: .pageResult(result))).count
+            < PresentationCodec.maxFrameBytes)
+    }
+
     @Test func aLinkClickWithAnUnknownModeDecodesAsOverlay() throws {
         let line = Data(#"{"kind":"link.click","gen":1,"rev":2,"link":{"raw":"/a.md","pane":"6F9619FF-8B86-D011-B42D-00C04FC964FF","mode":"overlay33"}}"#.utf8)
 
@@ -260,6 +387,64 @@ struct PresentationFramesTests {
         let line = Data(#"{"kind":"link.refused","gen":1,"rev":2,"link":{"reason":"futureReason"}}"#.utf8)
 
         #expect(try PresentationCodec.decode(line).body == .linkRefused(PresentationLinkRefusal(reason: .notOpened)))
+    }
+
+    @Test @MainActor func aMessageFrameCarriesPaneSenderAndIDButNoBody() throws {
+        let message = PresentationMessage(pane: UUID(), from: "S:P", messageID: UUID())
+        let line = try PresentationCodec.encode(PresentationFrame(gen: 1, rev: 2, body: .message(message)))
+
+        #expect(String(decoding: line, as: UTF8.self).contains(#""kind":"message""#))
+        #expect(!String(decoding: line, as: UTF8.self).contains("body"))
+        #expect(try PresentationCodec.decode(line.dropLast()).body == .message(message))
+        #expect(PresentationHub.supportedKinds.contains("message"))
+    }
+
+    @Test @MainActor func aMailFrameAndSnapshotCarryCountsAsAnObjectKeyedByPane() throws {
+        let pane = UUID()
+        let mail = PresentationMail(panes: [pane.uuidString: 3])
+        let line = try PresentationCodec.encode(PresentationFrame(gen: 1, rev: 2, body: .mail(mail)))
+        let snapshot = PresentationSnapshot(status: nil, hud: nil, mail: PresentationMail(panes: [:]))
+        let snapshotLine = try PresentationCodec.encode(PresentationFrame(gen: 1, rev: 1, body: .snapshot(snapshot)))
+
+        #expect(String(decoding: line, as: UTF8.self).contains(#""mail":{"panes":{"\#(pane.uuidString)":3}}"#))
+        #expect(try PresentationCodec.decode(line.dropLast()).body == .mail(mail))
+        #expect(try PresentationCodec.decode(snapshotLine.dropLast()).body == .snapshot(snapshot))
+        #expect(PresentationHub.supportedKinds.contains("mail"))
+    }
+
+    @Test func aSnapshotFromAnOriginWithoutMailDecodesWithNone() throws {
+        let line = Data(#"{"kind":"snapshot","gen":1,"rev":1,"snapshot":{"context":"PR #517"}}"#.utf8)
+
+        let frame = try PresentationCodec.decode(line)
+
+        guard case .snapshot(let snapshot) = frame.body else { Issue.record("not a snapshot"); return }
+        #expect(snapshot.mail == nil)
+    }
+
+    @Test @MainActor func aCompanionsFrameAndSnapshotCarryTheMembersInOrderWithTheirKinds() throws {
+        let terminal = UUID()
+        let page = UUID()
+        let companions = PresentationCompanions(members: [PresentationCompanions.Member(id: page, kind: .page),
+                                                          PresentationCompanions.Member(id: terminal, kind: .terminal)])
+        let line = try PresentationCodec.encode(PresentationFrame(gen: 1, rev: 2, body: .companions(companions)))
+        let snapshot = PresentationSnapshot(status: nil, hud: nil, companions: PresentationCompanions(members: []))
+        let snapshotLine = try PresentationCodec.encode(PresentationFrame(gen: 1, rev: 1, body: .snapshot(snapshot)))
+
+        let text = String(decoding: line, as: UTF8.self)
+        #expect(text.contains(#""kind":"companions""#))
+        #expect(text.contains(#"{"id":"\#(page.uuidString)","kind":"page"}"#))
+        #expect(try PresentationCodec.decode(line.dropLast()).body == .companions(companions))
+        #expect(try PresentationCodec.decode(snapshotLine.dropLast()).body == .snapshot(snapshot))
+        #expect(PresentationHub.supportedKinds.contains(PresentationHub.companionsKind))
+    }
+
+    @Test func aSnapshotFromAnOriginWithoutCompanionsDecodesWithNone() throws {
+        let line = Data(#"{"kind":"snapshot","gen":1,"rev":1,"snapshot":{"context":"PR #517"}}"#.utf8)
+
+        let frame = try PresentationCodec.decode(line)
+
+        guard case .snapshot(let snapshot) = frame.body else { Issue.record("not a snapshot"); return }
+        #expect(snapshot.companions == nil)
     }
 
     @Test func anUnknownKindDecodesToUnknownAndKeepsItsOrdering() throws {
@@ -363,5 +548,39 @@ struct PresentationFramesTests {
     @Test(arguments: [0, -1])
     func aPeerBelowVersionOneCannotBeNegotiated(_ theirs: Int) {
         #expect(PresentationCodec.negotiatedVersion(ours: 1, theirs: theirs) == nil)
+    }
+
+    @Test func statusClearAndSeenRoundTrip() throws {
+        let bodies: [PresentationFrame.Body] = [.statusClear(PresentationStatusClear(reason: .submit, pane: .identity(UUID()))),
+                                                .statusClear(PresentationStatusClear(reason: .select)),
+                                                .statusSeen(PresentationSeen(reason: .viewed))]
+        for body in bodies {
+            let frame = PresentationFrame(gen: 1, rev: 2, body: body)
+
+            let line = try PresentationCodec.encode(frame)
+
+            #expect(try PresentationCodec.decode(line.dropLast()) == frame)
+        }
+    }
+
+    @Test func aClearWithAnUnknownReasonOrPaneStillDecodes() throws {
+        let line = #"{"kind":"status.clear","gen":1,"rev":1,"status":{"reason":"wave","pane":"nowhere"}}"#
+
+        guard case .statusClear(let clear) = try PresentationCodec.decode(Data(line.utf8)).body else {
+            Issue.record("not a status clear")
+            return
+        }
+        #expect(clear.reason == nil)
+        #expect(clear.pane == nil)
+    }
+
+    @Test func autoResetTravelsAndAnOlderOriginsStatusLacksIt() throws {
+        let status = PresentationStatus(status: .completed, blink: false, color: nil, shape: nil, pane: nil, changedAt: nil,
+                                        autoReset: true)
+        let decoded = try JSONDecoder().decode(PresentationStatus.self, from: JSONEncoder().encode(status))
+        let older = try JSONDecoder().decode(PresentationStatus.self, from: Data(#"{"status":"completed","blink":false}"#.utf8))
+
+        #expect(decoded.autoReset == true)
+        #expect(older.autoReset == nil)
     }
 }

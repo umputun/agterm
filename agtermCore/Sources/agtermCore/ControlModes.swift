@@ -12,7 +12,7 @@ public struct ControlEventReadOptions: Equatable, Sendable {
 }
 
 /// Parsed binary control mode with the shared default/toggle semantics used by mode-bearing commands.
-public enum ControlToggleMode: Equatable, Sendable {
+public enum ControlToggleMode: String, Codable, Equatable, Sendable {
     case on
     case off
     case toggle
@@ -190,6 +190,13 @@ public struct ControlSessionCreateOptions: Equatable, Sendable {
         self.before = before
         self.noSelect = noSelect
     }
+}
+
+/// ControlAttachWorkspace is the workspace a `zmx.attach` row goes into instead of the window's current one:
+/// `id` takes an id, unique prefix or `active`; `name` an exact sidebar name, created when `create` is set.
+public enum ControlAttachWorkspace: Equatable, Sendable {
+    case id(String)
+    case name(String, create: Bool)
 }
 
 /// Parsed `session.status` payload. Sound validation and playback stay host-side; the dispatcher

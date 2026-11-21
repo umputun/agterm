@@ -1,7 +1,8 @@
-diff -ruN zmx-orig/src/posix.zig zmx/src/posix.zig
---- zmx-orig/src/posix.zig	2026-10-21 17:35:22.868154135 -0500
-+++ zmx/src/posix.zig	2026-10-21 17:50:42.715566026 -0500
-@@ -387,6 +387,30 @@
+diff --git a/src/posix.zig b/src/posix.zig
+index 97bb220..f4cbbe4 100644
+--- a/src/posix.zig
++++ b/src/posix.zig
+@@ -387,6 +387,30 @@ pub fn listen(sock: socket_t, backlog: u31) ListenError!void {
      }
  }
  
@@ -32,10 +33,11 @@ diff -ruN zmx-orig/src/posix.zig zmx/src/posix.zig
  /// Obtains errno from the return value of a system function call.
  ///
  /// For some systems this will obtain the value directly from the syscall return value;
-diff -ruN zmx-orig/src/socket.zig zmx/src/socket.zig
---- zmx-orig/src/socket.zig	2026-10-21 17:35:22.868508219 -0500
-+++ zmx/src/socket.zig	2026-10-21 17:45:35.596684761 -0500
-@@ -98,7 +98,32 @@
+diff --git a/src/socket.zig b/src/socket.zig
+index 7e6e868..c49e805 100644
+--- a/src/socket.zig
++++ b/src/socket.zig
+@@ -98,7 +98,32 @@ pub fn sessionExists(io: std.Io, dir: std.Io.Dir, name: []const u8) !bool {
      return true;
  }
  
@@ -68,7 +70,7 @@ diff -ruN zmx-orig/src/socket.zig zmx/src/socket.zig
      // AF.UNIX: Unix domain socket for local IPC with client processes
      // SOCK.STREAM: Reliable, bidirectional communication
      // SOCK.NONBLOCK: Set socket to non-blocking
-@@ -109,10 +134,32 @@
+@@ -109,10 +134,32 @@ pub fn createSocket(sesh: []const u8) !lib_posix.socket_t {
      );
      errdefer lib_posix.close(fd);
  
@@ -76,9 +78,9 @@ diff -ruN zmx-orig/src/socket.zig zmx/src/socket.zig
 +    var staged: Staged = .{ .fd = fd };
 +    const dir = std.fs.path.dirname(sesh) orelse ".";
 +    var dir_buf: [max_socket_path_len + 1]u8 = undefined;
-+    const holder = std.fmt.bufPrintZ(&dir_buf, "{s}/{s}", .{ dir, staging_dir }) catch null;
++    const holder = std.mem.printSentinel(&dir_buf, "{s}/{s}", .{ dir, staging_dir }, 0) catch null;
 +    if (holder != null and lib_posix.ensureDir(holder.?, 0o700)) {
-+        if (std.fmt.bufPrintZ(&staged.buf, "{s}/{d}", .{ holder.?, std.c.getpid() })) |name| {
++        if (std.mem.printSentinel(&staged.buf, "{s}/{d}", .{ holder.?, std.c.getpid() }, 0)) |name| {
 +            staged.len = name.len;
 +            // a creator that died between bind and publish left its name behind; this pid owns it now
 +            lib_posix.unlink(staged.path());
@@ -96,7 +98,7 @@ diff -ruN zmx-orig/src/socket.zig zmx/src/socket.zig
 +// losing creator reports the same AddressInUse a direct bind did and never removes the winner's socket.
 +fn publish(staged: *const Staged, sesh: []const u8) !void {
 +    var buf: [max_socket_path_len + 1]u8 = undefined;
-+    const final = std.fmt.bufPrintZ(&buf, "{s}", .{sesh}) catch return error.NameTooLong;
++    const final = std.mem.printSentinel(&buf, "{s}", .{sesh}, 0) catch return error.NameTooLong;
 +    lib_posix.link(staged.path(), final) catch |err| switch (err) {
 +        error.PathAlreadyExists => return error.AddressInUse,
 +        else => return err,
@@ -104,7 +106,7 @@ diff -ruN zmx-orig/src/socket.zig zmx/src/socket.zig
  }
  
  /// Maximum number of usable bytes in a Unix domain socket path.
-@@ -242,3 +289,77 @@
+@@ -242,3 +289,77 @@ test "parseSessionArg accepts a wildcard matching all sessions" {
      try std.testing.expectEqualStrings("", match.name);
      try std.testing.expect(match.matches("any-session"));
  }
@@ -117,7 +119,7 @@ diff -ruN zmx-orig/src/socket.zig zmx/src/socket.zig
 +
 +    fn make(self: *TestDir) ![]const u8 {
 +        const made = mkdtemp(&self.template) orelse return error.SkipZigTest;
-+        _ = try std.fmt.bufPrintZ(&self.holder, "{s}/{s}", .{ std.mem.span(made), staging_dir });
++        _ = try std.mem.printSentinel(&self.holder, "{s}/{s}", .{ std.mem.span(made), staging_dir }, 0);
 +        return std.mem.span(made);
 +    }
 +
@@ -144,7 +146,7 @@ diff -ruN zmx-orig/src/socket.zig zmx/src/socket.zig
 +    const dir = try tmp.make();
 +    defer tmp.remove();
 +    var buf: [max_socket_path_len + 1]u8 = undefined;
-+    const sesh = try std.fmt.bufPrintZ(&buf, "{s}/agterm-s", .{dir});
++    const sesh = try std.mem.printSentinel(&buf, "{s}/agterm-s", .{dir}, 0);
 +
 +    var staged = try bindStaged(sesh);
 +    defer lib_posix.close(staged.fd);
@@ -170,7 +172,7 @@ diff -ruN zmx-orig/src/socket.zig zmx/src/socket.zig
 +    const dir = try tmp.make();
 +    defer tmp.remove();
 +    var buf: [max_socket_path_len + 1]u8 = undefined;
-+    const sesh = try std.fmt.bufPrintZ(&buf, "{s}/agterm-s", .{dir});
++    const sesh = try std.mem.printSentinel(&buf, "{s}/agterm-s", .{dir}, 0);
 +
 +    const first = try createSocket(sesh);
 +    defer lib_posix.close(first);

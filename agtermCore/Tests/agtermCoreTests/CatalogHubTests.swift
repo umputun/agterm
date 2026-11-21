@@ -20,6 +20,12 @@ enum CatalogFixture {
         return CatalogSession(fields: fields, panes: panes)
     }
 
+    static func pageRow(_ id: UUID = UUID(), name: String = "page", parent: UUID? = nil) -> CatalogSession {
+        let fields = CatalogSessionFields(id: id, name: name, parent: parent, cwd: "/home", primary: id, axis: nil, shown: false,
+                                          lifecycle: .live, page: CatalogPage(kind: "url", identity: "example.com", endpoint: endpoint))
+        return CatalogSession(fields: fields, panes: [])
+    }
+
     static func snapshot(_ workspaces: [CatalogWorkspace]) -> CatalogSnapshot {
         CatalogSnapshot(epoch: "e1", rev: 0, catalogID: catalog, versions: versions, workspaces: workspaces)
     }
@@ -224,6 +230,108 @@ struct CatalogHubTests {
         hub.heartbeat()
 
         #expect(sink.closed == [.stale])
+    }
+
+    private struct OlderViewer {
+        var state: CatalogSnapshot?
+        var gap = false
+
+        mutating func take(_ frames: [CatalogFrame]) {
+            for frame in frames {
+                switch frame {
+                case .snapshot(let snapshot):
+                    state = snapshot
+                case .delta(_, let rev, let change):
+                    step(rev)
+                    state?.apply(change)
+                case .unknown(_, _, let rev?):
+                    step(rev)
+                default: break
+                }
+            }
+        }
+
+        private mutating func step(_ rev: Int) {
+            guard let current = state?.rev else { return }
+            if rev != current + 1 { gap = true }
+            state?.rev = rev
+        }
+    }
+
+    @Test func aViewerWithoutPageRowsFollowsEveryRevisionAndNeverSeesAPage() throws {
+        let a = CatalogFixture.session(name: "a"), b = CatalogFixture.session(name: "b")
+        let page = CatalogFixture.pageRow()
+        let w1 = UUID(), w2 = UUID()
+        var workspaces = [CatalogWorkspace(id: w1, name: "w1", sessions: [a, page, b]), CatalogWorkspace(id: w2, name: "w2", sessions: [])]
+        let hub = CatalogHub(epoch: "e1", staleTimeout: 30) { CatalogFixture.snapshot(workspaces) }
+        let older = Sink(), newer = Sink()
+        try hub.subscribe(hello: CatalogHello(version: 1), sink: older, versions: CatalogFixture.versions)
+        try hub.subscribe(hello: CatalogHello(version: 1, pageRows: true), sink: newer, versions: CatalogFixture.versions)
+
+        workspaces[0].sessions[1].fields.name = "docs"
+        hub.refresh()
+        let c = CatalogFixture.session(name: "c")
+        workspaces[0].sessions.insert(c, at: 2)
+        hub.refresh()
+        workspaces[0].sessions = [b, page, c, a]
+        hub.refresh()
+        workspaces[0].sessions.removeAll { $0.id == a.id }
+        workspaces[1].sessions = [a]
+        hub.refresh()
+        workspaces[0].sessions.removeAll { $0.id == page.id }
+        hub.refresh()
+
+        var viewer = OlderViewer()
+        viewer.take(older.frames)
+        #expect(!viewer.gap)
+        let lines = try older.frames.map { String(decoding: try CatalogCodec.encode($0), as: UTF8.self) }
+        #expect(!lines.contains { $0.contains(page.id.uuidString) })
+        #expect(viewer.state?.rev == hub.rev)
+        #expect(viewer.state?.workspaces == CatalogHub.withoutPageRows(hub.snapshot()).workspaces)
+        #expect(newer.deltas.map(\.rev) == Array(1...hub.rev))
+        #expect(newer.deltas.contains { if case .sessionChanged(let fields) = $0.change { fields.page != nil } else { false } })
+    }
+
+    @Test func aPageRootsCompanionShowsTopLevelToAViewerWithoutPageRows() throws {
+        let root = CatalogFixture.pageRow()
+        var workspaces = [CatalogWorkspace(id: UUID(), name: "w", sessions: [root])]
+        let hub = CatalogHub(epoch: "e1", staleTimeout: 30) { CatalogFixture.snapshot(workspaces) }
+        let older = Sink()
+        try hub.subscribe(hello: CatalogHello(version: 1), sink: older, versions: CatalogFixture.versions)
+
+        let companion = CatalogFixture.session(name: "shell", parent: root.id)
+        workspaces[0].sessions.append(companion)
+        hub.refresh()
+
+        guard case .snapshot(let first)? = older.frames.dropFirst().first else {
+            Issue.record("no snapshot")
+            return
+        }
+        #expect(first.workspaces[0].sessions.isEmpty)
+        guard case .sessionAdded(let added, _, _)? = older.deltas.first?.change else {
+            Issue.record("no added companion: \(older.frames)")
+            return
+        }
+        #expect(added.id == companion.id && added.fields.parent == nil)
+    }
+
+    @Test func aFilteredChangeListLongerThanTheRevisionsGoesAsAFilteredSnapshot() throws {
+        let root = CatalogFixture.pageRow()
+        let first = CatalogFixture.session(name: "one", parent: root.id), second = CatalogFixture.session(name: "two", parent: root.id)
+        var workspaces = [CatalogWorkspace(id: UUID(), name: "w", sessions: [root, first, second])]
+        let hub = CatalogHub(epoch: "e1", staleTimeout: 30) { CatalogFixture.snapshot(workspaces) }
+        let older = Sink()
+        try hub.subscribe(hello: CatalogHello(version: 1), sink: older, versions: CatalogFixture.versions)
+
+        workspaces[0].sessions.removeFirst()
+        hub.refresh()
+
+        guard hub.rev == 1, case .snapshot(let snapshot)? = older.frames.last else {
+            Issue.record("no filtered snapshot: \(older.frames)")
+            return
+        }
+        #expect(snapshot.rev == 1)
+        #expect(snapshot.workspaces == CatalogHub.withoutPageRows(hub.snapshot()).workspaces)
     }
 
     @Test func aPingIsAnsweredWithAnAck() throws {

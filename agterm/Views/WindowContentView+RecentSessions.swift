@@ -75,7 +75,7 @@ extension WindowContentView {
         if let session = store.session(withID: id) {
             SessionPopoverRow(
                 title: store.listLabel(for: session),
-                subtitle: "\(store.workspace(forSession: id)?.name ?? "") · \(session.switcherDetail)",
+                subtitle: store.listSubtitle(forSession: id, detail: session.switcherDetail),
                 remote: session.remoteHost != nil,
                 status: session.agentIndicator.status,
                 statusColorHex: session.agentIndicator.color,

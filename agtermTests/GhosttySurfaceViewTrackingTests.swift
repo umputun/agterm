@@ -267,6 +267,65 @@ final class GhosttySurfaceViewTrackingTests: XCTestCase {
         XCTAssertFalse(HudLinkClick.consumes(try mouse(.leftMouseDown, .command)), "a closed panel claims nothing")
     }
 
+    // regression: leaving the window from a HUD with command held kept the panel's link label up
+    func testLeavingTheWindowWithCommandHeldUnhoversTheHudPanel() throws {
+        let panel = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        content.addSubview(panel)
+        panel.frame = NSRect(x: 0, y: 0, width: 120, height: 80)
+        panel.viewOnly = true
+        panel.hudBodyFile = NSTemporaryDirectory() + "agterm-hud-\(UUID().uuidString)"
+        defer { panel.hudBodyFile = nil; panel.removeFromSuperview() }
+        HudLinkClick.hover(try mouse(.mouseMoved, .command))
+        XCTAssertTrue(HudLinkClick.hovered === panel)
+
+        let exit = try XCTUnwrap(NSEvent.enterExitEvent(with: .mouseExited, location: NSPoint(x: -5, y: 30), modifierFlags: .command,
+                                                        timestamp: 0, windowNumber: window.windowNumber, context: nil,
+                                                        eventNumber: 0, trackingNumber: 0, userData: nil))
+        NSApp.postEvent(exit, atStart: true)
+        if let next = NSApp.nextEvent(matching: .any, until: Date().addingTimeInterval(1), inMode: .default, dequeue: true) {
+            NSApp.sendEvent(next)
+        }
+
+        XCTAssertNil(HudLinkClick.hovered)
+    }
+
+    // regression: with command held over a HUD, the pane beneath labelled a link hidden under the panel
+    func testAPaneUnderAHoveredHudPanelShowsNoLinkTarget() throws {
+        let pane = LinkHoverModel()
+        pane.adopt(surface)
+        surface.applyLinkHover("https://example.com/pane")
+        XCTAssertEqual(pane.label, "https://example.com/pane")
+        let panel = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        content.addSubview(panel)
+        panel.frame = NSRect(x: 0, y: 0, width: 120, height: 80)
+        panel.viewOnly = true
+        panel.hudBodyFile = NSTemporaryDirectory() + "agterm-hud-\(UUID().uuidString)"
+        defer { panel.hudBodyFile = nil; panel.removeFromSuperview() }
+        let hud = LinkHoverModel()
+        hud.adopt(panel)
+        let hidden = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        content.addSubview(hidden)
+        defer { hidden.removeFromSuperview() }
+        let hiddenModel = LinkHoverModel()
+        hiddenModel.adopt(hidden)
+        hidden.applyLinkHover("https://example.com/hidden-deck")
+        content.hitResult = hidden
+
+        let move = try mouse(.mouseMoved, .command)
+        HudLinkClick.hover(move)
+        surface.mouseMoved(with: move)
+        XCTAssertNil(pane.label, "entering the panel within one cell brings no new report from the pane")
+        XCTAssertEqual(hiddenModel.label, "https://example.com/hidden-deck", "a deck surface the pointer never moved over")
+        surface.applyLinkHover("https://example.com/hidden")
+        panel.applyLinkHover("https://example.com/hud")
+        XCTAssertNil(pane.label, "the link under the panel is hidden")
+        XCTAssertEqual(hud.label, "https://example.com/hud")
+
+        HudLinkClick.hover(try mouse(.mouseMoved, .command, at: NSPoint(x: 200, y: 150)))
+        surface.applyLinkHover("https://example.com/pane")
+        XCTAssertEqual(pane.label, "https://example.com/pane", "beside the panel the pane's links are its own again")
+    }
+
     func testRendererVisibilityRequiresAnOnScreenHost() {
         surface.wantsLayer = true
         surface.layer?.contents = NSColor.red.cgColor

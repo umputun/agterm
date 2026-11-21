@@ -61,7 +61,7 @@ Kinds the gate does not assert, checked by hand over the same attach:
 | origin command | on the Mac |
 |---|---|
 | `overlay open --image`, `--markdown`, `--text`, `--url https://…` | a loaded replica page |
-| `overlay open --text FILE --follow-file` | refused: a log page is not shown on another Mac |
+| `overlay open --text FILE --follow-file` | refused: a log page is not shown on another Mac (2026-11-06); a Mac with `page.text` is expected to show a following replica, not rechecked by hand |
 | `overlay open --url http://127.0.0.1:…` | refused: a loopback url names agterm-server's host |
 | `pick open --no-block --session ID` | a replica picker with the origin's id |
 

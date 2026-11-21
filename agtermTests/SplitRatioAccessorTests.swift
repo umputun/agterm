@@ -116,6 +116,51 @@ final class SplitRatioAccessorTests: XCTestCase {
         XCTAssertEqual(split.arrangedSubviews[0].frame.height, 116, accuracy: 1)
     }
 
+    func testATopBottomRatioIsAFractionOfTheAreaBelowTheDeckTop() {
+        probe.removeFromSuperview()
+        split.isVertical = false
+        split.arrangedSubviews[0].addSubview(probe)
+        probe.deckTop = 32
+        session.splitRatio = 0.5
+        probe.layout()
+        split.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(split.arrangedSubviews[0].frame.height, 116, accuracy: 1)
+    }
+
+    // pins the split-switch resize: a hidden deck entry reads a different native inset than a shown one
+    func testANativeSafeAreaChangeKeepsATopBottomDividerAtTheDeckInset() {
+        probe.removeFromSuperview()
+        split.isVertical = false
+        split.arrangedSubviews[0].addSubview(probe)
+        probe.deckTop = 32
+        session.splitRatio = 0.5
+        split.additionalSafeAreaInsets.top = 32
+        probe.layout()
+        split.layoutSubtreeIfNeeded()
+
+        split.additionalSafeAreaInsets.top = 1
+        probe.layout()
+        split.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(split.arrangedSubviews[0].frame.height, 116, accuracy: 1)
+    }
+
+    func testADeckTopChangeReappliesTheStoredRatio() {
+        probe.removeFromSuperview()
+        split.isVertical = false
+        split.arrangedSubviews[0].addSubview(probe)
+        session.splitRatio = 0.5
+        probe.layout()
+        split.layoutSubtreeIfNeeded()
+        XCTAssertEqual(split.arrangedSubviews[0].frame.height, 100, accuracy: 1)
+
+        probe.deckTop = 32
+        split.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(split.arrangedSubviews[0].frame.height, 116, accuracy: 1)
+    }
+
     func testALeftRightRatioIgnoresTheTitlebarBand() {
         split.additionalSafeAreaInsets.top = 32
         session.splitRatio = 0.5

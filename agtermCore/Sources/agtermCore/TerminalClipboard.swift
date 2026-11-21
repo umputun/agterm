@@ -10,8 +10,8 @@ public enum TerminalClipboard {
     public enum Failure: Error, Equatable {
         case emptyText
         case tooLarge(encodedBytes: Int)
-        /// notLivePane means the environment names no agterm zmx daemon. A scratch, quick or overlay
-        /// terminal has none.
+        /// notLivePane means the environment names no agterm zmx daemon. A quick or overlay terminal, and a
+        /// scratch outside Live sessions, has none.
         case notLivePane
         /// zmxNotFound carries where zmx was expected, nil when the CLI's own path is unknown.
         case zmxNotFound(path: String?)

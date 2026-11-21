@@ -15,14 +15,14 @@ public struct ControlDispatcher {
     public func dispatch(_ request: ControlRequest) async -> ControlResponse? {
         // a receipt the host never keeps would read as a durable answer
         if request.args?.opID != nil, !actions.takesOperationReceipts {
-            return ControlResponse(ok: false, error: "operation receipts are served only by agterm-server")
+            return ControlResponse(ok: false, error: "operation receipts are not taken by this agterm")
         }
         switch request.cmd {
         case .tree:
             return actions.controlTree(window: request.args?.window)
         case .eventsRead, .eventsStream:
             return dispatchEventsRead(request)
-        case .sessionNew, .sessionDuplicate, .sessionSelect, .sessionGo, .sessionClose, .sessionRename,
+        case .sessionNew, .sessionDuplicate, .sessionSelect, .sessionGo, .sessionClose, .sessionTerminate, .sessionRename,
                 .sessionReveal, .sessionMove, .sessionFlag, .sessionContext, .sessionInfo, .sessionSeen, .sessionStatus,
                 .sessionRestore:
             return await dispatchSessionCommand(request)
@@ -36,13 +36,20 @@ public struct ControlDispatcher {
                 .sessionOverlayClose, .sessionOverlayResize, .sessionOverlayReload, .sessionOverlayNavigate,
                 .sessionOverlayResult, .sessionOverlaySubmit, .sessionOverlayCopy, .sessionOverlayText,
                 .sessionOverlayHide, .sessionOverlayShow, .sessionOverlayToggle, .sessionOverlayFollow,
-                .sessionOverlaySearch, .sessionOverlayChanges, .sessionOverlayWrap, .sessionBackground, .sessionText:
+                .sessionOverlaySearch, .sessionOverlayChanges, .sessionOverlayFiles, .sessionOverlayWrap, .sessionOverlayExpand,
+                .sessionBackground,
+                .sessionText:
             return await dispatchSessionSurfaceCommand(request)
         case .sessionOverlayJobRun, .sessionOverlayPageServe:
             return dispatchSessionOverlayCommand(request)
         case .sessionCompanionNew, .sessionCompanionPage, .sessionPage, .sessionCompanionDuplicate, .sessionCompanionConvert,
-                .sessionCompanionPageAttach, .sessionCollapse, .sessionExpand:
+                .sessionCompanionMove, .sessionCompanionPromote, .sessionCompanionPageAttach, .sessionCollapse, .sessionExpand:
             return await dispatchCompanionCommand(request)
+        case .sessionRemoteNew:
+            switch RemoteSessionCreate.parse(request) {
+            case .failure(let rejection): return ControlResponse(ok: false, error: rejection.message)
+            case .success(let create): return await actions.newRemoteSession(create)
+            }
         case .workspaceNew, .workspaceSelect, .workspaceGo, .workspaceRename, .workspaceDelete,
                 .workspaceMove, .workspaceFocus, .workspaceFilter, .workspaceCollapse, .workspaceExpand,
                 .workspaceFlag:
@@ -51,12 +58,12 @@ public struct ControlDispatcher {
                 .configReload, .notify, .themeSet, .themeList, .sidebar, .sidebarMode, .sidebarFlaggedLayout,
                 .sidebarDensity, .sidebarExpand, .sidebarCollapse, .sidebarWidth, .restoreClear, .restoreCapture, .version:
             return dispatchAppCommand(request)
-        case .restoreMode, .zmxList, .zmxPrune, .zmxKill, .zmxReset, .zmxTree, .zmxAttach, .zmxAttachGroup, .zmxPresent, .zmxScreen:
+        case .restoreMode, .zmxList, .zmxPrune, .zmxKill, .zmxKillPane, .zmxReset, .zmxTree, .zmxAttach, .zmxAttachGroup, .zmxPresent, .zmxScreen:
             return await dispatchZmxCommand(request)
         case .sessionDetach, .sessionReattach, .workspaceDetach, .workspaceReattach, .windowRemoteDismiss:
             return dispatchDetachCommand(request)
         case .catalogSubscribe:
-            return actions.catalogSubscribe()
+            return await actions.catalogSubscribe()
         case .catalogOp:
             guard let opID = request.target?.trimmedOrNil, CatalogReceipt.isValidOpID(opID) else {
                 return ControlResponse(ok: false, error: "catalog.op requires an operation id")
@@ -66,13 +73,16 @@ public struct ControlDispatcher {
             guard (epoch == nil) == (rev == nil) else {
                 return ControlResponse(ok: false, error: "catalog.op takes epoch and rev together")
             }
-            return actions.catalogOperation(opID, sent: epoch.flatMap { epoch in rev.map { CatalogPosition(epoch: epoch, rev: $0) } })
+            return actions.catalogOperation(opID, sent: epoch.flatMap { epoch in rev.map { CatalogPosition(epoch: epoch, rev: $0) } },
+                                            window: request.args?.window)
         case .hooksReload, .hooksList:
             return dispatchHooksCommand(request)
-        case .recentList, .recentOpen, .recentClear:
+        case .recentList, .recentOpen, .recentClear, .sessionUndo:
             return dispatchRecentCommand(request)
         case .browserClear, .browserLinks:
             return await dispatchBrowserCommand(request)
+        case .updateCheck:
+            return await dispatchUpdateCheck(request)
         case .quickType, .quickText:
             return await dispatchQuickCommand(request)
         case .windowNew, .windowList, .windowSelect, .windowGo, .windowClose, .windowRename,
@@ -166,6 +176,12 @@ public struct ControlDispatcher {
             }
             return undoable ? actions.closeSession(request.target, window: window, undoable: true)
                 : actions.closeSession(request.target, window: window)
+        case .sessionTerminate:
+            if request.args?.targets?.isEmpty == true {
+                return ControlResponse(ok: false, error: "session.terminate requires at least one --target")
+            }
+            let targets = request.args?.targets ?? [request.target ?? "active"]
+            return actions.terminateSessions(targets, window: request.args?.window, undoable: request.args?.undoable == true)
         case .sessionRename:
             guard let name = request.args?.name else {
                 return ControlResponse(ok: false, error: "session.rename requires a name")
@@ -404,7 +420,7 @@ public struct ControlDispatcher {
         case .sessionPaste:
             switch parsePane(request.args?.pane) {
             case .pane(let parsed):
-                return actions.pasteSession(request.target, window: request.args?.window, pane: parsed)
+                return await actions.pasteSession(request.target, window: request.args?.window, pane: parsed)
             case .rejected(let rejection): return rejection
             }
         case .sessionSelectAll:
@@ -416,10 +432,17 @@ public struct ControlDispatcher {
             return await dispatchSessionOverlaySearch(request)
         case .sessionOverlayChanges:
             return await dispatchSessionOverlayChanges(request)
+        case .sessionOverlayFiles:
+            return await dispatchSessionOverlayFiles(request)
+        case .sessionOverlayFollow:
+            return await dispatchSessionOverlayFollow(request)
+        case .sessionOverlayWrap:
+            return await dispatchSessionOverlayWrap(request)
+        case .sessionOverlayExpand:
+            return await dispatchSessionOverlayExpand(request)
         case .sessionOverlayOpen, .sessionOverlayClose, .sessionOverlayResize, .sessionOverlayReload,
              .sessionOverlayNavigate, .sessionOverlayResult, .sessionOverlaySubmit, .sessionOverlayCopy,
-             .sessionOverlayText, .sessionOverlayHide, .sessionOverlayShow, .sessionOverlayToggle, .sessionOverlayFollow,
-             .sessionOverlayWrap:
+             .sessionOverlayText, .sessionOverlayHide, .sessionOverlayShow, .sessionOverlayToggle:
             return dispatchSessionOverlayCommand(request)
         case .sessionBackground:
             return dispatchSessionBackground(request)
@@ -687,7 +710,7 @@ public struct ControlDispatcher {
             guard RemoteSession.isHost(host) else {
                 return ControlResponse(ok: false, error: "window.remote.open: not a host ssh can be given")
             }
-            return await actions.windowRemoteOpen(host: host)
+            return await actions.windowRemoteOpen(host: host, originWindow: request.args?.originWindow?.trimmedOrNil)
         default:
             preconditionFailure("unexpected window command: \(request.cmd.rawValue)")
         }

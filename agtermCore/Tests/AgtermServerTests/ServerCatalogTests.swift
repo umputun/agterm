@@ -43,6 +43,74 @@ struct ServerCatalogTests {
         try harness.session(await serve(.sessionNew))
     }
 
+    @MainActor
+    private final class MacEffects: RemoteCatalogEffects {
+        func attachCommand(host: String, pane: CatalogPane, claim _: Bool) -> String { "attach \(host) \(pane.daemon)" }
+        func catalogRowAdded(_: Session) {}
+        func catalogRowRemoved(_: UUID) {}
+        func catalogRowEnded(_: UUID) {}
+        func catalogPaneNeedsAttach(_: UUID, session _: UUID) {}
+        func catalogBound(_: UUID) -> Bool { true }
+        func catalogStateChanged(_: RemoteCatalogMirror.State) {}
+    }
+
+    @MainActor
+    private final class MacWindow {
+        let store: AppStore
+        let effects = MacEffects()
+        let mirror: RemoteCatalogMirror
+
+        init(directory: String) {
+            store = AppStore(persistence: PersistenceStore(directory: URL(fileURLWithPath: directory)))
+            mirror = RemoteCatalogMirror(host: "box", store: store, effects: effects, viewState: RemoteWindowViewState())
+        }
+
+        func receive(_ snapshot: CatalogSnapshot) throws {
+            _ = mirror.receive(try CatalogCodec.decode(CatalogCodec.encode(.snapshot(snapshot))))
+        }
+    }
+
+    private func macWindow() -> MacWindow { MacWindow(directory: harness.scratch.root + "/mac") }
+
+    @Test func anUnnamedSessionOnTheMacFollowsItsTerminalTitle() async throws {
+        let session = try await newSession()
+        let mac = macWindow()
+
+        try mac.receive(hub.snapshot())
+        let row = try #require(mac.store.session(withID: session.id))
+        row.oscTitle = "omp"
+
+        #expect(row.displayName == "omp")
+    }
+
+    @Test func renamingASessionToItsOwnLabelPublishesTheManualName() async throws {
+        let session = try await newSession()
+        let label = session.displayName
+        let sink = try subscribe()
+
+        _ = await serve(.sessionRename, target: session.id.uuidString, args: ControlArgs(name: label))
+
+        guard case .sessionChanged(let fields)? = sink.changes.last else { Issue.record("no session change"); return }
+        #expect(fields.name == label)
+        #expect(fields.customName == label)
+    }
+
+    @Test func clearingTheNameOnTheServerReturnsTheMacRowToItsTerminalTitle() async throws {
+        let session = try await newSession()
+        let mac = macWindow()
+        _ = await serve(.sessionRename, target: session.id.uuidString, args: ControlArgs(name: "build"))
+        try mac.receive(hub.snapshot())
+        let row = try #require(mac.store.session(withID: session.id))
+        row.oscTitle = "omp"
+        #expect(row.displayName == "build")
+
+        _ = await serve(.sessionRename, target: session.id.uuidString, args: ControlArgs(name: ""))
+        try mac.receive(hub.snapshot())
+
+        #expect(row.displayName == "omp")
+        #expect(row.oscTitle == "omp")
+    }
+
     @Test func theLiveCatalogCarriesTheScratchAndTheSavedStoreDoesNot() async throws {
         let session = try await newSession()
         _ = await serve(.sessionScratch, target: session.id.uuidString, args: ControlArgs(mode: "on"))
@@ -94,6 +162,21 @@ struct ServerCatalogTests {
         #expect(projected.fields.lifecycle == .live)
     }
 
+    @Test func aPageRowCarriesItsPageAndNoPane() async throws {
+        let anchor = try await newSession()
+        var args = ControlArgs()
+        args.url = "https://example.com/docs"
+        let row = try harness.session(await serve(.sessionPage, target: anchor.id.uuidString, args: args))
+        let pane = try #require(hub.snapshot().workspaces.flatMap(\.sessions).first { $0.id == anchor.id }?.panes.first)
+
+        let projected = try #require(hub.snapshot().workspaces.flatMap(\.sessions).first { $0.id == row.id })
+
+        #expect(projected.panes.isEmpty)
+        #expect(projected.fields.primary == row.id)
+        #expect(projected.fields.page == CatalogPage(kind: "url", identity: "https://example.com", endpoint: pane.endpoint))
+        #expect(hub.snapshot().workspaces.flatMap(\.sessions).first { $0.id == anchor.id }?.fields.page == nil)
+    }
+
     @Test func aCompanionCarriesItsParent() async throws {
         let parent = try await newSession()
         let reply = await serve(.sessionCompanionNew, target: parent.id.uuidString)
@@ -137,6 +220,30 @@ struct ServerCatalogTests {
             return rev
         }
         #expect(revisions == Array(1...revisions.count))
+    }
+
+    @Test func flagAndTintAreCatalogFieldsWithAnExplicitNone() async throws {
+        let session = try await newSession()
+        let workspace = harness.store.workspaces[0].id
+        let fields = { self.hub.snapshot().workspaces.flatMap(\.sessions).first { $0.id == session.id }?.fields }
+        let tint = { self.hub.snapshot().workspaces.first { $0.id == workspace }.map { [$0.tint, $0.tintOn?.joined(separator: ",")] } }
+        #expect(fields()?.flagged == false)
+        #expect(fields()?.tint == "")
+        #expect(tint() == ["", nil])
+        let sink = try subscribe()
+
+        _ = await serve(.sessionFlag, target: session.id.uuidString, args: ControlArgs(mode: "on"))
+        _ = await serve(.sessionTint, target: session.id.uuidString, args: ControlArgs(mode: "set", tint: "#ff8800", tintOn: ["icon", "name"]))
+        _ = await serve(.workspaceTint, target: workspace.uuidString, args: ControlArgs(mode: "set", tint: "green"))
+
+        #expect(fields()?.flagged == true)
+        #expect(fields()?.tint == "#ff8800")
+        #expect(fields()?.tintOn == ["icon", "name"])
+        #expect(tint() == ["green", "icon"])
+        #expect(sink.changes.map(\.kind) == ["session.changed", "session.changed", "workspace.changed"])
+        _ = await serve(.sessionTint, target: session.id.uuidString, args: ControlArgs(mode: "clear"))
+        #expect(fields()?.tint == "")
+        #expect(fields()?.tintOn == nil)
     }
 
     @Test func aRefusedCommandPublishesNothing() async throws {
@@ -212,6 +319,13 @@ struct ServerCatalogTests {
 
     @Test func catalogSubscribeIsServed() {
         #expect(ServerCommandPolicy.refusal(.catalogSubscribe) == nil)
+    }
+
+    @Test func aServerRefusesAnOriginWindow() async {
+        let refused = await harness.actions.windowRemoteOpen(host: "mac", originWindow: "6f1c")
+
+        #expect(refused.ok == false)
+        #expect(refused.error == ControlActionsUnsupported.message("--origin-window"))
     }
 
     @Test func aServerOpensNoRemoteWindows() async {

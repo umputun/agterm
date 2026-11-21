@@ -106,11 +106,11 @@ final class ControlServerCompanionPageTests: XCTestCase {
         XCTAssertTrue(try XCTUnwrap(reply).contains(#""ok":true"#))
         XCTAssertTrue(try XCTUnwrap(claim(first.token).1).contains("page not claimable"), "a token is claimed once")
         let (two, _) = try claim(second.token)
-        waitUntil("both channels adopted") { self.server.companionPageStreams.count == 2 }
+        waitUntil("both channels adopted") { self.server.pageAttachments.streams.count == 2 }
 
         close(one.fd)
         clients.removeAll { $0 === one }
-        waitUntil("the closed attachment is gone") { self.server.companionPageStreams.count == 1 }
+        waitUntil("the closed attachment is gone") { self.server.pageAttachments.streams.count == 1 }
 
         XCTAssertNotNil(store.session(withID: page.id), "a viewer leaving ends nothing on this Mac")
         let index = docs.appendingPathComponent("index.html").path
@@ -134,7 +134,7 @@ final class ControlServerCompanionPageTests: XCTestCase {
         server.pageClaimUnanswered(claimed, token: fresh.token)
 
         XCTAssertNotNil(store.session(withID: page.id))
-        XCTAssertTrue(server.pendingCompanionClaims.isEmpty)
+        XCTAssertTrue(server.pageAttachments.claims.isEmpty)
     }
 
     func testClosingThePageHereEndsEveryAttachmentAndEveryUnclaimedToken() throws {
@@ -142,14 +142,14 @@ final class ControlServerCompanionPageTests: XCTestCase {
         let (one, _) = try claim(try attach(page).token)
         let (two, _) = try claim(try attach(page).token)
         let unclaimed = try attach(page)
-        waitUntil("both channels adopted") { self.server.companionPageStreams.count == 2 }
+        waitUntil("both channels adopted") { self.server.pageAttachments.streams.count == 2 }
 
         store.closeSession(page.id)
 
         let ends = offMain { [one.readLine(), two.readLine()] }
         XCTAssertEqual(ends?.compactMap { $0 }, [], "both channels end")
-        waitUntil("no attachment remains") { self.server.companionPageStreams.isEmpty }
-        XCTAssertNil(server.companionPageTokens[unclaimed.token])
+        waitUntil("no attachment remains") { self.server.pageAttachments.streams.isEmpty }
+        XCTAssertNil(server.pageAttachments.offers[unclaimed.token])
     }
 
     // a soft-closed page's window came from the live rows only, so its requests reached the frontmost window
@@ -200,14 +200,14 @@ final class ControlServerCompanionPageTests: XCTestCase {
 
         XCTAssertFalse(reply.ok)
         XCTAssertEqual(reply.error, "an unreadable saved page cannot be shown on another Mac")
-        XCTAssertTrue(server.companionPageTokens.isEmpty)
+        XCTAssertTrue(server.pageAttachments.offers.isEmpty)
     }
 
     func testAUrlAttachmentHasALifetimeChannelAndNoBridge() throws {
         let page = try store.addPageCompanion(to: parent.id, overlay: HtmlOverlay(source: .url(try XCTUnwrap(URL(string: "https://example.com/"))))).get()
         let (client, reply) = try claim(try attach(page).token)
         XCTAssertTrue(try XCTUnwrap(reply).contains(#""ok":true"#))
-        waitUntil("the channel adopted") { self.server.companionPageStreams.count == 1 }
+        waitUntil("the channel adopted") { self.server.pageAttachments.streams.count == 1 }
 
         let answer = offMain { () -> PageServeFrame? in
             client.send(.bridge(id: 4, request: #"{"cmd":"tree"}"#))

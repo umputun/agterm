@@ -2,7 +2,7 @@ import AppKit
 import WebKit
 import XCTest
 @testable import agterm
-import agtermCore
+@testable import agtermCore
 
 @MainActor
 final class ControlServerRemotePresentationTests: XCTestCase {
@@ -265,15 +265,189 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         }
     }
 
-    private func connected(player: StatusSoundPlayer = .shared, headless: Bool = false) throws
+    private func connected(player: StatusSoundPlayer = .shared, headless: Bool = false, kinds: [String] = ["status"],
+                           remoteSplit: UUID? = nil) throws
         -> (fix: (server: ControlServer, store: AppStore, session: Session), transport: Transport) {
         let fix = try fixture(player: player, headless: headless)
         XCTAssertFalse(fix.store.catalogMirrored)
+        if let remoteSplit {
+            fix.store.toggleSplit(fix.session.id)
+            let split = try XCTUnwrap(fix.session.splitPaneIdentity)
+            fix.store.bindRemote(RemoteBinding(remoteSessionID: "s1", daemonsByLocalPane: [split: ZmxSupport.daemonName(for: remoteSplit)],
+                                               presentationVersion: 1), forSession: fix.session.id)
+        }
         let transport = Transport()
         fix.server.remoteTransport = transport
         fix.server.startRemotePresentation(for: fix.session)
-        try transport.feed(.hello(PresentationHello(version: 1, kinds: ["status"], mode: .mirror)), rev: 0)
+        try transport.feed(.hello(PresentationHello(version: 1, kinds: kinds, mode: .mirror)), rev: 0)
         return (fix, transport)
+    }
+
+    private static let offerKinds = ["status", PresentationHub.offerIdentityKind]
+
+    private func heldExitRow(connect: Bool, kinds: [String] = ["status", PresentationHub.endedKind], realized: Bool = false) throws
+        -> (fix: (server: ControlServer, store: AppStore, session: Session), view: GhosttySurfaceView, transport: Transport) {
+        let fix = try fixture()
+        let pane = fix.session.paneIdentity
+        fix.store.bindRemote(RemoteBinding(remoteSessionID: "s1", daemonsByLocalPane: [pane: ZmxSupport.daemonName(for: UUID())],
+                                           presentationVersion: 1), forSession: fix.session.id)
+        let services = agtermApp.SurfaceServices(library: fix.server.library, actions: AppActions(library: fix.server.library),
+                                                 zmxForegroundResolver: nil, spawnRegistry: nil,
+                                                 launchContext: agtermApp.LaunchSpawnContext())
+        let view = agtermApp.makeSurface(for: fix.session, store: fix.store, env: [:], services: services)
+        fix.session.surface = view
+        if realized {
+            let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 480, height: 320), styleMask: [],
+                                  backing: .buffered, defer: false)
+            window.isReleasedWhenClosed = false
+            window.contentView = view
+            addTeardownBlock { window.orderOut(nil) }
+            XCTAssertTrue(view.isRealized)
+        }
+        PaneLead.heldExit = { [weak server = fix.server] in server?.remotePaneHeld($0) }
+        addTeardownBlock {
+            PaneLead.heldExit = nil
+            RemoteEndBook.shared.clear(session: fix.session.id)
+        }
+        let transport = Transport()
+        fix.server.remoteTransport = transport
+        if connect {
+            fix.server.startRemotePresentation(for: fix.session)
+            try transport.feed(.hello(PresentationHello(version: 1, kinds: kinds, mode: .mirror)), rev: 0)
+            try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+        }
+        return (fix, view, transport)
+    }
+
+    private func attachEnded(_ fix: (server: ControlServer, store: AppStore, session: Session)) -> Bool? {
+        fix.store.controlTree(paneForeground: { _ in nil }).workspaces.flatMap(\.sessions)
+            .first { $0.id == fix.session.id.uuidString }?.surfaces?.first { $0.kind == "left" }?.attachEnded
+    }
+
+    func testAHeldExitWaitsForTheOriginAndAnEndedItQueuedFirstClosesTheRowUnseen() throws {
+        let (fix, view, transport) = try heldExitRow(connect: true)
+        let pane = fix.session.paneIdentity
+        XCTAssertTrue(view.consumesHeldExit)
+
+        try XCTUnwrap(view.onExitHeld)()
+
+        XCTAssertTrue(RemoteEndBook.shared.settling(session: fix.session.id))
+        XCTAssertNil(RemoteEndBook.shared.notice(pane: pane))
+        XCTAssertNil(attachEnded(fix))
+        XCTAssertEqual(transport.links.last?.sent.last, .ping)
+
+        try transport.feed(.ended, rev: 2)
+
+        XCTAssertNil(fix.store.session(withID: fix.session.id))
+        XCTAssertNil(RemoteEndBook.shared.entries[pane])
+    }
+
+    func testAnAckAfterAHeldExitShowsTheEndedNoticeAndALateEndedStillClosesTheRow() throws {
+        let (fix, view, transport) = try heldExitRow(connect: true)
+        let pane = fix.session.paneIdentity
+        try XCTUnwrap(view.onExitHeld)()
+
+        try transport.feed(.ack, rev: 2)
+
+        XCTAssertEqual(RemoteEndBook.shared.notice(pane: pane)?.host, "buildbox")
+        XCTAssertEqual(RemoteEndBook.shared.notice(pane: pane)?.name, fix.session.displayName)
+        XCTAssertEqual(attachEnded(fix), true)
+        XCTAssertNil(fix.session.hudSpec, "the session HUD slot is untouched")
+
+        try transport.feed(.ended, rev: 3)
+
+        XCTAssertNil(fix.store.session(withID: fix.session.id))
+        XCTAssertNil(RemoteEndBook.shared.entries[pane])
+    }
+
+    func testALinkThatFailsBeforeTheOriginAnswersShowsTheEndedNotice() throws {
+        let (fix, view, transport) = try heldExitRow(connect: true)
+        try XCTUnwrap(view.onExitHeld)()
+
+        transport.deliver.last?(Data("not a frame".utf8))
+
+        XCTAssertNotNil(RemoteEndBook.shared.notice(pane: fix.session.paneIdentity))
+        XCTAssertNotNil(fix.store.session(withID: fix.session.id))
+    }
+
+    func testAHeldExitShowsTheNoticeAtOnceWithTheStreamDownOrAnOriginThatNeverSendsEnded() throws {
+        for connect in [false, true] {
+            let (fix, view, transport) = try heldExitRow(connect: connect, kinds: ["status"])
+
+            try XCTUnwrap(view.onExitHeld)()
+
+            XCTAssertNotNil(RemoteEndBook.shared.notice(pane: fix.session.paneIdentity), "connected: \(connect)")
+            XCTAssertFalse(transport.links.last?.sent.contains(.ping) == true)
+        }
+    }
+
+    func testAnEndedRowsHeldExitShowsNoNotice() throws {
+        let (fix, view, transport) = try heldExitRow(connect: true, realized: true)
+        try transport.feed(.ended, rev: 2)
+        XCTAssertNotNil(fix.store.session(withID: fix.session.id), "the last replica waits for its exit")
+
+        try XCTUnwrap(view.onExitHeld)()
+
+        XCTAssertNil(fix.store.session(withID: fix.session.id))
+        XCTAssertNil(RemoteEndBook.shared.entries[fix.session.paneIdentity])
+    }
+
+    func testAFreshAttachOnTheSamePaneDropsTheEndedNotice() throws {
+        let (fix, view, _) = try heldExitRow(connect: false)
+        try XCTUnwrap(view.onExitHeld)()
+        XCTAssertEqual(attachEnded(fix), true)
+
+        let services = agtermApp.SurfaceServices(library: fix.server.library, actions: AppActions(library: fix.server.library),
+                                                 zmxForegroundResolver: nil, spawnRegistry: nil,
+                                                 launchContext: agtermApp.LaunchSpawnContext())
+        fix.session.surface = agtermApp.makeSurface(for: fix.session, store: fix.store, env: [:], services: services)
+
+        XCTAssertNil(attachEnded(fix))
+    }
+
+    func testAClearOfABridgedStatusReachesOnlyAnOriginThatTakesIt() throws {
+        for (kinds, expected) in [([PresentationHub.statusClearKind], true), (["status"], false)] {
+            let fix = try fixture()
+            let transport = Transport()
+            fix.server.remoteTransport = transport
+            fix.server.startRemotePresentation(for: fix.session)
+            try transport.feed(.hello(PresentationHello(version: 1, kinds: kinds, mode: .presenter)), rev: 0)
+            try transport.feed(.presenterGranted, rev: 1)
+            try transport.feed(.status(PresentationStatus(status: .blocked, blink: false, color: nil, shape: nil, pane: nil,
+                                                          changedAt: nil)), rev: 2)
+
+            fix.store.clearStatus(fix.session.id)
+
+            XCTAssertEqual(fix.session.agentIndicator.status, .idle)
+            let sent = transport.links.last?.sent.contains(.statusClear(PresentationStatusClear(reason: .manual))) == true
+            XCTAssertEqual(sent, expected, "origin kinds \(kinds)")
+        }
+    }
+
+    func testATerminalNotificationLetsTheNextTypingReachTheOriginsBadgeAgain() throws {
+        let fix = try fixture()
+        let transport = Transport()
+        fix.server.remoteTransport = transport
+        fix.server.startRemotePresentation(for: fix.session)
+        try transport.feed(.hello(PresentationHello(version: 1, kinds: [PresentationHub.statusClearKind], mode: .presenter)),
+                           rev: 0)
+        try transport.feed(.presenterGranted, rev: 1)
+        let manager = NotificationManager.shared
+        let (library, banners) = (manager.library, manager.bannersEnabled)
+        defer { (manager.library, manager.bannersEnabled) = (library, banners) }
+        manager.library = fix.server.library
+        manager.bannersEnabled = false
+        let view = GhosttySurfaceView(workingDirectory: fix.session.initialCwd)
+        view.session = fix.session
+        let seen = { transport.links.last?.sent.filter { $0 == .statusSeen(PresentationSeen(reason: .key)) }.count ?? 0 }
+
+        fix.store.forwardSeenKeystroke(.other, forSession: fix.session.id)
+        fix.store.forwardSeenKeystroke(.other, forSession: fix.session.id)
+        XCTAssertEqual(seen(), 1)
+        manager.notify(surface: view, title: "done", body: "build finished")
+        fix.store.forwardSeenKeystroke(.other, forSession: fix.session.id)
+
+        XCTAssertEqual(seen(), 2)
     }
 
     func testStartingOpensTheBridgeForTheOriginsSession() throws {
@@ -296,6 +470,29 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         XCTAssertEqual(fix.session.remotePresentation?.connection, .connected)
     }
 
+    func testAnOriginMessageFrameEmitsTheMessageEventOnTheRow() async throws {
+        let (fix, transport) = try connected()
+        let dispatcher = ControlDispatcher(actions: fix.server)
+        let anchor = await dispatcher.dispatch(ControlRequest(cmd: .eventsRead))
+        let bootstrap = try XCTUnwrap(anchor?.result?.events)
+        let message = PresentationMessage(pane: UUID(), from: "S:P", messageID: UUID())
+
+        try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+        try transport.feed(.message(message), rev: 2)
+
+        let read = await dispatcher.dispatch(ControlRequest(cmd: .eventsRead, args: ControlArgs(
+            after: String(bootstrap.next), run: bootstrap.run.uuidString, kinds: ["message"])))
+        let events = try XCTUnwrap(read?.result?.events?.items)
+        XCTAssertEqual(events.count, 1)
+        XCTAssertEqual(events.first?.session, fix.session.id.uuidString)
+        XCTAssertEqual(events.first?.workspace, fix.store.workspace(forSession: fix.session.id)?.id.uuidString)
+        XCTAssertNotNil(events.first?.window)
+        XCTAssertNotEqual(message.pane, fix.session.paneIdentity)
+        XCTAssertEqual(events.first?.payload.paneID, message.pane.uuidString)
+        XCTAssertEqual(events.first?.payload.from, "S:P")
+        XCTAssertEqual(events.first?.payload.messageID, message.messageID.uuidString)
+    }
+
     func testAMirroredInfoLineFollowsTheSnapshotAndItsFrames() throws {
         let (fix, transport) = try connected()
 
@@ -308,6 +505,30 @@ final class ControlServerRemotePresentationTests: XCTestCase {
 
         try transport.feed(.info(nil), rev: 3)
         XCTAssertNil(fix.session.effectiveInfo)
+    }
+
+    func testAnAttachedRowsTreeReadsTheOriginsMailCounts() throws {
+        let fix = try fixture()
+        let origin = UUID()
+        fix.store.bindRemote(RemoteBinding(remoteSessionID: "s1", daemonsByLocalPane: [
+            fix.session.paneIdentity: ZmxSupport.daemonName(for: origin),
+        ], presentationVersion: 1), forSession: fix.session.id)
+        let transport = Transport()
+        fix.server.remoteTransport = transport
+        fix.server.startRemotePresentation(for: fix.session)
+        try transport.feed(.hello(PresentationHello(version: 1, kinds: ["mail"], mode: .mirror)), rev: 0)
+        let count = { () -> Int? in
+            let tree = fix.store.controlTree(paneForeground: { _ in nil })
+            let node = tree.workspaces.flatMap(\.sessions).first { $0.id == fix.session.id.uuidString }
+            return node?.surfaces?.first { $0.kind == "left" }?.pendingMessages
+        }
+
+        try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil,
+                                                          mail: PresentationMail(panes: [origin.uuidString: 2]))), rev: 1)
+        XCTAssertEqual(count(), 2)
+
+        try transport.feed(.mail(PresentationMail(panes: [:])), rev: 2)
+        XCTAssertNil(count())
     }
 
     func testAMirroredHudFrameIsShownOnTheRow() throws {
@@ -480,8 +701,8 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         return controller
     }
 
-    private func handedPick(owner: Int = 2) -> PresentationPick {
-        PresentationPick(PendingPick(id: UUID().uuidString, items: [ControlPickItem(id: "a", label: "Alpha")]), owner: owner)
+    private func handedPick(owner: Int = 2, offer: Int? = nil) -> PresentationPick {
+        PresentationPick(PendingPick(id: UUID().uuidString, items: [ControlPickItem(id: "a", label: "Alpha")]), owner: owner, offer: offer)
     }
 
     func testAHandedOverPickIsShownInTheRowsWindowAndItsAnswerGoesBack() throws {
@@ -649,9 +870,80 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         XCTAssertFalse(fix.session.overlayActive)
     }
 
-    private func replica(_ style: ControlAskStyle) -> PresentationAsk {
+    private func replica(_ style: ControlAskStyle, pane: UUID? = nil, offer: Int? = nil) -> PresentationAsk {
         PresentationAsk(PendingAsk(id: UUID().uuidString, title: "deploy?", buttons: [ControlAskButton(id: "yes", label: "Yes")],
-                                   style: style), pane: nil, owner: 2)
+                                   style: style), pane: pane.map { .identity($0) }, owner: 2, offer: offer)
+    }
+
+    func testAnswersAndRefusalsForAnOfferIdOriginEchoTheirOffers() throws {
+        let (fix, transport) = try connected(kinds: Self.offerKinds)
+        try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+        let unplaced = handedPick(offer: 3)
+        try transport.feed(.pickRequest(unplaced), rev: 2)
+        let controller = try pickWindow(fix)
+        let ask = replica(.terminal, offer: 4), pick = handedPick(offer: 5), refusedAsk = replica(.terminal, offer: 6)
+
+        try transport.feed(.askRequest(ask), rev: 3)
+        try transport.feed(.askRequest(refusedAsk), rev: 4)
+        try transport.feed(.pickRequest(pick), rev: 5)
+        fix.session.resolveAsk(id: ask.id, ControlAskResult(result: .answered, id: "yes", label: "Yes", index: 0))
+        controller.resolve(ControlPickResult(result: .picked, id: "a", label: "Alpha", index: 0))
+
+        let sent = transport.links[0].sent
+        XCTAssertTrue(sent.contains(.pickRejected(PresentationPickRef(id: unplaced.id, owner: 2, offer: 3))))
+        XCTAssertTrue(sent.contains(.askRejected(PresentationAskRef(id: refusedAsk.id, owner: 2, offer: 6))))
+        XCTAssertTrue(sent.contains(.askResolve(PresentationAskAnswer(id: ask.id, owner: 2, button: "yes", offer: 4))))
+        XCTAssertTrue(sent.contains(.pickResolve(PresentationPickAnswer(id: pick.id, owner: 2, item: "a", offer: 5))))
+    }
+
+    func testAPickForABusyWindowWaitsForAnOfferIdOriginAndIsRefusedForAnOlderOne() throws {
+        for (kinds, held) in [(Self.offerKinds, true), (["status"], false)] {
+            let (fix, transport) = try connected(kinds: kinds)
+            try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+            let controller = try pickWindow(fix)
+            let local = PendingPick(id: "local", items: [ControlPickItem(id: "x", label: "X")])
+            controller.open(local)
+            let pick = handedPick()
+
+            try transport.feed(.pickRequest(pick), rev: 2)
+
+            XCTAssertEqual(transport.links[0].sent.contains(.pickRejected(PresentationPickRef(id: pick.id, owner: 2))), !held, "kinds \(kinds)")
+            controller.cancel()
+            XCTAssertEqual(controller.pending?.id, held ? pick.id : nil, "kinds \(kinds)")
+        }
+    }
+
+    func testAGuiAskForARowNotShownWaitsForAnOfferIdOriginAndIsAnsweredOnceTheRowIsSelected() throws {
+        let (fix, transport) = try connected(kinds: Self.offerKinds)
+        try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+        try unselect(fix)
+        let ask = replica(.gui, offer: 9)
+
+        try transport.feed(.askRequest(ask), rev: 2)
+
+        XCTAssertEqual(fix.session.askPending?.id, ask.id)
+        XCTAssertFalse(transport.links[0].sent.contains { if case .askRejected = $0 { true } else { false } })
+        fix.store.selectSession(fix.session.id)
+        fix.session.resolveAsk(id: ask.id, ControlAskResult(result: .answered, id: "yes", label: "Yes", index: 0))
+        XCTAssertEqual(transport.links[0].sent.last, .askResolve(PresentationAskAnswer(id: ask.id, owner: 2, button: "yes", offer: 9)))
+    }
+
+    func testAnAskForASplitHiddenHereWaitsForAnOfferIdOriginAndCoversThePaneOnceShown() throws {
+        for (kinds, held) in [(Self.offerKinds, true), (["status"], false)] {
+            let remoteRight = UUID()
+            let (fix, transport) = try connected(kinds: kinds, remoteSplit: remoteRight)
+            try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+            fix.store.setSplitVisibility(fix.session.id, shown: false)
+            let ask = replica(.terminal, pane: remoteRight)
+
+            try transport.feed(.askRequest(ask), rev: 2)
+
+            XCTAssertEqual(fix.session.askPending?.id, held ? ask.id : nil, "kinds \(kinds)")
+            XCTAssertEqual(transport.links[0].sent.contains(.askRejected(PresentationAskRef(id: ask.id, owner: 2))), !held, "kinds \(kinds)")
+            XCTAssertFalse(fix.session.askCovers(.right))
+            fix.store.setSplitVisibility(fix.session.id, shown: true)
+            XCTAssertEqual(fix.session.askCovers(.right), held, "kinds \(kinds)")
+        }
     }
 
     private func unselect(_ fix: (server: ControlServer, store: AppStore, session: Session)) throws {
@@ -980,7 +1272,7 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         XCTAssertFalse(OverlayPanelStyle.resolve(viewer).interactive)
         XCTAssertEqual(viewer.hudSpec?.message, "deploying")
         XCTAssertEqual(store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == origin.id.uuidString }?
-            .presenters, ControlPresentersNode(mirrors: 0, presenter: true))
+            .presenters, ControlPresentersNode(mirrors: 0, presenter: true, viewers: 1))
 
         server.shutdownPresentationStreams()
         waitUntil("the mirrored status and HUD leave with the stream") {
@@ -1128,7 +1420,7 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         XCTAssertTrue(pair.origin.remoteOverlays.slots.isEmpty)
     }
 
-    func testTheOriginReadsTheViewersPageStateAndPresenterLossDismissesIt() throws {
+    func testTheOriginReadsTheViewersPageStateAndPresenterLossBringsItHere() throws {
         let pair = try bridgedPair()
         follow(pair.origin)
         let launcher = relay(pair)
@@ -1147,7 +1439,8 @@ final class ControlServerRemotePresentationTests: XCTestCase {
 
         pair.server.shutdownPresentationStreams()
 
-        waitUntil("presenter loss ends the page") { HtmlPageOutcomes.shared.outcome(for: page)?.outcome == .dismissed }
+        waitUntil("presenter loss brings the page here") { pair.origin.htmlOverlay?.id == page }
+        XCTAssertEqual(HtmlPageOutcomes.shared.outcome(for: page)?.outcome, .pending)
         XCTAssertTrue(pair.origin.remoteOverlays.slots.isEmpty)
         waitUntil("the viewer's replica is gone") { pair.viewer.htmlOverlay == nil && pair.server.replicaPages.isEmpty }
         waitUntil("the channel's helper is gone") { launcher.toOrigin.joinsClosed == 1 }

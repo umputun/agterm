@@ -1046,6 +1046,41 @@ struct ControlDispatcherOverlayTests {
         #expect(actions.calls.isEmpty)
     }
 
+    @Test(arguments: [("on", ControlToggleMode.on), ("off", .off), ("toggle", .toggle)])
+    func overlayExpandRoutesItsModeAndPane(_ raw: String, _ mode: ControlToggleMode) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .sessionOverlayExpand, target: "session",
+                                                                args: ControlArgs(mode: raw, pane: "right")))
+
+        #expect(response?.ok == true)
+        #expect(actions.calls == [.overlayExpand(target: "session", window: nil, pane: .right, mode: mode)])
+    }
+
+    @Test func overlayExpandDefaultsToToggle() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .sessionOverlayExpand, target: "session"))
+
+        #expect(actions.calls == [.overlayExpand(target: "session", window: nil, pane: nil, mode: .toggle)])
+    }
+
+    @Test(arguments: [
+        (ControlArgs(mode: "maybe"), "invalid overlay expand mode: maybe"),
+        (ControlArgs(mode: "on", pane: "middle"), PaneOverlayError.invalidPane),
+    ])
+    func overlayExpandRejectsBadInputBeforeCallingActions(_ args: ControlArgs, _ error: String) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .sessionOverlayExpand, target: "session", args: args))
+
+        #expect(response == ControlResponse(ok: false, error: error))
+        #expect(actions.calls.isEmpty)
+    }
+
     @Test(arguments: [
         (ControlArgs(text: "main()"), TextSearchRequest.query("main()")),
         (ControlArgs(to: "next"), .next),
@@ -1103,6 +1138,32 @@ struct ControlDispatcherOverlayTests {
         let dispatcher = ControlDispatcher(actions: actions)
 
         let response = await dispatcher.dispatch(ControlRequest(cmd: .sessionOverlayChanges, target: "session", args: args))
+
+        #expect(response == ControlResponse(ok: false, error: error))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func overlayFilesRoutesItsTargetAndPane() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .sessionOverlayFiles, target: "session",
+                                                                args: ControlArgs(pane: "right", to: "src/b.go")))
+
+        #expect(response?.result?.text == "2 of 4: b.go")
+        #expect(actions.calls == [.overlayFiles(target: "session", window: nil, pane: .right, to: "src/b.go")])
+    }
+
+    @Test(arguments: [
+        (ControlArgs(), "session.overlay.files requires to, a file number or path"),
+        (ControlArgs(to: ""), "session.overlay.files requires to, a file number or path"),
+        (ControlArgs(pane: "middle", to: "2"), PaneOverlayError.invalidPane),
+    ])
+    func overlayFilesRejectsBadInputBeforeCallingActions(_ args: ControlArgs, _ error: String) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .sessionOverlayFiles, target: "session", args: args))
 
         #expect(response == ControlResponse(ok: false, error: error))
         #expect(actions.calls.isEmpty)

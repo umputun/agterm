@@ -4,12 +4,12 @@ import os
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    typealias ForegroundCommandReader = (GhosttySurfaceView, String?, ZmxForegroundResolver.Snapshot?) -> [String]?
+    typealias ForegroundCommandReader = (GhosttySurfaceView, String?, ZmxDaemonForeground?) -> [String]?
     typealias ExitCapture = @MainActor @Sendable ([Session]) -> Int
 
     private static let logger = Logger(subsystem: "com.umputun.agterm", category: "AppDelegate")
 
-    // adds a nominal 150 ms for pane reads after the listing timeout and cleanup grace
+    // checked before each pane read; a pane reached after it keeps only its unconsumed pending argv
     static let exitCaptureBudget: Duration = .milliseconds(800)
 
     /// App-global window library, set on scene appear; terminate flushes every window's state.
@@ -37,6 +37,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Holds the confirmed reset between the dialog or `zmx.reset` and the quit; set on scene appear.
     var liveReset: LiveResetCoordinator?
 
+    var updates: UpdateController?
+
     /// Strongly retains the current Dock menu's target objects so nil-sender dispatch never depends on
     /// AppKit's target lifetime; replaced whenever the Dock asks for a fresh menu.
     var dockMenuActionTargets: [DockMenuActionTarget] = []
@@ -44,6 +46,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Directories from `open -a agterm /path` not yet turned into sessions — queued until the frontmost
     /// store resolves, so the new session lands in the last-active window.
     private var pendingOpenDirectories: [String] = []
+    private var coldOpenDirectories = false
+
+    /// Set once `applicationDidFinishLaunching` runs; `NSRunningApplication.isFinishedLaunching` turns
+    /// true earlier, while SwiftUI is still settling the launch window.
+    private(set) static var launchFinished = false
+
+    private struct PendingSessionLink {
+        let id: UUID
+        let request: Int
+        let deadline: ContinuousClock.Instant
+        /// Arrived before launch finished, so the restored windows are still taking key.
+        let cold: Bool
+    }
+
+    private var pendingSessionLink: PendingSessionLink?
+    private var sessionLinkRequest = 0
 
     private var restoreObserver: NSObjectProtocol?
     private var scheduledReconciliationReasons: Set<String> = []
@@ -68,6 +86,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_: Notification) {
+        Self.launchFinished = true
         NSApp.setActivationPolicy(.regular)
         if ContentView.isUITestLaunch {
             scheduleUITestWindowActivationRetries()
@@ -241,26 +260,77 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// `open -a agterm /path` (the OS "open terminal here" integration): each URL resolves to a directory
     /// (folder → itself, file → its parent, via `OpenPathResolver`), queued and drained into a new session
-    /// in the last-active window. WARM case only — a running instance already has a window to graft into.
+    /// in the last-active window.
+    /// An `agterm://session/<id>` URL from another app selects that session; the batch's last one wins.
     func application(_: NSApplication, open urls: [URL]) {
         let directories = urls.compactMap { OpenPathResolver.directory(for: $0) }
-        guard !directories.isEmpty else { return }
+        if !directories.isEmpty { queueOpenDirectories(directories, cold: !Self.launchFinished) }
+        // after the directories: their session lands in the active window, which the link may change
+        if let id = urls.compactMap({ LinkPolicy.sessionLink($0.absoluteString) }).last {
+            queueSessionLink(id, cold: !Self.launchFinished)
+        }
+    }
+
+    /// Makes `id` the pending session link, replacing any earlier one, and drains it. A replacement keeps a
+    /// waiting cold link's wait, since the startup raises it waits for are still to come.
+    func queueSessionLink(_ id: UUID, cold: Bool) {
+        sessionLinkRequest += 1
+        let waits = cold || pendingSessionLink?.cold == true
+        pendingSessionLink = PendingSessionLink(id: id, request: sessionLinkRequest, deadline: .now + .seconds(10), cold: waits)
+        drainPendingSessionLink(request: sessionLinkRequest)
+    }
+
+    /// Selects the pending session link once its row and window have loaded, retrying every 0.1 s until 10 s
+    /// after it arrived. A newer link replaces it, ending the older link's retries. A link that launched the
+    /// app first waits for every restored window to finish its attach-time raises, each of which takes key.
+    func drainPendingSessionLink(request: Int) {
+        guard let link = pendingSessionLink, link.request == request else { return }
+        guard ContinuousClock.now < link.deadline else {
+            pendingSessionLink = nil
+            return
+        }
+        let restoring = link.cold && !(library?.openIDs().allSatisfy(WindowRegistry.shared.isPresented) ?? false)
+        if !restoring, actions?.openSessionLink(link.id) == true {
+            pendingSessionLink = nil
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            self?.drainPendingSessionLink(request: request)
+        }
+    }
+
+    /// Queues `open -a` directories and drains them. A cold launch's folders wait for every restored window's
+    /// attach-time raises, then land in the window that launch adopted as frontmost.
+    func queueOpenDirectories(_ directories: [String], cold: Bool) {
+        if cold { coldOpenDirectories = true }
         pendingOpenDirectories.append(contentsOf: directories)
         drainPendingOpenDirectories()
     }
 
     /// Turn every queued `open -a` directory into a new session in the last-active window, dropping an
-    /// entry only once its session lands (a transient failure keeps it queued). Until the frontmost store
+    /// entry once `openSession` settles it (a transient failure keeps it queued). Until the frontmost store
     /// resolves, retries every 0.1 s, bounded so a folder can't wedge a stuck timer.
     func drainPendingOpenDirectories(retry: Int = 0) {
         guard !pendingOpenDirectories.isEmpty else { return }
-        guard let actions, library?.activeStore?.currentWorkspaceID != nil else {
-            guard retry < 50 else { pendingOpenDirectories.removeAll(); return }
+        let restoring = coldOpenDirectories && !(library?.openIDs().allSatisfy(WindowRegistry.shared.isPresented) ?? false)
+        let coldTarget = coldOpenDirectories
+            ? WindowRegistry.shared.launchHandoffID.flatMap { library?.isOpen($0) == true ? $0 : nil } : nil
+        // a remote store refuses the folder in openSession, so it never waits for its catalog's workspaces
+        let ready = (coldTarget.flatMap { library?.store(for: $0) } ?? library?.activeStore)
+            .map { $0.remoteActions != nil || $0.currentWorkspaceID != nil } ?? false
+        guard let actions, !restoring, ready else {
+            guard retry < 50 else {
+                pendingOpenDirectories.removeAll()
+                coldOpenDirectories = false
+                return
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
                 self?.drainPendingOpenDirectories(retry: retry + 1)
             }
             return
         }
+        coldOpenDirectories = false
+        if let coldTarget { actions.takeFrontmost(coldTarget) }
         NSApp.activate()
         let beforeCount = pendingOpenDirectories.count
         while let directory = pendingOpenDirectories.first, actions.openSession(atDirectory: directory) {
@@ -336,7 +406,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard expected > 0, WindowRegistry.shared.registeredCount >= expected else { return }
 
         let extras = NSApp.windows.filter { window in
-            isTerminalWindowGroupWindow(window) && !WindowRegistry.shared.contains(window)
+            isTerminalWindowGroupWindow(window) && !WindowRegistry.shared.contains(window) && !WindowRegistry.shared.isRetired(window)
         }
         guard !extras.isEmpty else { return }
 
@@ -377,7 +447,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if QuitReason.isSystemQuit(NSAppleEventManager.shared().currentAppleEvent) { return .terminateNow }
         if liveReset?.armablePending != nil { return .terminateNow }
         let counts = library.openCounts()
-        guard counts.windows > 0 else { return .terminateNow }
+        let flow = updates?.flow ?? UpdateFlow()
+        switch flow.quitAlert(openWindows: counts.windows) {
+        case .none: return .terminateNow
+        case .restart: return confirmRestart(library: library)
+        case .quit: break
+        }
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = "Quit Agterm?"
@@ -385,6 +460,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                                    mode: GhosttyApp.shared.restoreLaunchDecision.active)
         alert.addButton(withTitle: "Quit")
         alert.addButton(withTitle: "Cancel")
+        return alert.runModal() == .alertFirstButtonReturn ? .terminateNow : .terminateCancel
+    }
+
+    private func confirmRestart(library: WindowLibrary) -> NSApplication.TerminateReply {
+        let counts = library.restartCounts()
+        let environment = ProcessInfo.processInfo.environment
+        let alert = NSAlert()
+        alert.messageText = "Restart to update?"
+        alert.informativeText = QuitPrompt.restartMessage(
+            localSessions: counts.localSessions, remote: counts.remote,
+            current: GhosttyApp.shared.restoreLaunchDecision.active,
+            next: settingsModel?.settings.effectiveRestoreMode ?? GhosttyApp.shared.restoreLaunchDecision.active,
+            customStateDirectory: ControlResolve.isCustomStateDirectory(environment: environment))
+        alert.addButton(withTitle: "Restart")
+        alert.addButton(withTitle: "Later")
         return alert.runModal() == .alertFirstButtonReturn ? .terminateNow : .terminateCancel
     }
 
@@ -462,13 +552,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Keep the exit policy live so a mode selected after launch governs the next launch.
     static func makeExitCapture(settingsModel: SettingsModel,
-                                zmxResolver: ZmxForegroundResolver?) -> ExitCapture {
+                                zmxForeground: ZmxDaemonForeground?) -> ExitCapture {
         return { sessions in
             guard GhosttyApp.capturesForegroundOnExit(mode: settingsModel.settings.effectiveRestoreMode) else {
                 for session in sessions { session.clearCapturedForegroundCommands() }
                 return 0
             }
-            return captureForegroundCommands(sessions: sessions, zmxResolver: zmxResolver,
+            return captureForegroundCommands(sessions: sessions, zmxForeground: zmxForeground,
                                              preserveUnconsumedPending: true)
         }
     }
@@ -490,11 +580,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// out of the persisted field: persisting it while the pending copy stays armed lets a later show consume
     /// and replay it, and a crash before the next capture then replays the persisted copy a second time.
     static func captureForegroundCommands(
-        sessions: [Session], zmxResolver: ZmxForegroundResolver? = nil,
+        sessions: [Session], zmxForeground: ZmxDaemonForeground? = nil,
         preserveUnconsumedPending: Bool = false,
         timeRemaining suppliedTimeRemaining: (() -> Bool)? = nil,
-        commandReader: ForegroundCommandReader = { view, shell, snapshot in
-            ForegroundProcess.command(for: view, shellBasename: shell, zmxSnapshot: snapshot)
+        commandReader: ForegroundCommandReader = { view, shell, zmxForeground in
+            ForegroundProcess.command(for: view, shellBasename: shell, zmxForeground: zmxForeground)
         }
     ) -> Int {
         // filtered here rather than at each caller, so quit and `restore.capture` get the same rule: a
@@ -505,12 +595,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let clock = ContinuousClock()
         let deadline = clock.now.advanced(by: exitCaptureBudget)
         let timeRemaining = suppliedTimeRemaining ?? { clock.now < deadline }
-        let hasWrappedPane = sessions.contains { session in
-            session.surface?.backedByZmx == true || session.splitSurface?.backedByZmx == true
-        }
-        let zmxSnapshot = hasWrappedPane
-            ? zmxResolver?.freshSnapshot(timeout: ZmxClient.captureInvocationTimeout)
-            : nil
         var captured = 0
         // `loadStore` moves the persisted argv into the pending slot and rewrites the file with nil, so this
         // is the only thing that refills it: at exit, writing nil over a slot NO factory consumed destroys
@@ -519,8 +603,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let pending = preserveUnconsumedPending ? session.pendingForegroundCommand : nil
             let pendingSplit = preserveUnconsumedPending ? session.pendingSplitForegroundCommand : nil
             if let view = session.surface as? GhosttySurfaceView {
-                let read = timeRemaining() && (!view.backedByZmx || zmxSnapshot != nil)
-                    ? commandReader(view, shellBasename, zmxSnapshot) : nil
+                let read = timeRemaining() && (!view.backedByZmx || zmxForeground != nil)
+                    ? commandReader(view, shellBasename, zmxForeground) : nil
                 if read != nil { captured += 1 }
                 session.foregroundCommand = read ?? pending
             } else {
@@ -528,8 +612,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             if let split = session.splitSurface as? GhosttySurfaceView,
                session.isSplit || split.backedByZmx {
-                let read = timeRemaining() && (!split.backedByZmx || zmxSnapshot != nil)
-                    ? commandReader(split, shellBasename, zmxSnapshot) : nil
+                let read = timeRemaining() && (!split.backedByZmx || zmxForeground != nil)
+                    ? commandReader(split, shellBasename, zmxForeground) : nil
                 if read != nil { captured += 1 }
                 session.splitForegroundCommand = read ?? pendingSplit
             } else {

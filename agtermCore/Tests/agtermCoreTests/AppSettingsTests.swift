@@ -987,6 +987,14 @@ struct AppSettingsTests {
         #expect(dividers.afterB == afterB)
     }
 
+    @Test func updatesIsAShownByDefaultTitleBarElement() {
+        #expect(InterfaceElement.updates.section == .titleBar)
+        #expect(!InterfaceElement.updates.hiddenByDefault)
+        #expect(InterfaceElement.updates.displayName == "Update available")
+        #expect(!AppSettings().isInterfaceElementHidden(.updates))
+        #expect(AppSettings(hiddenInterfaceElements: ["updates"]).isInterfaceElementHidden(.updates))
+    }
+
     @Test func overlayToggleIsAHiddenByDefaultTitleBarElement() {
         #expect(InterfaceElement.overlayToggle.section == .titleBar)
         #expect(InterfaceElement.overlayToggle.hiddenByDefault)

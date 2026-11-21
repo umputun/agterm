@@ -52,11 +52,20 @@ public struct CatalogRoot: Sendable, Equatable {
         RemoteWindowProjection(id: id.uuidString, name: name, tree: tree)
     }
 
-    /// seedWorkspace gives an empty store its first workspace and leaves any existing one, renamed or not, alone.
+    /// seedWorkspace gives a store with no named workspace its first one and leaves any existing one, renamed or
+    /// not, alone.
     @MainActor
     public static func seedWorkspace(in store: AppStore) {
-        guard store.workspaces.isEmpty else { return }
+        guard store.namedWorkspaces.isEmpty else { return }
         _ = store.addWorkspace(name: store.defaultWorkspaceName)
+    }
+
+    /// provision gives the server's store its root, and seeds the first workspace only for a `fresh` catalog,
+    /// one with no saved `workspaces.json`: a saved catalog whose named workspaces were all deleted stays that way.
+    @MainActor
+    public static func provision(_ store: AppStore, fresh: Bool) {
+        store.ensureRoot()
+        if fresh { seedWorkspace(in: store) }
     }
 }
 
@@ -69,7 +78,7 @@ public enum HeadlessCommandPolicy {
         .windowMove, .windowZoom, .windowFullscreen, .windowMinimize, .windowRemoteOpen,
         .sidebar, .sidebarMode, .sidebarFlaggedLayout, .sidebarDensity, .sidebarExpand, .sidebarCollapse,
         .sidebarWidth, .fontInc, .fontDec, .fontReset, .quick, .quickType, .quickText, .dashboard,
-        .surfaceZoom, .surfaceCursor, .themeSet, .themeList, .keymapReload, .keymapList, .keymapRun,
+        .surfaceZoom, .themeSet, .themeList, .keymapReload, .keymapList, .keymapRun,
         .configReload, .browserClear, .browserLinks,
     ]
 

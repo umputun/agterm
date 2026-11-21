@@ -15,72 +15,13 @@ func validatePaneArgument(_ pane: String?) throws {
 struct Session: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Session commands.",
-        subcommands: [New.self, Duplicate.self, Close.self, Detach.self, Reattach.self, Select.self, Go.self, Rename.self, Reveal.self, Move.self, TypeText.self,
+        subcommands: [New.self, Duplicate.self, Close.self, Undo.self, Detach.self, Reattach.self, Select.self, Go.self, Rename.self, Reveal.self, Move.self, TypeText.self,
                       Split.self, Swap.self, Lead.self, Scratch.self, Focus.self, Resize.self, Copy.self, Paste.self,
                       SelectAll.self,
                       Text.self, Status.self, Restore.self, Restart.self, FlagCommand.self, Context.self, Info.self, Tint.self,
                       Seen.self, Search.self, Background.self, Overlay.self, Hud.self, Wait.self,
                       Collapse.self, Expand.self, Convert.self]
     )
-
-    struct New: RequestCommand {
-        static let configuration = CommandConfiguration(abstract: "Create a session.")
-        @Option(name: .long, help: "Working directory (defaults to $HOME).") var cwd: String?
-        @Option(name: .long, help: "Target workspace by id/prefix/active (defaults to the current one). Mutually exclusive with --workspace-name.") var workspace: String?
-        @Option(name: .long, help: "Target workspace by name; errors if not found unless --create-workspace. Mutually exclusive with --workspace.") var workspaceName: String?
-        @Flag(name: .long, help: "With --workspace-name, create the workspace when it does not exist (reuse it otherwise).") var createWorkspace = false
-        @Option(name: .long, help: "Run this command as the session's process instead of the login shell (no echoed command line; the session closes when it exits).") var command: String?
-        @Flag(name: .long, help: "With --command, hold the session open after the command exits (press any key to close) instead of closing immediately.") var wait = false
-        @Option(name: .long, help: "Initial session name (defaults to the auto basename).") var name: String?
-        @Option(name: .long, help: "Place the new session right AFTER this anchor session (id/prefix/active); the anchor carries its own workspace, replacing --workspace.") var after: String?
-        @Option(name: .long, help: "Place the new session right BEFORE this anchor session (id/prefix/active); mirror of --after.") var before: String?
-        @Flag(name: .long, help: "Create the session in the background without selecting or focusing it (leaves the current selection untouched).") var noSelect = false
-        @Option(name: .long, help: "Create a companion of this session (id/prefix/active), placed under it in the sidebar; a companion target means its parent.") var parent: String?
-        @OptionGroup var tint: TintCreateOptions
-        @OptionGroup var options: ClientOptions
-        @OptionGroup var operation: OperationOptions
-        var echoesResultID: Bool { true }
-
-        func validate() throws {
-            if parent != nil, workspace != nil || workspaceName != nil || createWorkspace || after != nil || before != nil {
-                throw ValidationError("--parent takes no --workspace, --workspace-name, --create-workspace, --after or --before")
-            }
-            if after != nil, before != nil {
-                throw ValidationError("use either --after or --before, not both")
-            }
-            // the anchor sid already names the workspace, so placement can't also address one.
-            if after != nil || before != nil, workspace != nil || workspaceName != nil {
-                throw ValidationError("session.new takes --after/--before or a workspace, not both")
-            }
-            if workspace != nil, workspaceName != nil {
-                throw ValidationError("use either --workspace or --workspace-name, not both")
-            }
-            if createWorkspace, workspaceName == nil {
-                throw ValidationError("--create-workspace requires --workspace-name")
-            }
-            if wait, command == nil {
-                throw ValidationError("--wait requires --command")
-            }
-        }
-
-        func run() throws {
-            guard parent != nil else { return try defaultRun() }
-            try runCompanionRequest(makeRequest(), options: options, echoID: true)
-        }
-
-        func makeRequest() throws -> ControlRequest {
-            if let parent {
-                return operation.stamp(ControlRequest(cmd: .sessionCompanionNew, target: parent,
-                                                      args: options.withWindow(tint.apply(to:
-                    ControlArgs(name: name, cwd: cwd, noSelect: noSelect ? true : nil, command: command,
-                                wait: wait ? true : nil)))))
-            }
-            return operation.stamp(ControlRequest(cmd: .sessionNew, args: options.withWindow(tint.apply(to:
-                ControlArgs(name: name, cwd: cwd, workspace: workspace, workspaceName: workspaceName,
-                            createWorkspace: createWorkspace ? true : nil, noSelect: noSelect ? true : nil,
-                            command: command, wait: wait ? true : nil, after: after, before: before)))))
-        }
-    }
 
     /// The target session names the destination workspace and the cwd, so a plain duplicate is fully described by
     /// `--target` (the GUI half is the sidebar row's "Duplicate"); `--companion` is "Duplicate as Companion".
@@ -93,10 +34,12 @@ struct Session: ParsableCommand {
         var noSelect = false
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
+        @OptionGroup var operation: OperationOptions
         var echoesResultID: Bool { true }
 
         func validate() throws {
             if noSelect, !companion { throw ValidationError("--no-select needs --companion") }
+            if operation.opID != nil, !companion { throw ValidationError("--op-id needs --companion") }
         }
 
         func run() throws {
@@ -105,8 +48,8 @@ struct Session: ParsableCommand {
         }
 
         func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: companion ? .sessionCompanionDuplicate : .sessionDuplicate, target: target.target,
-                           args: options.withWindow(noSelect ? ControlArgs(noSelect: true) : nil))
+            operation.stamp(ControlRequest(cmd: companion ? .sessionCompanionDuplicate : .sessionDuplicate, target: target.target,
+                                           args: options.withWindow(noSelect ? ControlArgs(noSelect: true) : nil)))
         }
     }
 
@@ -115,13 +58,25 @@ struct Session: ParsableCommand {
         @OptionGroup var target: BatchTargetOptions
         @Flag(name: .long, help: "Give a single close ⌘W's undo grace, so undo inside it brings the running shell back; closes at once when Settings turns undo off.")
         var undoable = false
+        @Flag(name: .long, help: "End a session attached from another host on that host, not only here; any other session closes as without it.")
+        var terminate = false
         @OptionGroup var options: ClientOptions
         @OptionGroup var operation: OperationOptions
 
         func makeRequest() throws -> ControlRequest {
             let args = ControlArgs(targets: target.batchTargets, undoable: undoable ? true : nil)
-            return operation.stamp(ControlRequest(cmd: .sessionClose, target: target.targets.first ?? "active",
+            return operation.stamp(ControlRequest(cmd: terminate ? .sessionTerminate : .sessionClose,
+                                                  target: target.targets.first ?? "active",
                                                   args: options.withWindow(args == ControlArgs() ? nil : args)))
+        }
+
+        func run() throws {
+            guard terminate else { return try defaultRun() }
+            let send = companionSend(SocketClient(path: options.socketPath()).send, json: options.json,
+                                     tooOld: "the running app is too old for terminate")
+            let reply = try send(try makeRequest())
+            SocketClient.printResponse(reply, json: options.json)
+            if !reply.response.ok { throw ExitCode.failure }
         }
     }
 
@@ -174,11 +129,17 @@ struct Session: ParsableCommand {
 
     struct Move: RequestCommand {
         static let configuration = CommandConfiguration(
-            abstract: "Move a session: to another workspace, reorder with --to, or place relative to an anchor with --after/--before.")
-        @Argument(help: "Destination workspace id/prefix (relocate). Omit with --to or --after/--before.") var workspace: String?
+            abstract: "Move a session: to another workspace, reorder with --to, place relative to an anchor with --after/--before, "
+                + "put a companion under another session with --parent, or make one a top-level session with --top-level.")
+        @Argument(help: "Destination workspace id/prefix, or root for the top-level sessions (relocate). Omit with --to or --after/--before.") var workspace: String?
         @Option(name: .long, help: "Reorder within the workspace: up, down, top, or bottom.") var to: String?
         @Option(name: .long, help: "Place right AFTER this anchor session (id/prefix/active); the anchor carries its own workspace (relocates + positions in one shot).") var after: String?
         @Option(name: .long, help: "Place right BEFORE this anchor session (id/prefix/active); mirror of --after.") var before: String?
+        @Option(name: .long, help: "Move the target under this top-level session (id/prefix) instead; a top-level target brings its companions.") var parent: String?
+        @Option(name: .long, help: "With --parent: the slot among the new parent's companions, 0 first; omitted appends.")
+        var index: Int?
+        @Flag(name: .customLong("top-level"), help: "Make the target companion a top-level session: after its group, or in the workspace or beside the --after/--before anchor given.")
+        var topLevel = false
         @OptionGroup var target: BatchTargetOptions
         @OptionGroup var options: ClientOptions
         @OptionGroup var operation: OperationOptions
@@ -187,6 +148,8 @@ struct Session: ParsableCommand {
         // (anchor-relative)}; reject empty/conflicting cases at parse time as a clean usage error, unit-testable
         // without a socket. the anchor carries its own workspace, so placement excludes --to and a workspace.
         func validate() throws {
+            if topLevel { return try validateCompanionPromotion() }
+            if parent != nil || index != nil { return try validateCompanionMove() }
             if after != nil, before != nil {
                 throw ValidationError("use either --after or --before, not both")
             }
@@ -203,13 +166,15 @@ struct Session: ParsableCommand {
                 throw ValidationError("session.move --target can be repeated only with a workspace or --after/--before")
             }
             switch (workspace, to) {
-            case (nil, nil): throw ValidationError("provide a destination workspace, --to, or --after/--before")
+            case (nil, nil): throw ValidationError("provide a destination workspace, --to, --after/--before, or --parent")
             case (.some, .some): throw ValidationError("provide a destination workspace or --to, not both")
             default: break
             }
         }
 
         func makeRequest() throws -> ControlRequest {
+            if topLevel { return companionPromotionRequest() }
+            if parent != nil { return companionMoveRequest() }
             let args: ControlArgs
             if let after {
                 args = ControlArgs(after: after)
@@ -586,7 +551,8 @@ struct Session: ParsableCommand {
     struct Overlay: ParsableCommand {
         static let configuration = CommandConfiguration(
             abstract: "Open, read, resize, or close an ephemeral overlay terminal on a session.",
-            subcommands: [Open.self, Close.self, Hide.self, Show.self, Toggle.self, Follow.self, Search.self, Changes.self, Wrap.self, Resize.self,
+            subcommands: [Open.self, Close.self, Hide.self, Show.self, Toggle.self, Follow.self, Search.self, Changes.self, Files.self, Wrap.self, Expand.self,
+                          Resize.self,
                           Reload.self, Navigate.self,
                           Result.self, Submit.self, Copy.self, Text.self, RunJob.self, PageServe.self, PageAttach.self]
         )
@@ -693,6 +659,7 @@ struct Session: ParsableCommand {
                 cannot be combined with --size-percent.
                 """)
             var pane: String?
+            @OptionGroup var operation: OperationOptions
             @OptionGroup var target: TargetOptions
             @OptionGroup var options: ClientOptions
 
@@ -707,10 +674,22 @@ struct Session: ParsableCommand {
 
             private var rowFlag: String? { companion ? "--companion" : page ? "--page" : nil }
 
+            // the app opens a page path in its own process, where a `<(...)` path names its own descriptor;
+            // matched as typed, so parsing never touches the caller's filesystem
+            private func validateNoDescriptorPath() throws {
+                let pages = [("--html", html), ("--image", image), ("--markdown", markdown), ("--text", text)]
+                for (flag, path) in pages {
+                    guard let path, path.wholeMatch(of: /\/dev\/fd\/[0-9]+/) != nil else { continue }
+                    let hint = flag == "--html" ? ", or use zsh =(...) with --block for self-contained HTML" : ""
+                    throw ValidationError("\(flag) \(path) names a process-local file descriptor. Pass a named file\(hint).")
+                }
+            }
+
             // reject the mutually-exclusive combos + a malformed color at parse time (before any connection),
             // so it's a clean usage error and is unit-testable without a socket.
             func validate() throws {
                 if companion, page { throw ValidationError("--page cannot be combined with --companion") }
+                if operation.opID != nil, rowFlag == nil { throw ValidationError("--op-id requires --companion or --page") }
                 if let rowFlag, html == nil && url == nil { throw ValidationError("\(rowFlag) requires --html or --url") }
                 if let rowFlag, pane != nil || sizePercent != nil || width != nil || height != nil {
                     throw ValidationError("\(rowFlag) is full size: it takes no --pane, --size-percent, --width or --height")
@@ -719,6 +698,7 @@ struct Session: ParsableCommand {
                 if [command, html, url, image, markdown, text].compactMap({ $0 }).count != 1 {
                     throw ValidationError("provide exactly one of COMMAND, --html, --url, --image, --markdown or --text")
                 }
+                try validateNoDescriptorPath()
                 if line != nil, text == nil { throw ValidationError("--line requires --text") }
                 if let line, line < 1 { throw ValidationError("--line must be 1 or more") }
                 try validateLog()
@@ -759,7 +739,7 @@ struct Session: ParsableCommand {
             }
 
             func makeRequest() throws -> ControlRequest {
-                ControlRequest(cmd: companion ? .sessionCompanionPage : page ? .sessionPage : .sessionOverlayOpen, target: target.target,
+                operation.stamp(ControlRequest(cmd: companion ? .sessionCompanionPage : page ? .sessionPage : .sessionOverlayOpen, target: target.target,
                                args: options.withWindow(ControlArgs(cwd: html == nil ? cwd : cwd.map(Overlay.absolutePath),
                                                                      command: command, wait: wait ? true : nil,
                                                                      sizePercent: sizePercent, follow: follow ? true : nil,
@@ -772,7 +752,7 @@ struct Session: ParsableCommand {
                                                                      image: image.map(Overlay.absolutePath),
                                                                      markdownFile: markdown.map(Overlay.absolutePath),
                                                                      textFile: text.map(Overlay.absolutePath), line: line,
-                                                                     tail: tail, followFile: followFile ? true : nil)))
+                                                                     tail: tail, followFile: followFile ? true : nil))))
             }
 
             func run() throws {

@@ -47,6 +47,23 @@ struct CatalogRootTests {
         #expect(store.workspaces.count == 1)
     }
 
+    @Test func provisioningAFreshStoreMintsTheRootThenSeedsBeforeIt() {
+        let store = makeStore()
+
+        CatalogRoot.provision(store, fresh: true)
+
+        #expect(store.workspaces.map(\.isRoot) == [false, true])
+        #expect(store.namedWorkspaces.map(\.name) == ["workspace 1"])
+    }
+
+    @Test func provisioningASavedStoreMintsTheRootAndSeedsNothing() {
+        let store = makeStore()
+
+        CatalogRoot.provision(store, fresh: false)
+
+        #expect(store.workspaces.map(\.isRoot) == [true])
+    }
+
     @Test func seedingKeepsARenamedWorkspace() {
         let store = makeStore()
         let workspace = store.addWorkspace(name: "projects")
@@ -64,7 +81,7 @@ struct CatalogRootTests {
     }
 
     @Test(arguments: [Command.windowList, .tree, .version, .zmxTree, .zmxPresent, .pickResult, .pickCancel,
-                      .sessionNew, .zmxPrune])
+                      .sessionNew, .zmxPrune, .surfaceCursor])
     func logicalReadsAndSessionCommandsAreNotOnTheList(_ command: Command) {
         #expect(HeadlessCommandPolicy.physicalWindowRefusal(command) == nil)
     }

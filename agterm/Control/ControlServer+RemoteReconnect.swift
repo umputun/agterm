@@ -6,23 +6,28 @@ import agtermCore
 extension ControlServer {
     static let reconnectProbeDeadline: TimeInterval = 10
 
-    func waitToReconnect(_ view: GhosttySurfaceView, cover: Bool) {
+    func waitToReconnect(_ view: GhosttySurfaceView, cover: Bool, reclaim: String?) {
         guard let session = view.session, let host = session.remoteHost, heldSession(session.id) === session,
               let pane = session.surface === view ? session.paneIdentity
                   : session.splitSurface === view ? session.splitPaneIdentity : nil else { return }
-        RemoteReconnectBook.shared.wait(pane: pane, session: session.id, host: host, cover: cover, now: hudClock())
+        RemoteReconnectBook.shared.wait(pane: pane, session: session.id, host: host, cover: cover, reclaim: reclaim, now: hudClock())
         startRemoteTick()
     }
 
-    /// catalogScratchStopped parks a remote window row's scratch whose current attach ended while the catalog still
-    /// lists it: its screen and shown state stay, and the next answered probe attaches it again. False for a view that
-    /// is not such a scratch, so a local scratch keeps its own close.
+    /// remoteScratchStopped parks a remote row's scratch whose current attach ended while its server's catalog or its
+    /// origin's layout still lists it: its screen and shown state stay, and the next answered probe attaches it again.
+    /// False for a view that is not such a scratch, so a local scratch keeps its own close.
     @discardableResult
-    func catalogScratchStopped(_ view: GhosttySurfaceView) -> Bool {
-        guard let session = view.watermarkSession, session.catalogScratch != nil, session.scratchSurface === view else { return false }
-        guard let host = session.remoteHost, let mirror = library.store(forSession: session.id)?.remoteActions?.mirror,
-              let pane = mirror.scratchAttachmentStopped(of: session.id) else { return true }
-        RemoteReconnectBook.shared.wait(pane: pane, session: session.id, host: host, cover: false, now: hudClock())
+    func remoteScratchStopped(_ view: GhosttySurfaceView) -> Bool {
+        guard let session = view.watermarkSession, session.originScratch != nil, session.scratchSurface === view else { return false }
+        let store = library.store(forSession: session.id)
+        let stopped = session.catalogScratch != nil
+            ? store?.remoteActions?.mirror.scratchAttachmentStopped(of: session.id)
+            : store?.originScratchStopped(session.id)
+        guard let host = session.remoteHost, let pane = stopped else { return true }
+        // a server window's scratch attaches with no lead
+        let reclaim = session.catalogScratch == nil ? ZmxLeadBook.shared.states[pane]?.reclaimAfterDrop : nil
+        RemoteReconnectBook.shared.wait(pane: pane, session: session.id, host: host, cover: false, reclaim: reclaim, now: hudClock())
         startRemoteTick()
         return true
     }
@@ -52,16 +57,20 @@ extension ControlServer {
                 guard let entry = book.finished(pane: pane, ok: result.status == 0, stderr: result.stderr,
                                                 now: hudClock()),
                       let view = waitingSurface(pane, in: entry.session) else { return }
-                if let store = library.store(forSession: entry.session), store.session(withID: entry.session)?.catalogScratch == pane {
-                    _ = store.remoteActions?.mirror.replaceScratchAttachment(of: entry.session, identity: pane)
+                if let store = library.store(forSession: entry.session), let row = store.session(withID: entry.session),
+                   row.scratchClientIdentity == pane, let scratch = row.originScratch {
+                    _ = row.catalogScratch != nil
+                        ? store.remoteActions?.mirror.replaceScratchAttachment(of: entry.session, identity: scratch)
+                        : store.replaceOriginScratchAttachment(entry.session, identity: scratch, attach: self, reclaim: entry.reclaim)
                     return
                 }
                 // a row hidden for undo keeps waiting; finalizing its close lets the next due probe drop it. A catalog
                 // row also waits for a fresh catalog, which may have ended it while its host was away
                 guard let store = library.store(forSession: entry.session),
                       view.session?.remotePresentation?.binding.catalogOwned != true || store.catalogState == .connected,
-                      PaneLead.reconnect?(view, entry.cover) == true else {
-                    book.wait(pane: pane, session: entry.session, host: entry.host, cover: entry.cover, now: hudClock())
+                      PaneLead.reconnect?(view, entry.cover, entry.reclaim) == true else {
+                    book.wait(pane: pane, session: entry.session, host: entry.host, cover: entry.cover, reclaim: entry.reclaim,
+                              now: hudClock())
                     return
                 }
                 store.remotePaneResumed(pane, forSession: entry.session)
@@ -80,12 +89,12 @@ extension ControlServer {
     }
 
     /// The surface still holding `pane`, nil once the pane or its row is gone. A row closed within its undo
-    /// window still holds it. An ended row's panes keep their last screen and never attach again; only its
-    /// surviving scratch does.
+    /// window still holds it. An ended row's panes, and a pane its Mac origin holds stopped, keep their last screen
+    /// and never attach again; only an ended row's surviving scratch does.
     private func waitingSurface(_ pane: UUID, in sessionID: UUID) -> GhosttySurfaceView? {
         guard let session = heldSession(sessionID) else { return nil }
-        if session.catalogScratch == pane { return session.scratchSurface as? GhosttySurfaceView }
-        guard !session.ended else { return nil }
+        if session.originScratch != nil, session.scratchClientIdentity == pane { return session.scratchSurface as? GhosttySurfaceView }
+        guard !session.ended, !session.catalogPaneHeld(pane) else { return nil }
         let surface = session.paneIdentity == pane ? session.surface
             : session.splitPaneIdentity == pane ? session.splitSurface : nil
         return surface as? GhosttySurfaceView

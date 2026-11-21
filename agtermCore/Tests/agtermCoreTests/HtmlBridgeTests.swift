@@ -86,11 +86,26 @@ struct HtmlBridgeTests {
         #expect(workspace.args?.window == nil)
     }
 
-    @Test(arguments: ["hooks.reload", "hooks.list", "browser.clear", "browser.links", "recent.list", "recent.clear"])
+    @Test(arguments: ["hooks.reload", "hooks.list", "browser.clear", "browser.links", "recent.list", "recent.clear", "update.check"])
     func aCommandRefusingAnyWindowGetsNone(_ cmd: String) throws {
         let built = try request(#"{"cmd":"\#(cmd)"}"#)
         #expect(built.target == nil)
         #expect(built.args?.window == nil)
+    }
+
+    @Test func aRemoteSessionNewLandsInThePagesWindowAndNamesNoSession() throws {
+        let built = try request(#"{"cmd":"session.remote.new","args":{"host":"mac"}}"#)
+
+        #expect(built.target == nil)
+        #expect(built.args?.window == "W1")
+    }
+
+    @Test func aRemoteOpenKeepsTheOriginWindowItWasGiven() throws {
+        let named = try request(#"{"cmd":"window.remote.open","args":{"host":"mac","originWindow":"6f1c"}}"#)
+        let bare = try request(#"{"cmd":"window.remote.open","args":{"host":"mac"}}"#)
+
+        #expect(named.args?.originWindow == "6f1c")
+        #expect(bare.args?.originWindow == nil)
     }
 
     @Test func recentOpenReopensIntoThePagesWindow() throws {
@@ -154,7 +169,8 @@ struct HtmlBridgeTests {
     @Test func thePaneIsFilledOnlyForThePagesOwnOverlayCommands() throws {
         for cmd in ["session.overlay.close", "session.overlay.reload", "session.overlay.navigate", "session.overlay.submit",
                     "session.overlay.hide", "session.overlay.show", "session.overlay.toggle", "session.overlay.resize",
-                    "session.overlay.follow", "session.overlay.search", "session.overlay.changes", "session.overlay.wrap"] {
+                    "session.overlay.follow", "session.overlay.search", "session.overlay.changes", "session.overlay.wrap",
+                    "session.overlay.expand"] {
             let built = try request(#"{"cmd":"\#(cmd)"}"#)
             #expect(built.target == session.uuidString, "\(cmd)")
             #expect(built.args?.pane == "right", "\(cmd)")

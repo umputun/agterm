@@ -10,9 +10,23 @@ public enum RemoteOperationParse: Equatable, Sendable {
 extension RemoteOperation {
     /// structuralCommands are the commands a remote window sends to its server instead of running on this Mac.
     public static let structuralCommands: Set<Command> = [
-        .sessionNew, .sessionDuplicate, .sessionCompanionNew, .sessionSplit, .sessionSplitClose, .sessionSwap, .sessionRename, .sessionClose,
+        .sessionNew, .sessionDuplicate, .sessionCompanionNew, .sessionCompanionPage, .sessionPage, .sessionSplit, .sessionSplitClose, .sessionSwap, .sessionRename, .sessionClose, .sessionTerminate,
         .sessionMove, .sessionScratch, .workspaceNew, .workspaceRename, .workspaceDelete, .workspaceMove,
+        .sessionFlag, .sessionTint, .workspaceFlag, .workspaceTint,
+        .sessionRestart, .sessionCompanionDuplicate, .sessionCompanionConvert, .sessionCompanionMove, .sessionCompanionPromote, .zmxKill, .zmxKillPane,
     ]
+
+    /// markCommands set flag and tint, which only a server carrying them in its catalog keeps.
+    static let markCommands: Set<Command> = [.sessionFlag, .sessionTint, .workspaceFlag, .workspaceTint]
+
+    /// runsLocally is whether a structural command still runs on this Mac in the remote window `store`: a flagged
+    /// order, which is each Mac's own, and flag or tint against a server that does not keep them.
+    @MainActor
+    public static func runsLocally(_ request: ControlRequest, in store: AppStore) -> Bool {
+        guard markCommands.contains(request.cmd) else { return false }
+        if request.cmd == .sessionFlag, request.args?.mode == "move" { return true }
+        return store.remoteActions?.mirror.ownsFlags != true
+    }
 
     /// parse reads `request` against the remote window `store`, resolving its targets there. A field the server
     /// cannot be asked for from here is refused by name rather than dropped.
@@ -20,17 +34,31 @@ extension RemoteOperation {
     public static func parse(_ request: ControlRequest, in store: AppStore) -> RemoteOperationParse {
         let args = request.args ?? ControlArgs()
         // the caller's own id and epoch would be replaced by this window's, running what its epoch might refuse
-        if args.opID != nil || args.epoch != nil || args.panes != nil || args.scratch != nil { return refuse("operation receipts are served only by agterm-server") }
-        if let field = unsupportedField(request.cmd, args) { return refuse("\(field) is not available in a remote window") }
+        if args.opID != nil || args.epoch != nil || args.panes != nil || args.scratch != nil { return refuse("a remote window adds operation ids itself; send the command without them") }
         let select = args.noSelect != true
-        let shell = RemoteShellOptions(name: args.name, cwd: args.cwd, command: args.command)
+        var shell = RemoteShellOptions(name: args.name, cwd: args.cwd, command: args.command, wait: args.wait == true)
+        switch request.cmd {
+        case .sessionNew, .sessionCompanionNew, .workspaceNew:
+            switch ControlDispatcher.creationTint(args) {
+            case .success(let tint): shell.tint = tint
+            case .failure(let rejection): return refuse(rejection.message)
+            }
+        default: break
+        }
         switch request.cmd {
         case .sessionNew:
             if args.after != nil, args.before != nil { return refuse("use either --after or --before, not both") }
+            if args.after != nil || args.before != nil, args.workspace != nil || args.workspaceName != nil {
+                return refuse("session.new takes --after/--before or a workspace, not both")
+            }
+            if args.workspace != nil, args.workspaceName != nil { return refuse("use either --workspace or --workspace-name, not both") }
+            if args.createWorkspace == true, args.workspaceName == nil { return refuse("--create-workspace requires --workspace-name") }
+            if let name = args.workspaceName {
+                return .operation(.newSessionInNamedWorkspace(name: name, create: args.createWorkspace == true, shell: shell), select: select)
+            }
             guard let anchor = args.after ?? args.before else {
                 return workspace(args.workspace, in: store) { .operation(.newSession(workspace: $0, shell: shell), select: select) }
             }
-            if args.workspace != nil { return refuse("session.new takes --after/--before or a workspace, not both") }
             return session(anchor, in: store) { id in
                 guard let workspace = store.sessionLocation(ofSession: id)?.workspace else { return refuse("no such session") }
                 let placement: RemoteSessionPlacement = args.after != nil ? .after(id) : .before(id)
@@ -48,6 +76,18 @@ extension RemoteOperation {
                 return refuse("a companion takes no workspace or placement: it lands under its parent")
             }
             return session(request.target, in: store) { .operation(.newCompanion(parent: $0, shell: shell), select: select) }
+        case .sessionCompanionPage, .sessionPage:
+            let companion = request.cmd == .sessionCompanionPage
+            let row = companion ? "page companion" : "page session"
+            let needsPage = companion ? OverlayHtmlError.companionNeedsPage : OverlayHtmlError.pageSessionNeedsPage
+            switch ControlDispatcher.pageRowOptions(args, row: row, needsPage: needsPage) {
+            case .rejected(let response): return .refused(response)
+            case .options(let options):
+                guard let page = RemotePageOptions(options) else { return refuse(needsPage) }
+                return session(request.target, in: store) {
+                    .operation(.newPage(anchor: $0, companion: companion, page: page), select: options.follow)
+                }
+            }
         case .sessionSplit:
             if let axis = args.axis, SplitAxis(rawValue: axis) == nil { return refuse("invalid split axis: \(axis) (vertical|horizontal)") }
             guard let mode = ControlToggleMode.parse(args.mode) else { return refuse("session.split mode must be on, off or toggle") }
@@ -69,29 +109,122 @@ extension RemoteOperation {
         case .sessionRename:
             guard let name = args.name else { return refuse("session.rename requires a name") }
             return session(request.target, in: store) { .operation(.renameSession($0, name: name), select: false) }
-        case .sessionClose:
-            guard let target = singleTarget(request) else { return refuse("a remote window closes one session at a time") }
+        case .sessionClose, .sessionTerminate:
             // a close terminates on the server, so it reaches a row this window detached as well as a shown one
             let catalog = store.remoteActions?.mirror.catalog?.workspaces.flatMap(\.sessions).map(\.id)
-            return session(target, in: store, candidates: catalog) { .operation(.closeSession($0), select: false) }
+            if request.args?.targets?.isEmpty == true { return refuse("\(request.cmd.rawValue) requires at least one --target") }
+            guard let targets = request.args?.targets, targets.count > 1 else {
+                return session(singleTarget(request), in: store, candidates: catalog) {
+                    .operation(.closeSession($0, undoable: args.undoable == true), select: false)
+                }
+            }
+            return sessions(targets, in: store, candidates: catalog) { .operation(.closeSessions($0, undoable: args.undoable == true), select: false) }
         case .sessionMove:
-            guard let target = singleTarget(request) else { return refuse("a remote window moves one session at a time") }
-            return session(target, in: store) { id in move(id, args, in: store) }
+            if request.args?.targets?.isEmpty == true { return refuse("session.move requires at least one --target") }
+            guard let targets = request.args?.targets, targets.count > 1 else {
+                return session(singleTarget(request), in: store) { id in move([id], args, in: store) }
+            }
+            return sessions(targets, in: store) { ids in move(ids, args, in: store) }
+        case .sessionFlag:
+            return flag(request, in: store)
+        case .sessionRestart:
+            return restart(request, in: store)
+        case .sessionCompanionDuplicate:
+            return session(request.target, in: store) { .operation(.duplicateCompanion($0), select: select) }
+        case .sessionCompanionConvert:
+            // the converted row keeps its id and the selection, as a local convert leaves them
+            return session(request.target, in: store) { .operation(.convertCompanion($0), select: false) }
+        case .sessionCompanionMove:
+            return moveCompanion(request, in: store)
+        case .sessionCompanionPromote:
+            return promoteCompanion(request, in: store)
+        case .zmxKill, .zmxKillPane:
+            return kill(request, in: store)
+        case .sessionTint, .workspaceTint:
+            switch ControlDispatcher.tintUpdate(args, command: request.cmd.rawValue) {
+            case .failure(let rejection): return refuse(rejection.message)
+            case .success(let update) where request.cmd == .workspaceTint:
+                return namedWorkspace(request.target, in: store) { .operation(.setWorkspaceTint($0, update), select: false) }
+            case .success(let update):
+                return session(request.target, in: store) { .operation(.setTint($0, update), select: false) }
+            }
+        case .workspaceFlag:
+            guard let mode = ControlToggleMode.parse(args.mode) else { return refuse("invalid workspace flag mode: \(args.mode ?? "toggle")") }
+            return workspace(request.target, in: store) { id in
+                .operation(.setWorkspaceFlag(id, on: mode.desiredValue(current: store.workspaceAllFlagged(id))), select: false)
+            }
         case .workspaceNew:
-            return .operation(.newWorkspace(name: args.name), select: false)
+            return .operation(.newWorkspace(name: args.name, collapsed: args.collapsed == true, tint: shell.tint), select: false)
         case .workspaceRename:
             guard let name = args.name?.trimmedOrNil else { return refuse("workspace.rename requires a name") }
-            return workspace(request.target, in: store) { .operation(.renameWorkspace($0, name: name), select: false) }
+            return namedWorkspace(request.target, in: store) { .operation(.renameWorkspace($0, name: name), select: false) }
         case .workspaceDelete:
-            return workspace(request.target, in: store) { .operation(.deleteWorkspace($0), select: false) }
+            return namedWorkspace(request.target, in: store) { .operation(.deleteWorkspace($0), select: false) }
         case .workspaceMove:
             guard let to = args.to, ReorderDirection(rawValue: to) != nil else {
                 return refuse("workspace.move --to must be up|down|top|bottom")
             }
-            return workspace(request.target, in: store) { .operation(.moveWorkspace($0, to: to), select: false) }
+            return namedWorkspace(request.target, in: store) { .operation(.moveWorkspace($0, to: to), select: false) }
         default:
             return refuse("\(request.cmd.rawValue) is not sent to a remote window's server")
         }
+    }
+
+    /// companionIndex maps `slot`, a place among `visible` (the destination's companions this window shows), to the
+    /// server's index among `group` (all of them there, detached rows included); both leave out the moving companion.
+    public static func companionIndex(slot: Int?, visible: [UUID], group: [UUID]) -> Int? {
+        guard let slot else { return nil }
+        if slot < visible.count, let index = group.firstIndex(of: visible[max(slot, 0)]) { return index }
+        if let last = visible.last, let index = group.firstIndex(of: last) { return index + 1 }
+        return 0
+    }
+
+    // the index is already in the server's terms here: a control caller addresses the server's group
+    @MainActor
+    private static func moveCompanion(_ request: ControlRequest, in store: AppStore) -> RemoteOperationParse {
+        let move: ControlDispatcher.CompanionMove
+        switch ControlDispatcher.companionMoveArguments(request.args) {
+        case .failure(let rejection): return refuse(rejection.message)
+        case .success(let parsed): move = parsed
+        }
+        return session(request.target, in: store) { id in
+            session(move.parent, in: store) { parent in
+                if case .failure(let refusal) = store.canMoveCompanion(id, under: parent) { return refuse(refusal.message) }
+                return .operation(.moveCompanion(id, parent: parent, index: move.index), select: false)
+            }
+        }
+    }
+
+    @MainActor
+    private static func promoteCompanion(_ request: ControlRequest, in store: AppStore) -> RemoteOperationParse {
+        let placement: ControlCompanionPromotion
+        switch ControlDispatcher.companionPromoteArguments(request.args) {
+        case .failure(let rejection): return refuse(rejection.message)
+        case .success(let parsed): placement = parsed
+        }
+        return session(request.target, in: store) { id in
+            let operation = { (local: CompanionPromotion, remote: RemoteSessionPlacement?) -> RemoteOperationParse in
+                if case .failure(let refusal) = store.canPromoteCompanion(id, to: local) { return refuse(refusal.message) }
+                return .operation(.promoteCompanion(id, to: remote), select: false)
+            }
+            switch placement {
+            case .afterOwnGroup:
+                return operation(.afterOwnGroup, nil)
+            case .workspace(let workspace):
+                return self.workspace(workspace, in: store) { operation(.workspace($0, slot: nil), .workspace($0)) }
+            case .beside(let anchor, let after):
+                return session(anchor, in: store) { operation(.beside($0, after: after), after ? .after($0) : .before($0)) }
+            }
+        }
+    }
+
+    /// promotionPlacement is a sidebar drop of a companion into `workspace` before its `slot`th shown top-level session,
+    /// as the anchor the server places it by: the server's workspace can also hold rows this window detached.
+    static func promotionPlacement(workspace: UUID, slot: Int?, roots: [UUID]) -> RemoteSessionPlacement {
+        // an append is the server's own, past the rows this window detached; only a gap is pinned to a shown row
+        guard let slot else { return .workspace(workspace) }
+        if slot < roots.count { return .before(roots[max(slot, 0)]) }
+        return roots.last.map { .after($0) } ?? .workspace(workspace)
     }
 
     /// dropPlacement is a sidebar drop of `id` at `destination`, an index among `workspace`'s other sessions, as the
@@ -115,41 +248,83 @@ extension RemoteOperation {
         }
     }
 
+    /// move places `ids` as one server command, or as the single-row move a lone target always was.
     @MainActor
-    private static func move(_ id: UUID, _ args: ControlArgs, in store: AppStore) -> RemoteOperationParse {
+    private static func move(_ ids: [UUID], _ args: ControlArgs, in store: AppStore) -> RemoteOperationParse {
         if args.after != nil, args.before != nil { return refuse("use either --after or --before, not both") }
         let placements = [args.after != nil || args.before != nil, args.to != nil, args.workspace != nil].filter { $0 }.count
         guard placements == 1 else { return refuse("session.move takes exactly one of --to, a workspace, or --after/--before") }
+        let operation = { (placement: RemoteSessionPlacement) -> RemoteOperationParse in
+            .operation(ids.count == 1 ? .moveSession(ids[0], to: placement) : .moveSessions(ids, to: placement), select: false)
+        }
         if let anchor = args.after ?? args.before {
-            return session(anchor, in: store) { anchorID in
-                .operation(.moveSession(id, to: args.after != nil ? .after(anchorID) : .before(anchorID)), select: false)
-            }
+            return session(anchor, in: store) { operation(args.after != nil ? .after($0) : .before($0)) }
         }
         if let to = args.to {
             guard ReorderDirection(rawValue: to) != nil else { return refuse("session.move --to must be up|down|top|bottom") }
-            return .operation(.moveSession(id, to: .step(to)), select: false)
+            guard ids.count == 1 else { return refuse("session.move --to takes one session") }
+            return operation(.step(to))
         }
-        return workspace(args.workspace, in: store) { .operation(.moveSession(id, to: .workspace($0)), select: false) }
+        return workspace(args.workspace, in: store) { operation(.workspace($0)) }
     }
 
-    private static func unsupportedField(_ cmd: Command, _ args: ControlArgs) -> String? {
-        let tinted = args.tint != nil || args.tintOn != nil
-        let fields: [(Bool, String)] = switch cmd {
-        case .sessionNew:
-            [(args.workspaceName != nil, "--workspace-name"), (args.createWorkspace == true, "--create-workspace"),
-             (args.wait == true, "--wait"), (tinted, "--tint")]
-        case .sessionCompanionNew: [(args.wait == true, "--wait"), (tinted, "--tint")]
-        case .sessionClose: [(args.undoable == true, "--undoable")]
-        case .workspaceNew: [(args.collapsed == true, "--collapsed"), (tinted, "--tint")]
-        default: []
+    /// flag sends `on` or `off` decided against the server's own flag, never `toggle`, so a second writer racing
+    /// this one cannot invert it twice.
+    @MainActor
+    private static func flag(_ request: ControlRequest, in store: AppStore) -> RemoteOperationParse {
+        let mode = request.args?.mode ?? "toggle"
+        if request.args?.before != nil || request.args?.after != nil { return refuse("--before and --after apply only to session.flag move") }
+        if mode == "clear" { return .operation(.clearFlags, select: false) }
+        return session(request.target, in: store) { id in
+            let flagged = store.remoteActions?.mirror.catalog?.session(id)?.fields.flagged ?? store.session(withID: id)?.flagged == true
+            switch mode {
+            case "on": return .operation(.setFlag(id, on: true), select: false)
+            case "off": return .operation(.setFlag(id, on: false), select: false)
+            case "toggle": return .operation(.setFlag(id, on: !flagged), select: false)
+            default: return refuse("invalid flag mode: \(mode)")
+            }
         }
-        return fields.first { $0.0 }?.1
     }
 
-    /// singleTarget is the request's one target, from `target` or a one-element `targets`; nil for a batch.
-    private static func singleTarget(_ request: ControlRequest) -> String? {
-        guard let targets = request.args?.targets else { return request.target ?? "active" }
-        return targets.count == 1 ? targets[0] : nil
+    /// restart names the pane by role, resolving a token against the row this window shows, since the server
+    /// knows only its own panes' tokens.
+    @MainActor
+    private static func restart(_ request: ControlRequest, in store: AppStore) -> RemoteOperationParse {
+        switch ControlDispatcher.restartOptions(request.args) {
+        case .failure(let rejection):
+            return refuse(rejection.message)
+        case .success(let options):
+            return session(request.target, in: store) { id in
+                guard let row = store.session(withID: id) else { return refuse("no such session") }
+                if let token = options.paneID, row.paneRole(forToken: token) == nil { return refuse("unknown pane id: \(token)") }
+                let role = options.paneID.flatMap(row.paneRole(forToken:)) ?? options.pane
+                guard let pane = role.flatMap({ ZmxPaneRole(controlName: $0.rawValue) }) else {
+                    return refuse("session.restart does not address the scratch pane")
+                }
+                return .operation(.restart(id, pane: pane, command: options.command), select: false)
+            }
+        }
+    }
+
+    /// kill keeps the local refusals: nothing about destroying a daemon falls back to what is in front of the user.
+    @MainActor
+    private static func kill(_ request: ControlRequest, in store: AppStore) -> RemoteOperationParse {
+        let cmd = request.cmd.rawValue
+        guard let target = request.target, !target.isEmpty else { return refuse("\(cmd) requires an explicit --target") }
+        guard target != "active" else { return refuse("\(cmd) needs a session id; 'active' is not accepted") }
+        guard request.args?.window != "active" else { return refuse("\(cmd) needs a window id; 'active' is not accepted") }
+        guard let raw = request.args?.pane, let pane = ZmxPaneRole(controlName: raw) else { return refuse("\(cmd) requires --pane left|right") }
+        guard request.args?.force == true else { return refuse("\(cmd) requires --force") }
+        let paneID = request.args?.paneID
+        if request.cmd == .zmxKillPane, paneID?.isEmpty != false { return refuse("zmx.kill.pane requires --pane-id") }
+        return session(target, in: store) {
+            .operation(.killDaemon($0, pane: pane, paneID: request.cmd == .zmxKillPane ? paneID : nil), select: false)
+        }
+    }
+
+    /// singleTarget is the request's one target, from `target` or a one-element `targets`.
+    private static func singleTarget(_ request: ControlRequest) -> String {
+        request.args?.targets?.first ?? request.target ?? "active"
     }
 
     @MainActor
@@ -164,14 +339,36 @@ extension RemoteOperation {
         return body(id)
     }
 
+    /// sessions resolves batch targets in order, deduplicated; one unresolved target refuses the batch.
+    @MainActor
+    private static func sessions(_ targets: [String], in store: AppStore, candidates: [UUID]? = nil,
+                                 _ body: ([UUID]) -> RemoteOperationParse) -> RemoteOperationParse {
+        var ids: [UUID] = []
+        for target in targets {
+            let resolution = ControlResolve.resolve(target, candidates: candidates ?? store.workspaces.flatMap { $0.sessions.map(\.id) },
+                                                    active: store.selectedSessionID)
+            guard case .resolved(let id) = resolution else {
+                return refuse(ControlResolve.errorMessage(noun: "session", target: target, resolution: resolution))
+            }
+            if !ids.contains(id) { ids.append(id) }
+        }
+        return body(ids)
+    }
+
     @MainActor
     private static func workspace(_ target: String?, in store: AppStore, _ body: (UUID) -> RemoteOperationParse) -> RemoteOperationParse {
         let target = target ?? "active"
-        let resolution = ControlResolve.resolve(target, candidates: store.workspaces.map(\.id), active: store.currentWorkspaceID)
+        let resolution = store.resolveWorkspaceTarget(target)
         guard case .resolved(let id) = resolution else {
             return refuse(ControlResolve.errorMessage(noun: "workspace", target: target, resolution: resolution))
         }
         return body(id)
+    }
+
+    /// namedWorkspace is `workspace` for a workspace-only command, refusing a root the catalog marks before forwarding.
+    @MainActor
+    private static func namedWorkspace(_ target: String?, in store: AppStore, _ body: (UUID) -> RemoteOperationParse) -> RemoteOperationParse {
+        workspace(target, in: store) { id in store.rootRefusal(id).map { .refused($0) } ?? body(id) }
     }
 
     private static func refuse(_ error: String) -> RemoteOperationParse {

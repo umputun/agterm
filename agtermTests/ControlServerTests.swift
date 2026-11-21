@@ -694,6 +694,26 @@ final class ControlServerTests: XCTestCase {
         XCTAssertTrue(reply.error?.contains("too many concurrent event streams") == true, reply.error ?? "")
     }
 
+    func testRunBlockingAnswersWhileSamePriorityWorkIsStillQueued() async {
+        let done = OSAllocatedUnfairLock(initialState: 0)
+        let jobs = 600
+        var flood: [Task<Void, Never>] = []
+        for _ in 0..<jobs {
+            flood.append(Task.detached(priority: .medium) {
+                let end = Date().addingTimeInterval(0.002)
+                while Date() < end {}
+                done.withLock { $0 += 1 }
+            })
+        }
+
+        let finishedAtRun = await withCheckedContinuation { continuation in
+            Thread { continuation.resume(returning: ControlServer.runBlocking { done.withLock { $0 } }) }.start()
+        }
+        for task in flood { await task.value }
+
+        XCTAssertLessThan(finishedAtRun, jobs / 2)
+    }
+
     nonisolated private static func address(for path: String) -> sockaddr_un {
         var addr = sockaddr_un()
         addr.sun_family = sa_family_t(AF_UNIX)

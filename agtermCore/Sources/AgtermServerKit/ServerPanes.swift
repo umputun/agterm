@@ -15,6 +15,13 @@ final class ServerPanes {
     let programVersion: String
     /// The server's own environment, without the variables a pane gets from the server itself.
     let baseEnvironment: [String: String]
+    /// leaders is each listed pane's shell pid from the last applied listing, which the tree's foreground reads start at.
+    var leaders: [UUID: Int32] = [:]
+    /// restartHolds counts, per pane, the restarts replacing its shell that have not yet confirmed or given up on the new
+    /// one, which no listing may settle meanwhile; each restart releases only its own hold.
+    private var restartHolds: [UUID: Int] = [:]
+    /// processes is the host's process table, through which a kill hangs up the pane's foreground job.
+    var processes: any ProcessTable = ProcProcessTable()
     private var startedAt: [UUID: Date] = [:]
     /// scratches are the identities this run started under a scratch daemon name, which `end` kills by that name.
     private var scratches: Set<UUID> = []
@@ -38,13 +45,13 @@ final class ServerPanes {
             .appendingPathComponent(identity.uuidString)
     }
 
-    /// Start is one pane for `start` to create; a `command` runs once in place of the login shell.
+    /// Start is one pane for `start` to create, running `program`.
     struct Start {
         let identity: UUID
         let session: Session
         let workspace: UUID?
         let pane: StatusPane
-        var command: String?
+        var program: ServerShell.Program = .loginShell
         let directory: String
         /// scratch starts the pane under `scratchDaemonName` and leaves `daemonBackedPanes` to the session's panes.
         var scratch = false
@@ -74,7 +81,7 @@ final class ServerPanes {
         environment["ZMX_NO_DETACH_KEY"] = "1"
         environment["ZMX_EXIT_FILE"] = record
         let integration = (configuration.resourcesDirectory as NSString).appendingPathComponent("shell-integration")
-        let launch = shell.launch(integration: integration, environment: environment, command: start.command)
+        let launch = shell.launch(integration: integration, environment: environment, program: start.program)
         let home = baseEnvironment["HOME"] ?? "/"
         let directory = FileManager.default.fileExists(atPath: start.directory) ? start.directory : home
         startedAt[identity] = Date()
@@ -94,15 +101,51 @@ final class ServerPanes {
         startedAt[identity].map { $0 >= date } ?? false
     }
 
+    /// confirmed records that a restart saw `identity`'s new shell run: a listing begun before then may predate the
+    /// daemon, so it counts as a start.
+    func confirmed(_ identity: UUID) {
+        startedAt[identity] = Date()
+    }
+
+    func holdRestart(_ identity: UUID) {
+        restartHolds[identity, default: 0] += 1
+    }
+
+    func releaseRestart(_ identity: UUID) {
+        guard let count = restartHolds[identity] else { return }
+        restartHolds[identity] = count > 1 ? count - 1 : nil
+    }
+
+    func isRestarting(_ identity: UUID) -> Bool {
+        restartHolds[identity] != nil
+    }
+
     /// end kills the daemons of panes the store finalized before the command that closed them replies, so a
     /// restart right after the reply cannot leave one running unbooked. A failed kill is logged; the pane stays
-    /// closed, as on the Mac.
+    /// closed, as on the Mac. A killed pane's foreground job gets the SIGHUP a closed terminal sends: `zmx kill`
+    /// signals only the shell's own process group, and a creation command runs in another.
     func end(_ identities: [UUID]) {
-        for identity in identities {
-            let name = daemonName(for: identity)
+        let names = identities.map(daemonName(for:))
+        let jobs = foregroundJobs(of: names)
+        for (identity, name) in zip(identities, names) {
             scratches.remove(identity)
-            if !runner.kill(name) { FileHandle.standardError.write(Data("agterm-server: could not end daemon \(name)\n".utf8)) }
+            guard runner.kill(name) else {
+                FileHandle.standardError.write(Data("agterm-server: could not end daemon \(name)\n".utf8))
+                continue
+            }
+            if let job = jobs[name] { processes.send(SIGHUP, to: job) }
         }
+    }
+
+    /// foregroundJobs reads each named daemon's foreground job before a kill ends its shell; empty when the listing
+    /// cannot be read.
+    private func foregroundJobs(of names: [String]) -> [String: [ProcessRecord]] {
+        guard !names.isEmpty, let listed = try? runner.list() else { return [:] }
+        var jobs: [String: [ProcessRecord]] = [:]
+        for record in listed where names.contains(record.name) {
+            if let leader = record.leaderPID, let job = processes.foregroundJob(of: leader) { jobs[record.name] = job }
+        }
+        return jobs
     }
 
     /// endUnownedScratches kills every listed scratch daemon this run does not own: one a previous run left, since a

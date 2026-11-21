@@ -17,14 +17,19 @@ public enum ZmxOwnerWindowState: String, Codable, Sendable {
     case open, closed, unindexed
 }
 
-/// Which pane of a session a claim belongs to. Deliberately two cases rather than `StatusPane`, whose
-/// `scratch` can never be zmx-backed: an impossible state in a public model is one every reader has to
-/// handle and no producer can create.
+/// ZmxPaneRole is the pane a claim belongs to; `scratch` is a Live scratch's daemon, claimed and read back but never
+/// addressed.
 public enum ZmxPaneRole: String, Codable, Sendable {
-    case left, right
+    case left, right, scratch
+
+    /// pinRefusal is why a kill pinned to `paneID` must not touch the `pane` claim holding `identity`, nil when it may.
+    public static func pinRefusal(_ paneID: String, identity: UUID, pane: ZmxPaneRole) -> String? {
+        UUID(uuidString: paneID) == identity ? nil
+            : "pane \(paneID) is no longer the \(pane.rawValue) pane; nothing was killed"
+    }
 
     /// Accepts the same spellings the rest of the API takes for a pane, so `--pane primary` means here what
-    /// it means everywhere else. Read-back stays `left`/`right`.
+    /// it means everywhere else. Read-back stays `left`/`right`; `scratch` is never accepted.
     public init?(controlName: String) {
         switch controlName.lowercased() {
         case "left", "top", "primary": self = .left

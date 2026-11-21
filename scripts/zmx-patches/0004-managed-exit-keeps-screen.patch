@@ -1,17 +1,18 @@
-diff -ruN zmx-orig/src/main.zig zmx/src/main.zig
---- zmx-orig/src/main.zig
-+++ zmx/src/main.zig
-@@ -13,6 +13,7 @@
+diff --git a/src/client.zig b/src/client.zig
+index 7248aff..4fd818f 100644
+--- a/src/client.zig
++++ b/src/client.zig
+@@ -14,6 +14,7 @@ const label = @import("label.zig");
+ const lib_posix = @import("posix.zig");
+ const cross = @import("cross");
  const signal = @import("signal.zig");
- const Cfg = @import("cfg.zig");
- const loop = @import("loop.zig");
 +const role = @import("role.zig");
- const Client = loop.Client;
- const Daemon = loop.Daemon;
- const version = build_options.version;
-@@ -1636,13 +1637,19 @@
+ const loop = @import("loop.zig");
+ const Daemon = if (has_daemon) loop.Daemon else struct {};
  
-     // RIS, OSC 10/11/12
+@@ -166,12 +167,18 @@ pub fn attach(alloc: Allocator, io: Io, name: []const u8, opts: AttachOptions) !
+     var orig_termios: cross.termios = undefined;
+     const stdin_is_tty = cross.tcgetattr(lib_posix.STDIN_FILENO, &orig_termios) == 0;
      const restore_seq = "\x1bc\x1b]110\x1b\\\x1b]111\x1b\\\x1b]112\x1b\\";
 +    // A managed terminal keeps the session's last screen up after the client
 +    // exits, which RIS would erase. Turn off the input reports a program may
@@ -22,9 +23,8 @@ diff -ruN zmx-orig/src/main.zig zmx/src/main.zig
  
      defer {
          if (stdin_is_tty) {
-             _ = cross.c.tcsetattr(lib_posix.STDIN_FILENO, cross.c.TCSAFLUSH, &orig_termios);
+             _ = cross.tcsetattr(lib_posix.STDIN_FILENO, cross.TCSAFLUSH, &orig_termios);
          }
-         // Reset terminal modes on detach
 -        _ = lib_posix.write(lib_posix.STDOUT_FILENO, restore_seq) catch {};
 +        _ = lib_posix.write(lib_posix.STDOUT_FILENO, exit_seq) catch {};
      }

@@ -3,7 +3,8 @@ import agtermCore
 
 extension ControlServer {
     func listRecentClosed() -> ControlResponse {
-        ControlResponse(ok: true, result: ControlResult(recent: library.recentClosedItems.map(ControlRecentItem.init)))
+        ControlResponse(ok: true, result: ControlResult(recent: ControlRecentItem.merged(library.recentClosedItems,
+                                                                                     remote: library.remoteRecentClosedItems)))
     }
 
     /// The store swallows a failed write, so the reply is decided by the reloaded list, never by the call.
@@ -13,6 +14,15 @@ extension ControlServer {
             return ControlResponse(ok: false, error: "could not clear recent items")
         }
         return ControlResponse(ok: true)
+    }
+
+    /// The `--window` forms reach here only for a window of this Mac, whose list is the app-global one.
+    func listRecentClosed(window: String?) -> ControlResponse {
+        resolver.resolveOpenPlacementStore(window) { _ in listRecentClosed() }
+    }
+
+    func clearRecentClosed(window: String?) -> ControlResponse {
+        resolver.resolveOpenPlacementStore(window) { _ in clearRecentClosed() }
     }
 
     static let companionWithoutParentError = "parent session is not open or in Recent Closed"

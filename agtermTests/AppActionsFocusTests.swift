@@ -128,13 +128,19 @@ final class AppActionsFocusTests: XCTestCase {
             pair.actions.followSessionLink(id, from: origin, pane: pane)
         }
         opener.follow("agterm://session/\(id.uuidString)", from: .pane(clicker.id),
-                      pane: clicker.paneIdentity, cwd: NSTemporaryDirectory(), intent: intent)
+                      pane: clicker.paneIdentity, cwd: NSTemporaryDirectory(),
+                      gesture: LinkOpener.Gesture(intent: intent, source: .detected))
     }
 
     private func assertSessionLinkIsRefused(
         _ id: UUID, in pair: Pair, intent: LinkPolicy.ClickIntent = .normal,
         file: StaticString = #filePath, line: UInt = #line
     ) throws {
+        try assertNothingChanges(in: pair, file: file, line: line) { try followSessionLink(id, in: pair, intent: intent) }
+    }
+
+    private func assertNothingChanges(in pair: Pair, file: StaticString = #filePath, line: UInt = #line,
+                                      _ act: () throws -> Void) throws {
         let frontSelection = pair.library.store(for: pair.front)?.selectedSessionID
         let backSelection = pair.backStore.selectedSessionID
         let visible = pair.hostBack.isVisible
@@ -143,7 +149,7 @@ final class AppActionsFocusTests: XCTestCase {
                                                           object: nil, queue: .main) { _ in posted += 1 }
         defer { NotificationCenter.default.removeObserver(token) }
 
-        try followSessionLink(id, in: pair, intent: intent)
+        try act()
 
         XCTAssertEqual(pair.library.frontmostWindowID, pair.front, file: file, line: line)
         XCTAssertEqual(pair.library.store(for: pair.front)?.selectedSessionID, frontSelection, file: file, line: line)
@@ -286,6 +292,95 @@ final class AppActionsFocusTests: XCTestCase {
         try assertSessionLinkIsRefused(session.id, in: pair, intent: .reveal)
 
         XCTAssertFalse(session.scratchActive)
+    }
+
+    func testOutsideSessionLinkRaisesSelectsAndFocusesTheRowInTheOtherWindow() throws {
+        let pair = try makePair()
+        let session = try addSession(to: pair.backStore, AgentIndicator(status: .blocked))
+        let surface = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        defer { surface.teardown(); surface.removeFromSuperview() }
+        surface.frame = NSRect(x: 0, y: 0, width: 400, height: 300)
+        pair.hostBack.contentView?.addSubview(surface)
+        session.surface = surface
+        XCTAssertFalse(pair.hostBack.isVisible)
+
+        XCTAssertTrue(pair.actions.openSessionLink(session.id))
+
+        XCTAssertEqual(pair.library.frontmostWindowID, pair.back)
+        XCTAssertTrue(pair.hostBack.isVisible)
+        XCTAssertEqual(pair.backStore.selectedSessionID, session.id)
+        XCTAssertTrue(pair.hostBack.firstResponder === surface)
+    }
+
+    func testOutsideSessionLinkRaisesTheActiveWindowWhenItIsOffScreen() throws {
+        let pair = try makePair()
+        let frontStore = try XCTUnwrap(pair.library.store(for: pair.front))
+        let session = try addSession(to: frontStore, AgentIndicator(status: .idle))
+        let hostFront = try XCTUnwrap(windows.first)
+        XCTAssertFalse(hostFront.isVisible)
+
+        XCTAssertTrue(pair.actions.openSessionLink(session.id))
+
+        XCTAssertEqual(pair.library.frontmostWindowID, pair.front)
+        XCTAssertTrue(hostFront.isVisible)
+        XCTAssertEqual(frontStore.selectedSessionID, session.id)
+    }
+
+    func testOutsideSessionLinkWaitsForTheTargetWindowToRegister() throws {
+        let pair = try makePair()
+        let session = try addSession(to: pair.backStore, AgentIndicator(status: .blocked))
+        WindowRegistry.shared.unregister(pair.back)
+
+        try assertNothingChanges(in: pair) { XCTAssertFalse(pair.actions.openSessionLink(session.id)) }
+
+        WindowRegistry.shared.register(pair.back, window: pair.hostBack)
+        XCTAssertTrue(pair.actions.openSessionLink(session.id))
+        XCTAssertEqual(pair.backStore.selectedSessionID, session.id)
+    }
+
+    func testOutsideSessionLinkToAnUnknownIDWaitsAndChangesNothing() throws {
+        let pair = try makePair()
+
+        try assertNothingChanges(in: pair) { XCTAssertFalse(pair.actions.openSessionLink(UUID())) }
+    }
+
+    func testOutsideSessionLinkUnderTerminalZoomIsSettledWithoutSelecting() throws {
+        let pair = try makePair()
+        let session = try addSession(to: pair.backStore, AgentIndicator(status: .blocked))
+        let zoom = TerminalZoomController()
+        TerminalZoomRegistry.shared.register(pair.back, controller: zoom)
+        defer { TerminalZoomRegistry.shared.unregister(pair.back) }
+        zoom.set(.on, target: .session(session.id, .primary))
+
+        try assertNothingChanges(in: pair) { XCTAssertTrue(pair.actions.openSessionLink(session.id)) }
+    }
+
+    func testOutsideSessionLinkToARowInTwoWindowsIsSettledWithoutSelecting() throws {
+        let windowA = UUID(), windowB = UUID(), shared = UUID()
+        let windowsDir = stateDir.appendingPathComponent("windows")
+        for (window, name) in [(windowA, "a"), (windowB, "b")] {
+            try PersistenceStore(directory: windowsDir, fileName: "\(window.uuidString).json")
+                .save(Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: name, sessions: [
+                    SessionSnapshot(id: UUID(), customName: "own", cwd: NSTemporaryDirectory()),
+                    SessionSnapshot(id: shared, customName: "dup", cwd: NSTemporaryDirectory()),
+                ])]))
+        }
+        let index = WindowsIndex(frontmost: windowA, windows: [WindowEntry(id: windowA, name: "a", isOpen: true),
+                                                              WindowEntry(id: windowB, name: "b", isOpen: true)])
+        try JSONEncoder().encode(index).write(to: stateDir.appendingPathComponent("windows.json"))
+        let library = WindowLibrary(directory: stateDir)
+        _ = registerWindow(windowA)
+        let hostB = registerWindow(windowB)
+        let storeA = try XCTUnwrap(library.store(for: windowA)), storeB = try XCTUnwrap(library.store(for: windowB))
+        let selections = (storeA.selectedSessionID, storeB.selectedSessionID)
+        XCTAssertNotEqual(selections.0, shared)
+
+        XCTAssertTrue(AppActions(library: library).openSessionLink(shared))
+
+        XCTAssertEqual(library.frontmostWindowID, windowA)
+        XCTAssertFalse(hostB.isVisible)
+        XCTAssertEqual(storeA.selectedSessionID, selections.0)
+        XCTAssertEqual(storeB.selectedSessionID, selections.1)
     }
 
     // with agterm inactive no didBecomeKey reconciles the sidebars, so the restored window stayed collapsed

@@ -5,6 +5,7 @@ struct PaletteCatalogTests {
     @Test func titlesMatchThePaletteSourceOrder() {
         #expect(PaletteCommand.allCases.map(\.title) == [
             "New Session",
+            "New Top-Level Session",
             "New Workspace",
             "Open Directory…",
             "Rename Session",
@@ -49,6 +50,7 @@ struct PaletteCatalogTests {
             "Attach Remote…",
             "Open Remote Window…",
             "Detached Sessions…",
+            "New Remote Session…",
             "Edit Keymap",
             "Reload Keymap",
             "Edit Hooks",
@@ -72,7 +74,7 @@ struct PaletteCatalogTests {
     }
 
     @Test func catalogHasTheExpectedStaticCommandCount() {
-        #expect(PaletteCommand.allCases.count == 64)
+        #expect(PaletteCommand.allCases.count == 66)
     }
 
     @Test func idsRoundTripThroughRawValue() {
@@ -90,6 +92,25 @@ struct PaletteCatalogTests {
         #expect(PaletteCommand.focusRightPane.title(in: PaletteContext(activeSplitAxis: .topBottom)) == "Focus Bottom Pane")
         #expect(PaletteCommand.toggleWorkspaceCollapse.title(in: PaletteContext(activeWorkspaceCollapsed: false)) == "Collapse Workspace")
         #expect(PaletteCommand.toggleWorkspaceCollapse.title(in: PaletteContext(activeWorkspaceCollapsed: true)) == "Expand Workspace")
+    }
+
+    @Test func focusTitlesNameTheTopLevelSessionsWhenTheyAreTheActiveContainer() {
+        let root = PaletteContext(activeWorkspaceIsRoot: true)
+        #expect(PaletteCommand.focusWorkspace.title(in: PaletteContext()) == "Focus Workspace")
+        #expect(PaletteCommand.focusWorkspace.title(in: root) == "Focus Top-Level Sessions")
+        #expect(PaletteCommand.addWorkspaceToFocus.title(in: PaletteContext()) == "Add Workspace to Focus")
+        #expect(PaletteCommand.addWorkspaceToFocus.title(in: root) == "Add Top-Level Sessions to Focus")
+    }
+
+    @Test func newTopLevelSessionRunsOnlyInAWindowWithARoot() {
+        let rootOnly = PaletteContext(hasCurrentWorkspace: true, activeWorkspaceIsRoot: true, hasRootWorkspace: true)
+        #expect(PaletteCommand.newRootSession.isEnabled(in: rootOnly))
+        #expect(!PaletteCommand.newRootSession.isEnabled(in: PaletteContext(hasCurrentWorkspace: true)))
+        #expect(PaletteCommand.newRootSession.isEnabled(in: PaletteContext(remoteWindow: true, remoteConnected: true, hasRootWorkspace: true)))
+        #expect(!PaletteCommand.newRootSession.isEnabled(in: PaletteContext(remoteWindow: true, remoteConnected: true)))
+        #expect(!PaletteCommand.newRootSession.isEnabled(in: PaletteContext(remoteWindow: true, hasRootWorkspace: true)))
+        #expect(!PaletteCommand.newRootSession.isEnabled(in: PaletteContext(pickerActive: true, hasRootWorkspace: true)))
+        #expect(PaletteCommand.newRootSession.builtinAction == .newRootSession)
     }
 
     @Test func clearFlaggedVisibleOnlyWhenSomethingIsFlagged() {
@@ -168,6 +189,15 @@ struct PaletteCatalogTests {
         }
     }
 
+    @Test(arguments: [PaletteCommand.deleteWorkspace, .renameWorkspace, .toggleWorkspaceCollapse])
+    func workspaceOnlyCommandsDisableOnTheRoot(_ command: PaletteCommand) {
+        let named = PaletteContext(canRemoveWorkspace: true, sidebarShowsWorkspaceTree: true, hasCurrentWorkspace: true)
+        let root = PaletteContext(canRemoveWorkspace: true, sidebarShowsWorkspaceTree: true, hasCurrentWorkspace: true,
+                                  activeWorkspaceIsRoot: true)
+        #expect(command.isEnabled(in: named))
+        #expect(!command.isEnabled(in: root))
+    }
+
     @Test func workspaceAndSplitCommandsFollowTheirPredicates() {
         #expect(!PaletteCommand.deleteWorkspace.isVisible(in: PaletteContext(canRemoveWorkspace: false)))
         #expect(PaletteCommand.deleteWorkspace.isVisible(in: PaletteContext(canRemoveWorkspace: true)))
@@ -216,7 +246,8 @@ struct PaletteCatalogTests {
                                              canStepWindows: true,
                                              activeSessionHasSplit: true, hasPendingClose: true,
                                              hasRecentClosed: true, hasActiveSession: true, hasSessions: true,
-                                             hasCurrentWorkspace: true, hasRemotes: true, activeSessionHasOverlay: true)
+                                             hasCurrentWorkspace: true, hasRemotes: true, activeSessionHasOverlay: true,
+                                             hasRootWorkspace: true)
 
     /// The commands whose menu item carries no `modalActive` term at all.
     private static let coverProof: Set<PaletteCommand> = [
@@ -266,7 +297,8 @@ struct PaletteCatalogTests {
                                      canStepWindows: true,
                                      activeSessionHasSplit: true, hasPendingClose: true,
                                      hasRecentClosed: true, hasActiveSession: false, hasSessions: true,
-                                     hasCurrentWorkspace: true, hasRemotes: true, activeSessionHasOverlay: true)
+                                     hasCurrentWorkspace: true, hasRemotes: true, activeSessionHasOverlay: true,
+                                     hasRootWorkspace: true)
         for command in PaletteCommand.allCases {
             #expect(command.isEnabled(in: context) == !(Self.needSession.contains(command) || Self.needRemoteWindow.contains(command)), "\(command)")
         }
@@ -293,11 +325,11 @@ struct PaletteCatalogTests {
         #expect(PaletteCommand.duplicateCompanion.builtinAction == .duplicateCompanion)
     }
 
-    @Test func convertToCompanionNeedsALocalTopLevelSession() {
+    @Test func convertToCompanionNeedsATopLevelSession() {
         #expect(PaletteCommand.convertCompanion.isEnabled(in: PaletteContext(hasActiveSession: true)))
         #expect(!PaletteCommand.convertCompanion.isEnabled(in: PaletteContext()))
         #expect(!PaletteCommand.convertCompanion.isEnabled(in: PaletteContext(hasActiveSession: true, activeSessionIsCompanion: true)))
-        #expect(!PaletteCommand.convertCompanion.isEnabled(in: PaletteContext(hasActiveSession: true, activeSessionIsRemote: true)))
+        #expect(PaletteCommand.convertCompanion.isEnabled(in: PaletteContext(hasActiveSession: true, activeSessionIsRemote: true)))
         #expect(PaletteCommand.convertCompanion.isEnabled(in: PaletteContext(hasActiveSession: true, activeSessionIsPage: true)))
         #expect(PaletteCommand.convertCompanion.isVisible(in: PaletteContext()), "stays listed, inert")
         #expect(PaletteCommand.convertCompanion.builtinAction == .convertCompanion)
@@ -324,10 +356,13 @@ struct PaletteCatalogTests {
                          context: PaletteContext(hasActiveSession: true, activeSessionIsPage: true, activeSessionIsCompanion: true),
                          newCompanion: true, duplicate: false, convert: false),
         CompanionRowKind(name: "remote terminal", context: PaletteContext(hasActiveSession: true, activeSessionIsRemote: true),
-                         newCompanion: true, duplicate: true, convert: false),
+                         newCompanion: true, duplicate: true, convert: true),
         CompanionRowKind(name: "remote page",
                          context: PaletteContext(hasActiveSession: true, activeSessionIsPage: true, activeSessionIsRemote: true),
-                         newCompanion: true, duplicate: false, convert: false),
+                         newCompanion: true, duplicate: false, convert: true),
+        CompanionRowKind(name: "server window terminal",
+                         context: PaletteContext(hasActiveSession: true, activeSessionIsRemote: true, remoteWindow: true, remoteConnected: true),
+                         newCompanion: true, duplicate: true, convert: true),
     ]
 
     @Test(arguments: companionRowKinds)
@@ -383,6 +418,18 @@ struct PaletteCatalogTests {
         #expect(PaletteCommand.openRemoteWindow.builtinAction == .openRemoteWindow)
     }
 
+    @Test func newRemoteSessionNeedsAConfiguredRemoteAndAWorkspaceToLandIn() {
+        let none = PaletteContext(hasCurrentWorkspace: true)
+        #expect(PaletteCommand.newRemoteSession.isVisible(in: none), "stays listed, inert")
+        #expect(!PaletteCommand.newRemoteSession.isEnabled(in: none))
+        #expect(!PaletteCommand.newRemoteSession.isEnabled(in: PaletteContext(hasRemotes: true)))
+        #expect(PaletteCommand.newRemoteSession.isEnabled(in: PaletteContext(hasCurrentWorkspace: true, hasRemotes: true)))
+        #expect(!PaletteCommand.newRemoteSession.isEnabled(
+            in: PaletteContext(hasCurrentWorkspace: true, hasRemotes: true, pickerActive: true)))
+        #expect(PaletteCommand.newRemoteSession.title == "New Remote Session…")
+        #expect(PaletteCommand.newRemoteSession.builtinAction == .newRemoteSession)
+    }
+
     @Test func workspacePresenceGatesTheWorkspaceEntries() {
         let context = PaletteContext(canRemoveWorkspace: true, hasFlaggedSessions: true,
                                      sidebarShowsWorkspaceTree: true, sidebarShowsWorkspaceRows: true, hasMarkedWorkspaces: true,
@@ -390,10 +437,11 @@ struct PaletteCatalogTests {
                                      canStepWindows: true,
                                      activeSessionHasSplit: true, hasPendingClose: true,
                                      hasRecentClosed: true, hasActiveSession: true, hasSessions: true,
-                                     hasCurrentWorkspace: false, hasRemotes: true, activeSessionHasOverlay: true)
+                                     hasCurrentWorkspace: false, hasRemotes: true, activeSessionHasOverlay: true,
+                                     hasRootWorkspace: true)
         let needWorkspace: Set<PaletteCommand> = [.renameWorkspace, .focusWorkspace, .addWorkspaceToFocus,
                                                   .previousWorkspace, .nextWorkspace, .toggleWorkspaceCollapse,
-                                                  .attachRemote, .editFocusedWorkspaces]
+                                                  .attachRemote, .newRemoteSession, .editFocusedWorkspaces]
         for command in PaletteCommand.allCases {
             #expect(command.isEnabled(in: context) == !(needWorkspace.contains(command) || Self.needRemoteWindow.contains(command)), "\(command)")
         }
@@ -504,17 +552,28 @@ struct PaletteCatalogTests {
     }
 
     @Test(arguments: [PaletteCommand.newSession, .newWorkspace, .renameSession, .duplicateSession, .newCompanion, .renameWorkspace,
-                      .toggleSplit, .toggleHorizontalSplit, .closeSplit, .swapPanes])
+                      .toggleSplit, .toggleHorizontalSplit, .closeSplit, .swapPanes, .duplicateCompanion, .convertCompanion])
     func aServerActionIsDisabledWhileItsRemoteWindowIsNotConnected(_ command: PaletteCommand) {
         #expect(!command.isEnabled(in: remoteContext(window: true, connected: false)))
         #expect(command.isEnabled(in: remoteContext(window: true, connected: true)))
         #expect(command.isEnabled(in: remoteContext(window: false, connected: false)))
     }
 
-    @Test(arguments: [PaletteCommand.openDirectory, .duplicateCompanion, .attachRemote])
+    @Test(arguments: [PaletteCommand.openDirectory, .attachRemote, .newRemoteSession])
     func aLocalOnlyActionIsDisabledInARemoteWindow(_ command: PaletteCommand) {
         #expect(!command.isEnabled(in: remoteContext(window: true, connected: true)))
         #expect(command.isEnabled(in: remoteContext(window: false, connected: false)))
+    }
+
+    @Test func flagCommandsAreDisabledWhileTheServerKeepingThemCannotBeAsked() {
+        let blocked = PaletteContext(hasFlaggedSessions: true, hasActiveSession: true, hasSessions: true, hasCurrentWorkspace: true,
+                                     marksBlocked: true)
+        let open = PaletteContext(hasFlaggedSessions: true, hasActiveSession: true, hasSessions: true, hasCurrentWorkspace: true)
+
+        #expect(!PaletteCommand.toggleFlag.isEnabled(in: blocked))
+        #expect(!PaletteCommand.clearFlagged.isEnabled(in: blocked))
+        #expect(PaletteCommand.toggleFlag.isEnabled(in: open))
+        #expect(PaletteCommand.clearFlagged.isEnabled(in: open))
     }
 
     @Test(arguments: [PaletteCommand.closeSession, .deleteWorkspace])

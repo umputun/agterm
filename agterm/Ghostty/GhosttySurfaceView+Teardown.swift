@@ -1,0 +1,20 @@
+import AppKit
+import GhosttyKit
+
+extension GhosttySurfaceView {
+    func destroySurface() {
+        if let surface = detachSurface() { ghostty_surface_free(surface) }
+        finishDestroy()
+    }
+
+    /// destroySurface without waiting on the surface's threads. `ghostty_surface_free` joins them, and their
+    /// exit polls with short sleeps that App Nap stretches to seconds, so the surface is only asked to stop
+    /// here and `retirement` frees it once they have exited. It stays allocated meanwhile, so no new surface
+    /// can take its address (`agtermApp.replacePane`).
+    func retireSurface(into retirement: SurfaceRetirement = .shared) {
+        guard let surface = detachSurface() else { return finishDestroy() }
+        retired.withLock { $0 = true }
+        if ghostty_surface_try_free(surface) { return finishDestroy() }
+        retirement.retire(self, surface: surface)
+    }
+}

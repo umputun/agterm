@@ -173,6 +173,90 @@ final class RemoteAttachTests: XCTestCase {
         await finishListing()
     }
 
+    private func window(_ id: String, _ name: String, open: Bool = true) -> ControlWindowNode {
+        ControlWindowNode(id: id, name: name, open: open, active: false)
+    }
+
+    private func openedRemote(_ opened: [WindowInfo.ID]) -> WindowSource? {
+        opened.last.flatMap { id in library.windows.first { $0.id == id }?.source }
+    }
+
+    func testAServerHostOpensItsWindowWithNoWindowStep() async {
+        var opened: [WindowInfo.ID] = []
+        actions.openWindow = { opened.append($0) }
+
+        actions.openRemoteWindow("studio", in: windowID)
+        await waitUntil("the window opens") { !opened.isEmpty }
+
+        XCTAssertEqual(attacher.originHosts, ["studio"])
+        XCTAssertEqual(openedRemote(opened), WindowSource(host: "studio"))
+        XCTAssertNil(controller.pending)
+    }
+
+    func testAMacWithOneOpenWindowOpensItWithoutAsking() async throws {
+        let build = UUID()
+        var mirrored = window(UUID().uuidString, "server")
+        mirrored.remote = ControlRemoteWindow(host: "box", catalogID: nil, state: nil)
+        attacher.origin = .mac([window(UUID().uuidString, "old", open: false), mirrored, window(build.uuidString, "build")])
+        var opened: [WindowInfo.ID] = []
+        actions.openWindow = { opened.append($0) }
+
+        actions.openRemoteWindow("studio", in: windowID)
+        await waitUntil("the window opens") { !opened.isEmpty }
+
+        XCTAssertNil(controller.pending)
+        XCTAssertEqual(openedRemote(opened), WindowSource(host: "studio", originWindow: build))
+        XCTAssertEqual(library.windows.first { $0.id == opened.last }?.name, "studio · build")
+    }
+
+    func testAMacWithSeveralOpenWindowsAsksWhichAndOpensThePickedOne() async throws {
+        let build = UUID(), notes = UUID()
+        attacher.origin = .mac([window(build.uuidString, "build"), window(UUID().uuidString, "old", open: false),
+                                window(notes.uuidString, "notes")])
+        var opened: [WindowInfo.ID] = []
+        actions.openWindow = { opened.append($0) }
+
+        actions.openRemoteWindow("studio", in: windowID)
+        await waitUntil("the window picker opens") { controller.pending != nil }
+        let pick = try XCTUnwrap(controller.pending)
+        controller.resolve(ControlPickResult(result: .picked, id: notes.uuidString, label: "notes", index: 1))
+        await waitUntil("the window opens") { !opened.isEmpty }
+
+        XCTAssertEqual(pick.prompt, "Open which window of studio?")
+        XCTAssertEqual(pick.items, [ControlPickItem(id: build.uuidString, label: "build"), ControlPickItem(id: notes.uuidString, label: "notes")])
+        XCTAssertEqual(openedRemote(opened), WindowSource(host: "studio", originWindow: notes))
+    }
+
+    func testAMacWithNoOpenWindowSaysSoAndOpensNothing() async throws {
+        let session = try XCTUnwrap(library.activeStore?.selectedSessionID?.uuidString)
+        attacher.origin = .mac([window(UUID().uuidString, "old", open: false)])
+        var opened: [WindowInfo.ID] = []
+        actions.openWindow = { opened.append($0) }
+
+        actions.openRemoteWindow("studio", in: windowID)
+        await waitUntil("the error panel shows") { attacher.huds.count == 2 }
+
+        XCTAssertEqual(attacher.huds.last, .opened(session: session, window: windowID.uuidString,
+                                                   spec: HudSpec(message: "Open Remote Window: studio has no open window", hideAfter: 5)))
+        XCTAssertTrue(opened.isEmpty)
+        XCTAssertNil(controller.pending)
+    }
+
+    func testAHostThatCannotServeAWindowSaysWhyAndOpensNothing() async throws {
+        let session = try XCTUnwrap(library.activeStore?.selectedSessionID?.uuidString)
+        attacher.origin = .failed("studio does not run Live sessions, which a remote window needs")
+        var opened: [WindowInfo.ID] = []
+        actions.openWindow = { opened.append($0) }
+
+        actions.openRemoteWindow("studio", in: windowID)
+        await waitUntil("the error panel shows") { attacher.huds.count == 2 }
+
+        XCTAssertEqual(attacher.huds.last, .opened(session: session, window: windowID.uuidString, spec: HudSpec(
+            message: "Open Remote Window: studio does not run Live sessions, which a remote window needs", hideAfter: 5)))
+        XCTAssertTrue(opened.isEmpty)
+        XCTAssertFalse(library.windows.contains { $0.isRemote })
+    }
+
     func testNoRemotesDoesNothing() async {
         actions.attachRemote()
         for _ in 0..<200 { await Task.yield() }
@@ -356,6 +440,68 @@ final class RemoteAttachTests: XCTestCase {
         controller.cancel()
     }
 
+    func testAFailureLeavesAHudAnotherCallerPostedBeforeIt() throws {
+        let session = try XCTUnwrap(library.activeStore?.selectedSessionID?.uuidString)
+        let foreign = HudSpec(message: "an agent's own panel")
+        _ = attacher.openHud(session, window: nil, spec: foreign)
+        let hud = RemoteAttachHud(attacher: attacher, session: session, window: windowID.uuidString, action: "Paste")
+
+        hud.progress("copying to studio")
+        hud.fail("too large to paste")
+
+        XCTAssertEqual(attacher.huds, [.opened(session: session, window: nil, spec: foreign)])
+    }
+
+    func testAFailureLeavesAHudPostedOverItsProgressAndItsOwnPanelStillCloses() throws {
+        let session = try XCTUnwrap(library.activeStore?.selectedSessionID?.uuidString)
+        let window = windowID.uuidString
+        let hud = RemoteAttachHud(attacher: attacher, session: session, window: window, action: "Paste")
+        hud.progress("copying to studio")
+        hud.close()
+        XCTAssertEqual(attacher.huds.last, .closed(session: session, window: window))
+
+        hud.progress("copying to studio")
+        let foreign = HudSpec(message: "an agent's own panel")
+        _ = attacher.openHud(session, window: nil, spec: foreign)
+        hud.fail("too large to paste")
+        hud.close()
+
+        XCTAssertEqual(attacher.huds.last, .opened(session: session, window: nil, spec: foreign))
+    }
+
+    func testARunningOperationsProgressIsNotReplacedButAnErrorItLeftIs() throws {
+        let session = try XCTUnwrap(library.activeStore?.selectedSessionID?.uuidString)
+        let window = windowID.uuidString
+        let first = RemoteAttachHud(attacher: attacher, session: session, window: window, action: "Paste")
+        let second = RemoteAttachHud(attacher: attacher, session: session, window: window, action: "Paste")
+        first.progress("copying to studio")
+        let running = attacher.huds.last
+
+        second.progress("copying to studio")
+        XCTAssertEqual(attacher.huds.last, running, "a second operation's progress waits behind the first one's")
+
+        first.fail("too large to paste")
+        second.fail("the paste could not be copied (exit 255)")
+        guard case .opened(_, _, let spec)? = attacher.huds.last else { return XCTFail("no panel opened") }
+        XCTAssertEqual(spec.message, "Paste: the paste could not be copied (exit 255)")
+    }
+
+    func testAMovedHudDoesNotTakeTheNewRowsPanelForItsOwn() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let first = try XCTUnwrap(store.selectedSessionID?.uuidString)
+        let second = try XCTUnwrap(store.addSession(toWorkspace: try XCTUnwrap(store.currentWorkspaceID), cwd: NSHomeDirectory()))
+        let hud = RemoteAttachHud(attacher: attacher, session: first, window: windowID.uuidString)
+        hud.progress("attaching")
+        attacher.expireHud(session: first)
+        let foreign = HudSpec(message: "an agent's own panel")
+        attacher.postHud(foreign, session: second.id.uuidString, generation: 1)
+
+        hud.move(to: second.id.uuidString)
+        hud.fail("no attachable session")
+
+        XCTAssertEqual(attacher.huds.last, .opened(session: second.id.uuidString, window: nil, spec: foreign))
+    }
+
     func testAnOverlongErrorIsCutToWhatAHudAccepts() async throws {
         actions.attachRemote("studio", in: windowID)
         await waitUntil("the listing starts") { attacher.treeHosts.count == 1 }
@@ -389,6 +535,82 @@ final class RemoteAttachTests: XCTestCase {
         XCTAssertTrue(attacher.attaches.isEmpty)
     }
 
+    func testANewRemoteSessionOnTheOnlyHostAsksNothingAndLandsInTheCurrentWorkspace() async throws {
+        try await writeRemotes("srv\n", expecting: ["srv"])
+        let store = try XCTUnwrap(library.activeStore)
+        let workspace = try XCTUnwrap(store.currentWorkspaceID)
+        let session = try XCTUnwrap(store.selectedSessionID?.uuidString)
+
+        actions.newRemoteSession()
+        await waitUntil("the session is created") { attacher.creates.count == 1 }
+        await waitUntil("the progress panel closes") { attacher.huds.last == .closed(session: session, window: windowID.uuidString) }
+
+        XCTAssertNil(controller.pending)
+        XCTAssertEqual(attacher.sessionOriginHosts, ["srv"])
+        let create = try XCTUnwrap(attacher.creates.first)
+        XCTAssertEqual(create.host, "srv")
+        XCTAssertEqual(create.origin, .server)
+        XCTAssertTrue(create.destination.store === store)
+        XCTAssertEqual(create.destination.workspace, workspace)
+    }
+
+    func testANewRemoteSessionAsksForTheHostAndTheMacWindowAndKeepsTheWorkspaceItStartedIn() async throws {
+        try await writeRemotes("studio\nmini\n", expecting: ["studio", "mini"])
+        let store = try XCTUnwrap(library.activeStore)
+        let started = try XCTUnwrap(store.currentWorkspaceID)
+        store.renameWorkspace(started, to: "dev")
+        let build = UUID().uuidString, notes = UUID().uuidString
+        attacher.sessionOrigin = .mac([window(build, "build"), window(notes, "notes")])
+
+        actions.newRemoteSession()
+        await waitUntil("the host picker opens") { controller.pending != nil }
+        XCTAssertEqual(controller.pending?.prompt, "New session on which host?")
+        _ = store.addWorkspace(name: "other")
+        XCTAssertNotEqual(store.currentWorkspaceID, started)
+        controller.resolve(ControlPickResult(result: .picked, id: "mini", label: "mini", index: 1))
+        await waitUntil("the window picker opens") { controller.pending?.prompt == "New session in which window of mini?" }
+        XCTAssertEqual(controller.pending?.items, [ControlPickItem(id: build, label: "build"), ControlPickItem(id: notes, label: "notes")])
+        store.renameWorkspace(started, to: "renamed")
+        controller.resolve(ControlPickResult(result: .picked, id: notes, label: "notes", index: 1))
+        await waitUntil("the session is created") { attacher.creates.count == 1 }
+
+        let create = try XCTUnwrap(attacher.creates.first)
+        XCTAssertEqual(attacher.sessionOriginHosts, ["mini"])
+        XCTAssertEqual(create.origin, .mac(window: notes))
+        XCTAssertEqual(create.destination.workspace, started)
+        XCTAssertEqual(create.destination.name, "dev")
+    }
+
+    func testANewRemoteSessionOnAHostThatCannotTakeOneSaysWhyAndCreatesNothing() async throws {
+        let session = try XCTUnwrap(library.activeStore?.selectedSessionID?.uuidString)
+        attacher.sessionOrigin = .failed("the agterm on studio is too old to create sessions for another Mac")
+        let destination = try XCTUnwrap(currentDestination())
+
+        actions.newRemoteSession(on: "studio", into: destination, in: windowID)
+        await waitUntil("the error panel shows") { attacher.huds.count == 2 }
+
+        XCTAssertEqual(attacher.huds.last, .opened(session: session, window: windowID.uuidString, spec: HudSpec(
+            message: "New Remote Session: the agterm on studio is too old to create sessions for another Mac", hideAfter: 5)))
+        XCTAssertTrue(attacher.creates.isEmpty)
+    }
+
+    func testAFailedCreateShowsItsErrorInATimedPanel() async throws {
+        attacher.createResponse = ControlResponse(ok: false, error: "studio did not answer; nothing was created")
+        let destination = try XCTUnwrap(currentDestination())
+
+        actions.newRemoteSession(on: "studio", into: destination, in: windowID)
+        await waitUntil("the error panel shows") { attacher.huds.count == 3 }
+
+        guard case let .opened(_, _, spec) = attacher.huds.last else { return XCTFail("expected an error panel") }
+        XCTAssertEqual(spec, HudSpec(message: "New Remote Session: studio did not answer; nothing was created", hideAfter: 5))
+    }
+
+    private func currentDestination() -> RemoteSessionDestination? {
+        guard let store = library.activeStore, let id = store.currentWorkspaceID,
+              let workspace = store.workspaces.first(where: { $0.id == id }) else { return nil }
+        return RemoteSessionDestination(store: store, workspace: id, name: workspace.name)
+    }
+
     func testAttachDoesNothingWhileAModalHoldsTheWindow() async {
         XCTAssertTrue(controller.open(PendingPick(id: "busy", items: [ControlPickItem(id: "a", label: "A")])))
 
@@ -415,12 +637,19 @@ private final class FakeAttacher: RemoteAttaching {
     }
 
     private(set) var treeHosts: [String?] = []
+    private(set) var originHosts: [String] = []
+    var origin = RemoteOrigin.server
     private(set) var attaches: [Attach] = []
     private(set) var huds: [Hud] = []
-    private var generation: Int?
+    private var generations: [String: Int] = [:]
     private var opens = 0
     var attachResponse = ControlResponse(ok: true)
     private var trees: [CheckedContinuation<ControlResponse, Never>] = []
+
+    func remoteOrigin(host: String) async -> RemoteOrigin {
+        originHosts.append(host)
+        return origin
+    }
 
     func remoteTree(host: String?) async -> ControlResponse {
         treeHosts.append(host)
@@ -442,20 +671,55 @@ private final class FakeAttacher: RemoteAttaching {
         ControlResponse(ok: false, error: "not scripted")
     }
 
+    struct Create {
+        let host: String
+        let origin: RemoteSessionCreate.Origin
+        let destination: RemoteSessionDestination
+    }
+
+    var sessionOrigin = RemoteSessionOrigin.server
+    private(set) var sessionOriginHosts: [String] = []
+    private(set) var creates: [Create] = []
+    var createResponse = ControlResponse(ok: true)
+
+    func remoteSessionOrigin(host: String) async -> RemoteSessionOrigin {
+        sessionOriginHosts.append(host)
+        return sessionOrigin
+    }
+
+    func createRemoteSession(_ request: RemoteSessionCreate, origin: RemoteSessionCreate.Origin,
+                             destination: RemoteSessionDestination, progress: (String) -> Void) async -> ControlResponse {
+        creates.append(Create(host: request.host, origin: origin, destination: destination))
+        progress("creating a session on \(request.host)…")
+        return createResponse
+    }
+
     func openHud(_ target: String?, window: String?, spec: HudSpec) -> ControlResponse {
-        huds.append(.opened(session: target, window: window, spec: spec))
         opens += 1
-        generation = opens
+        postHud(spec, session: target, window: window, generation: opens)
         return ControlResponse(ok: true)
     }
 
     func closeHud(_ target: String?, window: String?) -> ControlResponse {
         huds.append(.closed(session: target, window: window))
-        generation = nil
+        generations[target ?? ""] = nil
         return ControlResponse(ok: true)
     }
 
-    func hudGeneration(session: String) -> Int? { generation }
+    func hudGeneration(session: String) -> Int? { generations[session] }
+
+    func postHud(_ spec: HudSpec, session: String?, window: String? = nil, generation: Int) {
+        huds.append(.opened(session: session, window: window, spec: spec))
+        generations[session ?? ""] = generation
+    }
+
+    func expireHud(session: String) { generations[session] = nil }
+
+    func attachedRoute(_: ControlRequest) -> RemoteRoute? { nil }
+
+    func runRemoteRoute(_: RemoteRoute) async -> ControlResponse { ControlResponse(ok: false) }
+    func reopenAttached(_: UUID, window _: String?) async -> ControlResponse { ControlResponse(ok: false) }
+    func undoOriginClose(_: AttachedUndo, window _: String) async -> ControlResponse { ControlResponse(ok: false) }
 
     func answerTree(_ response: ControlResponse, call: Int = 0) {
         trees[call].resume(returning: response)

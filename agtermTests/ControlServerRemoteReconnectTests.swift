@@ -60,7 +60,7 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
         server.hudClock = { frozen }
         let book = RemoteReconnectBook.shared
 
-        server.waitToReconnect(view, cover: false)
+        server.waitToReconnect(view, cover: false, reclaim: nil)
         server.tickReconnects()
         for _ in 0..<200 where book.entries[session.paneIdentity]?.probing != false {
             try await Task.sleep(for: .milliseconds(10))
@@ -96,7 +96,7 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
         let probe = Probe(status: 0)
         let server = server(runner: probe)
         let reconnected = expectation(description: "reconnected")
-        PaneLead.reconnect = { old, cover in
+        PaneLead.reconnect = { old, cover, _ in
             XCTAssertTrue(old === view)
             XCTAssertTrue(cover)
             reconnected.fulfill()
@@ -105,13 +105,28 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
         store.remotePaneHeld(session.paneIdentity, forSession: session.id)
         XCTAssertTrue(store.remotePaneIsHeld(session.paneIdentity, forSession: session.id))
 
-        server.waitToReconnect(view, cover: true)
+        server.waitToReconnect(view, cover: true, reclaim: nil)
         server.tickReconnects()
         await fulfillment(of: [reconnected], timeout: 2)
 
         XCTAssertFalse(store.remotePaneIsHeld(session.paneIdentity, forSession: session.id))
         XCTAssertFalse(RemoteReconnectBook.shared.waiting(pane: session.paneIdentity))
         XCTAssertEqual(probe.argvs, [try RemoteSession.probeCommand(host: "mini")])
+    }
+
+    func testAReconnectTakesBackTheLeadOfTheAttachThatLedAtTheDrop() async throws {
+        let (_, view) = try replica()
+        let server = server(runner: Probe(status: 0))
+        let reconnected = expectation(description: "reconnected")
+        PaneLead.reconnect = { _, _, reclaim in
+            XCTAssertEqual(reclaim, "n1")
+            reconnected.fulfill()
+            return true
+        }
+
+        server.waitToReconnect(view, cover: true, reclaim: "n1")
+        server.tickReconnects()
+        await fulfillment(of: [reconnected], timeout: 2)
     }
 
     func testAnUncoveredReconnectLeavesThePaneUncovered() throws {
@@ -132,21 +147,39 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
                        "an origin that never reports a role would leave it covered for good")
     }
 
+    func testAReattachNamesTheAttachItTakesTheLeadBackFrom() throws {
+        let (session, view) = try replica()
+        let endpoint = ControlZmxEndpoint(executable: "/Applications/agterm.app/zmx", socketDirectory: "/tmp/agterm-zmx-t")
+        store.bindRemote(RemoteBinding(remoteSessionID: "origin", daemonsByLocalPane: [
+            session.paneIdentity: ZmxSupport.daemonName(for: UUID()),
+        ], presentationVersion: 1, origin: RemoteBinding.Origin(host: "mini", endpoint: endpoint, sessionName: "build")),
+                         forSession: session.id)
+        defer { ZmxLeadBook.shared.forget(pane: session.paneIdentity) }
+        let services = agtermApp.SurfaceServices(library: library, actions: AppActions(library: library),
+                                                 zmxForegroundResolver: nil, spawnRegistry: nil,
+                                                 launchContext: agtermApp.LaunchSpawnContext())
+
+        XCTAssertTrue(agtermApp.reattachPane(view, claim: false, reclaim: "n1", services: services))
+
+        XCTAssertEqual(ZmxLeadBook.shared.states[session.paneIdentity]?.attachment.reclaim, "n1")
+    }
+
     func testAnAttachThatDidNotStartKeepsThePaneWaitingAndHeld() async throws {
         let (session, view) = try replica()
         let server = server(probe: 0)
         let attempted = expectation(description: "attempted")
-        PaneLead.reconnect = { _, _ in
+        PaneLead.reconnect = { _, _, _ in
             attempted.fulfill()
             return false
         }
         store.remotePaneHeld(session.paneIdentity, forSession: session.id)
 
-        server.waitToReconnect(view, cover: false)
+        server.waitToReconnect(view, cover: false, reclaim: "n1")
         server.tickReconnects()
         await fulfillment(of: [attempted], timeout: 2)
 
         XCTAssertTrue(RemoteReconnectBook.shared.waiting(pane: session.paneIdentity))
+        XCTAssertEqual(RemoteReconnectBook.shared.entries[session.paneIdentity]?.reclaim, "n1")
         XCTAssertTrue(store.remotePaneIsHeld(session.paneIdentity, forSession: session.id))
         XCTAssertEqual(RemoteReconnectBook.shared.entries[session.paneIdentity]?.failures, 1)
     }
@@ -155,14 +188,14 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
         let (session, view) = try replica()
         let server = server(probe: 0)
         var attached: [GhosttySurfaceView] = []
-        PaneLead.reconnect = { old, _ in
+        PaneLead.reconnect = { old, _, _ in
             attached.append(old)
             return true
         }
         let book = RemoteReconnectBook.shared
         XCTAssertTrue(store.softCloseSession(session.id, grace: 60))
 
-        server.waitToReconnect(view, cover: false)
+        server.waitToReconnect(view, cover: false, reclaim: nil)
         server.tickReconnects()
         try await settleProbe(session.paneIdentity)
         XCTAssertTrue(book.waiting(pane: session.paneIdentity))
@@ -186,14 +219,14 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
     func testAFailedProbesReasonIsOnThePanesTreeNodeUntilTheWaitEnds() async throws {
         let (session, view) = try replica()
         let server = server(runner: Probe(status: 255, stderr: "Host key verification failed.\r\n"))
-        PaneLead.reconnect = { _, _ in true }
+        PaneLead.reconnect = { _, _, _ in true }
         func leftNode() -> ControlSurfaceNode? {
             store.controlTree(paneForeground: { _ in nil }).workspaces.flatMap(\.sessions)
                 .first { $0.id == session.id.uuidString }?.surfaces?.first { $0.kind == "left" }
         }
         XCTAssertNil(leftNode()?.reconnect)
 
-        server.waitToReconnect(view, cover: false)
+        server.waitToReconnect(view, cover: false, reclaim: nil)
         server.tickReconnects()
         try await settleProbe(session.paneIdentity)
 
@@ -207,12 +240,12 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
     func testAHostThatDoesNotAnswerKeepsThePaneWaiting() async throws {
         let (session, view) = try replica()
         let server = server(probe: 255)
-        PaneLead.reconnect = { _, _ in
+        PaneLead.reconnect = { _, _, _ in
             XCTFail("no attach before the host answers")
             return true
         }
 
-        server.waitToReconnect(view, cover: false)
+        server.waitToReconnect(view, cover: false, reclaim: nil)
         server.tickReconnects()
         let book = RemoteReconnectBook.shared
         for _ in 0..<100 where book.entries[session.paneIdentity]?.probing == true {
@@ -226,11 +259,11 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
     func testAPaneThatClosedWhileWaitingIsDropped() throws {
         let (session, view) = try replica()
         let server = server(probe: 0)
-        PaneLead.reconnect = { _, _ in
+        PaneLead.reconnect = { _, _, _ in
             XCTFail("a closed pane is never attached")
             return true
         }
-        server.waitToReconnect(view, cover: false)
+        server.waitToReconnect(view, cover: false, reclaim: nil)
 
         session.surface = nil
         server.tickReconnects()
@@ -257,6 +290,11 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
         func release() { lock.withLock { waiter }?.resume() }
     }
 
+    private func heldPane(_ identity: UUID) -> CatalogPane {
+        CatalogPane(identity: identity, daemon: ZmxSupport.daemonName(for: identity),
+                    endpoint: ControlZmxEndpoint(executable: "/zmx", socketDirectory: "/run/zmx"), held: true)
+    }
+
     private func catalogRow() throws -> (Session, GhosttySurfaceView, GhosttySurfaceView) {
         let (session, view) = try replica()
         let split = UUID()
@@ -276,15 +314,15 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
     func testAnEndedRowsPanesStopWaitingAndKeepTheirScreens() async throws {
         let (session, view, splitView) = try catalogRow()
         let server = server(probe: 0)
-        PaneLead.reconnect = { _, _ in
+        PaneLead.reconnect = { _, _, _ in
             XCTFail("an ended row's pane is never attached again")
             return true
         }
         let book = RemoteReconnectBook.shared
         let split = try XCTUnwrap(session.splitPaneIdentity)
         defer { book.cancel(pane: split) }
-        server.waitToReconnect(view, cover: false)
-        server.waitToReconnect(splitView, cover: false)
+        server.waitToReconnect(view, cover: false, reclaim: nil)
+        server.waitToReconnect(splitView, cover: false, reclaim: nil)
         XCTAssertTrue(book.waiting(pane: split))
 
         session.ended = true
@@ -296,16 +334,56 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
         XCTAssertTrue(session.splitSurface === splitView)
     }
 
+    func testAnExitAttachesTheRunningPaneAgainButNotOneItsOriginHoldsStopped() throws {
+        let (session, view, splitView) = try catalogRow()
+        splitView.isSplitPane = true
+        var reattached: [GhosttySurfaceView] = []
+        PaneLead.reattach = { view, _ in reattached.append(view) }
+        defer { PaneLead.reattach = nil }
+        let split = try XCTUnwrap(session.splitPaneIdentity)
+        session.catalogPanes = [split: heldPane(split)]
+
+        agtermApp.handlePaneExit(splitView, store: store, sessionID: session.id, library: library)
+        agtermApp.handlePaneExit(view, store: store, sessionID: session.id, library: library)
+
+        XCTAssertEqual(reattached.count, 1)
+        XCTAssertTrue(reattached.first === view)
+        XCTAssertTrue(session.hasSplit && session.splitSurface === splitView)
+    }
+
+    func testAPaneItsOriginHoldsStoppedStopsWaitingWhileItsSiblingReconnects() async throws {
+        let (session, view, splitView) = try catalogRow()
+        let server = server(probe: 0)
+        var reconnected: [GhosttySurfaceView] = []
+        PaneLead.reconnect = { view, _, _ in
+            reconnected.append(view)
+            return true
+        }
+        let book = RemoteReconnectBook.shared
+        let split = try XCTUnwrap(session.splitPaneIdentity)
+        defer { book.cancel(pane: split); book.cancel(pane: session.paneIdentity) }
+        server.waitToReconnect(view, cover: false, reclaim: nil)
+        server.waitToReconnect(splitView, cover: false, reclaim: nil)
+
+        session.catalogPanes = [split: heldPane(split)]
+        server.tickReconnects()
+        for _ in 0..<50 where reconnected.isEmpty { await Task.yield() }
+
+        XCTAssertFalse(book.waiting(pane: split))
+        XCTAssertTrue(reconnected.allSatisfy { $0 === view })
+        XCTAssertTrue(session.splitSurface === splitView)
+    }
+
     func testARowThatEndsDuringItsProbeIsNotAttachedAgain() async throws {
         let (session, view, _) = try catalogRow()
         let probe = GatedProbe()
         let server = server(runner: probe)
-        PaneLead.reconnect = { _, _ in
+        PaneLead.reconnect = { _, _, _ in
             XCTFail("a row that ended while its probe ran is never attached again")
             return true
         }
         let book = RemoteReconnectBook.shared
-        server.waitToReconnect(view, cover: false)
+        server.waitToReconnect(view, cover: false, reclaim: nil)
         server.tickReconnects()
         for _ in 0..<200 where !probe.inFlight {
             try await Task.sleep(for: .milliseconds(10))
@@ -347,12 +425,12 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
         let (session, view, _) = try catalogRow()
         let server = server(probe: 0)
         var attached: [GhosttySurfaceView] = []
-        PaneLead.reconnect = { old, _ in
+        PaneLead.reconnect = { old, _, _ in
             attached.append(old)
             return true
         }
         let book = RemoteReconnectBook.shared
-        server.waitToReconnect(view, cover: false)
+        server.waitToReconnect(view, cover: false, reclaim: nil)
 
         for state in [RemoteCatalogMirror.State.connecting, .disconnected("lost")] {
             store.catalogState = state
@@ -378,12 +456,12 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
         store.catalogState = .connected
         let probe = GatedProbe()
         let server = server(runner: probe)
-        PaneLead.reconnect = { _, _ in
+        PaneLead.reconnect = { _, _, _ in
             XCTFail("a pane whose catalog dropped during its probe is never attached")
             return true
         }
         let book = RemoteReconnectBook.shared
-        server.waitToReconnect(view, cover: false)
+        server.waitToReconnect(view, cover: false, reclaim: nil)
         server.tickReconnects()
         for _ in 0..<200 where !probe.inFlight {
             try await Task.sleep(for: .milliseconds(10))
@@ -406,7 +484,7 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
         store.catalogState = .disconnected("lost")
         let probe = Probe(status: 0)
         let server = server(runner: probe)
-        PaneLead.reconnect = { _, _ in
+        PaneLead.reconnect = { _, _, _ in
             XCTFail("a scratch reattaches through the mirror")
             return true
         }
@@ -421,16 +499,120 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
         XCTAssertFalse(book.waiting(pane: scratch))
     }
 
+    func testAnAttachedRowsOriginScratchParksAndAttachesAgainOnceItsOriginAnswers() async throws {
+        let workspace = try XCTUnwrap(store.currentWorkspaceID)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: "/tmp", remoteHost: "mini"))
+        let primary = UUID()
+        let scratch = UUID()
+        store.bindRemote(RemoteBinding(remoteSessionID: "origin", daemonsByLocalPane: [session.paneIdentity: ZmxSupport.daemonName(for: primary)],
+                                       presentationVersion: 1,
+                                       origin: RemoteBinding.Origin(host: "mini", endpoint: ControlZmxEndpoint(executable: "/a/zmx",
+                                                                                                               socketDirectory: "/tmp/z"),
+                                                                    sessionName: "c")),
+                         forSession: session.id)
+        let server = server(probe: 0)
+        store.applyRemoteLayout(PresentationLayout(panes: [primary], primary: primary, shown: false, scratch: scratch, scratchShown: true),
+                                forSession: session.id, attach: server)
+        let client = try XCTUnwrap(session.scratchClientIdentity)
+        pane = client
+        defer { ZmxLeadBook.shared.forget(pane: client) }
+        let view = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), env: ["AGTERM_PANE_ID": client.uuidString],
+                                      backedByZmx: false)
+        view.watermarkSession = session
+        session.scratchSurface = view
+        session.scratchCommand = nil
+        let generation = session.scratchGeneration
+        let local = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: "/tmp"))
+        let localView = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), backedByZmx: false)
+        localView.watermarkSession = local
+        local.scratchSurface = localView
+
+        XCTAssertFalse(server.remoteScratchStopped(localView))
+        XCTAssertTrue(server.remoteScratchStopped(view))
+        XCTAssertTrue(RemoteReconnectBook.shared.waiting(pane: client))
+        server.tickReconnects()
+        for _ in 0..<200 where session.scratchGeneration == generation {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        XCTAssertEqual(session.scratchGeneration, generation + 1)
+        XCTAssertNil(session.scratchSurface)
+        XCTAssertTrue(session.scratchCommand?.contains(ZmxSupport.daemonName(for: scratch)) == true, session.scratchCommand ?? "")
+        XCTAssertTrue(session.scratchActive)
+    }
+
+    func testAnOriginScratchThatLedTakesItsLeadBackOnReconnect() async throws {
+        let workspace = try XCTUnwrap(store.currentWorkspaceID)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: "/tmp", remoteHost: "mini"))
+        let primary = UUID()
+        let origin = RemoteBinding.Origin(host: "mini", endpoint: ControlZmxEndpoint(executable: "/a/zmx", socketDirectory: "/tmp/z"),
+                                          sessionName: "c")
+        store.bindRemote(RemoteBinding(remoteSessionID: "origin", daemonsByLocalPane: [session.paneIdentity: ZmxSupport.daemonName(for: primary)],
+                                       presentationVersion: 1, origin: origin), forSession: session.id)
+        let server = server(probe: 0)
+        store.applyRemoteLayout(PresentationLayout(panes: [primary], primary: primary, shown: false, scratch: UUID(), scratchShown: true),
+                                forSession: session.id, attach: server)
+        let client = try XCTUnwrap(session.scratchClientIdentity)
+        pane = client
+        defer { ZmxLeadBook.shared.forget(pane: client) }
+        let nonce = try XCTUnwrap(ZmxLeadBook.shared.states[client]?.attachment.nonce)
+        _ = ZmxLeadBook.shared.apply(try XCTUnwrap(ZmxLeadNotice(title: "zmx-role;\(nonce):leader:1")), pane: client)
+        let view = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), env: ["AGTERM_PANE_ID": client.uuidString],
+                                      backedByZmx: false)
+        view.watermarkSession = session
+        session.scratchSurface = view
+        session.scratchCommand = nil
+        let generation = session.scratchGeneration
+
+        XCTAssertTrue(server.remoteScratchStopped(view))
+        server.tickReconnects()
+        for _ in 0..<200 where session.scratchGeneration == generation {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        XCTAssertTrue(session.scratchCommand?.contains("ZMX_MANAGED_RECLAIM=\(nonce)") == true, session.scratchCommand ?? "")
+    }
+
+    func testAnEndedRowClosesItsOriginScratchWhetherParkedOrRunning() throws {
+        for parked in [true, false] {
+            let workspace = try XCTUnwrap(store.currentWorkspaceID)
+            let session = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: "/tmp", remoteHost: "mini"))
+            let primary = UUID()
+            let origin = RemoteBinding.Origin(host: "mini", endpoint: ControlZmxEndpoint(executable: "/a/zmx", socketDirectory: "/tmp/z"),
+                                              sessionName: "c")
+            store.bindRemote(RemoteBinding(remoteSessionID: "origin", daemonsByLocalPane: [session.paneIdentity: ZmxSupport.daemonName(for: primary)],
+                                           presentationVersion: 1, origin: origin), forSession: session.id)
+            let server = server(probe: 0)
+            store.applyRemoteLayout(PresentationLayout(panes: [primary], primary: primary, shown: false, scratch: UUID(), scratchShown: true),
+                                    forSession: session.id, attach: server)
+            let client = try XCTUnwrap(session.scratchClientIdentity)
+            defer { ZmxLeadBook.shared.forget(pane: client) }
+            let view = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), env: ["AGTERM_PANE_ID": client.uuidString],
+                                          backedByZmx: false)
+            view.watermarkSession = session
+            session.scratchSurface = view
+            if parked { XCTAssertTrue(server.remoteScratchStopped(view)) }
+
+            _ = store.remoteSessionEnded(forSession: session.id)
+
+            XCTAssertNil(session.scratchSurface, "parked: \(parked)")
+            XCTAssertTrue(view.isDestroyed, "parked: \(parked)")
+            XCTAssertFalse(session.scratchActive, "parked: \(parked)")
+            XCTAssertNil(session.scratchDaemon, "parked: \(parked)")
+            XCTAssertFalse(RemoteReconnectBook.shared.waiting(pane: client), "parked: \(parked)")
+        }
+    }
+
     func testAPaneAlreadyClosedWhenParkedIsNeverRegistered() throws {
         let (session, view) = try replica()
         let server = server(probe: 0)
-        PaneLead.reconnect = { _, _ in
+        PaneLead.reconnect = { _, _, _ in
             XCTFail("a pane already closed is never attached")
             return true
         }
         session.surface = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), backedByZmx: false)
 
-        server.waitToReconnect(view, cover: false)
+        server.waitToReconnect(view, cover: false, reclaim: nil)
 
         XCTAssertFalse(RemoteReconnectBook.shared.waiting(pane: session.paneIdentity))
     }

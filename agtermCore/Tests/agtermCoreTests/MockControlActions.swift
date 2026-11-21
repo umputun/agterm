@@ -10,6 +10,7 @@ import Testing
 final class MockControlActions: ControlActions {
     enum Call: Equatable {
         case tree(window: String?)
+        case catalogOperation(opID: String, sent: CatalogPosition?, window: String?)
         case eventsRead(ControlEventReadOptions)
         case sessionNew(ControlSessionCreateOptions)
         case sessionDuplicate(target: String?, window: String?)
@@ -17,6 +18,7 @@ final class MockControlActions: ControlActions {
         case sessionGo(window: String?, SessionNavigation)
         case sessionClose(target: String?, window: String?)
         case sessionCloseBatch(targets: [String], window: String?)
+        case sessionTerminate(targets: [String], window: String?, undoable: Bool)
         case sessionRename(target: String?, window: String?, String)
         case sessionReveal(target: String?, window: String?)
         case workspaceNew(window: String?, String?, collapsed: Bool)
@@ -36,6 +38,8 @@ final class MockControlActions: ControlActions {
         case pageSession(target: String?, window: String?, options: ControlSessionOverlayOpenOptions)
         case companionDuplicate(target: String?, window: String?, select: Bool)
         case companionConvert(target: String?, window: String?)
+        case companionMove(target: String?, parent: String, index: Int?, window: String?)
+        case companionPromote(target: String?, placement: ControlCompanionPromotion, window: String?)
         case companionPageAttach(target: String?, window: String?)
         case workspaceFlag(target: String?, window: String?, ControlToggleMode)
         case sessionFlag(target: String?, window: String?, String?)
@@ -70,6 +74,7 @@ final class MockControlActions: ControlActions {
         case browserClear
         case browserLinks(LinkOpenMode?)
         case version
+        case updateCheck
         case configReload
         case notify(target: String?, window: String?, title: String?, body: String)
         case themeSet(String?)
@@ -80,6 +85,7 @@ final class MockControlActions: ControlActions {
         case zmxScreen(name: String, fullBuffer: Bool, lines: Int?)
         case zmxPrune
         case zmxKill(target: String, window: String?, pane: ZmxPaneRole)
+        case zmxKillPane(target: String, window: String?, pane: ZmxPaneRole, paneID: String)
         case zmxReset
         case zmxTree(host: String?)
         case zmxAttach(host: String, session: String)
@@ -105,8 +111,10 @@ final class MockControlActions: ControlActions {
         case overlayVisibility(target: String?, window: String?, pane: OverlayPane?, mode: OverlayVisibilityMode)
         case overlayFollow(target: String?, window: String?, pane: OverlayPane?, mode: ControlToggleMode)
         case overlayWrap(target: String?, window: String?, pane: OverlayPane?, mode: ControlToggleMode)
+        case overlayExpand(target: String?, window: String?, pane: OverlayPane?, mode: ControlToggleMode)
         case overlaySearch(target: String?, window: String?, pane: OverlayPane?, request: TextSearchRequest)
         case overlayChanges(target: String?, window: String?, pane: OverlayPane?, forward: Bool)
+        case overlayFiles(target: String?, window: String?, pane: OverlayPane?, to: String)
         case overlayReload(target: String?, window: String?, pane: OverlayPane?, current: Bool)
         case overlayNavigate(target: String?, window: String?, pane: OverlayPane?, HtmlNavigation)
         case overlayResize(target: String?, window: String?, sizePercent: Int?)
@@ -133,7 +141,7 @@ final class MockControlActions: ControlActions {
         case windowZoom(target: String?)
         case windowFullscreen(target: String?)
         case windowMinimize(target: String?, mode: ControlToggleMode)
-        case windowRemoteOpen(host: String)
+        case windowRemoteOpen(host: String, originWindow: String?)
         case pickOpen(PendingPick, window: String?, follow: Bool)
         case pickResult(target: String, window: String?)
         case pickCancel(target: String, window: String?)
@@ -176,6 +184,7 @@ final class MockControlActions: ControlActions {
     var nextHooksListResponse = ControlResponse(ok: true)
     var nextRecentResponse = ControlResponse(ok: true)
     var nextVersionResponse = ControlResponse(ok: true)
+    var nextUpdateCheckResponse = ControlResponse(ok: true)
     var nextKeymapResponse = ControlResponse(ok: true)
     var nextConfigResponse = ControlResponse(ok: true)
     var nextThemeSetResponse = ControlResponse(ok: true)
@@ -239,6 +248,11 @@ final class MockControlActions: ControlActions {
         return nextTreeResponse
     }
 
+    func catalogOperation(_ opID: String, sent: CatalogPosition?, window: String?) -> ControlResponse {
+        calls.append(.catalogOperation(opID: opID, sent: sent, window: window))
+        return ControlResponse(ok: true)
+    }
+
     func readEvents(_ options: ControlEventReadOptions) -> ControlResponse {
         calls.append(.eventsRead(options))
         return nextEventsReadResponse
@@ -271,6 +285,11 @@ final class MockControlActions: ControlActions {
 
     func closeSessions(_ targets: [String], window: String?) -> ControlResponse {
         calls.append(.sessionCloseBatch(targets: targets, window: window))
+        return ControlResponse(ok: true)
+    }
+
+    func terminateSessions(_ targets: [String], window: String?, undoable: Bool) -> ControlResponse {
+        calls.append(.sessionTerminate(targets: targets, window: window, undoable: undoable))
         return ControlResponse(ok: true)
     }
 
@@ -355,6 +374,16 @@ final class MockControlActions: ControlActions {
 
     func convertToCompanion(_ target: String?, window: String?) -> ControlResponse {
         calls.append(.companionConvert(target: target, window: window))
+        return ControlResponse(ok: true)
+    }
+
+    func moveCompanion(_ target: String?, parent: String, index: Int?, window: String?) -> ControlResponse {
+        calls.append(.companionMove(target: target, parent: parent, index: index, window: window))
+        return ControlResponse(ok: true)
+    }
+
+    func promoteCompanion(_ target: String?, placement: ControlCompanionPromotion, window: String?) -> ControlResponse {
+        calls.append(.companionPromote(target: target, placement: placement, window: window))
         return ControlResponse(ok: true)
     }
 
@@ -567,6 +596,11 @@ final class MockControlActions: ControlActions {
         return nextVersionResponse
     }
 
+    func checkForUpdates() async -> ControlResponse {
+        calls.append(.updateCheck)
+        return nextUpdateCheckResponse
+    }
+
     func reloadGhosttyConfig() -> ControlResponse {
         calls.append(.configReload)
         return nextConfigResponse
@@ -615,6 +649,11 @@ final class MockControlActions: ControlActions {
 
     func killZmxDaemon(target: String, window: String?, pane: ZmxPaneRole) -> ControlResponse {
         calls.append(.zmxKill(target: target, window: window, pane: pane))
+        return nextZmxKillResponse
+    }
+
+    func killZmxPane(target: String, window: String?, pane: ZmxPaneRole, paneID: String) -> ControlResponse {
+        calls.append(.zmxKillPane(target: target, window: window, pane: pane, paneID: paneID))
         return nextZmxKillResponse
     }
 
@@ -760,6 +799,12 @@ final class MockControlActions: ControlActions {
         return ControlResponse(ok: true, result: ControlResult(id: target, text: "wrapped"))
     }
 
+    func setSessionOverlayExpand(_ target: String?, window: String?, pane: OverlayPane?,
+                                 mode: ControlToggleMode) -> ControlResponse {
+        calls.append(.overlayExpand(target: target, window: window, pane: pane, mode: mode))
+        return ControlResponse(ok: true, result: ControlResult(id: target, text: "expanded"))
+    }
+
     func searchSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?,
                               request: TextSearchRequest) async -> ControlResponse {
         calls.append(.overlaySearch(target: target, window: window, pane: pane, request: request))
@@ -770,6 +815,11 @@ final class MockControlActions: ControlActions {
                                    forward: Bool) async -> ControlResponse {
         calls.append(.overlayChanges(target: target, window: window, pane: pane, forward: forward))
         return ControlResponse(ok: true, result: ControlResult(id: target, text: "3 of 7"))
+    }
+
+    func goSessionOverlayFiles(_ target: String?, window: String?, pane: OverlayPane?, to: String) async -> ControlResponse {
+        calls.append(.overlayFiles(target: target, window: window, pane: pane, to: to))
+        return ControlResponse(ok: true, result: ControlResult(id: target, text: "2 of 4: b.go"))
     }
 
     func resizeSessionOverlay(_ target: String?, window: String?, sizePercent: Int?) -> ControlResponse {
@@ -906,7 +956,11 @@ final class MockControlActions: ControlActions {
     }
 
     func windowRemoteOpen(host: String) async -> ControlResponse {
-        calls.append(.windowRemoteOpen(host: host))
+        await windowRemoteOpen(host: host, originWindow: nil)
+    }
+
+    func windowRemoteOpen(host: String, originWindow: String?) async -> ControlResponse {
+        calls.append(.windowRemoteOpen(host: host, originWindow: originWindow))
         return nextWindowRemoteOpenResponse
     }
 
@@ -969,8 +1023,11 @@ final class MockControlActions: ControlActions {
     /// messagesUnsupported answers what the `ControlActions` default answers, for a host without the bus.
     var messagesUnsupported = false
 
+    var messageFailures: [MessageAddress: MessagePaneError] = [:]
+
     func resolveMessagePane(_ address: MessageAddress) -> Result<MessageRecipient, MessagePaneError> {
         if messagesUnsupported { return .failure(.unsupported) }
+        if let failure = messageFailures[address] { return .failure(failure) }
         guard let recipient = messagePanes[address] else {
             let pane = switch address.pane {
             case .id(let id): id.uuidString

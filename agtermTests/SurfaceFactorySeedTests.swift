@@ -322,6 +322,116 @@ final class SurfaceFactorySeedTests: XCTestCase {
         XCTAssertEqual(overlaySurface(for: session).workingDirectory, "/nowhere/explicit")
     }
 
+    func testALiveScratchAttachesItsSavedDaemon() throws {
+        let session = try liveSession()
+        let saved = UUID()
+        store.recordLiveScratch(session.id, identity: saved)
+
+        let live = try XCTUnwrap(agtermApp.liveScratch(for: session, store: store, env: [:], command: nil,
+                                                       requested: .live, active: .live))
+
+        XCTAssertEqual(live.identity, saved)
+        XCTAssertEqual(live.environment["AGTERM_PANE_ID"], saved.uuidString)
+        XCTAssertTrue(live.command.contains(ZmxSupport.daemonName(for: saved)), live.command)
+        XCTAssertFalse(live.command.contains("--ends-pane"), live.command)
+    }
+
+    func testALiveScratchWithNoDaemonSavesANewOne() throws {
+        let session = try liveSession()
+
+        let live = try XCTUnwrap(agtermApp.liveScratch(for: session, store: store, env: [:], command: nil,
+                                                       requested: .live, active: .live))
+
+        XCTAssertEqual(session.scratchDaemon?.identity, live.identity)
+        XCTAssertEqual(store.snapshot().workspaces[0].sessions[0].scratchPaneIdentity, live.identity)
+    }
+
+    func testAScratchCommandIsItsDaemonsCreateOnlyPayload() throws {
+        let session = try liveSession()
+
+        let live = try XCTUnwrap(agtermApp.liveScratch(for: session, store: store, env: [:], command: "htop",
+                                                       requested: .live, active: .live))
+
+        XCTAssertTrue(live.command.contains("--ends-pane"), live.command)
+        XCTAssertTrue(live.command.contains("htop"), live.command)
+    }
+
+    func testARequestedLiveFallbackKeepsTheSavedScratch() throws {
+        let session = try liveSession()
+        let saved = UUID()
+        store.recordLiveScratch(session.id, identity: saved)
+
+        XCTAssertNil(agtermApp.liveScratch(for: session, store: store, env: [:], command: nil, requested: .live, active: .none))
+
+        XCTAssertEqual(session.scratchDaemon?.identity, saved)
+    }
+
+    func testAScratchOutsideRequestedLiveForgetsTheSavedOneAndRunsAPlainShell() throws {
+        let session = try liveSession()
+        let saved = UUID()
+        store.recordLiveScratch(session.id, identity: saved)
+
+        let view = scratchSurface(for: session)
+
+        XCTAssertFalse(view.backedByZmx)
+        XCTAssertNil(session.scratchDaemon)
+        XCTAssertNotEqual(view.paneToken, saved.uuidString)
+    }
+
+    func testAFactoryLiveScratchRunsInItsSavedDaemonWithoutAClaim() throws {
+        let session = try liveSession()
+
+        let view = agtermApp.makeScratchSurface(for: session, store: store, env: [:], suppressAutoFocus: true,
+                                                actions: AppActions(library: library), requested: .live, active: .live)
+
+        let identity = try XCTUnwrap(session.scratchDaemon?.identity)
+        defer { ZmxLeadBook.shared.forget(pane: identity) }
+        XCTAssertTrue(view.backedByZmx)
+        XCTAssertEqual(view.paneToken, identity.uuidString)
+        let attachment = try XCTUnwrap(ZmxLeadBook.shared.states[identity]?.attachment)
+        XCTAssertFalse(attachment.claim)
+        XCTAssertEqual(view.env[ZmxLeadAttachment.nonceVariable], attachment.nonce)
+        XCTAssertNil(view.env[ZmxLeadAttachment.claimVariable])
+    }
+
+    func testAnExitedLiveScratchStartsANewDaemonOnTheNextShow() throws {
+        let session = try liveSession()
+        let first = agtermApp.makeScratchSurface(for: session, store: store, env: [:], suppressAutoFocus: true,
+                                                 actions: AppActions(library: library), requested: .live, active: .live)
+        let old = try XCTUnwrap(session.scratchDaemon?.identity)
+        defer { ZmxLeadBook.shared.forget(pane: old) }
+        session.scratchSurface = first
+        session.scratchActive = true
+
+        first.onExit?()
+
+        XCTAssertNil(session.scratchSurface)
+        XCTAssertNil(session.scratchDaemon)
+        XCTAssertNil(ZmxLeadBook.shared.states[old])
+        let next = agtermApp.makeScratchSurface(for: session, store: store, env: [:], suppressAutoFocus: true,
+                                                actions: AppActions(library: library), requested: .live, active: .live)
+        let fresh = try XCTUnwrap(session.scratchDaemon?.identity)
+        defer { ZmxLeadBook.shared.forget(pane: fresh) }
+        XCTAssertNotEqual(fresh, old)
+        XCTAssertEqual(next.paneToken, fresh.uuidString)
+    }
+
+    private func liveSession() throws -> Session {
+        let workspace = store.addWorkspace(name: "work")
+        return try XCTUnwrap(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+    }
+
+    func testALocalScratchRecordsWhereItStarted() {
+        let local = Session(initialCwd: "/nowhere")
+        local.currentCwd = "/nowhere/primary"
+        _ = scratchSurface(for: local)
+        XCTAssertEqual(local.scratchCwd, "/nowhere/primary")
+
+        let attached = remoteSession(reportedCwd: stateDir.appendingPathComponent("only-on-the-remote").path)
+        _ = scratchSurface(for: attached)
+        XCTAssertEqual(attached.scratchCwd, NSHomeDirectory())
+    }
+
     func testLocalSessionFactoriesKeepTheirInheritedPaths() {
         let session = Session(initialCwd: "/nowhere")
         session.currentCwd = "/nowhere/primary"
