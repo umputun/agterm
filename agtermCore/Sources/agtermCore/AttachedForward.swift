@@ -32,7 +32,7 @@ public enum AttachedForward: Equatable, Sendable {
     case restart(session: String, paneID: String, command: String?)
     case killPane(session: String, pane: ZmxPaneRole, paneID: String)
     case convert(session: String)
-    /// moveCompanion puts the origin's companion `session` under its session `parent`, at the end of that group: the
+    /// moveCompanion puts the origin's session `session` under its session `parent`, at the end of that group: the
     /// viewer places its own row at the requested slot afterwards.
     case moveCompanion(session: String, parent: String)
     /// promoteCompanion makes the origin's companion `session` top-level after its group there: the viewer places its

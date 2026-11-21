@@ -255,6 +255,22 @@ final class ControlServerRemoteCompanionsTests: XCTestCase {
         XCTAssertEqual(HtmlPageOutcomes.shared.outcome(for: local)?.outcome, .pending)
     }
 
+    func testAPageHandedOverAfterItsParentJoinedAnotherGroupLandsInThatGroup() async throws {
+        let (server, store, row) = try makeServer(ScriptedRunner([pageAttach(created)]))
+        server.pageLauncher = FakePageLauncher()
+        let workspace = try XCTUnwrap(store.workspace(forSession: row.id))
+        let holder = try XCTUnwrap(store.addSession(toWorkspace: workspace.id, cwd: "/srv", remoteHost: "buildbox"))
+        store.nest(row.id, under: holder.id)
+        let endpoint = ControlZmxEndpoint(executable: "/Applications/agterm.app/zmx", socketDirectory: "/tmp/agterm-zmx-abc")
+
+        let reply = await server.attachRemotePage(created, origin: RemoteBinding.Origin(host: "buildbox", endpoint: endpoint, sessionName: "c"),
+                                                  presentation: .init(version: nil, headless: false),
+                                                  at: .companion(of: row.id), select: false)
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        XCTAssertEqual(store.companions(of: holder.id).filter { $0.content == .page }.count, 1)
+    }
+
     // a --block caller on a remote page companion had no outcome to read once the page ended there
     func testThePagesOutcomeThereBecomesTheViewsOutcomeWhenThatMacEndsIt() async throws {
         let submitted = RemoteCommandResult(status: 0, stdout: #"{"ok":true,"result":{"pageOutcome":{"pageID":"\#(pageID)","#

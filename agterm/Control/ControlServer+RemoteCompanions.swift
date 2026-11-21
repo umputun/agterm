@@ -284,10 +284,12 @@ extension ControlServer {
             guard let holder = library.store(forSession: parentID) else {
                 return ControlResponse(ok: false, error: "its parent row here was closed")
             }
-            switch holder.addReplicaPageCompanion(to: parentID, page: page, select: select,
+            // the parent may have joined another group during that wait too
+            let root = holder.session(withID: parentID)?.parentID ?? parentID
+            switch holder.addReplicaPageCompanion(to: root, page: page, select: select,
                                                   remoteSessionID: originSession) {
             case .failure(let refusal): return ControlResponse(ok: false, error: refusal.message)
-            case .success(let created): (store, row, parent) = (holder, created, parentID)
+            case .success(let created): (store, row, parent) = (holder, created, root)
             }
         case .root(let holder, let destination):
             guard library.windowID(for: holder) != nil else {

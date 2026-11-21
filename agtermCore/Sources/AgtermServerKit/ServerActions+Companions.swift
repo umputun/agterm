@@ -84,7 +84,7 @@ extension ServerActions {
         return nil
     }
 
-    /// moveCompanion puts the target companion under another top-level session of the catalog, at `index` in its group.
+    /// moveCompanion puts the target session under another top-level session of the catalog, at `index` in its group.
     public func moveCompanion(_ target: String?, parent: String, index: Int?, window: String?) async -> ControlResponse {
         withSession(target, window: window) { session in
             switch resolveSession(parent) {

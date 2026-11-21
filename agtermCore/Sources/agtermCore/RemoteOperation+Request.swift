@@ -220,7 +220,7 @@ extension RemoteOperation {
 
     /// promotionPlacement is a sidebar drop of a companion into `workspace` before its `slot`th shown top-level session,
     /// as the anchor the server places it by: the server's workspace can also hold rows this window detached.
-    public static func promotionPlacement(workspace: UUID, slot: Int?, roots: [UUID]) -> RemoteSessionPlacement {
+    static func promotionPlacement(workspace: UUID, slot: Int?, roots: [UUID]) -> RemoteSessionPlacement {
         // an append is the server's own, past the rows this window detached; only a gap is pinned to a shown row
         guard let slot else { return .workspace(workspace) }
         if slot < roots.count { return .before(roots[max(slot, 0)]) }

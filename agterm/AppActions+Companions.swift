@@ -87,7 +87,7 @@ extension AppActions {
         }
     }
 
-    /// moveCompanion puts a companion under another top-level session for the sidebar drop and the row menu; the
+    /// moveCompanion puts a session under another top-level session for the sidebar drop and the row menu; the
     /// control command calls the store itself, since this reports only through the HUD.
     func moveCompanion(_ id: UUID, under parentID: UUID, at index: Int?, in store: AppStore) {
         if let remote = store.remoteActions {

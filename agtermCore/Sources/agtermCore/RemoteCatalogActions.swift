@@ -133,7 +133,7 @@ public enum RemoteOperation: Equatable, Sendable {
     case restart(UUID, pane: ZmxPaneRole, command: String?)
     case duplicateCompanion(UUID)
     case convertCompanion(UUID)
-    /// moveCompanion puts companion `UUID` under `parent`; `index` counts the server's group, detached rows included.
+    /// moveCompanion puts session `UUID` under `parent`; `index` counts the server's group, detached rows included.
     case moveCompanion(UUID, parent: UUID, index: Int?)
     /// promoteCompanion makes companion `UUID` a top-level session at `placement`, after its own group when nil.
     case promoteCompanion(UUID, to: RemoteSessionPlacement?)

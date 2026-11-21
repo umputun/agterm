@@ -318,7 +318,7 @@ paths:
 - `syncSelection` reveals on a change of the selected row's parent as well as of the selection
   (`lastRevealedParent`), so a companion moved under a folded parent or into another workspace stays in view.
 - Companion rows keep the `session-row` identifier with accessibility label `companion`; the value stays the name.
-- Convert to Companion and a companion move are the paths that change a `parentID` after creation. A recorded parent can therefore be
+- Convert to Companion, a companion move and a promotion are the paths that change a `parentID` after creation. A recorded parent can therefore be
   a companion by the time its child reopens: both restore paths resolve it through `groupRoot(of:)`, and Recent
   Closed's `restoresSession` finds a parent inside a closed group or workspace, not only as an entry's root.
   A group hard close finalizes the parked companions of every member, not only of the closed parent.

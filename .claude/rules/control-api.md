@@ -518,6 +518,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   at the slot (`AttachedFollowUp.moveUnder`); a move under its own parent stays a local reorder. Another Mac attached
   to that origin attaches the moved row under the new parent's row only when it shows it nowhere yet; a row it
   already shows keeps its old grouping until it reattaches, the stream carrying membership, never grouping.
+  Read back `parent` and the session order.
 - `session.companion.promote` is its own wire command for the same reason (CLI `session move --top-level [WORKSPACE |
   --after X | --before X]`, too-old text `the running app is too old for companion promotion`); a plain `session.move` on a
   companion keeps `companionMoveError`. `AppStore.promoteCompanion` is the seam (`CompanionPromotion`, the former parent an
@@ -528,7 +529,6 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   promotion of a remote row reaches `remoteRowPromoted` through `onRemoteRowPromoted`: a Mac page root gets its membership
   observer, and a terminal row baselines the list its stream already sent, which a nested row never does. A confirmed
   origin promotion seeds an empty baseline first, since a reconnect clears that list. Read back `parent` and order.
-  Read back `parent` and the session order.
 - `PageSessionRefusal` is the one pre-dispatch guard, run by `ControlServer.pageCompanionRefusal`, a remote window's
   route and agterm-server's `pageRowRefusal`, covering the socket and a page's bridge.
   It judges `surface.zoom`/`surface.cursor` only for an explicit target, since their `active` means the

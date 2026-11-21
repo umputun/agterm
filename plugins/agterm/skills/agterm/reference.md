@@ -617,7 +617,8 @@ workspace (rename, delete, select, move, collapse, expand, tint and detach) refu
   among the new parent's companions (omitted or past the end: last); on a server window it counts the server's
   group, rows this Mac detached included. The current parent reorders it. Takes no
   workspace, `--to`, `--after`/`--before`, and one target. Refusals: `a session cannot move under itself`, `the new parent must be a
-  top-level session`, `a companion moves only under a session from the same host`; an app predating it answers
+  top-level session`, `a companion moves only under a session from the same host`; an owner predating top-level
+  movers refuses nesting a top-level session with `not a companion`; an app predating it answers
   `the running app is too old for companion moves`. A remote window's row moves on its server or Mac (an older one
   answers `the agterm-server on HOST is too old for companion moves`, or `the agterm on HOST ...` for a Mac); on a session attached from another Mac
   both rows must come from it; for a new parent that Mac moves its own session, with the companions it has there, and then the row moves here with the
@@ -630,8 +631,10 @@ workspace (rename, delete, select, move, collapse, expand, tint and detach) refu
   appended to a workspace (`root` for the top-level sessions), or beside the anchor's whole group, its former
   parent included. Takes no `--parent`, `--index` or `--to`, and one target. Refusals: `not a companion`,
   `a session cannot be placed beside itself`; an app predating it answers
-  `the running app is too old for companion promotion`. A plain `session move` on a companion still refuses.
-  A remote window's row is promoted by its server or Mac. On a session attached from another Mac whose parent comes
+  `the running app is too old for companion promotion`. A plain `session move` that would take a companion out of its
+  group still refuses. A remote window's row is promoted by its server or Mac (an older one answers `the agterm-server
+  on HOST is too old for companion promotion`, or `the agterm on HOST ...` for a Mac); an older Mac a session is
+  attached from answers `the agterm on HOST is too old for this`. On a session attached from another Mac whose parent comes
   from that Mac too, that Mac promotes its own session and the row takes its place here; under any other parent the
   grouping is this Mac's alone and changes only here. Wire command `session.companion.promote`; returns `result.id`.
   Read back as the node's absent `parent` and tree order. GUI twins: a drop on a workspace row or between top-level

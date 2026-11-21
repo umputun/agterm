@@ -23,7 +23,8 @@ public protocol ControlActions {
     func duplicateAsCompanion(_ target: String?, window: String?, select: Bool) async -> ControlResponse
     /// convertToCompanion nests the target and its companions under a fresh session in its slot.
     func convertToCompanion(_ target: String?, window: String?) -> ControlResponse
-    /// moveCompanion puts the target companion under `parent`, at `index` among its companions or last.
+    /// moveCompanion puts the target session under `parent`, a top-level one with its companions, at `index` among
+    /// the parent's companions or last.
     func moveCompanion(_ target: String?, parent: String, index: Int?, window: String?) async -> ControlResponse
     /// promoteCompanion makes the target companion a top-level session at `placement`.
     func promoteCompanion(_ target: String?, placement: ControlCompanionPromotion, window: String?) async -> ControlResponse

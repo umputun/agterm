@@ -44,7 +44,9 @@ extension WorkspaceSidebar.Coordinator {
             return resolveFlaggedReorder(from: info, item: item, childIndex: index) == nil ? [] : .move
         }
         if let reparent = resolveCompanionReparent(from: info, item: item, childIndex: index) {
-            cancelSpringLoadedExpansion()
+            if let workspace = store.workspace(forSession: reparent.parent)?.id {
+                scheduleSpringLoadedExpansion(of: workspace, in: outlineView)
+            }
             outlineView.setDropItem(reparent.dropItem, dropChildIndex: reparent.dropChildIndex)
             return .move
         }

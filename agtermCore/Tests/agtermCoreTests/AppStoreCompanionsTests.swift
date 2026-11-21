@@ -1234,6 +1234,21 @@ extension AppStoreCompanionsTests {
         #expect(reported == [remote.id])
     }
 
+    @Test func aRowFromAnotherHostLeftTopLevelByItsParentsCloseIsReported() throws {
+        let g = try CompanionGroup()
+        var reported: [UUID] = []
+        g.store.onRemoteRowPromoted = { reported.append($0.id) }
+        let host = try #require(g.store.addSession(toWorkspace: g.work.id, cwd: "/h", remoteHost: "box"))
+        let remote = try #require(g.store.addSession(toWorkspace: g.work.id, cwd: "/r", remoteHost: "box"))
+        g.store.nest(remote.id, under: host.id)
+
+        _ = g.store.closeExactly([g.parent.id, g.first.id])
+        _ = g.store.closeExactly([host.id])
+
+        #expect(remote.parentID == nil)
+        #expect(reported == [remote.id])
+    }
+
     @Test func aPromotedCompanionRoundTripsThroughSnapshotAsTopLevel() throws {
         let g = try CompanionGroup()
 
