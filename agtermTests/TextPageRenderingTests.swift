@@ -1014,10 +1014,10 @@ extension TextPageRenderingTests {
 
         try await waitForScript(Self.code, in: page.webView) { $0 == "{\"a\": 1}\n{\"a\": 2}\n{\"a\": 3}\n" }
         try await waitForScript(Self.count, in: page.webView) { $0 == "2 of 3" }
-        let marks = try await page.webView.evaluateJavaScript("""
+        let marks = try await inRenderer("""
             [...CSS.highlights.get('agterm-match'), ...CSS.highlights.get('agterm-current')]
               .map(r => r.constructor.name + ':' + (r.startContainer.isConnected && r.endContainer.isConnected)).join(',')
-            """) as? String
+            """, page.webView) as? String
         XCTAssertEqual(marks, Array(repeating: "StaticRange:true", count: 4).joined(separator: ","))
         let bottom = try await page.webView.evaluateJavaScript(Self.atBottom)
         XCTAssertEqual(bottom as? Bool, true)
