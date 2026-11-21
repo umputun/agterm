@@ -869,6 +869,7 @@ final class HtmlOverlayRegistryTests: HtmlPageTestCase {
         XCTAssertNil(store.openHtmlOverlay(session.id, pane: nil, overlay: overlay, sizePercent: nil))
         let page = registry.page(for: overlay, store: store)
         try await waitForScript("document.images[0] ? String(document.images[0].naturalWidth) : ''", in: page.webView) { $0 == "30" }
+        try await waitForScript("document.images[0] ? document.images[0].src.split(':')[0] : ''", in: page.webView) { $0 == HtmlPageSchemeHandler.scheme }
 
         _ = try writePNG("shot.png", width: 40)
         XCTAssertNil(registry.reload(page.id, target: .current, store: store))
@@ -881,6 +882,7 @@ final class HtmlOverlayRegistryTests: HtmlPageTestCase {
         let page = registry.page(for: openReplica(path, .image(width: 30, height: 10)), store: store, replica: replicaLink())
 
         try await waitForScript("document.images[0] ? String(document.images[0].naturalWidth) : ''", in: page.webView) { $0 == "30" }
+        try await waitForScript("document.images[0] ? document.images[0].src.split(':')[0] : ''", in: page.webView) { $0 == HtmlPageSchemeHandler.scheme }
         XCTAssertEqual(page.webView.value(forKey: "drawsBackground") as? Bool, false)
         XCTAssertEqual(page.webView.configuration.userContentController.userScripts.count, 1, "the theme script alone")
         XCTAssertEqual(fetched, [path])

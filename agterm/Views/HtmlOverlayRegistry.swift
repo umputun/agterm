@@ -227,6 +227,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     private(set) var textPage: TextPageBridge?
     private let storageFailure: String?
     private let replica: HtmlReplicaLink?
+    private let images: ImagePageSource?
     private let revision: HtmlReplicaRevision
     /// usesSavedStore is true for a page built on the saved browser store.
     let usesSavedStore: Bool
@@ -235,6 +236,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
          browser: any HtmlBrowser, sharing: any HtmlSharing, storage: Storage, replica: HtmlReplicaLink? = nil) {
         id = overlay.id
         self.replica = replica
+        images = overlay.source.kind == .image ? ImagePageSource(pageID: overlay.id) : nil
         let revision = HtmlReplicaRevision()
         revision.value = overlay.reloadRevision
         self.revision = revision
@@ -258,7 +260,9 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         }
         // the page's own scripts only; the theme user script and app evaluation run either way
         configuration.defaultWebpagePreferences.allowsContentJavaScript = overlay.javascript
-        if case .replica = overlay.source, let replica {
+        if let images {
+            configuration.setURLSchemeHandler(HtmlPageSchemeHandler(pageID: overlay.id, source: images.source), forURLScheme: HtmlPageSchemeHandler.scheme)
+        } else if case .replica = overlay.source, let replica {
             var source: HtmlPageSchemeHandler.Source = { path in try await replica.fetch(path, revision) }
             if overlay.markdownLinks != nil { source = MarkdownPageSource.replicaLinkSource(replica, revision: revision) }
             configuration.setURLSchemeHandler(HtmlPageSchemeHandler(pageID: overlay.id, source: source), forURLScheme: HtmlPageSchemeHandler.scheme)
@@ -483,6 +487,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     func close() {
         textLoad += 1
+        images?.clear()
         textPage?.stop()
         endPrompt()
         webView.configuration.userContentController.removeAllScriptMessageHandlers()
@@ -530,6 +535,9 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
             webView.load(URLRequest(url: url))
         case .replica(_, .text) where textPage != nil:
             textPage?.loadDocument(fresh: true)
+        case .replica(let path, .image):
+            guard replica != nil else { return fail(OverlayHtmlError.remoteFile) }
+            loadImage { [weak self] in await self?.replicaImage(path) ?? .failure(ReplicaContentFailure(message: OverlayHtmlError.remoteFile)) }
         case .replica(let path, let content):
             guard replica != nil else { return fail(OverlayHtmlError.remoteFile) }
             textLoad += 1
@@ -542,7 +550,11 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
                 }
             }
         case .image(let path):
-            loadBuilt { ImageProbe.load(path: path).map { probe, data in ImagePage.html(data: data, mimeType: probe.mimeType) } }
+            loadImage {
+                await Task.detached(priority: .userInitiated) {
+                    ImageProbe.load(path: path).map { probe, data in (probe.mimeType, data) }.mapError { ReplicaContentFailure(message: $0.description) }
+                }.value
+            }
         case .markdown(let path):
             if let grant = overlay.markdownLinks, let url = HtmlPageSchemeHandler.url(pageID: id, path: grant.path) {
                 webView.load(URLRequest(url: url))
@@ -570,6 +582,33 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         }
     }
 
+    private typealias ImageRead = Result<(mimeType: String, data: Data), ReplicaContentFailure>
+
+    private func loadImage(_ read: @escaping @MainActor () async -> ImageRead) {
+        textLoad += 1
+        let load = textLoad
+        Task { @MainActor [weak self] in
+            let image = await read()
+            guard let self, textLoad == load else { return }
+            switch image {
+            case .failure(let failure): fail(failure.message)
+            case .success(let image):
+                guard let url = images?.stage(image.data, mimeType: image.mimeType, load: load) else { return fail(OverlayHtmlError.remoteFile) }
+                await show(ImagePage.html(src: url.absoluteString), load: load)
+            }
+        }
+    }
+
+    // the origin already judged the file, but the bytes are probed again here, since the channel checks no pixel count
+    private func replicaImage(_ path: String) async -> ImageRead {
+        let fetched = await fetchReplica(path, limit: ImagePage.maxBytes,
+                                         local: (ImageFile.Failure.tooLarge(path).description, ImageFile.Failure.unreadable(path).description))
+        guard case .success(let data) = fetched else { return fetched.map { _ in ("", Data()) } }
+        return await Task.detached(priority: .userInitiated) {
+            ImageProbe.probe(data, path: path).map { ($0.mimeType, data) }.mapError { ReplicaContentFailure(message: $0.description) }
+        }.value
+    }
+
     private func show(_ html: String, load: Int) async {
         let filtered = overlay.source.kind != .document ? true : await DocumentRules.shared.install(on: webView.configuration.userContentController)
         guard textLoad == load else { return }
@@ -582,17 +621,9 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     // a file can change between the origin's check and this fetch
     private func replicaContentPage(path: String, content: ReplicaContent) async -> Result<String, ReplicaContentFailure> {
         switch content {
-        // an html page loads through the scheme handler and a text page through its bridge
-        case .html, .text:
+        // an html page and a picture load through the scheme handler, a text page through its bridge
+        case .html, .text, .image:
             return .failure(ReplicaContentFailure(message: OverlayHtmlError.remoteFile))
-        case .image:
-            let fetched = await fetchReplica(path, limit: ImagePage.maxBytes,
-                                             local: (ImageFile.Failure.tooLarge(path).description, ImageFile.Failure.unreadable(path).description))
-            guard case .success(let data) = fetched else { return fetched.map { _ in "" } }
-            return await Task.detached(priority: .userInitiated) {
-                ImageProbe.probe(data, path: path).map { ImagePage.html(data: data, mimeType: $0.mimeType) }
-                    .mapError { ReplicaContentFailure(message: $0.description) }
-            }.value
         case .markdown:
             let fetched = await fetchReplica(path, limit: MarkdownPage.maxBytes,
                                              local: (MarkdownFile.Failure.tooLarge(path).description, MarkdownFile.Failure.unreadable(path).description))
@@ -794,6 +825,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     private func fail(_ message: String) {
         loadPending = false
+        images?.clear()
         store?.setHtmlLoadState(id, state: .failed, error: message)
     }
 

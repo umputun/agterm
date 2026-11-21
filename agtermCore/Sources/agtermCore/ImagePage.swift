@@ -74,11 +74,21 @@ public enum ImagePage {
 
     /// html shows `data` filling the page with its aspect kept, centered on a transparent canvas.
     public static func html(data: Data, mimeType: String) -> String {
+        page(escapedSrc: "data:\(MarkdownPage.escaped(mimeType));base64,\(data.base64EncodedString())")
+    }
+
+    /// html shows the picture at `src` the same way, for a page that serves the bytes itself.
+    public static func html(src: String) -> String {
+        page(escapedSrc: MarkdownPage.escaped(src))
+    }
+
+    // base64 needs no escaping, so a data URI's payload skips the scalar walk
+    private static func page(escapedSrc: String) -> String {
         """
         <!doctype html><html><head><meta charset="utf-8"><style>
         html,body{margin:0;height:100%;background:transparent;overflow:hidden}
         img{display:block;width:100%;height:100%;object-fit:contain}
-        </style></head><body><img alt="" src="data:\(mimeType);base64,\(data.base64EncodedString())"></body></html>
+        </style></head><body><img alt="" src="\(escapedSrc)"></body></html>
         """
     }
 }
