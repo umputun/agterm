@@ -287,7 +287,8 @@ paths:
 
 - The root container has no row: `workspaceProjection` yields it first and the Coordinator lists its session nodes as
   level-0 rows ahead of the workspace rows. Without the disclosure strip a root parent's triangle has no room, so
-  `SidebarOutlineView.rootBlockShift` indents the root block one step instead of reserving the strip.
+  `SidebarOutlineView.rootBlockShift` indents the root block one step instead of reserving the strip. With the strip
+  the root rows stay level with the workspace rows and `selectionMinX(atRow:)` starts their pill at 0, over the triangle.
 - A gap among the level-0 session rows, the one above the first workspace row included, drops into the root
   (`SidebarDrop.isRootGap`); workspace drags count only named workspace rows (`namedWorkspaces`), offset by the
   root block's row count for the highlight.

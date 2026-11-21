@@ -371,7 +371,8 @@ final class SidebarRowView: NSTableRowView {
 
     /// selectionRect is the pill's frame in the row.
     var selectionRect: NSRect {
-        let minX = (superview as? SidebarOutlineView)?.selectionMinX ?? 8
+        let outline = superview as? SidebarOutlineView
+        let minX = outline.map { $0.selectionMinX(atRow: $0.row(for: self)) } ?? 8
         let inset = GhosttyApp.shared.sidebarDensity.selectionInset
         let pill = bounds.insetBy(dx: 0, dy: inset)
         return NSRect(x: pill.minX + minX, y: pill.minY, width: pill.width - minX - 8, height: pill.height)

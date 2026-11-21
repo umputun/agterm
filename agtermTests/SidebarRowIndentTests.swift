@@ -224,6 +224,29 @@ final class SidebarRowIndentTests: XCTestCase {
         }
     }
 
+    func testATopLevelParentsPillSpansTheChevronStripSoItsTriangleSitsInside() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let inWorkspace = try XCTUnwrap(store.activeSession)
+        let root = try XCTUnwrap(store.rootWorkspace)
+        let parent = try XCTUnwrap(store.addSession(toWorkspace: root.id, cwd: "/tmp", select: false))
+        _ = try store.addCompanion(to: parent.id).get()
+        try buildSidebar()
+
+        for density in [SidebarDensity.standard, .compact] {
+            GhosttyApp.shared.setSidebarDensity(density)
+            postAppearanceChange()
+            let rootRow = try row(of: parent.id)
+            let triangle = outline.frameOfOutlineCell(atRow: rootRow)
+            let pill = try pillAndIcon(of: parent.id).pill
+            XCTAssertGreaterThan(triangle.width, 0, "\(density)")
+            XCTAssertEqual(outline.frameOfCell(atColumn: 0, row: rootRow).minX,
+                           outline.frameOfCell(atColumn: 0, row: try workspaceRow()).minX, "\(density)")
+            XCTAssertGreaterThanOrEqual(triangle.minX, pill.minX, "\(density)")
+            XCTAssertLessThanOrEqual(triangle.maxX, pill.maxX, "\(density)")
+            XCTAssertEqual(try pillAndIcon(of: inWorkspace.id).pill.minX, 8, "\(density)")
+        }
+    }
+
     func testTogglingChevronsOnAMountedSidebarReappliesTheLayoutBothWays() throws {
         try buildSidebar()
         postAppearanceChange()
