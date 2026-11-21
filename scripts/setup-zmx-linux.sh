@@ -17,7 +17,7 @@ stage_shell_integration() {
     return 0
   fi
   work="$(mktemp -d)"
-  curl -fsSL "https://codeload.github.com/ghostty-org/ghostty/tar.gz/$rev" \
+  curl -fsSL --proto =https --proto-redir =https "https://codeload.github.com/ghostty-org/ghostty/tar.gz/$rev" \
     | tar -xz -C "$work" "ghostty-$rev/src/shell-integration"
   rm -rf "$OUT/ghostty"
   mkdir -p "$OUT/ghostty/shell-integration"

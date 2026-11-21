@@ -30,7 +30,7 @@ bundle="$ROOT/build/server/$SDK.artifactbundle.tar.gz"
 mkdir -p "$out"
 
 # the swift image has no curl, so the bundle is fetched here and handed in read-only
-[[ -s "$bundle" ]] || curl -fsSL -o "$bundle" "$SDK_URL"
+[[ -s "$bundle" ]] || curl -fsSL --proto =https --proto-redir =https -o "$bundle" "$SDK_URL"
 [[ "$(shasum -a 256 "$bundle" | cut -d' ' -f1)" == "$SDK_SHA256" ]] \
   || die "$bundle does not match its published checksum; remove it to download again"
 
