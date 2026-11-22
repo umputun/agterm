@@ -2108,10 +2108,10 @@ terminal, and the receiver reads it when it chooses. Mailboxes live in the runni
 is drawn on screen.
 
 - `agtermctl msg send TEXT|--stdin (--to SESSION:PANE ... | --all [--workspace W]) [--as SESSION:PANE-ID]`
-  (`msg.send`). PANE is a pane id (`surfaces[].paneID` from `tree --json`) or `left` (alias `primary`, `top`), `right`
+  (`msg.send`). PANE is a pane id (`surfaces[].paneID` from `tree --json`, or the session's `scratchPaneID` for a hidden scratch) or `left` (alias `primary`, `top`), `right`
   (`split`, `bottom`) or `scratch`, resolved once at send time; a bare session is an error. Aliases of one pane are delivered
   once. `--all` reaches every live pane in every open window except the sender and remote rows;
-  `--workspace` narrows it (`root` for the top-level sessions). A split hidden since launch has no terminal yet and is not a live pane.
+  `--workspace` narrows it (`root` for the top-level sessions). In Live mode a pane with no terminal yet, such as a split or scratch hidden since a relaunch, is live while its program runs.
   The reply carries `messageID` (shared by every copy), `delivered` (canonical `SESSION:PANE-ID`
   addresses) and `rejected` (`{address, reason, detail?}`, reason `mailbox full` or `unknown pane`; `detail`
   says more, as `remote session` does). The CLI prints the id, one stderr line per rejection (the detail when

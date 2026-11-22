@@ -470,6 +470,7 @@ extension ControlServer {
         guard let store = library.store(for: claim.windowID),
               let session = store.session(withID: claim.sessionID) else { return }
         let surface = claim.pane == .left ? session.surface : session.splitSurface
+        if surface == nil { store.daemonKilled(claim.paneIdentity) }
         // `backedByZmx` is what makes this surface a CLIENT of the daemon just killed. On a requested-live
         // fallback the launch reap preserves claimed daemons while the pane gets a fresh plain shell, so
         // without this the kill would close a live pane that never attached to the thing it destroyed.

@@ -1598,8 +1598,14 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   shapes the reply; `ControlActions` only resolves an address to a live pane, lists the `--all` panes and
   reports a queued message. A host without the bus answers `MessagePaneError.unsupported`, which refuses the
   whole command; only `.unresolved` becomes a per-recipient `unknown pane` rejection.
-- A live pane is a realized surface with a parseable token, the one definition recipients, identities and
-  `--all` share; a split hidden since launch has none. `ControlServer+Messages` resolves the session across
+- A live pane is a realized surface with a parseable token, or, in a Live launch, a locally owned pane with no
+  realized surface whose daemon the kernel finds (`AppStore.daemonProbe`): the one definition recipients, identities,
+  `--all` and the tree's daemon-based `paneID` fallback share; a realized surface's token and `scratchPaneID` stay
+  identity metadata, published whatever a probe answers. Such a pane's leader pid is recorded and checked on every mail access, a
+  realized surface included, since its attach can still replace the daemon: an unknown probe refuses and drops
+  nothing, an absent one (no socket at the pane's name) and a different pid drop the earlier mail first. A primary exit
+  promotes a surfaceless split unless its probe is absent. The queued event routes by the recipient's canonical
+  session and never re-probes. `ControlServer+Messages` resolves the session across
   every open store with `window: nil`, never the frontmost default, then asks `AppStore.messagePane`.
 - An identity is `SESSION:PANE-ID` only and must be a live pane of that session, on send, read and ack alike.
   There is no fallback to a role or the active pane, and a stale or incomplete identity never becomes an

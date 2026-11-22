@@ -1739,4 +1739,13 @@ final class WindowLibraryTests {
         #expect(library.store(for: remote.id)?.rootWorkspace == nil)
     }
 
+    @Test func everyStoreAsksTheLibrarysDaemonProbe() throws {
+        let pane = UUID()
+        let library = WindowLibrary(directory: directory, paneFinalizer: nil, daemonProbe: { $0 == pane ? .running(leader: 42) : .absent })
+        let work = library.newWindow(name: "work")
+
+        #expect(library.store(for: work.id)?.daemonProbe?(pane) == .running(leader: 42))
+        #expect(WindowLibrary(directory: directory, paneFinalizer: nil).store(for: work.id)?.daemonProbe == nil)
+    }
+
 }

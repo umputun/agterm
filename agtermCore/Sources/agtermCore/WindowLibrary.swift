@@ -89,6 +89,8 @@ public final class WindowLibrary {
     /// presentationHub is the hub every open store publishes to, here so a deleted closed window's viewers are ended.
     @ObservationIgnored public var presentationHub: PresentationHub?
     @ObservationIgnored private let launchPaneDrop: (([UUID]) -> Void)?
+    /// daemonProbe is every store's `AppStore.daemonProbe`.
+    @ObservationIgnored private let daemonProbe: ((UUID) -> DaemonProbe)?
     @ObservationIgnored private let launchInventorySink: ((Set<UUID>?) -> Void)?
     @ObservationIgnored private var launchInventoryComplete = true
     @ObservationIgnored private var treeEventDebouncers: [UUID: Debouncer]
@@ -133,6 +135,7 @@ public final class WindowLibrary {
                 paneFinalizer: (([UUID]) -> Void)?,
                 launchInventorySink: ((Set<UUID>?) -> Void)? = nil,
                 launchPaneDrop: (([UUID]) -> Void)? = nil,
+                daemonProbe: ((UUID) -> DaemonProbe)? = nil,
                 controlEventRing: ControlEventRing? = nil,
                 flaggedLayout: FlaggedViewLayout = .flat) {
         self.directory = directory
@@ -142,6 +145,7 @@ public final class WindowLibrary {
         self.paneFinalizer = paneFinalizer
         self.launchInventorySink = launchInventorySink
         self.launchPaneDrop = launchPaneDrop
+        self.daemonProbe = daemonProbe
         self.treeEventDebouncers = [:]
         self.stores = [:]
         self.windows = []
@@ -742,7 +746,8 @@ public final class WindowLibrary {
                 self.onControlEvent?(event)
             },
             paneFinalizer: paneFinalizer,
-            launchPaneDrop: launchPaneDrop
+            launchPaneDrop: launchPaneDrop,
+            daemonProbe: daemonProbe
         )
         store.flaggedLayout = flaggedLayout
         store.recentClosedWindow = windowID

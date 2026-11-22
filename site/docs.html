@@ -664,6 +664,7 @@ agtermctl session overlay open --html report.html --page</code></pre>
 <li>⌥⌘← and Ctrl-1 focus the left or top pane, ⌥⌘→ and Ctrl-2 the right or bottom one. On a hidden split they swap which pane is shown. <code>agtermctl session focus</code> with no pane switches to the other one.</li>
 <li>The divider follows the axis and remembers its position. Drag it to resize, double-click it for an even split.</li>
 <li><strong>Close Split</strong> in the action palette ends the second pane, whatever it is running.</li>
+<li>When the first pane's shell exits, the second pane takes its place and the session stays. In Live mode that includes a split still hidden since a relaunch, while its program runs.</li>
 <li><strong>Swap Panes</strong> (View or the action palette) exchanges the two terminals without restarting them. The primary and split roles follow the positions, focus follows its terminal, and the divider stays put. <code>agtermctl session swap</code> does the same, also while the split is hidden.</li>
 </ul>
 <h3 id="terminals-quick">Quick terminal</h3>
@@ -2009,6 +2010,7 @@ agtermctl msg ack ID                                              # remove what 
 agtermctl msg read --ack --wait --timeout 60                      # wait for mail and take it</code></pre>
 <ul>
 <li>Every live pane has a mailbox; the receiver reads it when it chooses and acknowledges what it handled.</li>
+<li>In Live mode a split or scratch still hidden since a relaunch takes mail while its program runs.</li>
 <li>Run inside a pane, <code>agtermctl msg</code> acts as that pane through <code>AGTERM_SESSION_ID</code> and <code>AGTERM_PANE_ID</code>.</li>
 <li>Mail lives in the running app only: closing or restarting the pane, closing its session, workspace or window, or quitting agterm drops it.</li>
 <li>A full mailbox refuses that recipient alone.</li>
