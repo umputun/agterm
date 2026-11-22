@@ -334,8 +334,9 @@ repeat the consent request.
 
 Read `liveAttribution` and `splitLiveAttribution` in `agtermctl tree --json`;
 the [tree reference](https://agterm.com/commands#tree) defines the values.
-A pane marked `supervisor` keeps microphone requests attributed to agterm after you quit and relaunch
-agterm. App Data is expected to behave the same, but has not been checked.
+A pane marked `supervisor` under the current session host keeps microphone requests attributed to agterm
+after you quit and relaunch agterm. App Data is expected to behave the same, but has not been checked.
+A pane under an earlier host can lose the microphone after an update; see the next section.
 
 A pane reads `app` when its daemon was created without the session host, either by an older agterm or
 because the host could not start; it remains attributed to the running agterm. When that agterm quits,
@@ -359,20 +360,27 @@ System Settings ▸ Privacy & Security ▸ Full Disk Access; the
 Full Disk Access does not grant the microphone. Its permission is controlled separately under
 System Settings ▸ Privacy & Security ▸ Microphone.
 
-## A live session started before an update or a logout cannot reach the local network
+## A live session started before an update or a logout cannot use the microphone or the local network
 
-A command in a live session fails to reach a host on your network (`No route to host`, `EHOSTUNREACH`)
-while the same command works in a new session, or, after macOS forced a logout, a command in an older
-session reports `No user exists for uid 501`.
+After an update, a command in a live session cannot record from the microphone (Claude Code voice mode
+reports `No audio detected from microphone`, `ffmpeg` reports `Cannot use MacBook Pro Microphone`) or
+fails to reach a host on your network (`No route to host`, `EHOSTUNREACH`), while the same command works
+in a new session. After macOS forced a logout, a command in an older session reports
+`No user exists for uid 501`.
 
 A live session whose pane reads `supervisor` was started through a small helper process, the session
 host, and stays tied to the host that started it. Since [#971](https://github.com/umputun/agterm/issues/971)
 a changed helper build or a new login gets its own host, so new sessions always start under the current
 one; a session that was already running keeps its earlier host, because macOS cannot move a running
-process to another.
+process to another. An update deletes the earlier host's program file, and macOS then refuses that
+session's microphone requests.
 
-`agtermctl tree --json` marks such a pane with `liveHostStale` (or `splitLiveHostStale`). Agterm ▸ Reset
-Live Sessions… moves those sessions to the current host, as described in the previous section. At every
+`agtermctl tree --json` marks such a pane with `liveHostStale` (or `splitLiveHostStale`). The mark
+means only that the host is older: such a pane may still work, and there is no need to reset after every
+update. When one of these problems shows up, Agterm ▸ Reset Live Sessions… moves those sessions to the
+current host, as described in the previous section: it ends their processes and recreates them, and it can
+include sessions that still work. To check the microphone before ending running work, try it in a new live
+session first. At every
 launch agterm asks each earlier host to stop, and one stops once no live session runs under it. The single
 shared host that agterm used before #971 counts as an earlier host.
 
