@@ -96,7 +96,7 @@ final class ControlServerRemoteCompanionsTests: XCTestCase {
 
         XCTAssertTrue(reply.ok, reply.error ?? "")
         let create = try XCTUnwrap(runner.invocations[1].last)
-        for word in ["duplicate", "--companion", "--target", "origin-1", "--no-select"] {
+        for word in ["duplicate", "--companion", "--target", "origin-1", "--no-select", "--attach-pending"] {
             XCTAssertTrue(create.contains(word), word)
         }
         XCTAssertEqual(store.companions(of: row.id).count, 1)

@@ -467,7 +467,8 @@ public final class RemoteCatalogActions {
         }
         var attaches = operation.attachesPane
         if attaches, case .restart(let id, let pane, _) = operation {
-            attaches = mirror.store?.session(withID: id)?.mountsPane(pane) ?? false
+            let row = mirror.store?.session(withID: id)
+            attaches = OverlayPane(rawValue: pane.rawValue).map { row?.rendersPane($0) == true } ?? false
         }
         return .ready(PreparedRemoteOperation(operation: operation, sent: CatalogPosition(epoch: catalog.epoch, rev: catalog.rev),
                                               panes: panes, scratch: scratch, selection: mirror.selectedSessionID,

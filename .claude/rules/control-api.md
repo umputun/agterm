@@ -2004,8 +2004,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - Every Mac path that can start a program in an origin pane it then attaches sends `ControlArgs.attachPending`
   (CLI `--attach-pending`): a remote session or terminal companion create with a command, Duplicate as Companion,
   and `RemoteOperation.attachesPane` and `AttachedForward.attachesPane` (restart, a scratch with a command); paths
-  that start only a plain shell send none. A restart of a pane the window does not lay out sends none either
-  (`Session.mountsPane`), since no terminal would attach to release it. agterm-server binds it per request
+  that start only a plain shell send none. A restart of a pane the window's deck does not lay out sends none
+  either (`Session.rendersPane`); zoom and the Dashboard are not counted. agterm-server binds it per request
   (`AttachIntent`) and starts a pane running a program, never a plain login shell, with `ZMX_HOLD_UNTIL_ATTACH`
   (`ServerPanes.attachHoldSeconds`, 30 s); a Mac origin ignores it, since its panes attach locally. A create
   without it starts at once.

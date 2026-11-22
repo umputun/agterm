@@ -210,7 +210,7 @@ extension ControlServer {
         guard request.cmd == .sessionRestart, case .success(let pane) = originPane(request.args, of: row, origin: origin, token: .strict) else {
             return true
         }
-        return row.mountsPane(pane.role)
+        return OverlayPane(rawValue: pane.role.rawValue).map(row.rendersPane) ?? false
     }
 
     /// originRole is the role the origin's pane `token` holds there, which a swap on this Mac alone does not change.
