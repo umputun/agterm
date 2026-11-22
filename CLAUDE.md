@@ -113,8 +113,9 @@ C-boundary concurrency before changing the bridge.
   In an unpacked zmx tree inside another git checkout, `git apply` treats the tree as a subdirectory of
   that checkout, so it can skip the entire series and still exit 0:
   verify or regenerate the series outside the enclosing checkout.
-  `scripts/zmx-patches/check.py <zmx> <previous zmx>` checks the upgrade from the bundled zmx 0.8.1; pass
-  `agterm.app/Contents/MacOS/zmx` from a published release's DMG. A release predating `0008` keeps the reconnect
+  `scripts/zmx-patches/check.py <zmx> <previous zmx>` checks the upgrade from the previous release's zmx; pass
+  `agterm.app/Contents/MacOS/zmx` from a published release's DMG. Against a zmx before 1.0 the new client must
+  refuse `run`, `tail` and `write`; against a later one it must use them. A release predating `0008` keeps the reconnect
   a follower, so the reclaim check fails and the screen check reads the old leader's grid with the expected
   output; every other check is the upgrade verdict.
 - Commands:
