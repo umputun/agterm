@@ -257,7 +257,10 @@ struct TextPageTests {
         ("a.vb", "vbnet"), ("/x/Makefile", "makefile"), ("/x/GNUmakefile", "makefile"), ("/x/.bashrc", "bash"),
         ("/x/.zshrc", "bash"), ("/x/.profile", "bash"), ("/x/.bash_profile", "bash"), ("/x/.zprofile", "bash"),
         ("/x/.gitconfig", "ini"), ("/x/.editorconfig", "ini"), ("/x/MAIN.GO", "go"), ("/x/y/Lib.Swift", "swift"),
-        ("a.jsonl", "jsonl"), ("/x/A.NDJSON", "jsonl"),
+        ("a.jsonl", "jsonl"), ("/x/A.NDJSON", "jsonl"), ("a.jsx", "javascript"), ("a.tsx", "typescript"),
+        ("a.mts", "typescript"), ("a.cts", "typescript"), ("a.hh", "cpp"), ("a.hxx", "cpp"), ("a.c++", "cpp"),
+        ("a.h++", "cpp"), ("a.gql", "graphql"), ("a.jsonc", "json"), ("a.mak", "makefile"), ("a.gemspec", "ruby"),
+        ("a.podspec", "ruby"), ("a.pyi", "python"), ("a.pyw", "python"), ("a.wat", "wasm"),
     ])
     func mappedFilesGetTheirLanguage(path: String, language: String) {
         #expect(TextPage.language(forFile: path) == language)
@@ -267,6 +270,10 @@ struct TextPageTests {
     @Test(arguments: [
         "a.txt", "a.TEXT", "a.log", "a.out", "a.csv", "a.tsv", "a.env", "/x/Cargo.lock", "/x/Dockerfile",
         "/x/LICENSE", "/x/README", "/x/CHANGELOG", "/x/Procfile", "/x/.gitignore", "/x/.env",
+        "a.dart", "a.scala", "a.sc", "a.groovy", "a.gradle", "a.ex", "a.exs", "a.erl", "a.hrl", "a.hs", "a.clj",
+        "a.cljs", "a.edn", "a.zig", "a.nim", "a.jl", "a.ml", "a.mli", "a.fs", "a.fsx", "a.elm", "a.vue", "a.svelte",
+        "a.astro", "a.sass", "a.fish", "a.ps1", "a.psm1", "a.bat", "a.cmd", "a.cmake", "a.nix", "a.tf", "a.tfvars",
+        "a.hcl", "a.proto", "a.sol", "a.properties", "a.s", "a.asm",
     ])
     func plainFilesAreEligibleWithNoLanguage(path: String) {
         #expect(TextPage.language(forFile: path) == nil)
