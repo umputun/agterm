@@ -83,6 +83,14 @@ Ghostty version preserves skipped cells during VT replay by moving the cursor ac
   blocking reset, which on macOS wait for the terminal to read them. The client instead flushes what is
   queued, restores termios at once and gives the reset 100 ms.
 
+- `0013-hold-until-attach.patch` lets a detached create hold its command until a terminal attaches.
+  With `ZMX_HOLD_UNTIL_ATTACH=<seconds>` set, `attach --detached` forks the child as usual but parks it
+  before `exec` on a close-on-exec pipe. The first terminal client's Init releases it once leadership and
+  the PTY size are set, or the bound does with no terminal attached; a kill delivered before the bound, or
+  a teardown, closes the pipe and the child exits without running. A program that queries the terminal at startup (codex reads OSC 10/11
+  once) then reaches the attached terminal instead of a creator that answers only DA. A follower's Init
+  does not release; a zero or non-numeric value fails the create, and the variable is unset before exec.
+
 `check.py <zmx>` drives managed clients on PTYs of different sizes against one daemon in a throwaway
 `ZMX_DIR` and exits nonzero when a check fails. Pass a second argument pointing to agterm's patched
 zmx 0.8.1 binary to also verify listing, claiming and reclaiming the lead, typing, reading the screen,

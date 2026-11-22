@@ -126,8 +126,10 @@
   one byte; a byte continues to `exec` after closing the read end, EOF (daemon gone) exits 1. The daemon closes
   the read end, keeps the write end, writes the byte on release and closes it, tolerating `EPIPE` when the
   parked child died first (for example a `^C` typed with `zmx type` while held).
-- `ZMX_HOLD_UNTIL_ATTACH` is read only on `--detached` creation, removed from the daemon's environment, and
-  unset in the child before `exec`, beside the existing `ZMX_MANAGED` unsets. A non-numeric or zero value is
+- `ZMX_HOLD_UNTIL_ATTACH` is read only on `--detached` creation and unset in the child before `exec`, beside
+  the existing `ZMX_MANAGED` unsets; the daemon itself runs nothing that would read it.
+- The deadline release runs at the top of the daemon loop, never right after poll, so a kill or SIGTERM ready
+  in the same turn ends the loop first and the teardown cancels the hold. A non-numeric or zero value is
   rejected as a creation error, never treated as unbounded.
 - The deadline is checked in the daemon loop's poll timeout against a monotonic clock the Zig tests inject.
   Release on Init happens in `handleInit` after the leader resize; a follower's Init does not release (the first
@@ -152,22 +154,22 @@
 
 **Files:**
 - Create: `scripts/zmx-patches/0013-hold-until-attach.patch`
-- Modify: `scripts/zmx-patches/README.md`, `scripts/zmx-patches/check.py`, `scripts/setup.sh` (the `ZMX_REV`
-  comment that names `DeviceAttributeResponder.swift`)
+- Modify: `scripts/zmx-patches/README.md`, `scripts/zmx-patches/check.py`
 
-- [ ] worktree artifacts: symlink only the ghostty set from the main checkout; build zmx locally (no zmx
+- [x] worktree artifacts: symlink only the ghostty set from the main checkout; build zmx locally (no zmx
       artifact or stamp links), since this patch changes the zmx digest
-- [ ] write Zig tests first: a held child does not exec before Init; the first terminal Init releases it after
+- [x] write Zig tests first: a held child does not exec before Init; the first terminal Init releases it after
       the resize; the deadline releases it with no client (injected clock); a kill while held ends it without
       exec; a release write after the child died tolerates `EPIPE`; the env var is absent in the child; both
       gate ends are close-on-exec; a bad value fails creation
-- [ ] implement the gate in `spawnPty`/`exec`, the opt-in parse in `--detached` creation, release in
+- [x] implement the gate in `spawnPty`/`exec`, the opt-in parse in `--detached` creation, release in
       `handleInit` and the loop deadline, cancellation in teardown
-- [ ] add a `check.py` check: a held detached create whose command writes CPR and OSC 10/11 at exec and exits
+- [x] add a `check.py` check: a held detached create whose command writes CPR and OSC 10/11 at exec and exits
       on the replies; a managed client attaching after a delay answers them, and the command's output reaches
       that client
-- [ ] README entry for `0013`; regenerate the series outside the enclosing checkout and confirm it applies
-- [ ] `env -u ZMX_NO_DETACH_KEY zig build test` and `check.py` pass; Linux musl builds via `setup-zmx-linux.sh`
+- [x] README entry for `0013`; regenerate the series outside the enclosing checkout and confirm it applies
+- ➕ the `setup.sh` `ZMX_REV` comment naming `DeviceAttributeResponder.swift` moves to Task 2, which deletes it
+- [x] `env -u ZMX_NO_DETACH_KEY zig build test` and `check.py` pass; Linux musl builds via `setup-zmx-linux.sh`
 
 ### Task 2: session host creates through the held detached create
 
@@ -176,7 +178,8 @@
 - Delete: `agtermCore/Sources/SessionHostRuntime/DeviceAttributeResponder.swift`,
   `agtermCore/Tests/SessionHostRuntimeTests/DeviceAttributeResponderTests.swift`
 - Modify: `agtermCore/Tests/SessionHostRuntimeTests/SessionHostServerTests.swift`, `HostBackendTests.swift`,
-  `docs/ci-flakes.md` (its entry keyed on `paneAttachAfterTheCreatedCommandEndedStartsNoShell`)
+  `docs/ci-flakes.md` (its entry keyed on `paneAttachAfterTheCreatedCommandEndedStartsNoShell`),
+  `scripts/setup.sh` (the `ZMX_REV` comment that names `DeviceAttributeResponder.swift`)
 - Delete: `docs/backlog/fast-live-command-loses-output-in-host-handoff.md`
 
 - [ ] tests first: ensure spawns `zmx attach --detached NAME payload` with `ZMX_HOLD_UNTIL_ATTACH` from

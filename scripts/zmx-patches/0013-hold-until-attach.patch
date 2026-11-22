@@ -1,0 +1,450 @@
+diff --git a/src/client.zig b/src/client.zig
+index c28f1d0..d8aa462 100644
+--- a/src/client.zig
++++ b/src/client.zig
+@@ -28,6 +28,8 @@ pub const CreateOptions = struct {
+     labels: ?[]const u8 = null,
+     is_task_mode: bool = false,
+     quiet: bool = false,
++    /// with a value, the command waits until the first terminal attaches, at most this many seconds
++    hold_seconds: ?u32 = null,
+ };
+ 
+ pub const AttachOptions = struct {
+@@ -93,6 +95,7 @@ pub fn create(alloc: Allocator, io: Io, name: []const u8, opts: CreateOptions) !
+     if (opts.shell) |sh| daemon.shell = sh;
+     daemon.is_task_mode = opts.is_task_mode;
+     daemon.quiet = opts.quiet;
++    daemon.hold_seconds = opts.hold_seconds;
+ 
+     const is_daemon_proc = try daemon.ensureSession(io);
+     if (is_daemon_proc) {
+diff --git a/src/daemonize.zig b/src/daemonize.zig
+index 5110560..f70c545 100644
+--- a/src/daemonize.zig
++++ b/src/daemonize.zig
+@@ -87,23 +87,38 @@ fn exec(sesh_name: []const u8, cmd: Cmd) !noreturn {
+     _ = cross.unsetenv("ZMX_MANAGED_CLAIM");
+     // the record is the daemon's to write; a nested session must not write its own exit into it
+     _ = cross.unsetenv("ZMX_EXIT_FILE");
++    _ = cross.unsetenv("ZMX_HOLD_UNTIL_ATTACH");
+ 
+     const err = lib_posix.execvpeZ(cmd.file, cmd.argv_ptr, std.c.environ);
+     std.log.err("execvpe failed: cmd={s} err={s}", .{ cmd.file, @errorName(err) });
+     lib_posix.exit(1);
+ }
+ 
++/// awaitRelease parks the forked child until the daemon writes one byte to the gate. The gate closing
++/// without it (a kill, or the daemon gone) ends the child before the command runs.
++fn awaitRelease(gate: [2]lib_posix.fd_t) void {
++    // the child's copy of the write end would keep the gate open after the daemon is gone
++    lib_posix.close(gate[1]);
++    var byte: [1]u8 = undefined;
++    const n = lib_posix.read(gate[0], &byte) catch 0;
++    if (n != 1) lib_posix.exit(1);
++    lib_posix.close(gate[0]);
++}
++
+ pub const PtyInfo = struct {
+     master_fd: c_int = undefined,
+     pid: c_int = undefined,
++    /// the write end of a held child's gate, -1 when the child runs at once
++    hold_fd: c_int = -1,
+ };
+ 
+ /// spawnPty runs forkpty() and executes the shell or shell command the user
+-/// provides.
++/// provides. With `hold`, the child waits before exec until the daemon releases it through
++/// `PtyInfo.hold_fd`.
+ ///
+ /// This is the second fork in the double-fork technique explained in the
+ /// daemonize() comment.
+-pub fn spawnPty(sesh_name: []const u8, cmd: Cmd, size: ipc.Resize) !PtyInfo {
++pub fn spawnPty(sesh_name: []const u8, cmd: Cmd, size: ipc.Resize, hold: bool) !PtyInfo {
+     var ws: cross.struct_winsize = .{
+         .ws_row = size.rows,
+         .ws_col = size.cols,
+@@ -111,13 +126,19 @@ pub fn spawnPty(sesh_name: []const u8, cmd: Cmd, size: ipc.Resize) !PtyInfo {
+         .ws_ypixel = size.ypixel,
+     };
+ 
++    const gate: ?[2]lib_posix.fd_t = if (hold) try lib_posix.pipe2(.{ .CLOEXEC = true }) else null;
+     var master_fd: c_int = undefined;
+     const pid = cross.forkpty(&master_fd, null, null, &ws);
+     if (pid < 0) {
++        if (gate) |g| {
++            lib_posix.close(g[0]);
++            lib_posix.close(g[1]);
++        }
+         return error.ForkPtyFailed;
+     }
+ 
+     if (pid == 0) { // child pid code path
++        if (gate) |g| awaitRelease(g);
+         // In the forked child, ANY error must exit rather than propagate:
+         // a returned error falls through to the parent code path below,
+         // running a second daemon on the same socket (or worse, hitting
+@@ -129,7 +150,8 @@ pub fn spawnPty(sesh_name: []const u8, cmd: Cmd, size: ipc.Resize) !PtyInfo {
+         unreachable; // exec() either execs or exits, never returns ok
+     }
+     // master pid code path
+-    std.log.info("pty spawned session={s} pid={d}", .{ sesh_name, pid });
++    std.log.info("pty spawned session={s} pid={d} held={}", .{ sesh_name, pid, hold });
++    if (gate) |g| lib_posix.close(g[0]);
+ 
+     // make pty non-blocking
+     const flags = try lib_posix.fcntl(master_fd, lib_posix.F.GETFL, 0);
+@@ -138,6 +160,7 @@ pub fn spawnPty(sesh_name: []const u8, cmd: Cmd, size: ipc.Resize) !PtyInfo {
+     return .{
+         .master_fd = master_fd,
+         .pid = pid,
++        .hold_fd = if (gate) |g| g[1] else -1,
+     };
+ }
+ 
+@@ -184,7 +207,7 @@ pub fn spawnPty(sesh_name: []const u8, cmd: Cmd, size: ipc.Resize) !PtyInfo {
+ ///                 ✝          │ PID≠SID → can't get a tty
+ ///                            ▼
+ ///                          DAEMON ✓
+-pub fn daemonize(sesh_name: []const u8, cmd: Cmd, keep_fds_open: []i32) !PtyInfo {
++pub fn daemonize(sesh_name: []const u8, cmd: Cmd, keep_fds_open: []i32, hold: bool) !PtyInfo {
+     // creates the daemon
+     const pid = try lib_posix.fork();
+     assert(pid != -1);
+@@ -252,5 +275,61 @@ pub fn daemonize(sesh_name: []const u8, cmd: Cmd, keep_fds_open: []i32) !PtyInfo
+         }
+     }
+ 
+-    return spawnPty(sesh_name, cmd, term_size);
++    return spawnPty(sesh_name, cmd, term_size, hold);
++}
++
++fn readUntil(fd: c_int, want: []const u8, buf: []u8, wait_ms: i32) ![]const u8 {
++    var len: usize = 0;
++    var waited: i32 = 0;
++    while (waited < wait_ms) : (waited += 20) {
++        if (std.mem.indexOf(u8, buf[0..len], want) != null) break;
++        var pfd = [_]lib_posix.pollfd{.{ .fd = fd, .events = lib_posix.POLL.IN, .revents = 0 }};
++        if ((lib_posix.poll(&pfd, 20) catch 0) == 0) continue;
++        const n = lib_posix.read(fd, buf[len..]) catch break;
++        if (n == 0) break;
++        len += n;
++    }
++    return buf[0..len];
++}
++
++test "a held child runs its command only once released, without the hold variable" {
++    _ = cross.putenv(@constCast("ZMX_HOLD_UNTIL_ATTACH=5"));
++    defer _ = cross.unsetenv("ZMX_HOLD_UNTIL_ATTACH");
++    const cmd = try createCmdZ("/bin/sh", false, &.{ "/bin/sh", "-c", "printf 'ran:%s' \"${ZMX_HOLD_UNTIL_ATTACH-unset}\"" });
++    const info = try spawnPty("hold-test", cmd, .{ .rows = 24, .cols = 80 }, true);
++    defer lib_posix.close(info.master_fd);
++    try std.testing.expect(info.hold_fd >= 0);
++    const fd_flags = try lib_posix.fcntl(info.hold_fd, lib_posix.F.GETFD, 0);
++    try std.testing.expect(fd_flags & std.posix.FD_CLOEXEC != 0);
++
++    var buf: [256]u8 = undefined;
++    try std.testing.expectEqualStrings("", try readUntil(info.master_fd, "ran:", &buf, 300));
++
++    _ = try lib_posix.write(info.hold_fd, "1");
++    lib_posix.close(info.hold_fd);
++    const out = try readUntil(info.master_fd, "ran:unset", &buf, 3000);
++    try std.testing.expect(std.mem.indexOf(u8, out, "ran:unset") != null);
++    _ = lib_posix.waitpid(info.pid, 0);
++}
++
++test "a held child whose gate closes without release exits before its command" {
++    const cmd = try createCmdZ("/bin/sh", false, &.{ "/bin/sh", "-c", "printf ran" });
++    const info = try spawnPty("hold-test", cmd, .{ .rows = 24, .cols = 80 }, true);
++    defer lib_posix.close(info.master_fd);
++    lib_posix.close(info.hold_fd);
++    const status = lib_posix.waitpid(info.pid, 0).status;
++    try std.testing.expect(std.posix.W.IFEXITED(status));
++    try std.testing.expectEqual(@as(u8, 1), std.posix.W.EXITSTATUS(status));
++    var buf: [256]u8 = undefined;
++    try std.testing.expect(std.mem.indexOf(u8, try readUntil(info.master_fd, "ran", &buf, 200), "ran") == null);
++}
++
++test "a child spawned without a hold has no gate" {
++    const cmd = try createCmdZ("/bin/sh", false, &.{ "/bin/sh", "-c", "printf ran" });
++    const info = try spawnPty("hold-test", cmd, .{ .rows = 24, .cols = 80 }, false);
++    defer lib_posix.close(info.master_fd);
++    try std.testing.expectEqual(@as(c_int, -1), info.hold_fd);
++    var buf: [256]u8 = undefined;
++    try std.testing.expect(std.mem.indexOf(u8, try readUntil(info.master_fd, "ran", &buf, 3000), "ran") != null);
++    _ = lib_posix.waitpid(info.pid, 0);
+ }
+diff --git a/src/loop.zig b/src/loop.zig
+index 8f3b86b..736a542 100644
+--- a/src/loop.zig
++++ b/src/loop.zig
+@@ -452,6 +452,9 @@ fn daemonLoop(daemon: *Daemon, gpa: std.mem.Allocator, io: std.Io, server_sock_f
+     var drain_deadline: ?i64 = null;
+ 
+     daemon_loop: while (daemon.running) {
++        // at the top, never right after poll: a kill or SIGTERM that arrived with the deadline is handled
++        // first, ends the loop, and the teardown cancels the hold instead of running the command
++        daemon.releaseExpiredHold(role.nowMs());
+         if (drain_deadline) |deadline| {
+             if (!daemon.hasUnsentOutput()) break :daemon_loop;
+             if (role.nowMs() >= deadline) {
+@@ -503,10 +506,14 @@ fn daemonLoop(daemon: *Daemon, gpa: std.mem.Allocator, io: std.Io, server_sock_f
+             });
+         }
+ 
+-        const poll_timeout: i32 = if (drain_deadline) |deadline|
++        const drain_timeout: i32 = if (drain_deadline) |deadline|
+             @intCast(std.math.clamp(deadline - role.nowMs(), 0, EXIT_DRAIN_MS))
+         else
+             -1;
++        const poll_timeout: i32 = if (daemon.holdTimeoutMs(role.nowMs())) |hold|
++            (if (drain_timeout < 0) hold else @min(hold, drain_timeout))
++        else
++            drain_timeout;
+         _ = try lib_posix.poll(poll_fds.items, poll_timeout);
+ 
+         if (poll_fds.items[2].revents & lib_posix.POLL.IN != 0) {
+@@ -861,6 +868,12 @@ pub const Daemon = struct {
+     pty_fd: i32 = -1, // set by daemonLoop so handleRun can probe the foreground process
+     shell: []const u8 = "/bin/sh",
+     quiet: bool = false,
++    /// with a value, the child waits before exec until the first terminal Init or this many seconds
++    hold_seconds: ?u32 = null,
++    /// the write end of a held child's gate, -1 once released or cancelled
++    hold_fd: i32 = -1,
++    /// the monotonic time a held child is released with no terminal attached
++    hold_deadline_ms: ?i64 = null,
+ 
+     /// Create a Daemon. Caller is responsible for freeing all variables passed
+     /// into the init fn.
+@@ -906,6 +919,35 @@ pub const Daemon = struct {
+         try term.resize(gpa, .{ .cols = cols, .rows = rows });
+     }
+ 
++    /// releaseHold lets a held child exec. Its write can fail when the child already died, which
++    /// changes nothing: the gate is closed either way.
++    fn releaseHold(self: *Daemon, why: []const u8) void {
++        if (self.hold_fd < 0) return;
++        std.log.info("releasing held child session={s} on={s}", .{ self.session_name, why });
++        _ = lib_posix.write(self.hold_fd, "1") catch |err| {
++            std.log.warn("held child release failed err={s}", .{@errorName(err)});
++        };
++        self.cancelHold();
++    }
++
++    /// cancelHold closes the gate without releasing, so a held child exits instead of running.
++    fn cancelHold(self: *Daemon) void {
++        if (self.hold_fd >= 0) lib_posix.close(self.hold_fd);
++        self.hold_fd = -1;
++        self.hold_deadline_ms = null;
++    }
++
++    fn releaseExpiredHold(self: *Daemon, now_ms: i64) void {
++        const deadline = self.hold_deadline_ms orelse return;
++        if (now_ms >= deadline) self.releaseHold("deadline");
++    }
++
++    /// holdTimeoutMs is how long the loop may sleep before the hold's deadline, null with no hold.
++    fn holdTimeoutMs(self: *const Daemon, now_ms: i64) ?i32 {
++        const deadline = self.hold_deadline_ms orelse return null;
++        return @intCast(std.math.clamp(deadline - now_ms, 0, std.math.maxInt(i32)));
++    }
++
+     /// True while a client that sent .Init (a real `zmx attach`) is connected.
+     fn hasTerminalClient(self: *const Daemon) bool {
+         for (self.clients.items) |c| {
+@@ -1029,6 +1071,7 @@ pub const Daemon = struct {
+             sesh_name,
+             cmd,
+             &keep_fds_open,
++            self.hold_seconds != null,
+         ) catch |err| {
+             switch (err) {
+                 error.IsClientProc => {
+@@ -1057,6 +1100,10 @@ pub const Daemon = struct {
+         // =======
+ 
+         self.pid = pty_info.pid;
++        if (self.hold_seconds) |seconds| {
++            self.hold_fd = pty_info.hold_fd;
++            self.hold_deadline_ms = role.nowMs() + @as(i64, seconds) * 1000;
++        }
+ 
+         var threaded: std.Io.Threaded = .init_single_threaded;
+         defer threaded.deinit();
+@@ -1101,6 +1148,8 @@ pub const Daemon = struct {
+             // for the same name issued in that window will hang waiting
+             // for a connect.
+             lib_posix.close(server_sock_fd);
++            // a kill or teardown ends a held child without running its command
++            self.cancelHold();
+             std.log.info("deleting socket file session={s}", .{sesh_name});
+             dir.deleteFile(new_io, sesh_name) catch |err| {
+                 std.log.warn("failed to delete socket file err={s}", .{@errorName(err)});
+@@ -1416,6 +1465,7 @@ pub const Daemon = struct {
+             }
+ 
+             std.log.debug("init resize rows={d} cols={d}", .{ resize.rows, resize.cols });
++            self.releaseHold("init");
+         }
+     }
+ 
+@@ -1953,6 +2003,116 @@ test "a DA query the daemon answers is not forwarded until a client sent Init" {
+     try std.testing.expectEqualStrings("ab\x1b[?62;22cz\x1b[cx\x1b[cy", queuedOutput(client, &seen));
+ }
+ 
++fn gateReadable(fd: i32) !bool {
++    var pfd = [_]lib_posix.pollfd{.{ .fd = fd, .events = lib_posix.POLL.IN, .revents = 0 }};
++    return try lib_posix.poll(&pfd, 0) > 0;
++}
++
++test "a held child is released by the first terminal Init only, after the resize" {
++    const alloc = std.testing.allocator;
++    const cfg = Cfg{ .socket_dir = "", .log_dir = "" };
++    var term = try initTerminal(alloc, std.testing.io, .{ .cols = 80, .rows = 24 }, &cfg);
++    defer term.deinit(alloc);
++    var daemon = testDaemon();
++    defer daemon.clients.deinit(alloc);
++    defer daemon.pty_write_buf.deinit(alloc);
++    const gate = try lib_posix.pipe2(.{});
++    defer lib_posix.close(gate[0]);
++    daemon.hold_fd = gate[1];
++    daemon.hold_deadline_ms = 1000;
++
++    const a = try lib_posix.pipe2(.{});
++    const b = try lib_posix.pipe2(.{});
++    defer lib_posix.close(b[1]);
++    const pty = b[0];
++    defer lib_posix.close(pty);
++    const size = std.mem.asBytes(&ipc.Resize{ .rows = 30, .cols = 100 });
++
++    const tail_client = try testClient(alloc, a[0], false);
++    try daemon.clients.append(alloc, tail_client);
++    try std.testing.expect(!try gateReadable(gate[0]));
++
++    const attach = try testClient(alloc, a[1], false);
++    try daemon.clients.append(alloc, attach);
++    try daemon.handleInit(alloc, attach, pty, &term, size);
++    try std.testing.expectEqual(@as(usize, 100), term.cols);
++    try std.testing.expect(try gateReadable(gate[0]));
++    var byte: [1]u8 = undefined;
++    try std.testing.expectEqual(@as(usize, 1), try lib_posix.read(gate[0], &byte));
++    try std.testing.expectEqual(@as(i32, -1), daemon.hold_fd);
++    try std.testing.expectEqual(@as(?i64, null), daemon.hold_deadline_ms);
++    try std.testing.expectEqual(@as(usize, 0), try lib_posix.read(gate[0], &byte));
++
++    _ = daemon.closeClient(alloc, tail_client, 0, false);
++    _ = daemon.closeClient(alloc, attach, 0, false);
++}
++
++test "a follower's Init does not release a held child" {
++    const alloc = std.testing.allocator;
++    const cfg = Cfg{ .socket_dir = "", .log_dir = "" };
++    var term = try initTerminal(alloc, std.testing.io, .{ .cols = 80, .rows = 24 }, &cfg);
++    defer term.deinit(alloc);
++    var daemon = testDaemon();
++    defer daemon.clients.deinit(alloc);
++    defer daemon.pty_write_buf.deinit(alloc);
++    const gate = try lib_posix.pipe2(.{});
++    defer lib_posix.close(gate[0]);
++    defer daemon.cancelHold();
++    daemon.hold_fd = gate[1];
++    daemon.leader_client_fd = 4242;
++
++    const a = try lib_posix.pipe2(.{});
++    defer lib_posix.close(a[1]);
++    const size = std.mem.asBytes(&ipc.Resize{ .rows = 30, .cols = 100 });
++    const viewer = try testManaged(alloc, &daemon, a[0], false);
++    try daemon.handleInit(alloc, viewer, a[1], &term, size);
++    try std.testing.expect(!try gateReadable(gate[0]));
++    try std.testing.expectEqual(gate[1], daemon.hold_fd);
++    _ = daemon.closeClient(alloc, viewer, 0, false);
++}
++
++test "a hold releases at its deadline with no client" {
++    var daemon = testDaemon();
++    const gate = try lib_posix.pipe2(.{});
++    defer lib_posix.close(gate[0]);
++    daemon.hold_fd = gate[1];
++    daemon.hold_deadline_ms = 5000;
++
++    try std.testing.expectEqual(@as(?i32, 1000), daemon.holdTimeoutMs(4000));
++    daemon.releaseExpiredHold(4999);
++    try std.testing.expect(!try gateReadable(gate[0]));
++
++    daemon.releaseExpiredHold(5000);
++    var byte: [1]u8 = undefined;
++    try std.testing.expectEqual(@as(usize, 1), try lib_posix.read(gate[0], &byte));
++    try std.testing.expectEqual(@as(i32, -1), daemon.hold_fd);
++    try std.testing.expectEqual(@as(?i32, null), daemon.holdTimeoutMs(6000));
++}
++
++test "releasing a hold whose child already died is not an error" {
++    signal.ignoreSigpipe();
++    var daemon = testDaemon();
++    const gate = try lib_posix.pipe2(.{});
++    lib_posix.close(gate[0]);
++    daemon.hold_fd = gate[1];
++    daemon.hold_deadline_ms = 0;
++    daemon.releaseExpiredHold(0);
++    try std.testing.expectEqual(@as(i32, -1), daemon.hold_fd);
++}
++
++test "cancelling a hold closes the gate without releasing" {
++    var daemon = testDaemon();
++    const gate = try lib_posix.pipe2(.{});
++    defer lib_posix.close(gate[0]);
++    daemon.hold_fd = gate[1];
++    daemon.hold_deadline_ms = 5000;
++    daemon.cancelHold();
++    var byte: [1]u8 = undefined;
++    try std.testing.expectEqual(@as(usize, 0), try lib_posix.read(gate[0], &byte));
++    try std.testing.expectEqual(@as(i32, -1), daemon.hold_fd);
++    try std.testing.expectEqual(@as(?i64, null), daemon.hold_deadline_ms);
++}
++
+ test "send queues PTY input without changing leader" {
+     const alloc = std.testing.allocator;
+     var daemon = testDaemon();
+diff --git a/src/main.zig b/src/main.zig
+index 3331891..4a13d68 100644
+--- a/src/main.zig
++++ b/src/main.zig
+@@ -191,11 +191,16 @@ fn mainImpl(init: std.process.Init) !void {
+         defer gpa.free(env_str);
+ 
+         if (parsed.detached) {
++            const hold: ?u32 = if (lib_posix.getenv("ZMX_HOLD_UNTIL_ATTACH")) |value|
++                parseHoldSeconds(value) catch return printError(io, "invalid ZMX_HOLD_UNTIL_ATTACH \"{s}\": want whole seconds above zero", .{value})
++            else
++                null;
+             const created = zmx.create(gpa, io, parsed.session_name, .{
+                 .command = command,
+                 .cwd = cwd,
+                 .shell = shell_env,
+                 .labels = parsed.labels,
++                .hold_seconds = hold,
+             }) catch |err| return printError(io, "cannot create session \"{s}\": {s}", .{ parsed.session_name, @errorName(err) });
+             if (!created) return printError(io, "session \"{s}\" exists", .{parsed.session_name});
+             return;
+@@ -1360,6 +1365,20 @@ fn send(alloc: std.mem.Allocator, io: std.Io, session_name: []const u8, text_par
+     };
+ }
+ 
++fn parseHoldSeconds(value: []const u8) !u32 {
++    const seconds = try std.fmt.parseInt(u32, value, 10);
++    if (seconds == 0) return error.InvalidHold;
++    return seconds;
++}
++
++test "parseHoldSeconds takes whole seconds above zero and nothing else" {
++    try std.testing.expectEqual(@as(u32, 5), try parseHoldSeconds("5"));
++    try std.testing.expectEqual(@as(u32, 30), try parseHoldSeconds("30"));
++    for ([_][]const u8{ "", "0", "-1", "1.5", "abc", " 5", "99999999999" }) |bad| {
++        try std.testing.expect(std.meta.isError(parseHoldSeconds(bad)));
++    }
++}
++
+ test "parseAttachArgs reads a bare session name" {
+     const parsed = parseAttachArgs(&.{"dev"});
+     try std.testing.expectEqualStrings("dev", parsed.session_name);
