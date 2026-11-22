@@ -2679,6 +2679,7 @@ Settings ▸ General ▸ Restore sessions. The note under it is a reminder that 
 <ul>
 <li>a tool in a session created before session-host support asks for the microphone after every update;</li>
 <li>a session needs a Live fix that reaches only new sessions;</li>
+<li>a session under an older build's session host cannot use the microphone after an update;</li>
 <li>a session under an older build's or another login's session host cannot reach the local network.</li>
 </ul>
 <p>The dialog shows how many sessions the reset can affect. It can include working sessions that predate the last Live update or still use an earlier session host. Their running work stops, and recorded commands restart where possible; agent conversations may need resuming by hand. Other sessions are untouched. Another Mac attached to a reset session may need to attach it again.</p>
@@ -2689,7 +2690,7 @@ Settings ▸ General ▸ Restore sessions. The note under it is a reminder that 
 The confirmation names how many sessions it resets and why.
 </figcaption>
 </figure>
-<p>Microphone requests from panes created through the session host stay attributed to agterm across restarts (<a href="https://github.com/umputun/agterm/blob/master/docs/troubleshooting.md#agterm-would-like-to-access-data-from-other-apps-keeps-coming-back">troubleshooting</a>).</p>
+<p>Microphone requests from panes under the current session host stay attributed to agterm across restarts (<a href="https://github.com/umputun/agterm/blob/master/docs/troubleshooting.md#agterm-would-like-to-access-data-from-other-apps-keeps-coming-back">troubleshooting</a>).</p>
 <h4 id="restore-from-the-command-line">From the command line</h4>
 <p>These need agterm running: only the app knows a leftover program from a closed window's.</p>
 <table>
