@@ -15,6 +15,11 @@ public extension ControlActions {
 
     func messageQueued(_: UUID, from _: String?, to _: [MessageRecipient]) {}
 
+    func pasteSessionText(_: String?, window _: String?, pane _: StatusPane?, paneID _: String?,
+                          text _: String) async -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.paste.text"))
+    }
+
     func attachCompanionPage(_: String?, window _: String?) -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.companion.page.attach"))
     }

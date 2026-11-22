@@ -7,8 +7,9 @@ extension ControlServer {
     /// bindingSurface is the addressed pane of `session.paste`/`session.selectall`, never the focused one, with its
     /// spawn expedited: nil and `.left` are `addressableSurface`, so a promoted split survivor is still reached, and
     /// `.scratch` resolves while hidden. An empty slot and an unrealized view both answer "session not realized".
-    private func bindingSurface(_ target: String?, window: String?,
-                                pane: StatusPane?) -> ControlTargetResolver.Resolution<(GhosttySurfaceView, UUID)> {
+    /// `paneID` resolves before `pane` through `Session.paneAddress`.
+    private func bindingSurface(_ target: String?, window: String?, pane requested: StatusPane?,
+                                paneID: String? = nil) -> ControlTargetResolver.Resolution<(GhosttySurfaceView, UUID)> {
         let (store, id): (AppStore, UUID)
         switch resolver.resolveSessionTarget(target, window: window) {
         case .failure(let response): return .failure(response)
@@ -17,6 +18,11 @@ extension ControlServer {
         // resolveSessionTarget already resolved `id` from this store, so `session(withID:)` is non-nil.
         guard let session = store.session(withID: id) else {
             return .failure(ControlResponse(ok: false, error: "session not realized"))
+        }
+        let pane: StatusPane?
+        switch session.paneAddress(token: paneID, pane: requested) {
+        case .unknownToken(let token): return .failure(Self.unknownPaneID(token))
+        case .pane(let resolved): pane = resolved
         }
         let chosen: (any TerminalSurface)?
         switch pane {
@@ -98,6 +104,23 @@ extension ControlServer {
             return response
         case .success(let (surface, id)):
             if let reason = await surface.pasteClipboard().reason { return ControlResponse(ok: false, error: reason) }
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
+    /// `session.paste.text`: `text` goes in as a paste, not keystrokes, so a program with bracketed paste on gets it
+    /// framed and unsubmitted. `ghostty_surface_text` skips paste protection's prompt and replaces ESC and the
+    /// control bytes with spaces, so the text cannot end the bracket early.
+    func pasteSessionText(_ target: String?, window: String?, pane: StatusPane?, paneID: String?,
+                          text: String) async -> ControlResponse {
+        switch bindingSurface(target, window: window, pane: pane, paneID: paneID) {
+        case .failure(let response):
+            return response
+        case .success(let (surface, id)):
+            // bindingSurface only expedites the spawn; insertPasted drops text on a view with no surface yet
+            guard surface.isRealized else { return ControlResponse(ok: false, error: "session not realized") }
+            if let refusal = surface.pasteRefusal { return ControlResponse(ok: false, error: refusal) }
+            surface.insertPasted(text: text)
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
     }

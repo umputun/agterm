@@ -11,17 +11,14 @@ The text goes into a scratch file, revdiff opens on it in a blocking overlay, an
 comes back as the line it was attached to plus what was written about it. That pair is the whole
 point: a note like "why this one?" is unreadable on its own once the pane has scrolled on.
 
-The reply is delivered through the CLIPBOARD, saved and restored around the paste. This is not a
-convenience - `session type` sends real keystrokes, so a multi-line reply submits itself one line at
-a time whatever is reading, while `session paste` is the only bracketed-paste path agterm exposes
-and it reads the system clipboard. Measured against a pty with DECSET 2004 on: type produced bare
-lines, paste produced one `^[[200~...^[[201~` block, so the reply lands whole and unsent. 2004 is
-the PROGRAM's mode, not a property of the route: against one with it off the newlines submit, the
-same as any manual paste. There is no way to ask over the control API which it is.
+The reply is delivered as a PASTE through `session paste --stdin`, never as keystrokes: `session type`
+sends real keystrokes, so a multi-line reply submits itself one line at a time whatever is reading,
+while a paste is framed by bracketed paste and lands whole and unsent. 2004 is the PROGRAM's mode,
+not a property of the route: against one with it off the newlines submit, the same as any manual
+paste. There is no way to ask over the control API which it is.
 
-`session paste` takes no --pane and always runs on the session's main surface, so from a split's
-right pane or the scratch it would deliver to the wrong prompt. Those panes keep the notes on the
-clipboard and say so instead.
+The paste names the pane by its token, `$AGT_PANE_ID`, so it reaches the pane the chord fired from
+even if a swap or promotion moved it during the review, and a pane closed meanwhile is refused.
 
 Usage: annotate-pane.py [--print]
     --print  write the reply to stdout instead of pasting it, for checking the formatting
@@ -115,11 +112,6 @@ def cli_error(res: subprocess.CompletedProcess[str]) -> str:
     return f"agtermctl exited {res.returncode}"
 
 
-def copy_clipboard(text: str) -> None:
-    """Put text on the system clipboard, which is what `session paste` reads."""
-    subprocess.run(["pbcopy"], input=text, text=True, check=False)
-
-
 class Agt:
     """The agterm control channel: agtermctl plus this session's addressing."""
 
@@ -127,8 +119,9 @@ class Agt:
         self.socket = os.environ.get("AGT_SOCKET") or ""
         self.sid = os.environ.get("AGT_SESSION_ID") or ""
         self.pane = os.environ.get("AGT_PANE") or ""
+        self.pane_id = os.environ.get("AGT_PANE_ID") or ""
 
-    def run(self, *args: str) -> subprocess.CompletedProcess[str]:
+    def run(self, *args: str, stdin: str | None = None) -> subprocess.CompletedProcess[str]:
         """Invoke agtermctl against the instance the chord came from, never raising on a nonzero exit.
 
         An unresolvable binary is turned into a 127 rather than a FileNotFoundError: the traceback
@@ -138,7 +131,7 @@ class Agt:
         if self.socket:
             cmd += ["--socket", self.socket]
         try:
-            return subprocess.run(cmd, capture_output=True, text=True, check=False)
+            return subprocess.run(cmd, input=stdin, capture_output=True, text=True, check=False)
         except OSError as err:
             return subprocess.CompletedProcess(cmd, 127, "", f"{AGTERMCTL}: {err}")
 
@@ -180,24 +173,18 @@ class Agt:
         return res.returncode, cli_error(res)
 
     def deliver(self, text: str) -> str:
-        """Put the notes where the chord came from, returning "" on success or what went wrong.
+        """Paste the notes into the pane the chord came from, returning "" on success or what went wrong.
 
-        Only the main pane can be pasted into: `session paste` takes no --pane and runs on the
-        session's main surface, so pasting from a split's right pane or the scratch would drop the
-        notes at another prompt. Those panes keep the text on the clipboard for a manual paste,
-        which is why the restore below is skipped for them.
+        The pane token wins over the role: a role read before revdiff blocked can name another pane
+        by the time it quits. --pane is only the fallback for a runner that sets no token.
         """
-        if self.pane in ("right", "scratch"):
-            copy_clipboard(text)
-            self.notify(f"notes copied to the clipboard - paste them into the {self.pane} pane")
-            return ""
-        saved = subprocess.run(["pbpaste"], capture_output=True, text=True, check=False).stdout
-        try:
-            copy_clipboard(text)
-            res = self.run("session", "paste", "--target", self.sid)
-            return "" if res.returncode == 0 else cli_error(res)
-        finally:
-            copy_clipboard(saved)
+        args = ["session", "paste", "--stdin", "--target", self.sid]
+        if self.pane_id:
+            args += ["--pane-id", self.pane_id]
+        elif self.pane in ("left", "right", "scratch"):
+            args += ["--pane", self.pane]
+        res = self.run(*args, stdin=text)
+        return "" if res.returncode == 0 else cli_error(res)
 
 
 def captured(selection: str, pane: str) -> str:

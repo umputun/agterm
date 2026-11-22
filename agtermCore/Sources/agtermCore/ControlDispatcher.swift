@@ -32,7 +32,7 @@ public struct ControlDispatcher {
             return await dispatchSessionRestart(request)
         case .sessionSplit, .sessionSplitClose, .sessionSwap, .sessionLead, .sessionScratch, .sessionFocus,
                 .sessionResize, .surfaceZoom, .surfaceCursor, .sessionType,
-                .sessionCopy, .sessionPaste, .sessionSelectAll, .sessionSearch, .sessionOverlayOpen,
+                .sessionCopy, .sessionPaste, .sessionPasteText, .sessionSelectAll, .sessionSearch, .sessionOverlayOpen,
                 .sessionOverlayClose, .sessionOverlayResize, .sessionOverlayReload, .sessionOverlayNavigate,
                 .sessionOverlayResult, .sessionOverlaySubmit, .sessionOverlayCopy, .sessionOverlayText,
                 .sessionOverlayHide, .sessionOverlayShow, .sessionOverlayToggle, .sessionOverlayFollow,
@@ -449,6 +449,17 @@ public struct ControlDispatcher {
             switch parsePane(request.args?.pane) {
             case .pane(let parsed):
                 return await actions.pasteSession(request.target, window: request.args?.window, pane: parsed)
+            case .rejected(let rejection): return rejection
+            }
+        case .sessionPasteText:
+            guard let text = request.args?.text, !text.isEmpty else {
+                return ControlResponse(ok: false, error: "session.paste.text requires text")
+            }
+            if let rejection = nulRejection(text) { return rejection }
+            switch parsePane(request.args?.pane) {
+            case .pane(let parsed):
+                return await actions.pasteSessionText(request.target, window: request.args?.window,
+                                                      pane: parsed, paneID: request.args?.paneID, text: text)
             case .rejected(let rejection): return rejection
             }
         case .sessionSelectAll:

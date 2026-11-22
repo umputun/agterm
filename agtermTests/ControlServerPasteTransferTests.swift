@@ -222,6 +222,48 @@ final class ControlServerPasteTransferTests: XCTestCase {
         XCTAssertNotNil(store.session(withID: session.id))
     }
 
+    func testPastedTextIsFramedOnlyWhenTheProgramAskedAndCannotCloseTheFrame() async throws {
+        for (bracketed, expected) in [(true, "\u{1b}[200~a [201~b\nc\u{1b}[201~"), (false, "a [201~b\rc")] {
+            let store = try XCTUnwrap(library.activeStore)
+            let session = try XCTUnwrap(store.addSession(toWorkspace: try XCTUnwrap(store.currentWorkspaceID), cwd: NSTemporaryDirectory()))
+            let capture = stateDir.appendingPathComponent("raw-\(bracketed)")
+            let mode = bracketed ? #"\033[?2004h"# : ""
+            let view = realizedView(session: session, command: #"/bin/sh -c 'printf "\#(mode)READY"; stty raw -echo; exec cat > \#(capture.path)'"#)
+            session.surface = view
+            await waitFor("the program set its mode and started reading") {
+                view.readScreenText(all: false, lines: nil)?.contains("READY") == true && FileManager.default.fileExists(atPath: capture.path)
+            }
+
+            let response = await server.pasteSessionText(session.id.uuidString, window: nil, pane: nil, paneID: nil,
+                                                         text: "a\u{1b}[201~b\nc")
+
+            XCTAssertTrue(response.ok, "\(response)")
+            await waitFor("bracketed \(bracketed): the pty got the encoded paste") {
+                (try? String(contentsOf: capture, encoding: .utf8)) == expected
+            }
+        }
+    }
+
+    func testPasteTextOnAnUnrealizedPaneReportsNotRealized() async throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let target = try XCTUnwrap(store.addSession(toWorkspace: try XCTUnwrap(store.currentWorkspaceID), cwd: NSTemporaryDirectory()))
+        target.surface = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+
+        let response = await server.pasteSessionText(target.id.uuidString, window: nil, pane: nil, paneID: nil, text: "x")
+
+        XCTAssertEqual(response.error, "session not realized")
+    }
+
+    func testPasteTextRefusesAnUnknownPaneIDWithoutAPane() async throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let target = try XCTUnwrap(store.addSession(toWorkspace: try XCTUnwrap(store.currentWorkspaceID), cwd: NSTemporaryDirectory()))
+        target.surface = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+
+        let response = await server.pasteSessionText(target.id.uuidString, window: nil, pane: nil, paneID: "nope", text: "x")
+
+        XCTAssertEqual(response.error, "unknown pane id: nope")
+    }
+
     private static let png = Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3])
 
     private func pane(remoteHost: String?) throws -> GhosttySurfaceView {
@@ -250,9 +292,9 @@ final class ControlServerPasteTransferTests: XCTestCase {
         _ = ZmxLeadBook.shared.apply(ZmxLeadNotice(title: "zmx-role;n:follower:1")!, pane: pane)
     }
 
-    private func realizedView(session: Session, paneToken: UUID? = nil) -> GhosttySurfaceView {
+    private func realizedView(session: Session, paneToken: UUID? = nil, command: String = "/bin/cat") -> GhosttySurfaceView {
         let env = paneToken.map { ["AGTERM_PANE_ID": $0.uuidString] } ?? [:]
-        let view = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), fontSize: 12, command: "/bin/cat", env: env)
+        let view = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), fontSize: 12, command: command, env: env)
         view.session = session
         let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 1800, height: 320), styleMask: [],
                               backing: .buffered, defer: false)

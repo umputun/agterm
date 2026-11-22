@@ -62,6 +62,7 @@ public enum Command: String, Codable, Sendable, CaseIterable {
     case dashboard
     case sessionCopy = "session.copy"
     case sessionPaste = "session.paste"
+    case sessionPasteText = "session.paste.text"
     case sessionSelectAll = "session.selectall"
     case sessionText = "session.text"
     case sessionSearch = "session.search"

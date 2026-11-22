@@ -23,6 +23,7 @@ struct ServerCommandPolicyTests {
             .windowRemoteDismiss,
         ],
         "Mac selection and clipboard": [.sessionCopy, .sessionPaste, .sessionSelectAll, .sessionSearch, .sessionOverlayCopy, .sessionOverlayText],
+        "needs the daemon to report bracketed paste mode": [.sessionPasteText],
         "moves what a Mac shows": [.sessionFocus, .sessionSelect, .sessionGo, .sessionLead, .sessionResize, .workspaceSelect, .workspaceGo],
         "Finder on the Mac": [.sessionReveal],
         "Mac app relaunch": [.restoreMode, .restoreCapture, .restoreClear, .zmxReset, .sessionRestore],

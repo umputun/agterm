@@ -104,6 +104,7 @@ final class MockControlActions: ControlActions {
         case sessionType(target: String?, window: String?, ControlSessionTypeOptions)
         case sessionCopy(target: String?, window: String?)
         case sessionPaste(target: String?, window: String?, pane: StatusPane?)
+        case sessionPasteText(target: String?, window: String?, pane: StatusPane?, paneID: String?, text: String)
         case sessionSelectAll(target: String?, window: String?)
         case sessionSearch(target: String?, window: String?, text: String?, to: String?)
         case overlayOpen(target: String?, window: String?, ControlSessionOverlayOpenOptions)
@@ -745,6 +746,12 @@ final class MockControlActions: ControlActions {
 
     func pasteSession(_ target: String?, window: String?, pane: StatusPane?) -> ControlResponse {
         calls.append(.sessionPaste(target: target, window: window, pane: pane))
+        return nextSessionPasteResponse
+    }
+
+    func pasteSessionText(_ target: String?, window: String?, pane: StatusPane?, paneID: String?,
+                          text: String) -> ControlResponse {
+        calls.append(.sessionPasteText(target: target, window: window, pane: pane, paneID: paneID, text: text))
         return nextSessionPasteResponse
     }
 
