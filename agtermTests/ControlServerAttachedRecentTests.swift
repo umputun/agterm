@@ -75,6 +75,22 @@ final class ControlServerAttachedRecentTests: XCTestCase {
         XCTAssertTrue(named.allSatisfy { id in destination.workspaces.first { $0.id == id }?.sessions.allSatisfy { $0.id != shown } ?? true })
     }
 
+    func testAnOriginReopenAsksTheOriginToHoldTheCommandsItAttachesHere() async throws {
+        let listed = tree(sessions: session("origin-1"))
+        let runner = ScriptedRunner([ok(ControlResult(closed: ["origin-1"], recentID: "r1")), tree(sessions: ""),
+                                     reopened("r1", sessions: ["origin-1"]), listed, listed])
+        let (server, store) = try makeServer(runner)
+        try await terminate(try attachedRow(in: store), server)
+        let entry = try XCTUnwrap(library.remoteRecentClosedItems.first)
+
+        let reply = await server.reopenAttached(entry.id, window: nil)
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        XCTAssertTrue(line(runner, 2).contains("recent open"), line(runner, 2))
+        XCTAssertFalse(line(runner, 2).contains("--attach-pending"), line(runner, 2))
+        XCTAssertTrue(line(runner, 2).contains("-- r1"), line(runner, 2))
+    }
+
     func testABareTopLevelReopenStaysInTheWindowItResolvedWhenFrontmostChangesDuringDiscovery() async throws {
         let listed = tree(sessions: session("origin-1"))
         let runner = ScriptedRunner([ok(ControlResult(closed: ["origin-1"])), listed, listed, listed])

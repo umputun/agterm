@@ -37,6 +37,12 @@ struct RestartReplayTests {
         #expect(resolve(nil) == .failure(.unreadable))
     }
 
+    @Test func aPaneStillHeldBeforeItsCommandIsRefusedAsUnreadable() {
+        let held = CommandRestore.paneForeground(argv: ["/Applications/agterm.app/Contents/MacOS/zmx", "attach", "--detached",
+                                                        "agterm-0123456789abcdef0123456789abcdef", "/bin/sh", "-c", "codex"])
+        #expect(resolve(held, leader: true) == .failure(.unreadable))
+    }
+
     @Test func aShellInTheForegroundIsRefused() {
         #expect(resolve(.foregroundShell("zsh")) == .failure(.shell("zsh")))
     }

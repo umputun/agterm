@@ -192,6 +192,9 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var panes: [String]?
     /// scratch is the target session's scratch identity, or `none`, when a scratch operation was decided.
     public var scratch: String?
+    /// attachPending says the caller attaches a pane this command creates, so agterm-server holds its command until
+    /// that attach; a Mac ignores it, its own surfaces attaching at once.
+    public var attachPending: Bool?
     /// timeout is how many seconds an `ask.open` or `pick.open` waits for an answer before its origin cancels it.
     public var timeout: Double?
     /// token is the offer token a `session.overlay.job.run` helper claims its job with.

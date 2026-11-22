@@ -263,6 +263,66 @@ final class ControlServerAttachedForwardTests: XCTestCase {
         XCTAssertNil(copy.parentID)
     }
 
+    func testAPlainDuplicateAsksTheOriginNoHold() async throws {
+        let runner = ScriptedRunner([ok(ControlResult(id: created)), tree(sessions: session(created))])
+        let (server, store) = try makeServer(runner)
+        let row = try attachedRow(in: store)
+
+        let reply = try await run(server, ControlRequest(cmd: .sessionDuplicate, target: row.id.uuidString))
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        XCTAssertTrue(line(runner, 0).contains("session new --after origin-1 --no-select"), line(runner, 0))
+        XCTAssertFalse(line(runner, 0).contains("--attach-pending"), line(runner, 0))
+    }
+
+    func testAnOriginCliTooOldForTheIntentRunsTheRestartOnceWithoutIt() async throws {
+        let refused = RemoteCommandResult(status: 64, stdout: "", stderr: "Error: Unknown option '--attach-pending'")
+        let runner = ScriptedRunner([refused, ok(ControlResult(id: "origin-1"))])
+        let (server, store) = try makeServer(runner)
+        let row = try attachedRow(in: store)
+        try connect(row, server: server, kinds: ["layout", PresentationHub.restartRespawnKind])
+
+        let reply = try await run(server, ControlRequest(cmd: .sessionRestart, target: row.id.uuidString,
+                                                         args: ControlArgs(command: "codex", pane: "left")))
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        XCTAssertTrue(line(runner, 0).contains("--attach-pending"), line(runner, 0))
+        XCTAssertFalse(line(runner, 1).contains("--attach-pending"), line(runner, 1))
+        XCTAssertTrue(line(runner, 1).contains("session restart --target origin-1"), line(runner, 1))
+    }
+
+    func testARestartOfAPaneTheCollapsedSplitDoesNotShowAsksTheOriginNoHold() async throws {
+        let runner = ScriptedRunner(Array(repeating: ok(ControlResult(id: "origin-1")), count: 4))
+        let (server, store) = try makeServer(runner)
+        let row = try attachedRow(in: store, split: true)
+        try connect(row, server: server, kinds: ["layout", PresentationHub.restartRespawnKind])
+        row.isSplit = false
+        let restart = { (pane: String) in
+            ControlRequest(cmd: .sessionRestart, target: row.id.uuidString, args: ControlArgs(command: "codex", pane: pane))
+        }
+
+        row.splitFocused = false
+        _ = try await run(server, restart("right"))
+        _ = try await run(server, restart("left"))
+        row.splitFocused = true
+        row.splitSurface = Surface()
+        _ = try await run(server, restart("left"))
+        _ = try await run(server, restart("right"))
+
+        XCTAssertEqual(runner.invocations.count, 4)
+        XCTAssertEqual((0..<4).map { line(runner, $0).contains("--attach-pending") }, [false, true, false, true])
+    }
+
+    func testHidingASplitOnTheOriginAsksNoHold() async throws {
+        let runner = ScriptedRunner([ok(ControlResult())])
+        let (server, store) = try makeServer(runner)
+        let row = try attachedRow(in: store)
+
+        _ = try await run(server, ControlRequest(cmd: .sessionSplit, target: row.id.uuidString, args: ControlArgs(mode: "off")))
+
+        XCTAssertFalse(line(runner, 0).contains("--attach-pending"), line(runner, 0))
+    }
+
     func testASplitAndItsCloseRunOnTheOriginAndChangeNothingHere() async throws {
         let runner = ScriptedRunner([ok(), ok()])
         let (server, store) = try makeServer(runner)
@@ -660,6 +720,13 @@ final class ControlServerAttachedForwardTests: XCTestCase {
         server.remoteCompanionPause = {}
         servers.append(server)
         return (server, try XCTUnwrap(library.activeStore))
+    }
+
+    private final class Surface: TerminalSurface {
+        var isRealized = true
+        var paneToken = "collapsed"
+        func teardown() {}
+        func promoteToPrimaryPane() {}
     }
 
     private func attachedRow(in store: AppStore, host: String = "buildbox", origin: String = "origin-1",

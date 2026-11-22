@@ -55,7 +55,10 @@ Each entry separates a demonstrated cause from one that is only consistent with 
   as before. Test: `a DA query the daemon answers is not forwarded until a client sent Init` in zmx's
   `loop.zig`.
 
-### `SessionHostServerTests.paneAttachAfterTheCreatedCommandEndedStartsNoShell`
+### `SessionHostServerTests.aFastCommandsOutputReachesThePaneAndNoShellStarts`
+
+Named `paneAttachAfterTheCreatedCommandEndedStartsNoShell` in the runs below, when the command ran before the
+pane attached; zmx patch 0013 now holds it until that attach, and the test keeps the pty drain.
 
 - **Symptom.** `the pane's attach to an ended command kept running`; the stall report shows `waitpid` 0 and
   `p_stat` SRUN after about 3 s, an empty `zmx list` and host log.

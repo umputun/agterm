@@ -113,6 +113,8 @@ final class ControlServer {
     var restartWaits = (shell: Duration.seconds(10), follow: Duration.seconds(60), poll: Duration.milliseconds(100))
     /// restartLeader reads the named daemon's shell pid from the kernel; nil only without a zmx client.
     var restartLeader: (@Sendable (String) -> pid_t?)?
+    /// restartArgv reads a restart's new shell pid's argv, which is zmx's creator argv until the command runs.
+    var restartArgv: (pid_t) -> [String]? = ForegroundProcess.procArgs
     /// originRead is the inventory read in flight, answering whether it succeeded; a request during it rereads.
     var originRead: Task<Bool, Never>?
     var originRereads = false

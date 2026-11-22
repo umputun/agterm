@@ -240,7 +240,8 @@ whose companions are folded), `foreground`/`splitForeground` (the live argv of e
 is at its shell prompt, or running a setuid/setgid program like `top` or `sudo` whose argv macOS won't
 expose) — i.e. what each pane is currently running — `foregroundShell`/`splitForegroundShell` (the shell
 holding each pane's foreground as a basename, present exactly when that pane's `foreground` is omitted
-because a shell holds it, so an EXISTING pane with neither is one whose process could not be read; check
+because a shell holds it, so an EXISTING pane with neither is one whose process could not be read or whose
+program is still held until its terminal attaches; check
 `hasSplit` before reading the split pair. Not a claim the pane is at a prompt and never permission to type —
 a builtin like `read` runs inside the shell), `restoreCommand`/`splitRestoreCommand` (each pane's
 persisted restore-command override set via `session restore` — the read side: omitted = auto-capture, `""`

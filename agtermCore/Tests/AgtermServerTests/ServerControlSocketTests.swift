@@ -18,6 +18,11 @@ final class ServerControlSocketTests {
         var owners: [ControlStreamOwner] = []
     }
 
+    private final class Received: @unchecked Sendable {
+        let lock = NSLock()
+        var requests: [ControlRequest] = []
+    }
+
     private final class Counter: @unchecked Sendable {
         private let lock = NSLock()
         private var count = 0
@@ -39,10 +44,13 @@ final class ServerControlSocketTests {
         self.socket = socket
     }
 
-    // the server reads a request with a 5 s timeout, so connecting, writing and reading stay on one thread
     private func connect(_ request: ControlRequest) async throws -> (fd: Int32, reply: String) {
+        try await connect(line: JSONEncoder().encode(request) + Data("\n".utf8))
+    }
+
+    // the server reads a request with a 5 s timeout, so connecting, writing and reading stay on one thread
+    private func connect(line: Data) async throws -> (fd: Int32, reply: String) {
         let path = path
-        let line = try JSONEncoder().encode(request) + Data("\n".utf8)
         let connected: (fd: Int32, reply: String)? = try await offPool {
             guard let fd = UnixSocket.connected(path: path) else { return nil }
             var timeout = timeval(tv_sec: 60, tv_usec: 0)
@@ -132,6 +140,43 @@ final class ServerControlSocketTests {
         for task in flood { await task.value }
 
         #expect(finishedAtReply < jobs / 2)
+    }
+
+    private func record(into received: Received) throws {
+        let socket = ServerControlSocket(path: path, handler: { request in
+            received.lock.withLock { received.requests.append(request) }
+            return ControlResponse(ok: true)
+        }, adopter: { _, _, _, _ in false })
+        try socket.start()
+        self.socket = socket
+    }
+
+    @Test func theAttachIntentReachesTheServerWithItsOperation() async throws {
+        let received = Received()
+        try record(into: received)
+        var args = ControlArgs()
+        args.opID = "op-1"
+        args.attachPending = true
+
+        let (fd, reply) = try await connect(ControlRequest(cmd: .sessionNew, args: args))
+        close(fd)
+
+        #expect(reply.contains("\"ok\":true"))
+        #expect(received.lock.withLock { received.requests.map(\.args?.attachPending) } == [true])
+        #expect(!String(decoding: try JSONEncoder().encode(ControlArgs()), as: UTF8.self).contains("attachPending"))
+    }
+
+    @Test func aFieldThisServerDoesNotKnowIsDroppedAndTheOperationStillRuns() async throws {
+        let received = Received()
+        try record(into: received)
+
+        let line = #"{"cmd":"session.new","args":{"opID":"op-1","laterField":true}}"# + "\n"
+        let (fd, reply) = try await connect(line: Data(line.utf8))
+        close(fd)
+
+        #expect(reply.contains("\"ok\":true"))
+        #expect(received.lock.withLock { received.requests.map(\.cmd) } == [.sessionNew])
+        #expect(received.lock.withLock { received.requests.first?.args?.opID } == "op-1")
     }
 
     @Test func anOrdinaryCommandNeverReachesTheAdopter() async throws {

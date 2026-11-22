@@ -22,6 +22,7 @@ extension Session {
         @OptionGroup var tint: TintCreateOptions
         @OptionGroup var options: ClientOptions
         @OptionGroup var operation: OperationOptions
+        @OptionGroup var attach: AttachOptions
         var echoesResultID: Bool { true }
 
         func validate() throws {
@@ -72,15 +73,15 @@ extension Session {
                 return ControlRequest(cmd: .sessionRemoteNew, args: options.withWindow(args))
             }
             if let parent {
-                return operation.stamp(ControlRequest(cmd: .sessionCompanionNew, target: parent,
+                return attach.stamp(operation.stamp(ControlRequest(cmd: .sessionCompanionNew, target: parent,
                                                       args: options.withWindow(tint.apply(to:
                     ControlArgs(name: name, cwd: cwd, noSelect: noSelect ? true : nil, command: command,
-                                wait: wait ? true : nil)))))
+                                wait: wait ? true : nil))))))
             }
-            return operation.stamp(ControlRequest(cmd: .sessionNew, args: options.withWindow(tint.apply(to:
+            return attach.stamp(operation.stamp(ControlRequest(cmd: .sessionNew, args: options.withWindow(tint.apply(to:
                 ControlArgs(name: name, cwd: cwd, workspace: workspace, workspaceName: workspaceName,
                             createWorkspace: createWorkspace ? true : nil, noSelect: noSelect ? true : nil,
-                            command: command, wait: wait ? true : nil, after: after, before: before)))))
+                            command: command, wait: wait ? true : nil, after: after, before: before))))))
         }
     }
 }

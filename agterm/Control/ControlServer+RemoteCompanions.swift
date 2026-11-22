@@ -12,6 +12,16 @@ enum RemoteCompanionRequest {
         return nil
     }
 
+    /// attachesPane is whether the companion can start a program in a pane this Mac attaches: a duplicate replays the
+    /// parent's programs, a terminal only one with a command, and a page has no pane.
+    var attachesPane: Bool {
+        switch self {
+        case .terminal(let options): options.command != nil
+        case .duplicate: true
+        case .page: false
+        }
+    }
+
     var command: Command {
         switch self {
         case .terminal: .sessionCompanionNew
@@ -59,6 +69,20 @@ extension ControlServer {
     /// A new origin session is attachable once every pane's daemon runs, which takes a moment after creation.
     static let remoteCompanionReadyBudget: TimeInterval = 20
 
+    /// runRemoteControl runs `arguments` on `host`'s `agtermctl`; with `attaching` it asks the host to hold the command of the
+    /// pane this Mac attaches next. A far CLI too old for the intent refuses it before sending anything, so the command
+    /// then runs once without. Nil when `host` cannot be addressed.
+    func runRemoteControl(host: String, arguments: [String], operands: [String] = [], attaching: Bool) async -> RemoteCommandResult? {
+        guard let plain = try? RemoteSession.controlCommand(host: host, arguments: arguments, operands: operands) else { return nil }
+        guard attaching,
+              let held = try? RemoteSession.controlCommand(host: host, arguments: arguments + ["--attach-pending"], operands: operands) else {
+            return await remoteRunner.run(plain, deadline: Self.remoteCompanionDeadline)
+        }
+        let result = await remoteRunner.run(held, deadline: Self.remoteCompanionDeadline)
+        guard result.refusedArguments else { return result }
+        return await remoteRunner.run(plain, deadline: Self.remoteCompanionDeadline)
+    }
+
     /// createRemoteCompanion asks the origin of `rowID`, a remote row, to create a companion under its session,
     /// waits for the origin to report it attachable, then attaches it under the row's group here. Creation is
     /// never retried and never falls back to a local session; one created but not attached is named.
@@ -72,10 +96,8 @@ extension ControlServer {
         let parentID = parent.id
         // the companion lands under the parent, so the parent is what must still be attachable there
         let listedOrigin = parent.remotePresentation?.binding.remoteSessionID ?? origin
-        let argv: [String]
-        do {
-            argv = try RemoteSession.controlCommand(host: host, arguments: request.arguments(originSession: origin))
-        } catch {
+        let arguments = request.arguments(originSession: origin)
+        guard (try? RemoteSession.controlCommand(host: host, arguments: arguments)) != nil else {
             return ControlResponse(ok: false, error: "invalid host")
         }
         progress("creating a companion on \(host)…")
@@ -92,7 +114,9 @@ extension ControlServer {
             ?? listedOrigin
         let hold = holdCompanionFollow(OriginKey(host: host, endpoint: tree.endpoint, session: group))
         defer { releaseCompanionFollow(hold) }
-        let result = await remoteRunner.run(argv, deadline: Self.remoteCompanionDeadline)
+        guard let result = await runRemoteControl(host: host, arguments: arguments, attaching: request.attachesPane) else {
+            return ControlResponse(ok: false, error: "invalid host")
+        }
         if result.refusedArguments {
             return ControlResponse(ok: false, error: "the agterm on \(host) is too old for companions")
         }

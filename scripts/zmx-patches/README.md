@@ -39,6 +39,8 @@ Ghostty version preserves skipped cells during VT replay by moving the cursor ac
   goes, so a session found gone without a record was killed; teardown then ends the shell's process group as
   upstream does. A killed session writes nothing, and the shell never sees the variable. Create and attach
   hand labels the bare name, since upstream's prefixed one is prefixed again under `ZMX_SESSION_PREFIX`.
+  The creator exits only once the forked daemon acknowledges its `setsid`, or after a 1 s bound: agterm's
+  host runs it as its PTY's session leader, whose exit hangs up a daemon still in its process group.
 - `0006-single-da-answer.patch` keeps a DA1/DA2 query from being answered twice. Until a client sends
   Init, the daemon answers such queries itself, but upstream also forwards them to an attach it accepted
   and has not yet heard Init from, whose terminal answers again; the program reads the spare reply as the
@@ -82,6 +84,14 @@ Ghostty version preserves skipped cells during VT replay by moving the cursor ac
   terminal. Upstream catches SIGTERM, SIGHUP and SIGINT and leaves through a detach's `TCSAFLUSH` and
   blocking reset, which on macOS wait for the terminal to read them. The client instead flushes what is
   queued, restores termios at once and gives the reset 100 ms.
+
+- `0013-hold-until-attach.patch` lets a detached create hold its command until a terminal attaches.
+  With `ZMX_HOLD_UNTIL_ATTACH=<seconds>` set, `attach --detached` forks the child as usual but parks it
+  before `exec` on a close-on-exec pipe. The first terminal client's Init releases it once leadership and
+  the PTY size are set, or the bound does with no terminal attached; a kill delivered before the bound, or
+  a teardown, closes the pipe and the child exits without running. A program that queries the terminal at startup (codex reads OSC 10/11
+  once) then reaches the attached terminal instead of a creator that answers only DA. A follower's Init
+  does not release; a zero or non-numeric value fails the create, and the variable is unset before exec.
 
 `check.py <zmx>` drives managed clients on PTYs of different sizes against one daemon in a throwaway
 `ZMX_DIR` and exits nonzero when a check fails. Pass a second argument pointing to agterm's patched

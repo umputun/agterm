@@ -151,7 +151,8 @@ extension ServerActions {
     }
 
     /// follow waits for the new shell of `target`'s daemon, taking over the pane's restart hold: up to the reply's wait
-    /// here, and up to the follow window in `watch`, which outlives the reply. Nil unless the shell was seen in time.
+    /// here, and up to the follow window in `watch`, which outlives the reply. Nil unless the new pane was seen running
+    /// in time, a held one only once its command has run.
     private func follow(_ session: Session, identity: UUID, target: ProcDaemon.Target, oldPid: Int32?) async -> Int32? {
         let launched = ContinuousClock.now
         let entry = RestartFollow(respawns: session.primaryRespawns, deadline: launched + restartWaits.follow)
@@ -165,8 +166,9 @@ extension ServerActions {
         return entry.leader
     }
 
-    /// watch announces the respawn once a new shell runs under the daemon, then releases the hold. It gives up silently
-    /// when the window ends, the pane closes past undo or respawns, its shell exits, or a later restart's kill takes it.
+    /// watch announces the respawn once the daemon has a new shell pid and confirms the restart once that pid ran
+    /// its command, then releases the hold. It gives up silently when the window ends, the pane closes past undo or
+    /// respawns, its shell exits, or a later restart's kill takes it.
     private func watch(_ entry: RestartFollow, session: Session, identity: UUID, target: ProcDaemon.Target, oldPid: Int32?) async {
         let lookup = daemonLeader
         defer {
@@ -174,21 +176,40 @@ extension ServerActions {
             panes.releaseRestart(identity)
             if restartFollows[identity] === entry { restartFollows[identity] = nil }
         }
+        var announced = false
         while ContinuousClock.now < entry.deadline {
-            let pid = await Task.detached { lookup(target) }.value
+            let pid = await Task.detached { lookup(target) }.value.flatMap { $0 == oldPid ? nil : $0 }
+            let shell = if let pid { await shellState(pid, target: target) } else { ShellState.gone }
+            // checked after every read, so a close or a later restart during one cannot be confirmed over
             guard ContinuousClock.now < entry.deadline, restartFollows[identity] === entry,
                   (store.session(withID: session.id) ?? store.pendingCloseSession(withID: session.id)) === session,
                   session.paneRole(forIdentity: identity) != nil, session.primaryRespawns == entry.respawns,
                   !FileManager.default.fileExists(atPath: panes.exitRecord(identity)) else { return }
-            if let pid, pid != oldPid {
-                entry.leader = pid
-                entry.confirmedAt = .now
-                panes.confirmed(identity)
-                streams.noteRespawn(session: session.id, daemon: target.name)
-                return
+            if let pid, shell != .gone {
+                // announced before exec: zmx holds the command until a viewer's attach, so the viewer must hear first
+                if !announced {
+                    announced = true
+                    panes.confirmed(identity)
+                    streams.noteRespawn(session: session.id, daemon: target.name)
+                }
+                if shell == .ran {
+                    entry.leader = pid
+                    entry.confirmedAt = .now
+                    return
+                }
             }
             try? await Task.sleep(for: restartWaits.poll)
         }
+    }
+
+    private enum ShellState { case held, ran, gone }
+
+    /// shellState reports whether the daemon's shell `pid` is still in zmx's hold. An unreadable argv counts as run
+    /// only while the daemon still names that pid: a setuid program withholds its argv, and so does a gone pid.
+    private func shellState(_ pid: Int32, target: ProcDaemon.Target) async -> ShellState {
+        if let argv = foregroundArgv(pid) { return CommandRestore.isHeldCreation(argv) ? .held : .ran }
+        let lookup = daemonLeader
+        return await Task.detached { lookup(target) }.value == pid ? .ran : .gone
     }
 
     /// programEnded waits for the hung-up job, kills what is left of it, and waits once more; an unreadable process

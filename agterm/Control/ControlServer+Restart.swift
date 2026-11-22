@@ -128,7 +128,8 @@ extension ControlServer {
     }
 
     /// follow waits for `daemon`'s new shell, taking over the pane's restart hold: up to the reply's wait here, and
-    /// up to the follow window in `watch`, which outlives the reply. Nil unless the shell was seen in time.
+    /// up to the follow window in `watch`, which outlives the reply. Nil unless the new pane was seen running in time,
+    /// a held one only once its command has run.
     private func follow(_ session: Session, identity: UUID, daemon: String, oldPid: pid_t) async -> pid_t? {
         let launched = ContinuousClock.now
         let entry = RestartFollow(respawns: session.primaryRespawns, deadline: launched + restartWaits.follow)
@@ -142,9 +143,9 @@ extension ControlServer {
         return entry.leader
     }
 
-    /// watch publishes the respawn once a new shell runs under `daemon`, then releases the hold. It gives up silently
-    /// when the window ends, the pane closes past undo or respawns, or a later restart's kill takes the pane; an
-    /// attach-only lead change keeps the pane and its daemon, so it keeps the watch.
+    /// watch publishes the respawn once a new shell under `daemon` ran its command, then releases the hold. It gives up
+    /// silently when the window ends, the pane closes past undo or respawns, or a later restart's kill takes the pane;
+    /// an attach-only lead change keeps the pane and its daemon, so it keeps the watch.
     private func watch(_ entry: RestartFollow, session: Session, identity: UUID, daemon: String, oldPid: pid_t) async {
         defer {
             entry.ended = true
@@ -153,11 +154,13 @@ extension ControlServer {
         }
         guard let lookup = restartLeader else { return }
         while ContinuousClock.now < entry.deadline {
-            let pid = await Task.detached { lookup(daemon) }.value
+            let pid = await Task.detached { lookup(daemon) }.value.flatMap { $0 == oldPid ? nil : $0 }
+            let ran = if let pid { await hasRun(pid, daemon: daemon, lookup: lookup) } else { false }
+            // checked after every read, so a close or a later restart during one cannot be published over
             guard ContinuousClock.now < entry.deadline, restartFollows[identity] === entry,
                   heldSession(session.id) === session,
                   session.paneRole(forIdentity: identity) != nil, session.primaryRespawns == entry.respawns else { return }
-            if let pid, pid != oldPid {
+            if let pid, ran {
                 entry.leader = pid
                 entry.confirmedAt = .now
                 originPaneConfirmed(identity)
@@ -166,6 +169,13 @@ extension ControlServer {
             }
             try? await Task.sleep(for: restartWaits.poll)
         }
+    }
+
+    /// hasRun reports whether the daemon's shell `pid` left zmx's hold. An unreadable argv counts only while the
+    /// daemon still names that pid: a setuid program withholds its argv, and so does a pid that no longer exists.
+    private func hasRun(_ pid: pid_t, daemon: String, lookup: @escaping @Sendable (String) -> pid_t?) async -> Bool {
+        if let argv = restartArgv(pid) { return !CommandRestore.isHeldCreation(argv) }
+        return await Task.detached { lookup(daemon) }.value == pid
     }
 
     private func replayLaunch(of view: GhosttySurfaceView, leader: pid_t,

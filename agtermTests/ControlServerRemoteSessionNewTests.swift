@@ -130,6 +130,31 @@ final class ControlServerRemoteSessionNewTests: XCTestCase {
         }
     }
 
+    func testTheCreateAsksTheOriginToHoldItsCommandAndAnOlderCliCreatesWithoutIt() async throws {
+        let refused = RemoteCommandResult(status: 64, stdout: "", stderr: "Error: Unknown option '--attach-pending'")
+        let runner = ScriptedRunner([server(), refused, reply(id: created), tree(session(created))])
+
+        let reply = await makeServer(runner).newRemoteSession(RemoteSessionCreate(host: "srv", command: "codex"))
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        let sent = creates(runner)
+        XCTAssertEqual(sent.count, 2)
+        XCTAssertTrue(sent[0].contains("--attach-pending"), sent[0])
+        XCTAssertFalse(sent[1].contains("--attach-pending"), sent[1])
+        XCTAssertTrue(sent[1].contains("--command=codex"), sent[1])
+    }
+
+    func testACreateWithoutACommandAsksTheOriginNoHold() async throws {
+        let runner = ScriptedRunner([server(), reply(id: created), tree(session(created))])
+
+        let reply = await makeServer(runner).newRemoteSession(RemoteSessionCreate(host: "srv"))
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        let sent = creates(runner)
+        XCTAssertEqual(sent.count, 1)
+        XCTAssertFalse(sent[0].contains("--attach-pending"), sent[0])
+    }
+
     func testAServerGetsNoWindowAndRefusesANamedOne() async throws {
         let runner = ScriptedRunner([server(), reply(id: created), tree(session(created))])
         let server = makeServer(runner)

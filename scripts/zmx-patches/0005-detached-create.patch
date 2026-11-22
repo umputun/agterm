@@ -21,7 +21,7 @@ index 4fd818f..26b4c2d 100644
  
      const client_sock = try socket.sessionConnect(socket_path);
 diff --git a/src/daemonize.zig b/src/daemonize.zig
-index c872532..5110560 100644
+index c872532..e8f17d7 100644
 --- a/src/daemonize.zig
 +++ b/src/daemonize.zig
 @@ -85,6 +85,8 @@ fn exec(sesh_name: []const u8, cmd: Cmd) !noreturn {
@@ -33,6 +33,80 @@ index c872532..5110560 100644
  
      const err = lib_posix.execvpeZ(cmd.file, cmd.argv_ptr, std.c.environ);
      std.log.err("execvpe failed: cmd={s} err={s}", .{ cmd.file, @errorName(err) });
+@@ -139,6 +141,21 @@ pub fn spawnPty(sesh_name: []const u8, cmd: Cmd, size: ipc.Resize) !PtyInfo {
+     };
+ }
+ 
++/// Detach is what the parent learns of the child's setsid through the acknowledgement pipe.
++const Detach = enum { detached, gone, unknown };
++
++/// awaitDetach waits for the child's acknowledgement byte. A parent that leads its terminal's
++/// session would SIGHUP a child still in its group by exiting, so it must not exit before the
++/// child's setsid. EOF without the byte means the child died first; a timeout says nothing.
++fn awaitDetach(fd: i32, timeout_ms: i32) Detach {
++    var fds = [_]lib_posix.pollfd{.{ .fd = fd, .events = lib_posix.POLL.IN, .revents = 0 }};
++    const ready = lib_posix.poll(&fds, timeout_ms) catch return .unknown;
++    if (ready == 0) return .unknown;
++    var byte: [1]u8 = undefined;
++    const n = lib_posix.read(fd, &byte) catch return .unknown;
++    return if (n == 1) .detached else .gone;
++}
++
+ /// daemonize is the first fork in a double-fork technique to create a
+ /// completely disconnected session (container of process groups).
+ ///
+@@ -183,11 +200,17 @@ pub fn spawnPty(sesh_name: []const u8, cmd: Cmd, size: ipc.Resize) !PtyInfo {
+ ///                            ▼
+ ///                          DAEMON ✓
+ pub fn daemonize(sesh_name: []const u8, cmd: Cmd, keep_fds_open: []i32) !PtyInfo {
++    const ack = try lib_posix.pipe2(.{ .CLOEXEC = true });
+     // creates the daemon
+     const pid = try lib_posix.fork();
+     assert(pid != -1);
+ 
+     if (pid > 0) { // parent (client)
++        lib_posix.close(ack[1]);
++        const detach = awaitDetach(ack[0], 1000);
++        lib_posix.close(ack[0]);
++        // a slow child may still detach and serve, so only a child known dead fails the create
++        if (detach == .gone) return error.DaemonExited;
+         // cannot use a passed-in io or alloc after a fork so we create what we need
+         // after the fork()
+         var threaded: std.Io.Threaded = .init_single_threaded;
+@@ -198,8 +221,11 @@ pub fn daemonize(sesh_name: []const u8, cmd: Cmd, keep_fds_open: []i32) !PtyInfo
+     }
+ 
+     assert(pid == 0); // child (daemon's parent in double-fork)
++    lib_posix.close(ack[0]);
+     // becomes the session leader and detaches process from its controlling terminal
+     _ = try lib_posix.setsid();
++    _ = lib_posix.write(ack[1], "d") catch {};
++    lib_posix.close(ack[1]);
+ 
+     // Fetch terminal size before redirecting stdio FDs to /dev/null.
+     const term_size = ipc.getTerminalSize(lib_posix.STDOUT_FILENO);
+@@ -252,3 +278,21 @@ pub fn daemonize(sesh_name: []const u8, cmd: Cmd, keep_fds_open: []i32) !PtyInfo
+ 
+     return spawnPty(sesh_name, cmd, term_size);
+ }
++
++test "awaitDetach reads the acknowledgement, a child gone before it, and silence" {
++    const written = try lib_posix.pipe2(.{ .CLOEXEC = true });
++    _ = try lib_posix.write(written[1], "d");
++    lib_posix.close(written[1]);
++    try std.testing.expectEqual(Detach.detached, awaitDetach(written[0], 1000));
++    lib_posix.close(written[0]);
++
++    const closed = try lib_posix.pipe2(.{ .CLOEXEC = true });
++    lib_posix.close(closed[1]);
++    try std.testing.expectEqual(Detach.gone, awaitDetach(closed[0], 1000));
++    lib_posix.close(closed[0]);
++
++    const silent = try lib_posix.pipe2(.{ .CLOEXEC = true });
++    try std.testing.expectEqual(Detach.unknown, awaitDetach(silent[0], 10));
++    lib_posix.close(silent[0]);
++    lib_posix.close(silent[1]);
++}
 diff --git a/src/exit_record.zig b/src/exit_record.zig
 new file mode 100644
 index 0000000..5663838

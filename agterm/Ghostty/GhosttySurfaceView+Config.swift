@@ -33,7 +33,7 @@ extension GhosttySurfaceView {
         let resolvedImagePath = WatermarkRenderer.materialize(watermark, sessionID: session.id, paneKey: paneKey)
         let overlay = WatermarkConfig.overlayText(watermark: watermark,
                                                   resolvedImagePath: resolvedImagePath, fontSize: currentEffectiveFontSize(),
-                                                  windowOpacity: GhosttyApp.shared.windowOpacity)
+                                                  windowOpacity: GhosttyApp.shared.windowOpacity) + exitConfig
         guard let config = GhosttyApp.shared.configWithOverlay(overlay) else {
             NSLog("watermark: per-surface config build failed for session %@", session.id.uuidString)
             return
@@ -70,7 +70,8 @@ extension GhosttySurfaceView {
             return
         }
         let configSession = session ?? watermarkSession
-        guard effectiveWatermark != nil || configSession?.fontSize != nil || dashboardFontOverride != nil else {
+        guard effectiveWatermark != nil || configSession?.fontSize != nil || dashboardFontOverride != nil
+            || !exitConfig.isEmpty else {
             return
         }
         applyWatermarkFromSession()
@@ -94,15 +95,16 @@ extension GhosttySurfaceView {
         restoreHudFontSize()
     }
 
-    /// The sessionless overlay's own per-surface config: its `--background-color`, and for a HUD the
-    /// padding below even when it has no color.
+    /// The sessionless overlay's own per-surface config: its `--background-color`, for a HUD the padding below
+    /// even when it has no color, and a `--wait` program's `exitConfig`.
     func applyOverlayConfig() {
         if overlayBackgroundColorHex != nil { applyOverlayBackgroundColor(); return }
-        guard let surface, hudBodyFile != nil else { return }
+        guard let surface, hudBodyFile != nil || !exitConfig.isEmpty else { return }
         let overlay = WatermarkConfig.overlayText(watermark: nil, resolvedImagePath: nil,
-                                                  fontSize: currentEffectiveFontSize()) + Self.hudPaddingConfig
+                                                  fontSize: currentEffectiveFontSize())
+            + (hudBodyFile != nil ? Self.hudPaddingConfig : "") + exitConfig
         guard let config = GhosttyApp.shared.configWithOverlay(overlay) else {
-            NSLog("hud padding: per-surface config build failed")
+            NSLog("overlay: per-surface config build failed")
             return
         }
         ghostty_surface_update_config(surface, config)
@@ -139,7 +141,7 @@ extension GhosttySurfaceView {
         let overlay = WatermarkConfig.overlayText(watermark: BackgroundWatermark(kind: .color, colorHex: hex),
                                                   resolvedImagePath: nil, fontSize: currentEffectiveFontSize(),
                                                   windowOpacity: GhosttyApp.shared.windowOpacity)
-            + (hudBodyFile != nil ? Self.hudPaddingConfig : "")
+            + (hudBodyFile != nil ? Self.hudPaddingConfig : "") + exitConfig
         guard let config = GhosttyApp.shared.configWithOverlay(overlay) else {
             NSLog("overlay background: per-surface config build failed")
             return
@@ -196,7 +198,7 @@ extension GhosttySurfaceView {
         guard let surface, WatermarkConfig.isValidColorHex(hex) else { return }
         oscBackgroundColorHex = hex
         let overlay = WatermarkConfig.oscBackgroundOverlayText(fontSize: currentEffectiveFontSize(),
-                                                               windowOpacity: GhosttyApp.shared.windowOpacity)
+                                                               windowOpacity: GhosttyApp.shared.windowOpacity) + exitConfig
         guard let config = GhosttyApp.shared.configWithOverlay(overlay) else {
             NSLog("osc background: per-surface config build failed")
             return
@@ -217,7 +219,7 @@ extension GhosttySurfaceView {
         if overlayBackgroundColorHex != nil { applyOverlayBackgroundColor(); return }
         guard let surface else { return }
         let overlay = WatermarkConfig.overlayText(watermark: nil, resolvedImagePath: nil,
-                                                  fontSize: currentEffectiveFontSize())
+                                                  fontSize: currentEffectiveFontSize()) + exitConfig
         guard let config = GhosttyApp.shared.configWithOverlay(overlay) else {
             NSLog("osc background: per-surface config rebuild failed on reset")
             return

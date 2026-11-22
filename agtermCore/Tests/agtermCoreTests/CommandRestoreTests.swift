@@ -129,6 +129,30 @@ struct CommandRestoreTests {
         #expect(CommandRestore.paneForeground(argv: []) == nil)
     }
 
+    private static let pane = "agterm-0123456789abcdef0123456789abcdef"
+    private static let scratch = "agterm-scratch-0123456789abcdef0123456789abcdef"
+
+    @Test(arguments: [
+        ["/Applications/agterm.app/Contents/MacOS/zmx", "attach", "--detached", pane, "/bin/sh", "-c", "codex"],
+        ["/usr/local/lib/agterm-server/zmx", "attach", "--detached", scratch],
+        ["/opt/zmx-dev", "attach", "--detached", pane, "-zsh"],
+    ])
+    func aChildZmxHoldsBeforeItsCommandHasNoForeground(argv: [String]) {
+        #expect(CommandRestore.isHeldCreation(argv))
+        #expect(CommandRestore.paneForeground(argv: argv) == nil)
+    }
+
+    @Test(arguments: [
+        ["zmx", "attach", pane],
+        ["zmx", "attach", "--detached"],
+        ["/opt/bin/zmx-tool", "attach", "--detached", "notes"],
+        ["sh", "-c", "zmx attach --detached " + pane],
+    ])
+    func aProgramThatOnlyResemblesTheCreatorKeepsItsForeground(argv: [String]) {
+        #expect(!CommandRestore.isHeldCreation(argv))
+        #expect(CommandRestore.paneForeground(argv: argv) == .program(argv))
+    }
+
     @Test func paneForegroundCannotSeeAShellBusyInsideItself() {
         // pins the contract, not a defect: `read`, `vared` and a shell loop all run IN the shell, so argv is still
         // the shell's and a pane blocked on input classifies exactly as one at a prompt. Callers are told

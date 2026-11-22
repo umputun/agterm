@@ -18,7 +18,7 @@ cd "$(dirname "$0")/.."
 GHOSTTY_REPO="https://github.com/ghostty-org/ghostty"
 GHOSTTY_REV="83fb95624b0439ee660c2679b43b38c8b63769cd"  # v1.4.0, 2026-10-27
 ZMX_REPO="https://github.com/neurosnap/zmx"
-ZMX_REV="a35f00a2118b15a5e9d522a43035c8d7487df9b7"  # v1.0.1, 2026-11-06; SessionHostRuntime/DeviceAttributeResponder.swift copies its DA replies
+ZMX_REV="a35f00a2118b15a5e9d522a43035c8d7487df9b7"  # v1.0.1, 2026-11-06
 # zig defaults to the builder's OS version and CPU; ship the app's arm64/macOS 14 baseline.
 ZMX_TARGET="aarch64-macos.14.0"
 # setup-zmx-linux.sh builds the same pin for a Linux target into its own stage dir and stamp. Unquoted, so

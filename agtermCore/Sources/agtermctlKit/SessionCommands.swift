@@ -35,6 +35,7 @@ struct Session: ParsableCommand {
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
         @OptionGroup var operation: OperationOptions
+        @OptionGroup var attach: AttachOptions
         var echoesResultID: Bool { true }
 
         func validate() throws {
@@ -48,8 +49,9 @@ struct Session: ParsableCommand {
         }
 
         func makeRequest() throws -> ControlRequest {
-            operation.stamp(ControlRequest(cmd: companion ? .sessionCompanionDuplicate : .sessionDuplicate, target: target.target,
-                                           args: options.withWindow(noSelect ? ControlArgs(noSelect: true) : nil)))
+            attach.stamp(operation.stamp(ControlRequest(cmd: companion ? .sessionCompanionDuplicate : .sessionDuplicate,
+                                                        target: target.target,
+                                                        args: options.withWindow(noSelect ? ControlArgs(noSelect: true) : nil))))
         }
     }
 
@@ -273,6 +275,7 @@ struct Session: ParsableCommand {
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
         @OptionGroup var operation: OperationOptions
+        @OptionGroup var attach: AttachOptions
 
         func validate() throws {
             guard let expectScratch else { return }
@@ -285,7 +288,8 @@ struct Session: ParsableCommand {
         func makeRequest() throws -> ControlRequest {
             var args = ControlArgs(mode: mode, command: command, follow: follow ? true : nil)
             args.scratch = expectScratch
-            return operation.stamp(ControlRequest(cmd: .sessionScratch, target: target.target, args: options.withWindow(args)))
+            return attach.stamp(operation.stamp(ControlRequest(cmd: .sessionScratch, target: target.target,
+                                                               args: options.withWindow(args))))
         }
     }
 

@@ -16,8 +16,10 @@ extension ServerActions: CatalogOperationHost {
     }
 
     public func runOperation(_ request: ControlRequest) async -> ControlResponse {
-        await ControlDispatcher(actions: self).dispatch(request)
-            ?? ControlResponse(ok: false, error: "\(request.cmd.rawValue) is not available on agterm-server")
+        await AttachIntent.$pending.withValue(request.args?.attachPending == true) {
+            await ControlDispatcher(actions: self).dispatch(request)
+                ?? ControlResponse(ok: false, error: "\(request.cmd.rawValue) is not available on agterm-server")
+        }
     }
 
     public func catalogOperation(_ opID: String, sent: CatalogPosition?, window: String?) -> ControlResponse {

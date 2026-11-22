@@ -164,6 +164,30 @@ for _ in $(seq 50); do kill -0 "$shell" 2>/dev/null || break; sleep 0.2; done
 echo "close: pane shell $shell ended"
 '
 
+  # a create the Mac attaches holds its command for a terminal; script gives the attach the pty a Mac's would have
+  step '
+served hold
+rm -f /tmp/agterm-check-held /tmp/agterm-check-unheld
+plain="$("$ctl" session new --command "touch /tmp/agterm-check-unheld" --json | jq -r .result.id)"
+for _ in $(seq 50); do [[ -e /tmp/agterm-check-unheld ]] && break; sleep 0.2; done
+[[ -e /tmp/agterm-check-unheld ]] || fail "a --command create without the intent did not start at once"
+id="$("$ctl" session new --command "touch /tmp/agterm-check-held; exec sleep 600" --attach-pending --json | jq -r .result.id)"
+[[ -n "$id" && "$id" != null ]] || fail "a create with the intent returned no id"
+sleep 2
+[[ ! -e /tmp/agterm-check-held ]] || fail "a create with the intent ran its command before an attach"
+tree="$("$ctl" zmx tree --json)"
+zmx="$(jq -r .result.remote.endpoint.executable <<<"$tree")"
+dir="$(jq -r .result.remote.endpoint.socketDirectory <<<"$tree")"
+daemon="$(jq -r --arg id "$id" "[.result.remote.sessions[] | select(.id == \$id) | .panes[0].daemon][0] // empty" <<<"$tree")"
+[[ -n "$daemon" ]] || fail "zmx tree does not list the held session as attachable"
+sleep 3 | ZMX_DIR="$dir" timeout 5 script -qfc "$zmx attach $daemon" /dev/null >/dev/null 2>&1 || true
+for _ in $(seq 50); do [[ -e /tmp/agterm-check-held ]] && break; sleep 0.2; done
+[[ -e /tmp/agterm-check-held ]] || fail "a create with the intent did not run its command after an attach"
+"$ctl" session close --target "$id" >/dev/null
+"$ctl" session close --target "$plain" >/dev/null 2>&1 || true
+echo "held create: the command waited for an attach and ran after it; a plain --command started at once"
+'
+
   local id shell catalog opening
   opening="$(step 'served upgrade; opened upgrade')"
   read -r id shell catalog <<<"$opening"

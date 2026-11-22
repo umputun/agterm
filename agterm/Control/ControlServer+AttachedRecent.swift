@@ -160,10 +160,15 @@ extension ControlServer {
     }
 
     private func originCommand(_ host: String, _ words: [String], operands: [String] = []) async -> ControlResponse {
-        guard let argv = try? RemoteSession.controlCommand(host: host, arguments: words, operands: operands) else {
-            return ControlResponse(ok: false, error: "\(host) cannot be addressed")
+        let sent: RemoteCommandResult? = if let argv = try? RemoteSession.controlCommand(host: host, arguments: words, operands: operands) {
+            await remoteRunner.run(argv, deadline: Self.remoteCompanionDeadline)
+        } else {
+            nil
         }
-        let result = await remoteRunner.run(argv, deadline: Self.remoteCompanionDeadline)
+        guard let result = sent else { return ControlResponse(ok: false, error: "\(host) cannot be addressed") }
+        if result.refusedArguments {
+            return ControlResponse(ok: false, error: "the agterm on \(host) refused the command; nothing was done there")
+        }
         guard let reply = try? JSONDecoder().decode(ControlResponse.self, from: Data(result.stdout.utf8)) else {
             return ControlResponse(ok: false, error: "\(host) did not answer; whether it did anything is unknown")
         }

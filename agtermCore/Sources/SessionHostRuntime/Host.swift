@@ -13,6 +13,8 @@ enum HostChildState {
 protocol HostChild: AnyObject {
     var pid: Int32 { get }
     var hasExited: Bool { get }
+    /// The wait status once the child was reaped; nil while it runs or when it was reaped elsewhere.
+    var exitStatus: Int32? { get }
     var stopReason: String? { get }
     func poll() -> HostChildState
     func terminate(grace: TimeInterval) throws
@@ -35,8 +37,12 @@ public final class Host {
         let zmxPath: String
         var ensureTimeout: TimeInterval = 10
         var pollInterval: TimeInterval = 0.1
+        /// creatorPoll paces the exit check while a creator runs, which takes about 30 ms; `pollInterval` paces listings.
+        var creatorPoll: TimeInterval = 0.01
         var terminationGrace: TimeInterval = 0.25
         var upkeepInterval: TimeInterval = 3600
+        /// Seconds a created command waits for the pane's attach before it starts with no terminal.
+        var attachHold = 5
     }
 
     private let configuration: Configuration
@@ -124,11 +130,11 @@ public final class Host {
         guard now() < deadline else { return failure(.before, "deadline expired before creation") }
 
         let child: any HostChild
-        do { child = try backend.spawn(request) } catch { return failure(.started, "attach client startup could not be confirmed") }
+        do { child = try backend.spawn(creation(request)) } catch { return failure(.started, "creation client startup could not be confirmed") }
         var response = awaitLeader(name: request.name, child: child, deadline: deadline)
         do { try child.terminate(grace: configuration.terminationGrace) } catch {
             pendingChildren.append(child)
-            response = failure(.started, "attach client cleanup is incomplete")
+            response = failure(.started, "creation client cleanup is incomplete")
         }
         return response
     }
@@ -152,20 +158,37 @@ public final class Host {
         return .stopped
     }
 
+    // the detached create parks a payload until the pane's attach sends Init, so the queries a program writes
+    // at startup reach the pane's terminal; a plain shell starts at once, and an inherited hold is dropped
+    private func creation(_ request: SessionHost.Ensure) -> SessionHost.Ensure {
+        var env = request.env
+        env["ZMX_HOLD_UNTIL_ATTACH"] = request.argv.count > 3 ? String(configuration.attachHold) : nil
+        return .init(name: request.name, argv: [request.argv[0], "attach", "--detached"] + request.argv.dropFirst(2),
+                     cwd: request.cwd, env: env, rows: request.rows, cols: request.cols)
+    }
+
+    // the creator exits 0 only once it made the daemon, which may fork the pane's child after that exit
     private func awaitLeader(name: String, child: any HostChild, deadline: TimeInterval) -> SessionHost.Response {
         while now() < deadline {
-            guard case .running = child.poll() else {
-                Self.log("attach client \(child.pid) for \(name) stopped before readiness: \(child.stopReason ?? "unknown")")
-                return failure(.started, "attach client exited or failed before readiness")
+            let state = child.poll()
+            guard state == .running || (state == .exited && child.exitStatus == 0) else {
+                Self.log("creation client \(child.pid) for \(name) failed: \(child.stopReason ?? "unknown")")
+                return failure(.started, "creation client failed before readiness")
             }
-            do {
-                let matches = try backend.list(deadline: deadline).filter { $0.name == name }
-                if matches.count == 1, matches[0].clients != nil, let pid = matches[0].leaderPID, backend.isAlive(pid),
-                   backend.responsibleProcess(of: pid) == configuration.identity.pid {
-                    return .ok(.init(state: .created, leaderPid: pid))
-                }
-            } catch { return failure(.started, "daemon readiness could not be inspected") }
-            pause(min(configuration.pollInterval, max(0, deadline - now())))
+            if state == .exited {
+                do {
+                    let matches = try backend.list(deadline: deadline).filter { $0.name == name }
+                    // the creator binds the socket before it forks the daemon, and zmx lists every socket file,
+                    // so no row after its exit means the daemon is gone (killed while it was being created)
+                    guard !matches.isEmpty else { return failure(.started, "daemon ended before readiness") }
+                    if matches.count == 1, matches[0].clients != nil, let pid = matches[0].leaderPID, backend.isAlive(pid),
+                       backend.responsibleProcess(of: pid) == configuration.identity.pid {
+                        return .ok(.init(state: .created, leaderPid: pid))
+                    }
+                } catch { return failure(.started, "daemon readiness could not be inspected") }
+            }
+            let interval = state == .running ? configuration.creatorPoll : configuration.pollInterval
+            pause(min(interval, max(0, deadline - now())))
         }
         return failure(.started, "timeout waiting for daemon leader")
     }

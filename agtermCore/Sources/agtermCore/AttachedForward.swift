@@ -82,6 +82,16 @@ public enum AttachedForward: Equatable, Sendable {
         return []
     }
 
+    /// attachesPane is whether the forward can start a program in an origin pane this Mac attaches, so the origin holds
+    /// it; a forward that starts only a plain shell needs no hold.
+    public var attachesPane: Bool {
+        switch self {
+        case .restart: true
+        case .scratch(_, let mode, let command): mode != "off" && command != nil
+        default: false
+        }
+    }
+
     /// command is the wire command the origin's `agtermctl` sends for `words`, which an origin too old for it names.
     public var command: Command {
         switch self {

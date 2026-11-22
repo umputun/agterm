@@ -273,8 +273,8 @@ process — what it is running — omitted when the pane sits at its shell promp
 setuid/setgid foreground process like `top` or `sudo`, whose argv macOS refuses to expose),
 `foregroundShell`/`splitForegroundShell` (the shell HOLDING each pane's foreground as a basename — `zsh`,
 `fish` — present exactly when that pane's `foreground` is omitted because a shell holds it. For a pane that
-EXISTS, both omitted together means agterm could not read the process, which is how you tell "a shell has it"
-from "cannot tell"; check `hasSplit` before reading the split pair, since a session with no split omits both
+EXISTS, both omitted together means agterm could not read the process, or that the pane's program is still held
+until its terminal attaches, which is how you tell "a shell has it" from "cannot tell"; check `hasSplit` before reading the split pair, since a session with no split omits both
 simply because there is no pane. It is NOT a claim the pane is at a prompt and NEVER permission to type: a
 builtin like `read` runs inside the shell, so a pane blocked on input is indistinguishable from an idle one.
 A shell agterm does not recognize, outside its known set and your `$SHELL`, reports in `foreground` like any
@@ -1709,6 +1709,11 @@ the Mac showing it; `catalog` is served by agterm-server and by that other Mac.
   mode takes them for the window `--window` names by full id and refuses a request naming none
   (`the request names no window on HOST`). That Mac's `window list` and `tree` report `catalogViewers` on a window
   other Macs show, omitted at none.
+- `--attach-pending` on `session new`, `duplicate`, `scratch` and `restart`: agterm-server holds the program a new
+  terminal pane starts (not a
+  plain shell) until a terminal attaches, at most 30 s, so its startup terminal queries can get answers. A Mac accepts and ignores it. agterm sends it when it
+  creates or restarts a server pane it will attach; a command created on the server without it starts at once (user guide,
+  Open a remote window).
 - On agterm-server: one window (the catalog, `--window` takes its id or `active`); `NAME is not available on
   agterm-server` for every command it does not serve (window mutations, sidebar, font, theme, keymap, quick,
   dashboard, zoom and more; `window list`, `msg send/read/ack` between its own panes and the presenter bridges
