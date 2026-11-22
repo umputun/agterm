@@ -20,7 +20,7 @@ index c28f1d0..d8aa462 100644
      const is_daemon_proc = try daemon.ensureSession(io);
      if (is_daemon_proc) {
 diff --git a/src/daemonize.zig b/src/daemonize.zig
-index 5110560..f70c545 100644
+index e8f17d7..b334ed7 100644
 --- a/src/daemonize.zig
 +++ b/src/daemonize.zig
 @@ -87,23 +87,38 @@ fn exec(sesh_name: []const u8, cmd: Cmd) !noreturn {
@@ -102,16 +102,16 @@ index 5110560..f70c545 100644
      };
  }
  
-@@ -184,7 +207,7 @@ pub fn spawnPty(sesh_name: []const u8, cmd: Cmd, size: ipc.Resize) !PtyInfo {
+@@ -199,7 +222,7 @@ fn awaitDetach(fd: i32, timeout_ms: i32) Detach {
  ///                 ✝          │ PID≠SID → can't get a tty
  ///                            ▼
  ///                          DAEMON ✓
 -pub fn daemonize(sesh_name: []const u8, cmd: Cmd, keep_fds_open: []i32) !PtyInfo {
 +pub fn daemonize(sesh_name: []const u8, cmd: Cmd, keep_fds_open: []i32, hold: bool) !PtyInfo {
+     const ack = try lib_posix.pipe2(.{ .CLOEXEC = true });
      // creates the daemon
      const pid = try lib_posix.fork();
-     assert(pid != -1);
-@@ -252,5 +275,61 @@ pub fn daemonize(sesh_name: []const u8, cmd: Cmd, keep_fds_open: []i32) !PtyInfo
+@@ -276,7 +299,63 @@ pub fn daemonize(sesh_name: []const u8, cmd: Cmd, keep_fds_open: []i32) !PtyInfo
          }
      }
  
@@ -174,6 +174,8 @@ index 5110560..f70c545 100644
 +    try std.testing.expect(std.mem.indexOf(u8, try readUntil(info.master_fd, "ran", &buf, 3000), "ran") != null);
 +    _ = lib_posix.waitpid(info.pid, 0);
  }
+ 
+ test "awaitDetach reads the acknowledgement, a child gone before it, and silence" {
 diff --git a/src/loop.zig b/src/loop.zig
 index 8f3b86b..736a542 100644
 --- a/src/loop.zig

@@ -128,7 +128,8 @@ extension ControlServer {
     }
 
     /// follow waits for `daemon`'s new shell, taking over the pane's restart hold: up to the reply's wait here, and
-    /// up to the follow window in `watch`, which outlives the reply. Nil unless the shell was seen in time.
+    /// up to the follow window in `watch`, which outlives the reply. Nil unless the new pane was seen running in time,
+    /// a held one only once its command has run.
     private func follow(_ session: Session, identity: UUID, daemon: String, oldPid: pid_t) async -> pid_t? {
         let launched = ContinuousClock.now
         let entry = RestartFollow(respawns: session.primaryRespawns, deadline: launched + restartWaits.follow)

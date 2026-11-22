@@ -82,11 +82,12 @@ public enum AttachedForward: Equatable, Sendable {
         return []
     }
 
-    /// attachesPane is whether the forward can create an origin pane this Mac attaches, so the origin holds its command.
+    /// attachesPane is whether the forward can start a program in an origin pane this Mac attaches, so the origin holds
+    /// it; a forward that starts only a plain shell needs no hold.
     public var attachesPane: Bool {
         switch self {
-        case .restart, .convert, .duplicate: true
-        case .split(_, let mode, _), .scratch(_, let mode, _): mode != "off"
+        case .restart: true
+        case .scratch(_, let mode, let command): mode != "off" && command != nil
         default: false
         }
     }

@@ -122,6 +122,13 @@ final class RemoteCatalogActionsTests {
                               panes: catalogPanes)
     }
 
+    private final class Surface: TerminalSurface {
+        var isRealized = true
+        var paneToken = UUID().uuidString
+        func teardown() {}
+        func promoteToPrimaryPane() {}
+    }
+
     private func snapshot(epoch: String = "e1", rev: Int = 0, sessions: [CatalogSession]? = nil) -> CatalogSnapshot {
         CatalogSnapshot(epoch: epoch, rev: rev, catalogID: catalogID, versions: Self.versions,
                         workspaces: [CatalogWorkspace(id: workspaceID, name: "w", sessions: sessions ?? [session(sessionID, panes: panes)])])
@@ -578,6 +585,21 @@ final class RemoteCatalogActionsTests {
         #expect(script.commandCalls.allSatisfy { $0.contains(pin) })
     }
 
+    @Test(arguments: [(false, ZmxPaneRole.right, false), (false, .left, true), (true, .left, false), (true, .right, true)])
+    func aRestartOfAPaneTheCollapsedSplitDoesNotShowAsksNoHold(rightFocused: Bool, pane: ZmxPaneRole, held: Bool) async throws {
+        install(snapshot())
+        let row = try #require(store.session(withID: sessionID))
+        row.isSplit = false
+        row.hasSplit = true
+        row.splitFocused = rightFocused
+        row.splitSurface = Surface()
+        queue(reply(.noop))
+
+        _ = await send(.restart(sessionID, pane: pane, command: "codex"))
+
+        #expect(script.commandCalls.first?.contains("--attach-pending") == held)
+    }
+
     @Test func anEndedRowIsRestartedWithNoPanesToPin() async {
         install(snapshot(sessions: [session(sessionID, panes: [])]))
         queue(reply(.noop))
@@ -695,16 +717,18 @@ final class RemoteCatalogActionsTests {
         #expect(actions.marks.isEmpty)
     }
 
-    @Test func everyOperationWhosePaneThisMacAttachesAsksTheServerToHoldItsCommand() {
+    @Test func everyOperationThatStartsAProgramThisMacAttachesAsksTheServerToHoldIt() {
+        let program = RemoteShellOptions(command: "codex")
         let held: [RemoteOperation] = [
-            .newSession(workspace: workspaceID), .newSessionInNamedWorkspace(name: "w", create: true), .newCompanion(parent: sessionID),
-            .setSplit(sessionID, shown: true, axis: nil), .setScratch(sessionID, shown: true, command: "top"),
-            .restart(sessionID, pane: .left, command: nil), .duplicateCompanion(sessionID), .convertCompanion(sessionID),
-            .reopenRecent(nil),
+            .newSession(workspace: workspaceID, shell: program), .newSessionInNamedWorkspace(name: "w", create: true, shell: program),
+            .newCompanion(parent: sessionID, shell: program), .setScratch(sessionID, shown: true, command: "top"),
+            .restart(sessionID, pane: .left, command: nil), .duplicateCompanion(sessionID),
         ]
         let plain: [RemoteOperation] = [
-            .setSplit(sessionID, shown: false, axis: nil), .setScratch(sessionID, shown: false), .closeSession(sessionID),
-            .renameSession(sessionID, name: "n"), .killDaemon(sessionID, pane: .left),
+            .newSession(workspace: workspaceID), .newSessionInNamedWorkspace(name: "w", create: true), .newCompanion(parent: sessionID),
+            .setSplit(sessionID, shown: true, axis: nil), .setScratch(sessionID, shown: true), .convertCompanion(sessionID),
+            .reopenRecent(nil), .setSplit(sessionID, shown: false, axis: nil), .setScratch(sessionID, shown: false),
+            .closeSession(sessionID), .renameSession(sessionID, name: "n"), .killDaemon(sessionID, pane: .left),
         ]
 
         #expect(held.map(\.attachesPane) == Array(repeating: true, count: held.count))
@@ -715,7 +739,7 @@ final class RemoteCatalogActionsTests {
         install(snapshot())
         queue(reply(.applied, rev: 1, id: "new-id"))
 
-        _ = await send(.newSession(workspace: workspaceID))
+        _ = await send(.newSession(workspace: workspaceID, shell: RemoteShellOptions(command: "codex")))
 
         #expect(script.commandCalls.count == 1)
         #expect(script.commandCalls[0].contains("--op-id"))
@@ -728,7 +752,7 @@ final class RemoteCatalogActionsTests {
         queue({ _ in "" })
         queue(reply(.applied, rev: 1, id: "new-id"))
 
-        let response = await send(.newSession(workspace: workspaceID))
+        let response = await send(.newSession(workspace: workspaceID, shell: RemoteShellOptions(command: "codex")))
 
         #expect(response.result?.id == "new-id")
         #expect(script.commandCalls.count == 2)

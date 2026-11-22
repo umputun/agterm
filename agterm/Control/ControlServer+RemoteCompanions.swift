@@ -12,10 +12,14 @@ enum RemoteCompanionRequest {
         return nil
     }
 
-    /// attachesPane is whether the companion has a terminal pane this Mac attaches; a page has none.
+    /// attachesPane is whether the companion can start a program in a pane this Mac attaches: a duplicate replays the
+    /// parent's programs, a terminal only one with a command, and a page has no pane.
     var attachesPane: Bool {
-        if case .page = self { return false }
-        return true
+        switch self {
+        case .terminal(let options): options.command != nil
+        case .duplicate: true
+        case .page: false
+        }
     }
 
     var command: Command {

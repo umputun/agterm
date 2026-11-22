@@ -2001,9 +2001,11 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `createRemoteSession`, shared by the GUI and control, runs the create once; an unattached session is named with
   `zmx attach HOST ID`, and an undecodable reply is reported as an unknown outcome, never resent. It is in `localOnlyCommands` and `waitsOnNetwork`, and agterm-server
   refuses it as a command that makes a Mac viewer.
-- Every Mac path that creates or restarts an origin pane and then attaches it sends `ControlArgs.attachPending`
-  (CLI `--attach-pending`): the remote session and terminal companion creates, `RemoteOperation.attachesPane`,
-  `AttachedForward.attachesPane` and the attached reopen's `recent open`. agterm-server binds it per request
+- Every Mac path that can start a program in an origin pane it then attaches sends `ControlArgs.attachPending`
+  (CLI `--attach-pending`): a remote session or terminal companion create with a command, Duplicate as Companion,
+  and `RemoteOperation.attachesPane` and `AttachedForward.attachesPane` (restart, a scratch with a command); paths
+  that start only a plain shell send none. A restart of a pane the window does not lay out sends none either
+  (`Session.mountsPane`), since no terminal would attach to release it. agterm-server binds it per request
   (`AttachIntent`) and starts a pane running a program, never a plain login shell, with `ZMX_HOLD_UNTIL_ATTACH`
   (`ServerPanes.attachHoldSeconds`, 30 s); a Mac origin ignores it, since its panes attach locally. A create
   without it starts at once.

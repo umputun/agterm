@@ -240,7 +240,6 @@ struct Session: ParsableCommand {
             @OptionGroup var target: TargetOptions
             @OptionGroup var options: ClientOptions
             @OptionGroup var operation: OperationOptions
-            @OptionGroup var attach: AttachOptions
 
             func validate() throws {
                 if let axis, SplitAxis(rawValue: axis) == nil {
@@ -249,8 +248,8 @@ struct Session: ParsableCommand {
             }
 
             func makeRequest() throws -> ControlRequest {
-                attach.stamp(operation.stamp(ControlRequest(cmd: .sessionSplit, target: target.target,
-                                                            args: options.withWindow(ControlArgs(mode: mode, axis: axis)))))
+                operation.stamp(ControlRequest(cmd: .sessionSplit, target: target.target,
+                                               args: options.withWindow(ControlArgs(mode: mode, axis: axis))))
             }
         }
 

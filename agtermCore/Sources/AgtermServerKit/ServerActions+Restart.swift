@@ -151,7 +151,8 @@ extension ServerActions {
     }
 
     /// follow waits for the new shell of `target`'s daemon, taking over the pane's restart hold: up to the reply's wait
-    /// here, and up to the follow window in `watch`, which outlives the reply. Nil unless the shell was seen in time.
+    /// here, and up to the follow window in `watch`, which outlives the reply. Nil unless the new pane was seen running
+    /// in time, a held one only once its command has run.
     private func follow(_ session: Session, identity: UUID, target: ProcDaemon.Target, oldPid: Int32?) async -> Int32? {
         let launched = ContinuousClock.now
         let entry = RestartFollow(respawns: session.primaryRespawns, deadline: launched + restartWaits.follow)

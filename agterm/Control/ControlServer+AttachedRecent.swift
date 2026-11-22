@@ -76,7 +76,7 @@ extension ControlServer {
         guard let entry else {
             return .refused(ControlResponse(ok: false, error: "the session on \(host) is gone and \(host) keeps no record of it"))
         }
-        let reply = await originCommand(host, ["recent", "open"], operands: [entry], attaches: true)
+        let reply = await originCommand(host, ["recent", "open"], operands: [entry])
         guard reply.ok, let open = reply.result?.recentOpen else {
             return .refused(ControlResponse(ok: false, error: reply.error ?? "\(host) did not reopen \(item.name)"))
         }
@@ -159,11 +159,8 @@ extension ControlServer {
         }?.id
     }
 
-    private func originCommand(_ host: String, _ words: [String], operands: [String] = [],
-                               attaches: Bool = false) async -> ControlResponse {
-        let sent: RemoteCommandResult? = if attaches {
-            await runAttaching(host: host, arguments: words, operands: operands)
-        } else if let argv = try? RemoteSession.controlCommand(host: host, arguments: words, operands: operands) {
+    private func originCommand(_ host: String, _ words: [String], operands: [String] = []) async -> ControlResponse {
+        let sent: RemoteCommandResult? = if let argv = try? RemoteSession.controlCommand(host: host, arguments: words, operands: operands) {
             await remoteRunner.run(argv, deadline: Self.remoteCompanionDeadline)
         } else {
             nil

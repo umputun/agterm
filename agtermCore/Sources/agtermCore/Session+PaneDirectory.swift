@@ -47,4 +47,15 @@ extension Session {
         let exists = FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory)
         return exists && isDirectory.boolValue ? path : homeDirectory
     }
+
+    /// mountsPane is whether this window lays the pane out, as the deck's `sessionDetail` does: a collapsed split
+    /// shows its right pane alone when that pane had focus and has a surface, and its left pane otherwise.
+    public func mountsPane(_ pane: ZmxPaneRole) -> Bool {
+        switch pane {
+        case .scratch: return scratchActive
+        case .left, .right:
+            if isSplit { return true }
+            return (pane == .right) == (splitFocused && splitSurface != nil)
+        }
+    }
 }

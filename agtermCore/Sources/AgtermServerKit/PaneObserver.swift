@@ -113,9 +113,8 @@ final class PaneObserver {
             }
             guard store.closePrimaryPane(session.id, alreadyFinalized: session.paneIdentity) == .respawned else { return }
             let workspace = store.sessionLocation(ofSession: session.id)?.workspace
-            // a failed restart settles inside its own request, whose intent no viewer waits on for this shell
             guard panes.start(.init(identity: session.paneIdentity, session: session, workspace: workspace, pane: .left,
-                                    directory: session.effectiveCwd, attachPending: false)) == nil else {
+                                    directory: session.effectiveCwd)) == nil else {
                 store.markSessionEnded(session.id)
                 return
             }

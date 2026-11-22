@@ -37,7 +37,7 @@ public final class Host {
         let zmxPath: String
         var ensureTimeout: TimeInterval = 10
         var pollInterval: TimeInterval = 0.1
-        /// creatorPoll paces the cheap exit check while the creator runs, ~30 ms; `pollInterval` paces the listings.
+        /// creatorPoll paces the exit check while a creator runs, which takes about 30 ms; `pollInterval` paces listings.
         var creatorPoll: TimeInterval = 0.01
         var terminationGrace: TimeInterval = 0.25
         var upkeepInterval: TimeInterval = 3600

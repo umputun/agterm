@@ -68,14 +68,24 @@ final class ControlServerRemoteCompanionsTests: XCTestCase {
         XCTAssertEqual(ZmxLeadBook.shared.states[companion.paneIdentity]?.attachment.claim, true)
     }
 
-    func testACompanionCreateAsksTheOriginToHoldItsCommand() async throws {
+    func testACompanionCreateWithACommandAsksTheOriginToHoldIt() async throws {
+        let runner = ScriptedRunner([origin, reply(id: created), tree(sessions: session(created))])
+        let (server, _, row) = try makeServer(runner)
+
+        let reply = await server.createCompanion(row.id.uuidString, options: CompanionOptions(command: "codex"), window: nil)
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        XCTAssertTrue(try XCTUnwrap(runner.invocations[1].last).contains("--attach-pending"))
+    }
+
+    func testAShellCompanionCreateAsksTheOriginNoHold() async throws {
         let runner = ScriptedRunner([origin, reply(id: created), tree(sessions: session(created))])
         let (server, _, row) = try makeServer(runner)
 
         let reply = await server.createCompanion(row.id.uuidString, options: CompanionOptions(), window: nil)
 
         XCTAssertTrue(reply.ok, reply.error ?? "")
-        XCTAssertTrue(try XCTUnwrap(runner.invocations[1].last).contains("--attach-pending"))
+        XCTAssertFalse(try XCTUnwrap(runner.invocations[1].last).contains("--attach-pending"))
     }
 
     func testDuplicateAsCompanionOnARemoteRowAsksTheOriginToDuplicate() async throws {
@@ -114,7 +124,7 @@ final class ControlServerRemoteCompanionsTests: XCTestCase {
         let runner = ScriptedRunner([origin, usage, usage])
         let (server, store, row) = try makeServer(runner)
 
-        let reply = await server.createCompanion(row.id.uuidString, options: CompanionOptions(), window: nil)
+        let reply = await server.createCompanion(row.id.uuidString, options: CompanionOptions(command: "codex"), window: nil)
 
         XCTAssertEqual(reply.error, "the agterm on buildbox is too old for companions")
         XCTAssertTrue(store.companions(of: row.id).isEmpty)

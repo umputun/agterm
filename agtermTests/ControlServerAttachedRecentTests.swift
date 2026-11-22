@@ -86,7 +86,8 @@ final class ControlServerAttachedRecentTests: XCTestCase {
         let reply = await server.reopenAttached(entry.id, window: nil)
 
         XCTAssertTrue(reply.ok, reply.error ?? "")
-        XCTAssertTrue(line(runner, 2).contains("recent open --attach-pending"), line(runner, 2))
+        XCTAssertTrue(line(runner, 2).contains("recent open"), line(runner, 2))
+        XCTAssertFalse(line(runner, 2).contains("--attach-pending"), line(runner, 2))
         XCTAssertTrue(line(runner, 2).contains("-- r1"), line(runner, 2))
     }
 

@@ -10,11 +10,8 @@ struct CatalogCommandsTests {
         (["session", "new", "--parent", "p1"], .sessionCompanionNew),
         (["session", "duplicate"], .sessionDuplicate),
         (["session", "duplicate", "--companion"], .sessionCompanionDuplicate),
-        (["session", "split", "on"], .sessionSplit),
         (["session", "scratch", "on", "--command", "top"], .sessionScratch),
         (["session", "restart", "--pane", "left"], .sessionRestart),
-        (["session", "convert", "--companion"], .sessionCompanionConvert),
-        (["recent", "open"], .recentOpen),
     ]
 
     private func request(_ argv: [String]) throws -> ControlRequest {
@@ -32,6 +29,11 @@ struct CatalogCommandsTests {
         #expect(held.cmd == cmd)
         #expect(held.args?.attachPending == true)
         #expect(plain.args?.attachPending == nil)
+    }
+
+    @Test(arguments: [["session", "split", "on"], ["session", "convert", "--companion"], ["recent", "open"]])
+    func aCommandThatStartsOnlyAPlainShellRefusesTheIntent(argv: [String]) {
+        #expect(throws: (any Error).self) { try request(argv + ["--attach-pending"]) }
     }
 
     @Test func theIntentTravelsBesideAnOperationID() throws {

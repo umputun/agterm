@@ -39,6 +39,8 @@ Ghostty version preserves skipped cells during VT replay by moving the cursor ac
   goes, so a session found gone without a record was killed; teardown then ends the shell's process group as
   upstream does. A killed session writes nothing, and the shell never sees the variable. Create and attach
   hand labels the bare name, since upstream's prefixed one is prefixed again under `ZMX_SESSION_PREFIX`.
+  The creator exits only once the forked daemon acknowledges its `setsid`, or after a 1 s bound: agterm's
+  host runs it as its PTY's session leader, whose exit hangs up a daemon still in its process group.
 - `0006-single-da-answer.patch` keeps a DA1/DA2 query from being answered twice. Until a client sends
   Init, the daemon answers such queries itself, but upstream also forwards them to an attach it accepted
   and has not yet heard Init from, whose terminal answers again; the program reads the spare reply as the

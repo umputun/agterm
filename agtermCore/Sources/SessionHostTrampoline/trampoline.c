@@ -53,8 +53,8 @@ pid_t sh_forkpty_exec(char *const argv[], char *const envp[], const char *cwd,
     if (child == 0) {
         close(error_pipe[0]);
         /* exec keeps the forking thread's mask and every SIG_IGN, the host's own launch included: either
-           would leave the creation attach alive, and leading, until SIGKILL. Reset before unblocking so a
-           pending signal cannot reach a handler inherited from the host. */
+           would leave the spawned zmx alive until SIGKILL. Reset before unblocking so a pending signal
+           cannot reach a handler inherited from the host. */
         struct sigaction defaults = { .sa_handler = SIG_DFL };
         sigemptyset(&defaults.sa_mask);
         for (int signo = 1; signo < NSIG; signo++) {
