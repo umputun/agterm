@@ -61,8 +61,8 @@ final class ServerPanes {
         let directory: String
         /// scratch starts the pane under `scratchDaemonName` and leaves `daemonBackedPanes` to the session's panes.
         var scratch = false
-        /// attachPending holds the command until a terminal attaches, up to `attachHoldSeconds`; it defaults to what
-        /// the request being served asked for (`AttachIntent.pending`).
+        /// attachPending holds a program (never the plain login shell) until a terminal attaches, up to
+        /// `attachHoldSeconds`; it defaults to what the request being served asked for (`AttachIntent.pending`).
         var attachPending = AttachIntent.pending
     }
 
@@ -91,7 +91,7 @@ final class ServerPanes {
         environment["ZMX_SESSION_PREFIX"] = ""
         environment["ZMX_NO_DETACH_KEY"] = "1"
         environment["ZMX_EXIT_FILE"] = record
-        if start.attachPending { environment["ZMX_HOLD_UNTIL_ATTACH"] = String(Self.attachHoldSeconds) }
+        if start.attachPending, start.program != .loginShell { environment["ZMX_HOLD_UNTIL_ATTACH"] = String(Self.attachHoldSeconds) }
         let integration = (configuration.resourcesDirectory as NSString).appendingPathComponent("shell-integration")
         let launch = shell.launch(integration: integration, environment: environment, program: start.program)
         let home = baseEnvironment["HOME"] ?? "/"

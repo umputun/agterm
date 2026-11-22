@@ -42,10 +42,22 @@ private let sessionHostFixtureReady = Responsibility.system.isAvailable
         #expect([spawned.cwd, "\(spawned.rows)x\(spawned.cols)"] == ["/tmp", "30x100"])
     }
 
+    @Test func aPlainShellIsCreatedDetachedWithNoHoldEvenWhenItInheritedOne() throws {
+        let context = try Context()
+        context.backend.child.exit(0)
+        context.backend.records = [[], [context.record]]
+        let request = SessionHost.Ensure(name: context.name, argv: context.request.argv, cwd: "/tmp",
+                                         env: context.request.env.merging(["ZMX_HOLD_UNTIL_ATTACH": "9"]) { $1 }, rows: 24, cols: 80)
+        #expect(context.host.handle(ensure: request) == .ok(.init(state: .created, leaderPid: 600)))
+        let spawned = try #require(context.backend.spawned.first)
+        #expect(spawned.argv == [request.argv[0], "attach", "--detached", context.name])
+        #expect(spawned.env["ZMX_HOLD_UNTIL_ATTACH"] == nil)
+    }
+
     @Test func leaderAfterTheCreatorExitedCreatesOnceAndReleasesOnlyTheCreator() throws {
         let context = try Context()
         context.backend.child.exit(0)
-        context.backend.records = [[], [], [context.record]]
+        context.backend.records = [[], [.init(name: context.name, clients: nil, leaderPID: nil)], [context.record]]
         #expect(context.host.handle(ensure: context.request) == .ok(.init(state: .created, leaderPid: 600)))
         #expect(context.backend.spawns == 1)
         #expect(context.backend.listCalls == 3)
@@ -62,14 +74,26 @@ private let sessionHostFixtureReady = Responsibility.system.isAvailable
         #expect(context.clock.time >= 0.3)
     }
 
-    @Test func aCreatorThatExitedWithoutALeaderRowTimesOutAsStarted() throws {
+    @Test func aCreatorThatExitedWithAnUnreadyDaemonTimesOutAsStarted() throws {
         let context = try Context()
         context.backend.child.exit(0)
+        context.backend.records = [[], [.init(name: context.name, clients: nil, leaderPID: nil)]]
         guard case .error(let error) = context.host.handle(ensure: context.request) else { Issue.record("expected timeout"); return }
         #expect(error.stage == .started)
         #expect(context.backend.spawns == 1)
-        #expect(context.backend.listCalls > 1)
+        #expect(context.backend.listCalls > 2)
         #expect(context.clock.time >= 0.3)
+    }
+
+    // regression: a daemon killed after its creator exited held the host, and every pane queued behind it, to the deadline
+    @Test func aDaemonGoneAfterItsCreatorExitedFailsAtOnce() throws {
+        let context = try Context()
+        context.backend.child.exit(0)
+        guard case .error(let error) = context.host.handle(ensure: context.request) else { Issue.record("expected failure"); return }
+        #expect(error.stage == .started)
+        #expect(context.backend.listCalls == 2)
+        #expect(context.clock.time < 0.1)
+        #expect(context.backend.child.terminations == 1)
     }
 
     @Test(arguments: [Int32(1 << 8), SIGKILL])

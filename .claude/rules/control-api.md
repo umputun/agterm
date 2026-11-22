@@ -2004,8 +2004,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - Every Mac path that creates or restarts an origin pane and then attaches it sends `ControlArgs.attachPending`
   (CLI `--attach-pending`): the remote session and terminal companion creates, `RemoteOperation.attachesPane`,
   `AttachedForward.attachesPane` and the attached reopen's `recent open`. agterm-server binds it per request
-  (`AttachIntent`) and starts that pane with `ZMX_HOLD_UNTIL_ATTACH` (`ServerPanes.attachHoldSeconds`, 30 s);
-  a Mac origin ignores it, since its panes attach locally. A create without it starts at once.
+  (`AttachIntent`) and starts a pane running a program, never a plain login shell, with `ZMX_HOLD_UNTIL_ATTACH`
+  (`ServerPanes.attachHoldSeconds`, 30 s); a Mac origin ignores it, since its panes attach locally. A create
+  without it starts at once.
   It is a timing request with no state, so it has no read-back. An older origin drops the field and starts at
   once; a stale far `agtermctl` refuses the flag before sending, and only that `refusedArguments` reply is rerun
   once without it, keeping the operation id (`ControlServer.runAttaching`, `RemoteCatalogActions.send`).

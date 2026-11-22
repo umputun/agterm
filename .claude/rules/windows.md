@@ -250,11 +250,13 @@ session drag are out of scope.
 - Keep all `responsibility_*` SPI lookups in the `AgtermResponsibility` target.
   If the SPI is unavailable, panes fall back to bare attach.
 - `SessionHostTrampoline` owns the `forkpty` child path through `execve`; no Swift runs there.
-- The host creates a pane's daemon with `zmx attach --detached NAME payload` under
-  `ZMX_HOLD_UNTIL_ATTACH` (`Host.Configuration`, 5 s), spawned on a PTY at the pane's size, and answers once
-  the creator exits and the daemon's host-rooted child is live. The payload stays parked before `exec` until
+- The host creates a pane's daemon with `zmx attach --detached NAME [payload]`, spawned on a PTY at the pane's
+  size, and answers once the creator exits and the daemon's host-rooted child is live; a daemon gone by then
+  fails the request at once, since the serial host would otherwise hold every queued pane to its deadline.
+  A payload runs under `ZMX_HOLD_UNTIL_ATTACH` (`Host.Configuration`, 5 s): it stays parked before `exec` until
   the pane's own attach leads, so its startup terminal queries (codex's OSC 10/11 and CPR) reach the pane's
-  terminal; a bound expiry starts it unattached. zmx patch `0013` owns the hold.
+  terminal, and a bound expiry starts it unattached. A plain shell is not held, so its startup overlaps the
+  attach. zmx patch `0013` owns the hold.
 - The host answers one client at a time.
   A connected client waits up to 30 seconds for its turn before falling back to a bare attach,
   so a long enough queue of creations still yields an `app` pane.

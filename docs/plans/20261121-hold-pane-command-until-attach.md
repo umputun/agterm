@@ -273,6 +273,11 @@
       `scripts/server-container.sh check`
 - [x] `lsappinfo list | grep -A4 agterm.debug` after the hosted run; clean up leaked test processes
 - [ ] verify the Overview's requirements against the result; move this plan to `docs/plans/completed/`
+- ➕ the XCUITests found two regressions: a new plain shell took ~0.50 s to its prompt against master's ~0.27 s,
+  and a restart landing during a fresh pane's creation stalled the serial session host for 10 s. Eugene chose
+  (2026-11-21) to hold only panes started with a program, local and remote: the host holds a payload and clears an
+  inherited key, the server holds when the program is not the login shell. The host now fails a creation whose
+  daemon is gone after the creator's exit instead of polling to its deadline
 
 ## Post-Completion
 *Items requiring manual intervention or external systems*

@@ -37,10 +37,11 @@ struct ServerActionsSessionsTests {
         #expect(harness.store.selectedSessionID != session.id)
     }
 
-    @Test(arguments: [(true as Bool?, "30" as String?), (false, nil), (nil, nil)])
-    func aNewPaneHoldsItsCommandOnlyWhenTheRequestAttachesIt(pending: Bool?, hold: String?) async throws {
+    @Test(arguments: [(true as Bool?, "htop" as String?, "30" as String?), (false, "htop", nil), (nil, "htop", nil), (true, nil, nil)])
+    func aNewPaneHoldsItsProgramOnlyWhenTheRequestAttachesIt(pending: Bool?, command: String?, hold: String?) async throws {
         var args = ControlArgs()
         args.attachPending = pending
+        args.command = command
 
         try harness.session(await harness.actions.serve(ControlRequest(cmd: .sessionNew, args: args)))
 

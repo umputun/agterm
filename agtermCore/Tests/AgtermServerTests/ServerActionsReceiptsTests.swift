@@ -61,6 +61,7 @@ struct ServerActionsReceiptsTests {
     @Test func anOperationThatAttachesItsPaneHoldsTheCommand() async throws {
         var pending = ControlArgs()
         pending.attachPending = true
+        pending.command = "codex"
 
         let reply = await serve(.sessionNew, pending, op: "held")
 

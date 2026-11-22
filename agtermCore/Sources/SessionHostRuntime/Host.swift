@@ -156,11 +156,11 @@ public final class Host {
         return .stopped
     }
 
-    // the detached create parks the payload until the pane's attach sends Init, so the queries a program
-    // writes at startup reach the pane's terminal rather than this host, which has none to answer them
+    // the detached create parks a payload until the pane's attach sends Init, so the queries a program writes
+    // at startup reach the pane's terminal; a plain shell starts at once, and an inherited hold is dropped
     private func creation(_ request: SessionHost.Ensure) -> SessionHost.Ensure {
         var env = request.env
-        env["ZMX_HOLD_UNTIL_ATTACH"] = String(configuration.attachHold)
+        env["ZMX_HOLD_UNTIL_ATTACH"] = request.argv.count > 3 ? String(configuration.attachHold) : nil
         return .init(name: request.name, argv: [request.argv[0], "attach", "--detached"] + request.argv.dropFirst(2),
                      cwd: request.cwd, env: env, rows: request.rows, cols: request.cols)
     }
@@ -176,6 +176,9 @@ public final class Host {
             if state == .exited {
                 do {
                     let matches = try backend.list(deadline: deadline).filter { $0.name == name }
+                    // the creator binds the socket before it forks the daemon, and zmx lists every socket file,
+                    // so no row after its exit means the daemon is gone (killed while it was being created)
+                    guard !matches.isEmpty else { return failure(.started, "daemon ended before readiness") }
                     if matches.count == 1, matches[0].clients != nil, let pid = matches[0].leaderPID, backend.isAlive(pid),
                        backend.responsibleProcess(of: pid) == configuration.identity.pid {
                         return .ok(.init(state: .created, leaderPid: pid))
