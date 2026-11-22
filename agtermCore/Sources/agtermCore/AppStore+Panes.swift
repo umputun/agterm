@@ -31,9 +31,11 @@ extension AppStore {
         endPresentations(of: sessions.map(\.id))
         // every pane, an attached one included: its daemon is not ours to kill, its lead state is
         for session in sessions {
-            ([session.paneIdentity] + [session.splitPaneIdentity].compactMap { $0 }).forEach {
+            ([session.paneIdentity] + [session.splitPaneIdentity, session.localScratchIdentity].compactMap { $0 }).forEach {
                 ZmxLeadBook.shared.forget(pane: $0)
                 RemoteEndBook.shared.clear(pane: $0)
+                // a reattach reusing the pane id would otherwise inherit the old wait and save its reclaim
+                RemoteReconnectBook.shared.cancel(pane: $0)
             }
         }
         let identities = PaneIdentityInventory.identities(in: sessions).filter { $0 != alreadyFinalized }

@@ -177,4 +177,37 @@ struct ZmxLeadTests {
         #expect(!book.takeClaim(pane: pane))
         #expect(!book.takeClaim(pane: gone))
     }
+
+    @MainActor
+    @Test func anArmedLeadWaitsForThePanesNextAttachAndIsSavedUntilThen() throws {
+        let book = ZmxLeadBook()
+        let pane = UUID(), gone = UUID(), unused = UUID()
+        book.arm([pane: "n1", gone: "n2", unused: "n3"])
+
+        #expect(book.pendingReclaim(pane: pane) == "n1")
+        #expect(book.savedLead(pane: pane) == "n1")
+
+        let attach = ZmxLeadAttachment(nonce: "n4", claim: false, reclaim: "n1")
+        book.begin(attach, pane: pane)
+        book.forget(pane: gone)
+        book.disarm([unused])
+
+        #expect(book.pendingReclaim(pane: pane) == nil)
+        #expect(book.savedLead(pane: pane) == "n1")
+        _ = book.apply(try #require(ZmxLeadNotice(title: "zmx-role;n4:follower:1")), pane: pane)
+        book.arm([pane: "n1"])
+        #expect(book.savedLead(pane: pane) == nil)
+        #expect(book.savedLead(pane: gone) == nil)
+        #expect(book.savedLead(pane: unused) == nil)
+    }
+
+    @MainActor
+    @Test func aPaneParkedToReconnectSavesTheLeadItWillTakeBack() {
+        let book = ZmxLeadBook()
+        let pane = UUID()
+        RemoteReconnectBook.shared.wait(pane: pane, session: UUID(), host: "box", cover: true, reclaim: "n1", now: Date())
+        defer { RemoteReconnectBook.shared.cancel(pane: pane) }
+
+        #expect(book.savedLead(pane: pane) == "n1")
+    }
 }

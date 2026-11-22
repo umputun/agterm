@@ -164,6 +164,8 @@ public final class ZmxLeadBook {
     public private(set) var attachments = 0
     /// claims are panes whose attach started without the claim this Mac owes them; the first role report takes it.
     @ObservationIgnored private var claims: Set<UUID> = []
+    /// pendingReclaims are saved leads a restore armed, by pane identity, until that pane's next attach begins.
+    @ObservationIgnored private var pendingReclaims: [UUID: String] = [:]
     /// onChange runs after any pane's state is replaced, changed or forgotten, so an attached row can report
     /// what it now leads to its origin.
     @ObservationIgnored public var onChange: (() -> Void)?
@@ -176,8 +178,25 @@ public final class ZmxLeadBook {
     /// takeClaim answers whether `pane` owes a claim, ending it.
     public func takeClaim(pane: UUID) -> Bool { claims.remove(pane) != nil }
 
+    /// arm stages saved leads, by pane identity, for each pane's first attach after a restore.
+    func arm(_ leads: [UUID: String]) { pendingReclaims.merge(leads) { _, new in new } }
+
+    /// disarm drops the armed leads of `panes` that no attach took.
+    func disarm(_ panes: some Sequence<UUID>) { panes.forEach { pendingReclaims[$0] = nil } }
+
+    /// pendingReclaim is the saved lead `pane`'s next attach takes back; that attach's `begin` drops it.
+    public func pendingReclaim(pane: UUID) -> String? { pendingReclaims[pane] }
+
+    /// savedLead is what a snapshot keeps for `pane`: its attachment's reclaim target, the armed lead of a pane that
+    /// has not attached since the restore, or the one a pane parked to reconnect will take back.
+    func savedLead(pane: UUID) -> String? {
+        if let state = states[pane] { return state.reclaimAfterDrop }
+        return pendingReclaims[pane] ?? RemoteReconnectBook.shared.entries[pane]?.reclaim
+    }
+
     /// Starts over for `pane`: reports of its previous attachment no longer match and are dropped.
     public func begin(_ attachment: ZmxLeadAttachment, pane: UUID, reattaching: Bool = false) {
+        pendingReclaims[pane] = nil
         states[pane] = ZmxLeadState(attachment: attachment, reattaching: reattaching)
         attachments &+= 1
         onChange?()
@@ -200,6 +219,7 @@ public final class ZmxLeadBook {
     public func forget(pane: UUID) {
         states[pane] = nil
         claims.remove(pane)
+        pendingReclaims[pane] = nil
         onChange?()
     }
 }

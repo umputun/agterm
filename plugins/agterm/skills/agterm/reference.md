@@ -2755,7 +2755,8 @@ be typed.
 
 Closing a remote session here ends only this side's connection: the far-side processes keep running and
 nothing agterm does from this end can kill them. An open attached row is saved and attached again at the next
-launch whatever the restore mode is, without taking the lead from a Mac that took it meanwhile. A row whose
+launch whatever the restore mode is, and a reopened window attaches its rows again too; a pane this Mac led takes
+the lead back under the reconnect rule below. A row whose
 session the origin no longer has closes instead; an attached page waits for the origin to hand it
 over and retries while the host does not answer.
 
@@ -2779,7 +2780,10 @@ for this Mac, as pressing a key on the cover does.
 A pane or scratch that reconnects after its ssh dropped takes the lead back when this Mac led it at the drop and
 nobody has used it since: this Mac's lost connection still holds the lead, or another Mac took it only
 because the pane was free and nothing was typed, pasted or clicked there since. Otherwise it comes back
-covered. Text a script types with `session type` on the Mac the session runs on does not count as use. A session started by an agterm without this
+covered. A relaunch or a reopened window does the same for each pane this Mac led when it left: in an attached
+session, in a remote window, and in this Mac's own Live sessions while another Mac shows them; opening a
+window of another Mac takes the lead outright instead. Text a script
+types with `session type` on the Mac the session runs on does not count as use. A session started by an agterm without this
 behavior keeps leaving the lead where it is until it ends.
 
 On the Mac the session RUNS on, a covered pane stays fully drivable: `session type`, `session text` and

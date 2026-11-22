@@ -1,6 +1,6 @@
 import XCTest
 @testable import agterm
-import agtermCore
+@testable import agtermCore
 
 @MainActor
 final class ControlServerRemoteCatalogTests: XCTestCase {
@@ -44,6 +44,27 @@ final class ControlServerRemoteCatalogTests: XCTestCase {
         var result = ControlResult()
         result.windows = nodes
         return result
+    }
+
+    func testACatalogPaneReclaimsItsSavedLeadUnlessItsAttachClaims() throws {
+        let (server, _) = try server(answering: [])
+        let effects = RemoteCatalogWindow(window: UUID(), server: server,
+                                          pool: SshConnectionPool(host: "box", root: "/tmp", key: UUID().uuidString) { _ in 0 })
+        let endpoint = ControlZmxEndpoint(executable: "/srv/zmx", socketDirectory: "/run/zmx")
+        let restored = CatalogPane(identity: UUID(), daemon: ZmxSupport.daemonName(for: UUID()), endpoint: endpoint)
+        let claimed = CatalogPane(identity: UUID(), daemon: ZmxSupport.daemonName(for: UUID()), endpoint: endpoint)
+        ZmxLeadBook.shared.arm([restored.identity: "n1", claimed.identity: "n2"])
+        defer { [restored, claimed].forEach { ZmxLeadBook.shared.forget(pane: $0.identity) } }
+
+        let reclaiming = effects.attachCommand(host: "box", pane: restored, claim: false)
+        let claiming = effects.attachCommand(host: "box", pane: claimed, claim: true)
+
+        XCTAssertTrue(reclaiming.contains("\(ZmxLeadAttachment.reclaimVariable)=n1"))
+        XCTAssertEqual(ZmxLeadBook.shared.states[restored.identity]?.attachment.reclaim, "n1")
+        XCTAssertNil(ZmxLeadBook.shared.pendingReclaim(pane: restored.identity))
+        XCTAssertFalse(claiming.contains(ZmxLeadAttachment.reclaimVariable))
+        XCTAssertTrue(claiming.contains("\(ZmxLeadAttachment.claimVariable)=1"))
+        XCTAssertNil(ZmxLeadBook.shared.states[claimed.identity]?.attachment.reclaim)
     }
 
     func testAMacWithoutLiveSessionsIsRefusedBeforeAnyWindowIsMade() async throws {

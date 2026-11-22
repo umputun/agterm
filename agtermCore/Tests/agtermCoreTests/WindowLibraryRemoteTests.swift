@@ -79,6 +79,20 @@ final class WindowLibraryRemoteTests {
         #expect(library.openRemoteStores.map(\.id) == [remote.id])
     }
 
+    @Test func closingARemoteWindowEndsItsPanesWaitToReconnect() throws {
+        let library = WindowLibrary(directory: directory)
+        let remote = library.newRemoteWindow(host: "buildbox")
+        let (mirror, binder) = try mirror(library, window: remote.id, host: "buildbox")
+        _ = mirror.receive(.snapshot(snapshot(UUID(), sessions: [catalogSession()])))
+        let pane = try #require(library.store(for: remote.id)?.workspaces.flatMap(\.sessions).first?.paneIdentity)
+        RemoteReconnectBook.shared.wait(pane: pane, session: UUID(), host: "buildbox", cover: true, reclaim: "n1", now: Date())
+        defer { RemoteReconnectBook.shared.cancel(pane: pane) }
+
+        withExtendedLifetime(binder) { library.closeWindow(remote.id) }
+
+        #expect(!RemoteReconnectBook.shared.waiting(pane: pane))
+    }
+
     @Test func reopeningAClosedRemoteWindowTakesTheLeadAndALaunchRestoreDoesNot() throws {
         let library = WindowLibrary(directory: directory)
         let remote = library.newRemoteWindow(host: "buildbox", originWindow: UUID())

@@ -411,7 +411,7 @@ public final class WindowLibrary {
         guard windows.contains(where: { $0.id == id }) else { return nil }
         if let existing = stores[id] { return existing }
         if windows.first(where: { $0.id == id })?.isRemote == true {
-            // a window the user opens takes the lead of its rows; one the launch restores leaves it where it is
+            // a window the user opens takes the lead of its rows; one the launch restores takes back only the leads it saved
             if !launchRestore { remoteOpenClaims.insert(id) }
             return loadRemoteStore(for: id)
         }

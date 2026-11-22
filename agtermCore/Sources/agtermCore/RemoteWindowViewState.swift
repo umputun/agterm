@@ -18,10 +18,12 @@ public struct RemoteWindowViewState: Codable, Equatable, Sendable {
         public var collapsed: Bool?
         /// context is this Mac's own context, never the one mirrored from the server.
         public var context: String?
+        /// leads are the attach nonces the window's first attach of each pane reclaims from, by pane identity.
+        public var leads: [UUID: String]?
 
         public init(focusedPane: UUID? = nil, fontSize: Double? = nil, splitRatio: Double? = nil,
                     background: BackgroundWatermark? = nil, paneBackgrounds: [UUID: BackgroundWatermark]? = nil, collapsed: Bool? = nil,
-                    context: String? = nil) {
+                    context: String? = nil, leads: [UUID: String]? = nil) {
             self.focusedPane = focusedPane
             self.fontSize = fontSize
             self.splitRatio = splitRatio
@@ -29,6 +31,7 @@ public struct RemoteWindowViewState: Codable, Equatable, Sendable {
             self.paneBackgrounds = paneBackgrounds
             self.collapsed = collapsed
             self.context = context
+            self.leads = leads
         }
 
         @MainActor
@@ -37,14 +40,16 @@ public struct RemoteWindowViewState: Codable, Equatable, Sendable {
             var overrides: [UUID: BackgroundWatermark] = [:]
             overrides[session.paneIdentity] = session.paneBackgrounds.left
             if session.hasSplit, let split = session.splitPaneIdentity { overrides[split] = session.paneBackgrounds.right }
+            let panes = [session.paneIdentity] + (session.hasSplit ? [session.splitPaneIdentity].compactMap { $0 } : [])
+            let leads = panes.reduce(into: [UUID: String]()) { $0[$1] = ZmxLeadBook.shared.savedLead(pane: $1) }
             self.init(focusedPane: focused, fontSize: session.fontSize, splitRatio: session.splitRatio,
                       background: session.backgroundWatermark, paneBackgrounds: overrides.isEmpty ? nil : overrides,
-                      collapsed: session.isExpanded ? nil : true, context: session.context)
+                      collapsed: session.isExpanded ? nil : true, context: session.context, leads: leads.isEmpty ? nil : leads)
         }
 
         var isEmpty: Bool {
             focusedPane == nil && fontSize == nil && splitRatio == nil && background == nil && paneBackgrounds == nil
-                && collapsed == nil && context == nil
+                && collapsed == nil && context == nil && leads == nil
         }
 
         /// apply restores this view on `session`; a focused pane or a pane override the row no longer has is ignored.

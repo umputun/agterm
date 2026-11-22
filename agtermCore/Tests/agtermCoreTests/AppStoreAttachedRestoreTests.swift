@@ -67,6 +67,47 @@ struct AppStoreAttachedRestoreTests {
         #expect(ZmxLeadBook.shared.states[try #require(back.splitPaneIdentity)]?.attachment.claim == false)
     }
 
+    @Test func aRelaunchReclaimsTheLeadOnlyWhereThePaneLedWhenSaved() throws {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let row = try addAttachedRow(to: store, workspace: work.id, split: true)
+        let split = try #require(row.splitPaneIdentity)
+        let led = ZmxLeadAttachment(claim: false)
+        ZmxLeadBook.shared.begin(led, pane: row.paneIdentity)
+        _ = ZmxLeadBook.shared.apply(try #require(ZmxLeadNotice(title: "zmx-role;\(led.nonce):leader:1")), pane: row.paneIdentity)
+        let followed = ZmxLeadAttachment(claim: true)
+        ZmxLeadBook.shared.begin(followed, pane: split)
+        _ = ZmxLeadBook.shared.apply(try #require(ZmxLeadNotice(title: "zmx-role;\(followed.nonce):follower:1")), pane: split)
+
+        let restored = relaunched(store)
+
+        let back = try #require(restored.session(withID: row.id))
+        let primary = try #require(ZmxLeadBook.shared.states[back.paneIdentity]?.attachment)
+        #expect(!primary.claim)
+        #expect(primary.reclaim == led.nonce)
+        #expect(back.initialCommand?.contains("\(ZmxLeadAttachment.reclaimVariable)=\(led.nonce)") == true)
+        let right = try #require(ZmxLeadBook.shared.states[split]?.attachment)
+        #expect(!right.claim)
+        #expect(right.reclaim == nil)
+        #expect(back.splitInitialCommand?.contains(ZmxLeadAttachment.reclaimVariable) == false)
+    }
+
+    @Test func closingARowEndsItsPanesWaitToReconnectSoNoOldLeadIsSaved() throws {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let row = try addAttachedRow(to: store, workspace: work.id, split: true)
+        let split = try #require(row.splitPaneIdentity)
+        for pane in [row.paneIdentity, split] {
+            RemoteReconnectBook.shared.wait(pane: pane, session: row.id, host: "box", cover: true, reclaim: "n1", now: Date())
+        }
+
+        store.closeSession(row.id)
+
+        #expect(!RemoteReconnectBook.shared.waiting(pane: row.paneIdentity))
+        #expect(!RemoteReconnectBook.shared.waiting(pane: split))
+        #expect(ZmxLeadBook.shared.savedLead(pane: row.paneIdentity) == nil)
+    }
+
     @Test func aSplitWhoseDaemonIsNotInTheBindingIsDropped() throws {
         let store = makeStore()
         let work = store.addWorkspace(name: "work")

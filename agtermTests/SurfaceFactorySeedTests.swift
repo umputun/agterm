@@ -1,6 +1,6 @@
 import XCTest
 @testable import agterm
-import agtermCore
+@testable import agtermCore
 
 @MainActor
 final class SurfaceFactorySeedTests: XCTestCase {
@@ -392,6 +392,21 @@ final class SurfaceFactorySeedTests: XCTestCase {
         XCTAssertFalse(attachment.claim)
         XCTAssertEqual(view.env[ZmxLeadAttachment.nonceVariable], attachment.nonce)
         XCTAssertNil(view.env[ZmxLeadAttachment.claimVariable])
+    }
+
+    func testARestoredLiveScratchReclaimsItsSavedLeadOnItsFirstAttach() throws {
+        let session = try liveSession()
+        let identity = UUID()
+        store.recordLiveScratch(session.id, identity: identity)
+        ZmxLeadBook.shared.arm([identity: "n1"])
+        defer { ZmxLeadBook.shared.forget(pane: identity) }
+
+        let view = agtermApp.makeScratchSurface(for: session, store: store, env: [:], suppressAutoFocus: true,
+                                                actions: AppActions(library: library), requested: .live, active: .live)
+
+        XCTAssertEqual(view.env[ZmxLeadAttachment.reclaimVariable], "n1")
+        XCTAssertEqual(ZmxLeadBook.shared.states[identity]?.attachment.reclaim, "n1")
+        XCTAssertNil(ZmxLeadBook.shared.pendingReclaim(pane: identity))
     }
 
     func testAnExitedLiveScratchStartsANewDaemonOnTheNextShow() throws {

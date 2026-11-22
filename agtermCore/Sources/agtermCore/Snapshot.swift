@@ -226,6 +226,9 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
     public var ended: Bool?
     /// scratchPaneIdentity names the zmx daemon behind a Live scratch, so a relaunch adopts it hidden.
     public var scratchPaneIdentity: UUID?
+    /// leads are the attach nonces each Live pane's next attach reclaims from, by pane identity
+    /// (`ZmxLeadBook.savedLead`); a pane that followed has none.
+    public var leads: [UUID: String]?
 
     public init(id: UUID, paneIdentity: UUID? = nil, splitPaneIdentity: UUID? = nil,
                 customName: String?, cwd: String, isSplit: Bool? = nil, hasSplit: Bool? = nil,
@@ -238,8 +241,9 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
                 restoreCommand: String? = nil, splitRestoreCommand: String? = nil,
                 context: String? = nil, lastSelectedAt: Double? = nil, tint: SidebarTint? = nil,
                 parentID: UUID? = nil, collapsed: Bool? = nil, page: PageSnapshot? = nil, ended: Bool? = nil,
-                scratchPaneIdentity: UUID? = nil) {
+                scratchPaneIdentity: UUID? = nil, leads: [UUID: String]? = nil) {
         self.id = id
+        self.leads = leads
         self.scratchPaneIdentity = scratchPaneIdentity
         self.page = page
         self.ended = ended
@@ -277,7 +281,7 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
         case foregroundCommand, splitForegroundCommand, initialCommand, commandWait
         case splitInitialCommand, splitCommandWait, backgroundWatermark, paneBackgrounds
         case restoreCommand, splitRestoreCommand, context, lastSelectedAt, tint, parentID, collapsed, page, ended
-        case scratchPaneIdentity
+        case scratchPaneIdentity, leads
     }
 
     /// Custom decode so every optional is LOSSY, matching `Snapshot.init(from:)`: an unknown
@@ -323,6 +327,7 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
         }
         ended = (try? c.decodeIfPresent(Bool.self, forKey: .ended)) ?? nil
         scratchPaneIdentity = (try? c.decodeIfPresent(UUID.self, forKey: .scratchPaneIdentity)) ?? nil
+        leads = (try? c.decodeIfPresent([UUID: String].self, forKey: .leads)) ?? nil
         // the only field checked for CONTENT, not just type: a hand-edited context carrying a newline or
         // 300 bytes would otherwise reach the title bar and the JSON read-back intact.
         let storedContext = (try? c.decodeIfPresent(String.self, forKey: .context)) ?? nil

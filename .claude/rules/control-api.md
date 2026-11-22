@@ -2230,8 +2230,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - A row attached from another host (`Session.attachedOrigin`; nil for a server window's row and one not yet
   bound) is saved apart in `WorkspaceSnapshot.attached`: its place, view state and binding, never a command,
   cwd or page source, so a build predating the key ignores it rather than starting a shell in it. `bindRemote`
-  saves, since `addSession` saved before the binding existed. A relaunch runs the saved attach lines WITHOUT the
-  lead claim (`attachedSession(from:)`), and `ControlServer.checkRestoredOrigin` asks each host once. A terminal
+  saves, since `addSession` saved before the binding existed. A relaunch, or a reopened window, runs the saved attach
+  lines WITHOUT the lead claim (`attachedSession(from:)`) but with `ZMX_MANAGED_RECLAIM` set to the pane's saved
+  `lead` (`ZmxLeadBook.savedLead` at save, nil while it followed), so it takes back an idle vacancy fill
+  the way a reconnect does (Pane lead), and `ControlServer.checkRestoredOrigin` asks each host once. A terminal
   session the tree lists is alive; one it leaves out closes the row (`closeEndedAttachedRow`, the row alone through
   `closeExactly`, its companions moving up and each checked on its own) only when
   the host's complete `zmx list` has no claim for it, since a session in a window closed there is left out but
@@ -2598,7 +2600,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   starts is managed; a stock client on the same daemon keeps upstream behaviour.
 - `zmx.attach` claims in every pane, so the attaching Mac's grid applies with no key press. A local pane
   attaches WITHOUT the claim: it leads a daemon nobody leads, and one relaunched under another Mac's lead
-  comes back covered instead of taking it.
+  comes back covered instead of taking it, unless it reclaims the lead it saved (below).
 - The client reports its role as a TITLE, `OSC 2;zmx-role;<nonce>:<unowned|leader|follower>:<generation>`,
   intercepted in `GhosttyCallbacks` ahead of `applyTitle`. Not OSC 777: libghostty drops a desktop
   notification that follows another within one second APP-WIDE (`Surface.zig showDesktopNotification`),
@@ -2634,6 +2636,16 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   zmx patch 0008 decides at Init, in one step: the reconnect leads while the leader is that attach, matched by the
   token every managed client sends in `Identity`, or one that filled a vacancy without a claim and has sent no
   key, paste or mouse press since. Anything else leaves it following, so it never takes a lead someone used.
+  A pane's first attach after a window restore, launch or reopen, reclaims the same way. Each save writes
+  `ZmxLeadBook.savedLead` per pane identity: the state's `reclaimAfterDrop`, for a pane not attached since the
+  restore its armed value, and for one parked to reconnect, whose state `remotePaneStopped` dropped, its
+  `RemoteReconnectBook` entry's `reclaim`. An attached row's attach line takes `AttachedOriginSnapshot.Pane.lead` directly. The
+  others go through `ZmxLeadBook.arm`: `SessionSnapshot.leads` (local Live primary, split and scratch) in
+  `AppStore.restore`, never `session(from:)`, which also rebuilds Recent Closed rows, and
+  `RemoteWindowViewState.SessionView.leads` on the mirror's FIRST snapshot only, which disarms whatever that
+  reconcile did not attach. The attach reads `pendingReclaim` and `begin` consumes it, so a fallback launch
+  without a daemon keeps it; `finalizePaneIdentities` forgets a closed session's panes, scratch included.
+  A remote window's claim wins, and its scratch, which is not managed, never reclaims.
   `zmx type` and `zmx send` are not use. An older daemon ignores `Identity` and the reconnect follows as before. In place repair was rejected: libghostty
   reports a new grid before its terminal has it, and the role report reaches the app a main-queue hop
   after the bytes behind it, so a replay could be parsed at the old grid.

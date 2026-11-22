@@ -67,7 +67,7 @@ extension agtermApp {
             return nil
         }
         let identity = session.localScratchIdentity ?? UUID()
-        let lead = ZmxLeadAttachment(claim: false)
+        let lead = ZmxLeadAttachment(claim: false, reclaim: ZmxLeadBook.shared.pendingReclaim(pane: identity))
         guard let zmx = ZmxLaunch.configuration(paneIdentity: identity, pane: "scratch",
                                                 environment: env.merging(["AGTERM_PANE_ID": identity.uuidString]) { $1 },
                                                 lead: lead) else { return nil }

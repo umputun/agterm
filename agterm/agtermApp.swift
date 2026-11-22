@@ -540,8 +540,9 @@ struct agtermApp: App {
         // foreground pid, so it is never captured and restores via the exec `command` path, keeping close-on-exit.
         // `LaunchSeedProvider` owns the precedence between them and resolves it at spawn time, not here, so
         // the pending slots stay on the session until the pane really spawns.
-        // without the claim: a pane relaunched while another Mac leads its daemon comes back covered
-        let lead = ZmxLeadAttachment(claim: false)
+        // without the claim, so a lead another Mac took and used stays theirs; a restored pane names the attach it
+        // led with, which zmx patch 0008 lets it take back from a leader that only filled the vacancy
+        let lead = ZmxLeadAttachment(claim: false, reclaim: ZmxLeadBook.shared.pendingReclaim(pane: session.paneIdentity))
         let zmx = ZmxLaunch.wrapsLocally(mode: ghostty.launchRestoreMode, session: session)
             ? ZmxLaunch.configuration(paneIdentity: session.paneIdentity, pane: "primary", environment: env, lead: lead)
             : nil
@@ -808,7 +809,7 @@ struct agtermApp: App {
         // the parent's window/workspace/session ids.
         // Creation, capture and override precedence matches the primary.
         let ghostty = GhosttyApp.shared
-        let lead = ZmxLeadAttachment(claim: false)
+        let lead = ZmxLeadAttachment(claim: false, reclaim: session.splitPaneIdentity.flatMap { ZmxLeadBook.shared.pendingReclaim(pane: $0) })
         let zmx = ZmxLaunch.wrapsLocally(mode: ghostty.launchRestoreMode, session: session)
             ? ZmxLaunch.configuration(paneIdentity: session.splitPaneIdentity, pane: "split", environment: env, lead: lead)
             : nil
