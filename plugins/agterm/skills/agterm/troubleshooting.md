@@ -152,6 +152,10 @@ Check these in order:
   reset. Agterm ▸ Reset Live Sessions… (or `agtermctl zmx reset --force`) moves it to the current host: it ends
   and recreates the panes it selects, which can include working panes, with the same cost as any reset;
   at every launch agterm asks each earlier host to stop, and one stops once no live session runs under it.
+  One pane moves alone with `agtermctl session restart --target <session> --pane left --command '<command>'`
+  (`--pane right` for the split) run from another pane: it ends that pane's shell and program and starts the
+  command in a new shell; without `--command` it refuses a pane at a shell prompt. After a successful
+  restart the pane should read `supervisor` with no stale mark.
 - **Live sessions close about 30 seconds after a GUI program starts from one.** macOS force-quits a program
   switched off in System Settings ▸ General ▸ Login Items ▸ Allow in the Background, together with the
   coalition it started in (#985). On macOS 27 and later the session host runs as its own launchd job, so

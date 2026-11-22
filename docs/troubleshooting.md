@@ -380,7 +380,12 @@ means only that the host is older: such a pane may still work, and there is no n
 update. When one of these problems shows up, Agterm ▸ Reset Live Sessions… moves those sessions to the
 current host, as described in the previous section: it ends and recreates the panes it selects, which can
 include working panes. To check the microphone before ending running work, try it in a new live session
-first. At every launch agterm asks each earlier host to stop, and one stops once no live session runs under it. The single
+first. To move one pane without the reset, run
+`agtermctl session restart --target <session> --pane left --command '<command>'` from another pane
+(`--pane right` for the split): it ends that pane's shell and running program, then starts the command in a
+new shell. Pass `--command`: without it the restart refuses a pane at a shell prompt.
+After a successful restart, `agtermctl tree` should show the pane as `supervisor` without
+`(earlier helper)`. At every launch agterm asks each earlier host to stop, and one stops once no live session runs under it. The single
 shared host that agterm used before #971 counts as an earlier host.
 
 ## Live sessions close when macOS force-quits a program started in one
