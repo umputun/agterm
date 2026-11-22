@@ -8,24 +8,33 @@ cd "$(dirname "$0")/.."
 OUT="build/linux"
 
 # ghostty's build installs src/shell-integration verbatim, so the source at the pin is the shipped set; the Mac
-# staging is not used for it because its stamp can claim a rev its files never came from
+# staging is not used for it because its stamp can claim a rev its files never came from.
+# Fetching the full commit id pins the content by hash, as setup.sh does for the Mac build; the stamp carries
+# the source with the rev, so a stamp written by another source restages.
 stage_shell_integration() {
-  local rev stamp_file="$OUT/.shell-integration-stamp" work
+  local rev stamp stamp_file="$OUT/.shell-integration-stamp" work
   rev="$(sed -nE 's/^GHOSTTY_REV="([^"]+)".*/\1/p' scripts/setup.sh)"
-  if [[ -f "$stamp_file" && "$(cat "$stamp_file")" == "$rev" ]]; then
+  stamp="git $rev"
+  if [[ -f "$stamp_file" && "$(cat "$stamp_file")" == "$stamp" ]]; then
     echo "linux shell integration already current"
     return 0
   fi
   work="$(mktemp -d)"
-  curl -fsSL --proto =https --proto-redir =https "https://codeload.github.com/ghostty-org/ghostty/tar.gz/$rev" \
-    | tar -xz -C "$work" "ghostty-$rev/src/shell-integration"
+  git init -q "$work"
+  git -C "$work" remote add origin "https://github.com/ghostty-org/ghostty"
+  git -C "$work" -c http.followRedirects=false fetch -q --depth 1 origin "$rev"
+  if [[ "$(git -C "$work" rev-parse FETCH_HEAD)" != "$rev" ]]; then
+    echo "fetched ghostty commit is not GHOSTTY_REV $rev" >&2
+    exit 1
+  fi
+  git -C "$work" checkout -q FETCH_HEAD -- src/shell-integration
   rm -rf "$OUT/ghostty"
   mkdir -p "$OUT/ghostty/shell-integration"
   for shell in zsh fish bash; do
-    cp -R "$work/ghostty-$rev/src/shell-integration/$shell" "$OUT/ghostty/shell-integration/$shell"
+    cp -R "$work/src/shell-integration/$shell" "$OUT/ghostty/shell-integration/$shell"
   done
   rm -rf "$work"
-  echo "$rev" >"$stamp_file"
+  echo "$stamp" >"$stamp_file"
   echo "linux shell integration staged in $OUT at $rev"
 }
 
