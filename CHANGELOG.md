@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.44.1 - 2026-11-22
+
+### Improved
+
+- a companion's context menu separates **Move to**, which lists the workspaces and Top-Level Sessions, from **Move Under**, which lists the sessions it can become a companion of, grouped by workspace #1081 @umputun
+- launch diagnostics now log startup milestones once per process in a `launch` log category, for a relaunch that shows no window: `log show --last 1h --predicate 'subsystem == "com.umputun.agterm" AND category == "launch"'` #1080 @umputun
+
+### Bug Fixes
+
+- **codex in a Live pane draws its composer band again.** Some programs query the terminal at startup, and in a Live pane those queries could go unanswered before the pane's terminal attached, so codex drew its composer without the background band until it exited. A Live pane now holds a program until its terminal attaches, up to 5 s locally and 30 s on agterm-server, and a fast command's output reaches the pane when the terminal attaches in time. Plain login shells start at once. With agterm-server also updated, this Mac asks for the hold when it opens a session, companion or scratch with a command, uses Duplicate as Companion to copy a program, or restarts a pane the window lays out. Restart codex in an affected pane to pick up the fix #1083 @umputun
+- a `--wait` session or overlay now stays open after its command exits even if its background changed or the config reloaded while it ran #1083 @umputun
+- local Live panes, remote windows and sessions attached from another Mac reclaim their saved lead after a relaunch or a reopened window. A restored pane takes the lead back if its previous attachment still holds it, or if another attachment took the vacant lead without claiming it and has not been used since #1082 @umputun
+
 ## v0.44.0 - 2026-11-21
 
 ### New Features
