@@ -27,8 +27,17 @@ public enum TextPage {
         "yaml": "yaml", "yml": "yaml",
         "toml": "ini", "ini": "ini", "cfg": "ini", "conf": "ini", "xml": "xml", "plist": "xml",
         "diff": diffLanguage, "patch": diffLanguage, "mk": "makefile", "vb": "vbnet",
+        "jsx": "javascript", "tsx": "typescript", "mts": "typescript", "cts": "typescript",
+        "hh": "cpp", "hxx": "cpp", "c++": "cpp", "h++": "cpp", "gql": "graphql", "jsonc": "json", "mak": "makefile",
+        "gemspec": "ruby", "podspec": "ruby", "pyi": "python", "pyw": "python", "wat": "wasm",
     ]
-    private static let plainExtensions: Set<String> = ["txt", "text", "log", "out", "csv", "tsv", "env", "lock"]
+    private static let plainExtensions: Set<String> = [
+        "txt", "text", "log", "out", "csv", "tsv", "env", "lock",
+        // the bundled highlighter has no matching grammar for these formats
+        "dart", "scala", "sc", "groovy", "gradle", "ex", "exs", "erl", "hrl", "hs", "clj", "cljs", "edn", "zig", "nim",
+        "jl", "ml", "mli", "fs", "fsx", "elm", "vue", "svelte", "astro", "sass", "fish", "ps1", "psm1", "bat", "cmd",
+        "cmake", "nix", "tf", "tfvars", "hcl", "proto", "sol", "properties", "s", "asm",
+    ]
     private static let basenameLanguages: [String: String] = [
         "Makefile": "makefile", "GNUmakefile": "makefile",
         ".bashrc": "bash", ".zshrc": "bash", ".profile": "bash", ".bash_profile": "bash", ".zprofile": "bash",

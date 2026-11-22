@@ -618,6 +618,13 @@ struct LinkPolicyTests {
         #expect(missing == .reveal(URL(fileURLWithPath: "/x/a.go:42", isDirectory: false)))
     }
 
+    @Test func aFoundTsxLocationOpensAsTextAtItsLine() {
+        let found = LinkPolicy.resolvedRoute(for: "/x/a.tsx:109", candidates: Self.locations("/x/a.tsx:109"), mode: .overlay,
+                                             origin: .pane(Self.session)) { $0 == "/x/a.tsx" }
+        #expect(found == .text(LinkPolicy.TextLink(url: URL(fileURLWithPath: "/x/a.tsx", isDirectory: false), line: 109,
+                                                   session: Self.session, sizePercent: nil)))
+    }
+
     @Test(arguments: LinkOpenMode.allCases)
     func aFoundLocationOpensAsTextAtItsLineFromAPaneOrTheScratch(_ mode: LinkOpenMode) {
         let size = mode == .browser ? 95 : mode.overlaySizePercent
