@@ -20,9 +20,13 @@
   real terminal has sent Init and set the PTY size, or until a bound expires, whichever comes first. Either way
   the command starts exactly once. A bound expiry delays the start by the bound and otherwise gives today's
   behaviour: unanswered queries and, for a fast command, output lost before the attach.
-- The session host creates through it for every local pane. agterm-server uses it when the create or restart
-  carries an explicit attach-pending intent, which the Mac sends from every path that creates or restarts an
-  origin pane and then attaches it.
+- The session host creates every local pane detached and holds only a pane started with a program; a plain
+  shell starts at once. agterm-server holds a program when the create or restart carries an explicit
+  attach-pending intent, which the Mac sends only where a program can start in a pane it attaches: a session
+  or companion created with a command, Duplicate as Companion, a scratch with a command, and a restart of a pane
+  the window's deck lays out.
+- zmx 0005's detached creator waits for the daemon's post-`setsid` acknowledgement (1 s bound) before it exits:
+  the host runs it as its PTY's session leader, whose exit would hang up a daemon still in its process group.
 - Approved limitation (Eugene, 2026-11-21): a create or restart that starts on the server itself, such as an
   agent running `agtermctl session new --command codex` or `/chat` restarting its right pane inside a server
   session, carries no intent and starts at once, as today; codex started that way can still miss its band. It is
@@ -193,7 +197,7 @@
       `Host.Configuration` field, and remove `DeviceAttributeResponder`, `settleAttributeReplies` and the
       reply-write path; `SessionHost.protocolVersion` stays 1
 - [x] `swift test --filter SessionHostRuntimeTests` passes
-- [ ] via `-only-testing`: `ZmxLiveUITests/testAWaitCommandKeepsScrollbackPastOneScreenAfterExit` and
+- [x] via `-only-testing`: `ZmxLiveUITests/testAWaitCommandKeepsScrollbackPastOneScreenAfterExit` and
       `ZmxLiveUITests/testBundledZmxBacksPrimaryAndSplitAndRunsLongCreationCommandOnce`
 - ⚠️ the two XCUITests need Eugene's go-ahead (`ui-tests.md`: ask before XCUITest; they send real input);
   asked once at the end of the run, with any other XCUITest the later tasks name
@@ -219,7 +223,7 @@
       `follow`
 - [x] `swift test --filter` for the touched agtermCore and AgtermServer suites passes, plus hosted
       `ControlServerRestartTests`
-- [ ] via `-only-testing`: the `ZmxLiveUITests/testRestart*` methods (⚠️ XCUITest, asked at the end with Task 2's)
+- [x] via `-only-testing`: the `ZmxLiveUITests/testRestart*` methods (⚠️ XCUITest, asked at the end with Task 2's)
 - ➕ an unreadable new-shell argv counts as executed only while the daemon still names that pid, so a replayed
   setuid program (`sudo`) confirms and a vanished one is neither announced nor confirmed; the held predicate keys
   on the daemon name, not the zmx executable, which agterm-server's `--zmx` may rename
@@ -272,12 +276,18 @@
 - [x] run gates once: `cd agtermCore && swift test`, `make test-app`, `make lint`,
       `scripts/server-container.sh check`
 - [x] `lsappinfo list | grep -A4 agterm.debug` after the hosted run; clean up leaked test processes
-- [ ] verify the Overview's requirements against the result; move this plan to `docs/plans/completed/`
+- [x] verify the Overview's requirements against the result; move this plan to `docs/plans/completed/`
 - ➕ the XCUITests found two regressions: a new plain shell took ~0.50 s to its prompt against master's ~0.27 s,
   and a restart landing during a fresh pane's creation stalled the serial session host for 10 s. Eugene chose
   (2026-11-21) to hold only panes started with a program, local and remote: the host holds a payload and clears an
   inherited key, the server holds when the program is not the login shell. The host now fails a creation whose
   daemon is gone after the creator's exit instead of polling to its deadline
+- ➕ the wait-scrollback XCUITest timed out on the Live `--wait` exit: libghostty times the zmx client, whose whole
+  run with a held fast command stays under `abnormal-command-exit-runtime` (250 ms), so it drew "failed to launch"
+  instead of "Process exited". Eugene chose (2026-11-22) to zero the threshold only on Live `--wait` panes. Testing
+  it found every per-surface config write replaced `wait_after_command`, so a `--wait` pane given a background
+  mid-run, a colored `--wait` overlay, or one open during a reload closed at exit; Eugene chose to fix it here:
+  `GhosttySurfaceView.exitConfig` restates the wait in every per-surface config of a `--wait` surface
 
 ## Post-Completion
 *Items requiring manual intervention or external systems*
