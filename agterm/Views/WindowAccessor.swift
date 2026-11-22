@@ -129,6 +129,7 @@ struct WindowAccessor: NSViewRepresentable {
             }
             // register the NSWindow so the app raises this id's window (dedup) instead of spawning a second.
             WindowRegistry.shared.register(windowID, window: window)
+            LaunchTrace.shared.mark(.windowRegistered)
             ensureCloseProxy(on: window)
             applyTitlebarBlend(window)
             // the private titlebar subviews may not exist yet / get rebuilt after layout — re-apply the

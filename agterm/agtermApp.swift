@@ -90,6 +90,7 @@ struct agtermApp: App {
     }
 
     init() {
+        LaunchTrace.shared.mark(.initEntry)
         // before NSApplicationMain restores: windows opt out, so state left by an unclean exit restores none and no launch window opens
         UserDefaults.standard.register(defaults: ["ApplePersistenceIgnoreState": true])
         #if DEBUG
@@ -236,6 +237,7 @@ struct agtermApp: App {
             }
             logger.debug("launch spawn queue armed with \(plan.order.count) panes, \(plan.burst.count) in the burst")
         }
+        LaunchTrace.shared.mark(.initExit)
     }
 
     var body: some Scene {
@@ -276,6 +278,7 @@ struct agtermApp: App {
                 )
                     .frame(minWidth: 640, minHeight: 400)
                     .task {
+                        LaunchTrace.shared.mark(.sceneTask)
                         appDelegate.library = library
                         appDelegate.captureOnExit = captureOnExit
                         // `openWindow` lives only in the scene: hand it to the action hub for cross-window
@@ -290,6 +293,7 @@ struct agtermApp: App {
                         // socket on terminate.
                         appDelegate.controlServer = controlServer
                         controlServer.start()
+                        LaunchTrace.shared.mark(.socket, "bound=\(controlServer.boundSocketPath != nil)")
                         // bind the app-level quick terminal (idempotent); its env needs the bound socket, so
                         // this follows `start()` like the surface environment does.
                         wireQuickTerminal(library: library)
