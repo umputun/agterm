@@ -45,6 +45,25 @@ struct OperationOptions: ParsableArguments {
     }
 }
 
+/// AttachOptions carry the intent of a caller that attaches the pane a command creates, so agterm-server holds the
+/// pane's command until that attach.
+struct AttachOptions: ParsableArguments {
+    @Flag(name: .customLong("attach-pending"), help: """
+        The caller attaches the new pane next: agterm-server holds its command until a terminal attaches, so the \
+        command's startup queries reach one. A Mac ignores it.
+        """)
+    var attachPending = false
+
+    func stamp(_ request: ControlRequest) -> ControlRequest {
+        guard attachPending else { return request }
+        var request = request
+        var args = request.args ?? ControlArgs()
+        args.attachPending = true
+        request.args = args
+        return request
+    }
+}
+
 struct Catalog: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Carry a catalog to a remote window on a Mac.",

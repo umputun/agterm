@@ -58,6 +58,16 @@ struct ServerActionsReceiptsTests {
         #expect(Set(receipts.compactMap { $0?.opID }).count == replies.count)
     }
 
+    @Test func anOperationThatAttachesItsPaneHoldsTheCommand() async throws {
+        var pending = ControlArgs()
+        pending.attachPending = true
+
+        let reply = await serve(.sessionNew, pending, op: "held")
+
+        #expect(reply.result?.receipt?.outcome == .applied)
+        #expect(harness.runner.launches.last?.environment["ZMX_HOLD_UNTIL_ATTACH"] == "30")
+    }
+
     @Test func aCommandTheHostRefusesAnswersRefusedWithItsError() async {
         let reply = await serve(.sessionRename, target: UUID().uuidString, ControlArgs(name: "x"), op: "bad")
 

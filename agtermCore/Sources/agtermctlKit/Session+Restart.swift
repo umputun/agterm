@@ -45,6 +45,7 @@ extension Session {
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
         @OptionGroup var operation: OperationOptions
+        @OptionGroup var attach: AttachOptions
 
         func validate() throws {
             guard pane != nil || paneID?.isEmpty == false else {
@@ -54,8 +55,9 @@ extension Session {
         }
 
         func makeRequest() throws -> ControlRequest {
-            operation.stamp(ControlRequest(cmd: .sessionRestart, target: target.target,
-                                           args: options.withWindow(ControlArgs(command: command, pane: pane, paneID: paneID))))
+            attach.stamp(operation.stamp(ControlRequest(cmd: .sessionRestart, target: target.target,
+                                                        args: options.withWindow(ControlArgs(command: command, pane: pane,
+                                                                                             paneID: paneID)))))
         }
     }
 }

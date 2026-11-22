@@ -72,8 +72,7 @@ public final class ServerActions: ControlActions {
         }
         if let opID = request.args?.opID { return await operationBook.serve(request, opID: opID, host: self) }
         if let refusal = pageRowRefusal(request) { return refusal }
-        let response = await ControlDispatcher(actions: self).dispatch(request)
-            ?? ControlResponse(ok: false, error: "\(request.cmd.rawValue) is not available on agterm-server")
+        let response = await runOperation(request)
         streams.catalogHub.refresh()
         return response
     }

@@ -68,6 +68,16 @@ final class ControlServerRemoteCompanionsTests: XCTestCase {
         XCTAssertEqual(ZmxLeadBook.shared.states[companion.paneIdentity]?.attachment.claim, true)
     }
 
+    func testACompanionCreateAsksTheOriginToHoldItsCommand() async throws {
+        let runner = ScriptedRunner([origin, reply(id: created), tree(sessions: session(created))])
+        let (server, _, row) = try makeServer(runner)
+
+        let reply = await server.createCompanion(row.id.uuidString, options: CompanionOptions(), window: nil)
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        XCTAssertTrue(try XCTUnwrap(runner.invocations[1].last).contains("--attach-pending"))
+    }
+
     func testDuplicateAsCompanionOnARemoteRowAsksTheOriginToDuplicate() async throws {
         let runner = ScriptedRunner([origin, reply(id: created), tree(sessions: session(created))])
         let (server, store, row) = try makeServer(runner)
@@ -101,13 +111,14 @@ final class ControlServerRemoteCompanionsTests: XCTestCase {
     // an older CLI refuses the new flag before sending anything, which read as an unknown outcome
     func testAnOlderOriginCLIRefusingTheArgumentsIsTooOldNotUnknown() async throws {
         let usage = RemoteCommandResult(status: 64, stdout: "", stderr: "Error: Unknown option '--parent'\nUsage: agtermctl session new")
-        let runner = ScriptedRunner([origin, usage])
+        let runner = ScriptedRunner([origin, usage, usage])
         let (server, store, row) = try makeServer(runner)
 
         let reply = await server.createCompanion(row.id.uuidString, options: CompanionOptions(), window: nil)
 
         XCTAssertEqual(reply.error, "the agterm on buildbox is too old for companions")
         XCTAssertTrue(store.companions(of: row.id).isEmpty)
+        XCTAssertEqual(runner.invocations.count, 3, "asked once with the hold and once without")
 
         let pageUsage = RemoteCommandResult(status: 64, stdout: "", stderr: "Error: Unexpected argument 'page-attach'")
         let pages = ScriptedRunner([pageUsage])
@@ -247,6 +258,7 @@ final class ControlServerRemoteCompanionsTests: XCTestCase {
         for word in ["overlay", "open", "--companion", "--html", "/srv/report.html", "--cwd", "/srv", "--js"] {
             XCTAssertTrue(create.contains(word), word)
         }
+        XCTAssertFalse(create.contains("--attach-pending"), "a page creates no pane to hold")
         XCTAssertTrue(try XCTUnwrap(runner.invocations[2].last).contains("page-attach"))
         let serve = try XCTUnwrap(launcher.launches.last?.last)
         XCTAssertTrue(serve.contains("page-serve") && serve.contains("tok-1"), "the channel claims the attachment's own token")

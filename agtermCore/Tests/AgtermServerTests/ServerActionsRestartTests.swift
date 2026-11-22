@@ -152,6 +152,24 @@ struct ServerActionsRestartTests {
         #expect(harness.store.session(withID: session.id) == nil)
     }
 
+    @Test func aParentClosedByAFailedHeldRestartStartsItsRecoveryShellAtOnce() async throws {
+        let session = try newSession()
+        _ = try harness.session(await harness.actions.createCompanion(session.id.uuidString, options: CompanionOptions(select: false),
+                                                                      window: nil))
+        running(session.paneIdentity)
+        harness.processes.ends = []
+        let launches = harness.runner.launches.count
+        var args = ControlArgs(command: "true", pane: "left")
+        args.attachPending = true
+
+        let reply = await harness.actions.serve(ControlRequest(cmd: .sessionRestart, target: session.id.uuidString, args: args))
+
+        #expect(reply.ok == false)
+        let recovery = try #require(harness.runner.launches.dropFirst(launches).last)
+        #expect(recovery.name == ZmxSupport.daemonName(for: session.paneIdentity))
+        #expect(recovery.environment["ZMX_HOLD_UNTIL_ATTACH"] == nil)
+    }
+
     @Test func aRightPaneRestartKeepsTheSplitAndItsIdentity() async throws {
         let session = try newSession(split: true)
         let split = try #require(session.splitPaneIdentity)

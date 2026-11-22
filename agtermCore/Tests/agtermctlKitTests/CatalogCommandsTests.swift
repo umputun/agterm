@@ -5,6 +5,43 @@ import Testing
 @testable import agtermctlKit
 
 struct CatalogCommandsTests {
+    private static let attachingCommands: [(argv: [String], cmd: Command)] = [
+        (["session", "new"], .sessionNew),
+        (["session", "new", "--parent", "p1"], .sessionCompanionNew),
+        (["session", "duplicate"], .sessionDuplicate),
+        (["session", "duplicate", "--companion"], .sessionCompanionDuplicate),
+        (["session", "split", "on"], .sessionSplit),
+        (["session", "scratch", "on", "--command", "top"], .sessionScratch),
+        (["session", "restart", "--pane", "left"], .sessionRestart),
+        (["session", "convert", "--companion"], .sessionCompanionConvert),
+        (["recent", "open"], .recentOpen),
+    ]
+
+    private func request(_ argv: [String]) throws -> ControlRequest {
+        guard let command = try Agtermctl.parseAsRoot(argv) as? any RequestCommand else {
+            throw SocketClientError("parsed \(argv) is not a RequestCommand")
+        }
+        return try command.makeRequest()
+    }
+
+    @Test(arguments: attachingCommands)
+    func everyCommandWhoseNewPaneTheCallerAttachesCarriesTheIntent(argv: [String], cmd: Command) throws {
+        let held = try request(argv + ["--attach-pending"])
+        let plain = try request(argv)
+
+        #expect(held.cmd == cmd)
+        #expect(held.args?.attachPending == true)
+        #expect(plain.args?.attachPending == nil)
+    }
+
+    @Test func theIntentTravelsBesideAnOperationID() throws {
+        let held = try request(["session", "restart", "--pane", "left", "--attach-pending", "--op-id", "op-1", "--epoch", "e1"])
+
+        #expect(held.args?.attachPending == true)
+        #expect(held.args?.opID == "op-1")
+        #expect(held.args?.pane == "left")
+    }
+
     @Test func catalogSubscribeSendsItsCommandAlone() throws {
         let subscribe = try Catalog.Subscribe.parse(["--socket", "/tmp/x.sock"])
 

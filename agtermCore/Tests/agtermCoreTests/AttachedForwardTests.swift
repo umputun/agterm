@@ -12,6 +12,22 @@ struct AttachedForwardTests {
         RemoteCommandResult(status: status, stdout: String(decoding: try JSONEncoder().encode(response), as: UTF8.self), stderr: "")
     }
 
+    @Test func aForwardThatCreatesAPaneThisMacAttachesHoldsItsCommand() {
+        let held: [AttachedForward] = [
+            .restart(session: "s", paneID: "p", command: nil), .convert(session: "s"), .duplicate(after: "s", cwd: nil),
+            .split(session: "s", mode: "on", axis: nil), .split(session: "s", mode: "toggle", axis: nil),
+            .scratch(session: "s", mode: "on", command: "top"),
+        ]
+        let plain: [AttachedForward] = [
+            .split(session: "s", mode: "off", axis: nil), .scratch(session: "s", mode: "off", command: nil), .closeSplit(session: "s"),
+            .terminate(sessions: ["s"], undoable: false), .moveCompanion(session: "s", parent: "p"),
+            .killPane(session: "s", pane: .left, paneID: "p"),
+        ]
+
+        #expect(held.map(\.attachesPane) == Array(repeating: true, count: held.count))
+        #expect(plain.map(\.attachesPane) == Array(repeating: false, count: plain.count))
+    }
+
     @Test func anOkReplyIsDone() throws {
         let reply = ControlResponse(ok: true, result: ControlResult(id: "s1"))
 

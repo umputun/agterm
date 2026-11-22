@@ -1,6 +1,12 @@
 import Foundation
 import agtermCore
 
+/// AttachIntent carries the served request's `ControlArgs.attachPending`, bound for that request alone, so a pane it
+/// starts after a suspension cannot take another request's intent.
+enum AttachIntent {
+    @TaskLocal static var pending = false
+}
+
 /// ServerPanes starts and ends the zmx daemons behind the server's panes. A pane joins
 /// `Session.daemonBackedPanes` only once its daemon was created.
 @MainActor
@@ -55,7 +61,12 @@ final class ServerPanes {
         let directory: String
         /// scratch starts the pane under `scratchDaemonName` and leaves `daemonBackedPanes` to the session's panes.
         var scratch = false
+        /// attachPending holds the command until a terminal attaches, up to `attachHoldSeconds`; it defaults to what
+        /// the request being served asked for (`AttachIntent.pending`).
+        var attachPending = AttachIntent.pending
     }
+
+    static let attachHoldSeconds = 30
 
     /// daemonName is `identity`'s daemon: the scratch name for a scratch this run started.
     func daemonName(for identity: UUID) -> String {
@@ -80,6 +91,7 @@ final class ServerPanes {
         environment["ZMX_SESSION_PREFIX"] = ""
         environment["ZMX_NO_DETACH_KEY"] = "1"
         environment["ZMX_EXIT_FILE"] = record
+        if start.attachPending { environment["ZMX_HOLD_UNTIL_ATTACH"] = String(Self.attachHoldSeconds) }
         let integration = (configuration.resourcesDirectory as NSString).appendingPathComponent("shell-integration")
         let launch = shell.launch(integration: integration, environment: environment, program: start.program)
         let home = baseEnvironment["HOME"] ?? "/"

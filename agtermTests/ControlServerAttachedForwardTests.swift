@@ -263,6 +263,42 @@ final class ControlServerAttachedForwardTests: XCTestCase {
         XCTAssertNil(copy.parentID)
     }
 
+    func testADuplicateAsksTheOriginToHoldTheCommandItAttachesHere() async throws {
+        let runner = ScriptedRunner([ok(ControlResult(id: created)), tree(sessions: session(created))])
+        let (server, store) = try makeServer(runner)
+        let row = try attachedRow(in: store)
+
+        let reply = try await run(server, ControlRequest(cmd: .sessionDuplicate, target: row.id.uuidString))
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        XCTAssertTrue(line(runner, 0).contains("session new --after origin-1 --no-select"), line(runner, 0))
+        XCTAssertTrue(line(runner, 0).contains("--attach-pending"), line(runner, 0))
+    }
+
+    func testAnOriginCliTooOldForTheIntentRunsTheDuplicateOnceWithoutIt() async throws {
+        let refused = RemoteCommandResult(status: 64, stdout: "", stderr: "Error: Unknown option '--attach-pending'")
+        let runner = ScriptedRunner([refused, ok(ControlResult(id: created)), tree(sessions: session(created))])
+        let (server, store) = try makeServer(runner)
+        let row = try attachedRow(in: store)
+
+        let reply = try await run(server, ControlRequest(cmd: .sessionDuplicate, target: row.id.uuidString))
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        XCTAssertTrue(line(runner, 0).contains("--attach-pending"), line(runner, 0))
+        XCTAssertFalse(line(runner, 1).contains("--attach-pending"), line(runner, 1))
+        XCTAssertTrue(line(runner, 1).contains("session new --after origin-1 --no-select"), line(runner, 1))
+    }
+
+    func testHidingASplitOnTheOriginAsksNoHold() async throws {
+        let runner = ScriptedRunner([ok(ControlResult())])
+        let (server, store) = try makeServer(runner)
+        let row = try attachedRow(in: store)
+
+        _ = try await run(server, ControlRequest(cmd: .sessionSplit, target: row.id.uuidString, args: ControlArgs(mode: "off")))
+
+        XCTAssertFalse(line(runner, 0).contains("--attach-pending"), line(runner, 0))
+    }
+
     func testASplitAndItsCloseRunOnTheOriginAndChangeNothingHere() async throws {
         let runner = ScriptedRunner([ok(), ok()])
         let (server, store) = try makeServer(runner)

@@ -219,6 +219,16 @@ public enum RemoteOperation: Equatable, Sendable {
         return label + ":" + row
     }
 
+    /// attachesPane is whether this Mac attaches a pane the operation creates, so the server holds its command for it.
+    var attachesPane: Bool {
+        switch self {
+        case .newSession, .newSessionInNamedWorkspace, .newCompanion, .restart, .duplicateCompanion, .convertCompanion,
+             .reopenRecent: true
+        case .setSplit(_, let shown, _), .setScratch(_, let shown, _): shown
+        default: false
+        }
+    }
+
     /// words are the far side's `agtermctl` arguments; operands follow a `--` so a name starting with `-` stays a name.
     var words: [String] {
         switch self {
@@ -473,7 +483,12 @@ public final class RemoteCatalogActions {
         let newSplit = operation.newSplit(in: mirror.store)
         // read before the request: the offer can expire while an undo it allowed is in flight
         let undone = if case .undoClose(let undoID) = operation { undoRows[undoID] ?? [] } else { [UUID]() }
-        let outcome = await run(words + ["--op-id", opID, "--epoch", prepared.sent.epoch], operands: operation.operands)
+        words += ["--op-id", opID, "--epoch", prepared.sent.epoch]
+        var outcome = await run(words + (operation.attachesPane ? ["--attach-pending"] : []), operands: operation.operands)
+        // a far CLI too old for the intent refused it before sending anything, so the same operation id is still unused
+        if operation.attachesPane, case .refusedArguments = outcome {
+            outcome = await run(words, operands: operation.operands)
+        }
         if let (command, what) = operation.ownCommand, Self.tooOld(outcome, for: command) {
             entries[opID] = nil
             let app = mirror.originIsMac ? "agterm" : "agterm-server"

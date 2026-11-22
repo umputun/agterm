@@ -76,7 +76,7 @@ extension ControlServer {
         guard let entry else {
             return .refused(ControlResponse(ok: false, error: "the session on \(host) is gone and \(host) keeps no record of it"))
         }
-        let reply = await originCommand(host, ["recent", "open"], operands: [entry])
+        let reply = await originCommand(host, ["recent", "open"], operands: [entry], attaches: true)
         guard reply.ok, let open = reply.result?.recentOpen else {
             return .refused(ControlResponse(ok: false, error: reply.error ?? "\(host) did not reopen \(item.name)"))
         }
@@ -159,11 +159,19 @@ extension ControlServer {
         }?.id
     }
 
-    private func originCommand(_ host: String, _ words: [String], operands: [String] = []) async -> ControlResponse {
-        guard let argv = try? RemoteSession.controlCommand(host: host, arguments: words, operands: operands) else {
-            return ControlResponse(ok: false, error: "\(host) cannot be addressed")
+    private func originCommand(_ host: String, _ words: [String], operands: [String] = [],
+                               attaches: Bool = false) async -> ControlResponse {
+        let sent: RemoteCommandResult? = if attaches {
+            await runAttaching(host: host, arguments: words, operands: operands)
+        } else if let argv = try? RemoteSession.controlCommand(host: host, arguments: words, operands: operands) {
+            await remoteRunner.run(argv, deadline: Self.remoteCompanionDeadline)
+        } else {
+            nil
         }
-        let result = await remoteRunner.run(argv, deadline: Self.remoteCompanionDeadline)
+        guard let result = sent else { return ControlResponse(ok: false, error: "\(host) cannot be addressed") }
+        if result.refusedArguments {
+            return ControlResponse(ok: false, error: "the agterm on \(host) refused the command; nothing was done there")
+        }
         guard let reply = try? JSONDecoder().decode(ControlResponse.self, from: Data(result.stdout.utf8)) else {
             return ControlResponse(ok: false, error: "\(host) did not answer; whether it did anything is unknown")
         }

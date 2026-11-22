@@ -46,6 +46,7 @@ final class RemoteCatalogActionsTests {
         var commandGate: CheckedContinuation<Void, Never>?
         var gateNextCommand = false
         var commandStatus: Int32 = 0
+        var commandStatuses: [Int32] = []
 
         func answer(_ argv: [String]) async -> (status: Int32, stdout: String) {
             calls.append(argv)
@@ -56,7 +57,8 @@ final class RemoteCatalogActionsTests {
                     gateNextCommand = false
                     await withCheckedContinuation { commandGate = $0 }
                 }
-                return (commandStatus, commands.isEmpty ? "" : commands.removeFirst()(opID))
+                let status = commandStatuses.isEmpty ? commandStatus : commandStatuses.removeFirst()
+                return (status, commands.isEmpty ? "" : commands.removeFirst()(opID))
             }
             if gateNextLookup {
                 gateNextLookup = false
@@ -691,6 +693,58 @@ final class RemoteCatalogActionsTests {
         #expect(afterSend >= 2)
         #expect(changes > afterSend)
         #expect(actions.marks.isEmpty)
+    }
+
+    @Test func everyOperationWhosePaneThisMacAttachesAsksTheServerToHoldItsCommand() {
+        let held: [RemoteOperation] = [
+            .newSession(workspace: workspaceID), .newSessionInNamedWorkspace(name: "w", create: true), .newCompanion(parent: sessionID),
+            .setSplit(sessionID, shown: true, axis: nil), .setScratch(sessionID, shown: true, command: "top"),
+            .restart(sessionID, pane: .left, command: nil), .duplicateCompanion(sessionID), .convertCompanion(sessionID),
+            .reopenRecent(nil),
+        ]
+        let plain: [RemoteOperation] = [
+            .setSplit(sessionID, shown: false, axis: nil), .setScratch(sessionID, shown: false), .closeSession(sessionID),
+            .renameSession(sessionID, name: "n"), .killDaemon(sessionID, pane: .left),
+        ]
+
+        #expect(held.map(\.attachesPane) == Array(repeating: true, count: held.count))
+        #expect(plain.map(\.attachesPane) == Array(repeating: false, count: plain.count))
+    }
+
+    @Test func anOperationThatAttachesItsPaneSendsTheIntent() async {
+        install(snapshot())
+        queue(reply(.applied, rev: 1, id: "new-id"))
+
+        _ = await send(.newSession(workspace: workspaceID))
+
+        #expect(script.commandCalls.count == 1)
+        #expect(script.commandCalls[0].contains("--op-id"))
+        #expect(script.commandCalls[0].contains("--attach-pending"))
+    }
+
+    @Test func aRemoteCliThatRefusesTheIntentRunsTheOperationOnceWithoutIt() async {
+        install(snapshot())
+        script.commandStatuses = [64, 0]
+        queue({ _ in "" })
+        queue(reply(.applied, rev: 1, id: "new-id"))
+
+        let response = await send(.newSession(workspace: workspaceID))
+
+        #expect(response.result?.id == "new-id")
+        #expect(script.commandCalls.count == 2)
+        #expect(script.commandCalls[0].contains("--attach-pending"))
+        #expect(!script.commandCalls[1].contains("--attach-pending"))
+        #expect(Script.opID(script.commandCalls[0]) == Script.opID(script.commandCalls[1]))
+    }
+
+    @Test func anOperationWithoutTheIntentIsNeverRetried() async {
+        install(snapshot())
+        script.commandStatus = 64
+
+        let response = await send(rename)
+
+        #expect(response.ok == false)
+        #expect(script.commandCalls.count == 1)
     }
 
     @Test func theCreatedIdComesBackWithTheReply() async {

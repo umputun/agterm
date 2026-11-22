@@ -238,20 +238,27 @@
 - Modify: the protocol, dispatcher, CLI, server, remote-create, catalog and attached-forward tests beside those
   sources
 
-- [ ] confirm the path list in the Solution Overview against the code and record any further create-then-attach
+- [x] confirm the path list in the Solution Overview against the code and record any further create-then-attach
       path found here
-- [ ] tests first: the intent round-trips through protocol, dispatcher and CLI for every listed command; the
+- [x] tests first: the intent round-trips through protocol, dispatcher and CLI for every listed command; the
       server passes `ZMX_HOLD_UNTIL_ATTACH` only when it is set; creates and restarts without it pass none; a Mac
       origin accepts and ignores it; an older server's `ControlRequest` decoder (`ServerControlSocket`), fed the
       forwarded request with its opID, drops the field and runs the command
-- [ ] tests first, Mac side: each create-then-attach path (CLI, catalog `RemoteOperation`, `AttachedForward`
+- [x] tests first, Mac side: each create-then-attach path (CLI, catalog `RemoteOperation`, `AttachedForward`
       including a directly attached server pane's restart, `AttachedRecent` reopen with its recent-entry operand
       preserved) sends the intent; a pre-dispatch argument refusal is retried once without it; a lost or
       post-dispatch reply is never retried
-- [ ] implement server, dispatcher, CLI and Mac changes
-- [ ] add a `server-container.sh` check: a create with the intent has not run its command before an attach and
+- [x] implement server, dispatcher, CLI and Mac changes
+- [x] add a `server-container.sh` check: a create with the intent has not run its command before an attach and
       has run it after; existing headless shell and `--command` checks keep starting at once
-- [ ] `swift test --filter` for the touched suites passes
+- [x] `swift test --filter` for the touched suites passes
+- ➕ paths found: `AttachedForward.convert` (a new origin parent attached here) and the attached ordinary
+  duplicate (`session new --after ... --no-select`)
+- ➕ no dispatcher change: agterm-server binds `ControlArgs.attachPending` as a task-local around dispatch
+  (`AttachIntent`, in `runOperation`, which `serve` also goes through), so no public `ControlActions` signature
+  changes for the agterm-linux fork; `PaneObserver`'s recovery start passes no hold, since a failed held restart
+  settles inside its own request
+- ➕ the `server-container.sh` held-create check runs with Task 5's gates
 
 ### Task 5: docs and gates
 

@@ -82,6 +82,15 @@ public enum AttachedForward: Equatable, Sendable {
         return []
     }
 
+    /// attachesPane is whether the forward can create an origin pane this Mac attaches, so the origin holds its command.
+    public var attachesPane: Bool {
+        switch self {
+        case .restart, .convert, .duplicate: true
+        case .split(_, let mode, _), .scratch(_, let mode, _): mode != "off"
+        default: false
+        }
+    }
+
     /// command is the wire command the origin's `agtermctl` sends for `words`, which an origin too old for it names.
     public var command: Command {
         switch self {
