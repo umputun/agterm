@@ -396,6 +396,93 @@ final class ControlServerRestartTests: XCTestCase {
         XCTAssertEqual(server.originEvidence?.running, [session.paneIdentity])
     }
 
+    func testAShellZmxStillHoldsIsConfirmedAndPublishedOnlyOnceItRuns() async throws {
+        let (session, view) = try livePane()
+        let daemon = ZmxSupport.daemonName(for: session.paneIdentity)
+        let server = makeServer(daemon: daemon) { _ in }
+        server.restartLeader = { _ in 4343 }
+        var ran = false
+        server.restartArgv = { _ in ran ? ["-zsh"] : ["/Applications/agterm.app/Contents/MacOS/zmx", "attach", "--detached", daemon] }
+        server.restartWaits.shell = .milliseconds(50)
+        let replacement = RealizedReplacement()
+        defer { replacement.restore() }
+
+        let response = await server.restartSessionPane(
+            session.id.uuidString, window: nil,
+            options: ControlSessionRestartOptions(command: "echo restarted", pane: nil, paneID: view.paneToken))
+
+        XCTAssertEqual(response.error, "the old shell ended (pid 4242) and the replacement was requested but could not be verified in time")
+        XCTAssertNil(server.respawnGenerations[session.id]?[daemon])
+        XCTAssertEqual(server.restartHolds[session.paneIdentity], 1)
+        ran = true
+        try await waitUntil { server.respawnGenerations[session.id]?[daemon] == 1 }
+        XCTAssertNil(server.restartHolds[session.paneIdentity])
+    }
+
+    func testAShellThatVanishesBeforeItRunsIsNeverPublished() async throws {
+        let (session, view) = try livePane()
+        let daemon = ZmxSupport.daemonName(for: session.paneIdentity)
+        let server = makeServer(daemon: daemon) { _ in }
+        let leader = LeaderStub()
+        leader.pid = 4343
+        server.restartLeader = { _ in leader.pid }
+        server.restartArgv = { _ in
+            leader.pid = nil
+            return nil
+        }
+        server.restartWaits.shell = .milliseconds(50)
+        server.restartWaits.follow = .milliseconds(300)
+        let replacement = RealizedReplacement()
+        defer { replacement.restore() }
+
+        let response = await server.restartSessionPane(
+            session.id.uuidString, window: nil,
+            options: ControlSessionRestartOptions(command: "echo restarted", pane: nil, paneID: view.paneToken))
+
+        XCTAssertEqual(response.ok, false)
+        try await waitUntil { server.restartHolds[session.paneIdentity] == nil }
+        XCTAssertNil(server.respawnGenerations[session.id]?[daemon])
+    }
+
+    func testASessionClosedWhileAWithheldArgvIsCheckedIsNeverPublished() async throws {
+        let (session, view) = try livePane()
+        let daemon = ZmxSupport.daemonName(for: session.paneIdentity)
+        let server = makeServer(daemon: daemon) { _ in }
+        server.restartLeader = { _ in 4343 }
+        let store = try XCTUnwrap(library.store(forSession: session.id))
+        server.restartArgv = { _ in
+            _ = store.closeSession(session.id)
+            return nil
+        }
+        let replacement = RealizedReplacement()
+        defer { replacement.restore() }
+
+        let response = await server.restartSessionPane(
+            session.id.uuidString, window: nil,
+            options: ControlSessionRestartOptions(command: "sudo -v", pane: nil, paneID: view.paneToken))
+
+        XCTAssertEqual(response.ok, false)
+        try await waitUntil { server.restartHolds[session.paneIdentity] == nil }
+        XCTAssertNil(server.respawnGenerations[session.id]?[daemon])
+    }
+
+    func testALiveShellWhoseArgvIsWithheldIsPublished() async throws {
+        let (session, view) = try livePane()
+        let daemon = ZmxSupport.daemonName(for: session.paneIdentity)
+        let server = makeServer(daemon: daemon) { _ in }
+        server.restartLeader = { _ in 4343 }
+        server.restartArgv = { _ in nil }
+        let replacement = RealizedReplacement()
+        defer { replacement.restore() }
+
+        let response = await server.restartSessionPane(
+            session.id.uuidString, window: nil,
+            options: ControlSessionRestartOptions(command: "sudo -v", pane: nil, paneID: view.paneToken))
+
+        XCTAssertNil(response.error)
+        XCTAssertEqual(server.respawnGenerations[session.id]?[daemon], 1)
+    }
+
     func testAShellSeenOnlyAfterTheFollowWindowIsNeverPublished() async throws {
         let (session, view) = try livePane()
         let daemon = ZmxSupport.daemonName(for: session.paneIdentity)

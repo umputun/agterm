@@ -206,19 +206,23 @@
   `agterm/Control/ControlServer+Restart.swift` (`follow`)
 - Modify: the `paneForeground` tests in `agtermCoreTests`, the server restart tests in `AgtermServerTests`
 
-- [ ] tests first: `paneForeground` returns nil for the creator's argv (`<zmx> attach --detached <name> ...`)
+- [x] tests first: `paneForeground` returns nil for the creator's argv (`<zmx> attach --detached <name> ...`)
       and is unchanged for ordinary programs and shells; a restore capture inside the hold window records no
       foreground; a restart without `--command` and Duplicate as Companion inside it refuse as `.unreadable`,
       while a restart with `--command` and an ordinary Duplicate are unchanged
-- [ ] implement the predicate inside `paneForeground` (additive for the agterm-linux fork)
-- [ ] tests first: the server publishes the respawn notice once the new daemon is ready, before `exec`, and
+- [x] implement the predicate inside `paneForeground` (additive for the agterm-linux fork)
+- [x] tests first: the server publishes the respawn notice once the new daemon is ready, before `exec`, and
       confirms only after `exec`; a close during the hold yields no confirmation; a viewer reattaching after
       10 s gets the unverified reply and the follow then confirms; the local restart receipt confirms only an
       executed shell
-- [ ] split the server `watch` into publish-at-ready and confirm-at-exec; apply the exec check to the local
+- [x] split the server `watch` into publish-at-ready and confirm-at-exec; apply the exec check to the local
       `follow`
-- [ ] `swift test --filter` for the touched agtermCore and AgtermServer suites passes; via `-only-testing`:
-      the `ZmxLiveUITests/testRestart*` methods
+- [x] `swift test --filter` for the touched agtermCore and AgtermServer suites passes, plus hosted
+      `ControlServerRestartTests`
+- [ ] via `-only-testing`: the `ZmxLiveUITests/testRestart*` methods (⚠️ XCUITest, asked at the end with Task 2's)
+- ➕ an unreadable new-shell argv counts as executed only while the daemon still names that pid, so a replayed
+  setuid program (`sudo`) confirms and a vanished one is neither announced nor confirmed; the held predicate keys
+  on the daemon name, not the zmx executable, which agterm-server's `--zmx` may rename
 
 ### Task 4: remote attach-pending intent and server hold
 

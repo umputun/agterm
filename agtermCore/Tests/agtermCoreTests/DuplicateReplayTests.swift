@@ -18,6 +18,12 @@ struct DuplicateReplayTests {
         .failure(DuplicateReplay.Refusal(pane: "left", reason: reason))
     }
 
+    @Test func aPaneStillHeldBeforeItsCommandIsRefusedAsUnreadable() {
+        let held = CommandRestore.paneForeground(argv: ["/Applications/agterm.app/Contents/MacOS/zmx", "attach", "--detached",
+                                                        "agterm-0123456789abcdef0123456789abcdef", "/bin/sh", "-c", "codex"])
+        #expect(plan(held, leader: true) == refusal(.replay(.unreadable)))
+    }
+
     @Test func anIdleShellGivesAPlainShellWhereItSits() {
         #expect(plan(.foregroundShell("zsh")) == .success(.shell(workingDirectory: "/work")))
         #expect(plan(.foregroundShell("zsh"), cwd: nil) == .success(.shell(workingDirectory: "/fallback")))

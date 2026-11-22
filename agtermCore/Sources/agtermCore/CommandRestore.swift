@@ -62,18 +62,26 @@ public enum CommandRestore {
         }
     }
 
-    /// Classify a pane's raw foreground argv for the `tree` read. Nil for an empty argv only; the two live
-    /// answers are the cases of `PaneForeground`. `extra` is the user's `$SHELL` basename, widening
-    /// recognition to a non-standard login shell exactly as `isIdleShell` does.
+    /// Classify a pane's raw foreground argv for the `tree` read. Nil for an empty argv and for one zmx still
+    /// holds (`isHeldCreation`); the two live answers are the cases of `PaneForeground`. `extra` is the
+    /// user's `$SHELL` basename, widening recognition to a non-standard login shell exactly as `isIdleShell` does.
     ///
     /// The shell basename is taken AFTER `stripLoginDash`, never before: `basename` splits on `/`, so it
     /// drops the login mark from a path form (`-/bin/zsh`) but keeps it on the bare form (`-zsh`), which is
     /// the common case and would otherwise reach callers as `-zsh`.
     public static func paneForeground(argv: [String], extra: String? = nil) -> PaneForeground? {
-        guard !argv.isEmpty else { return nil }
+        guard !argv.isEmpty, !isHeldCreation(argv) else { return nil }
         let stripped = stripLoginDash(argv)
         if isIdleShell(argv: argv, extra: extra) { return .foregroundShell(basename(stripped[0])) }
         return .program(stripped)
+    }
+
+    /// True for the argv of a pane child zmx holds until its first attach: before `exec` it still carries the
+    /// detached creator's argv, which names no program the pane runs and must not be replayed. The executable
+    /// is not matched, since agterm-server takes any zmx path; the daemon name is.
+    public static func isHeldCreation(_ argv: [String]) -> Bool {
+        argv.count >= 4 && argv[1] == "attach" && argv[2] == "--detached"
+            && (ZmxSupport.isDaemonName(argv[3]) || ZmxSupport.isScratchDaemonName(argv[3]))
     }
 
     /// Drop the leading `-` macOS dash-marks a login process's argv[0] with, so the argv names a program

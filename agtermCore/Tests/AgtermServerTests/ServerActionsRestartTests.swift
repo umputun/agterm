@@ -14,6 +14,14 @@ private final class DelayedLeader: @unchecked Sendable {
 }
 
 @MainActor
+private final class ZmxHoldArgv {
+    let daemon: String
+    var ran = false
+    init(daemon: String) { self.daemon = daemon }
+    var argv: [String] { ran ? ["-zsh"] : ["/usr/local/lib/agterm-server/zmx", "attach", "--detached", daemon, "/bin/zsh"] }
+}
+
+@MainActor
 struct ServerActionsRestartTests {
     private let harness: ServerHarness
 
@@ -262,6 +270,92 @@ struct ServerActionsRestartTests {
         let frame = await offPool { viewer.first { if case .respawn = $0 { true } else { false } } }
         guard case .respawn(let respawns)? = frame else { Issue.record("no respawn frame"); return }
         #expect(respawns.generations == [ZmxSupport.daemonName(for: session.paneIdentity): 1])
+        #expect(await eventually { !self.harness.panes.isRestarting(session.paneIdentity) })
+    }
+
+    @Test func aHeldReplacementIsAnnouncedAtOnceAndConfirmedOnlyOnceItRuns() async throws {
+        let session = try newSession()
+        running(session.paneIdentity)
+        let creator = ZmxHoldArgv(daemon: ZmxSupport.daemonName(for: session.paneIdentity))
+        harness.actions.foregroundArgv = { pid in pid == 101 ? creator.argv : nil }
+        harness.actions.restartWaits.shell = .milliseconds(50)
+        let viewer = try await viewer(of: session)
+        defer { viewer.disconnect() }
+
+        let reply = await restart(session, command: "make test")
+
+        #expect(reply.error == "the old shell ended (pid 100) and the replacement was requested but could not be verified in time")
+        let frame = await offPool { viewer.first { if case .respawn = $0 { true } else { false } } }
+        guard case .respawn(let respawns)? = frame else { Issue.record("no respawn frame"); return }
+        #expect(respawns.generations == [ZmxSupport.daemonName(for: session.paneIdentity): 1])
+        #expect(harness.panes.isRestarting(session.paneIdentity), "a held child is announced but not yet confirmed")
+        creator.ran = true
+        #expect(await eventually { !self.harness.panes.isRestarting(session.paneIdentity) })
+    }
+
+    @Test func aReplacementThatRunsWithinTheReplyWaitIsConfirmedInTheReply() async throws {
+        let session = try newSession()
+        running(session.paneIdentity)
+        let creator = ZmxHoldArgv(daemon: ZmxSupport.daemonName(for: session.paneIdentity))
+        var reads = 0
+        harness.actions.foregroundArgv = { _ in
+            reads += 1
+            if reads > 3 { creator.ran = true }
+            return creator.argv
+        }
+
+        let reply = await restart(session, command: "make test")
+
+        #expect(reply.ok, "\(reply.error ?? "")")
+        #expect(reply.result?.restart?.newPid == 101)
+        #expect(reads > 3)
+    }
+
+    @Test func aReplacementThatVanishesBeforeItRunsIsNeitherAnnouncedNorConfirmed() async throws {
+        let session = try newSession()
+        running(session.paneIdentity)
+        let leader = DelayedLeader()
+        leader.pid = 101
+        harness.actions.daemonLeader = { _ in leader.pid }
+        harness.actions.foregroundArgv = { _ in
+            leader.pid = nil
+            return nil
+        }
+        harness.actions.restartWaits.follow = .milliseconds(300)
+
+        let reply = await restart(session, command: "make test")
+
+        #expect(reply.ok == false)
+        #expect(await eventually { !self.harness.panes.isRestarting(session.paneIdentity) })
+        #expect(try await respawnCounts(session).isEmpty)
+    }
+
+    @Test func aLiveReplacementWhoseArgvIsWithheldIsConfirmed() async throws {
+        let session = try newSession()
+        running(session.paneIdentity)
+        harness.actions.foregroundArgv = { _ in nil }
+
+        let reply = await restart(session, command: "sudo make install")
+
+        #expect(reply.ok, "\(reply.error ?? "")")
+        #expect(reply.result?.restart?.newPid == 101)
+    }
+
+    @Test func aPaneClosedWhileItsReplacementIsHeldIsNeverConfirmed() async throws {
+        let session = try newSession()
+        running(session.paneIdentity)
+        let creator = ZmxHoldArgv(daemon: ZmxSupport.daemonName(for: session.paneIdentity))
+        harness.actions.foregroundArgv = { _ in creator.argv }
+        let viewer = try await viewer(of: session)
+        defer { viewer.disconnect() }
+
+        let pending = Task { await restart(session, command: "make test") }
+        _ = await offPool { viewer.first { if case .respawn = $0 { true } else { false } } }
+        _ = harness.store.closeSession(session.id)
+        #expect(harness.store.session(withID: session.id) == nil)
+        let reply = await pending.value
+
+        #expect(reply.ok == false)
         #expect(await eventually { !self.harness.panes.isRestarting(session.paneIdentity) })
     }
 
