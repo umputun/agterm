@@ -67,6 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var scheduledReconciliationReasons: Set<String> = []
 
     func applicationWillFinishLaunching(_: Notification) {
+        LaunchTrace.shared.mark(.willFinishLaunching)
         // no native window tabs: this strips AppKit's injected "Show Tab Bar" / "Show All Tabs" / "Move Tab
         // to New Window" items and the tab affordances. Must be set before any window is created.
         NSWindow.allowsAutomaticWindowTabbing = false
@@ -79,6 +80,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             object: NSApp,
             queue: .main
         ) { [weak self] _ in
+            LaunchTrace.shared.mark(.windowsRestored)
             MainActor.assumeIsolated {
                 self?.scheduleRestoredWindowReconciliation(reason: "did-finish-restoring")
             }
@@ -86,6 +88,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_: Notification) {
+        LaunchTrace.shared.mark(.didFinishLaunchingEntry)
         Self.launchFinished = true
         NSApp.setActivationPolicy(.regular)
         if ContentView.isUITestLaunch {
@@ -110,6 +113,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NotificationCenter.default.addObserver(self, selector: #selector(keymapChanged),
                                                name: .agtermKeymapChanged, object: nil)
         reconcileStockMenuChords()
+        LaunchTrace.shared.mark(.didFinishLaunchingExit, "windows=\(NSApp.windows.count)")
     }
 
     /// XCUITest-only seam: pin the LAUNCH appearance from `AGTERM_UITEST_FORCE_APPEARANCE` (`light`/`dark`).
