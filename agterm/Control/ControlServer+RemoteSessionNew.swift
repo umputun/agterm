@@ -89,12 +89,9 @@ extension ControlServer {
             return ControlResponse(ok: false, error: "invalid host")
         }
         progress("creating a session on \(host)…")
-        let sent: RemoteCommandResult? = if request.command != nil {
-            await runAttaching(host: host, arguments: arguments)
-        } else if let argv = try? RemoteSession.controlCommand(host: host, arguments: arguments) {
-            await remoteRunner.run(argv, deadline: Self.remoteCompanionDeadline)
-        } else { nil }
-        guard let result = sent else { return ControlResponse(ok: false, error: "invalid host") }
+        guard let result = await runRemoteControl(host: host, arguments: arguments, attaching: request.command != nil) else {
+            return ControlResponse(ok: false, error: "invalid host")
+        }
         if result.refusedArguments {
             return ControlResponse(ok: false, error: "the agterm on \(host) is too old to create sessions for another Mac")
         }

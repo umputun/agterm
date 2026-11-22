@@ -69,12 +69,15 @@ extension ControlServer {
     /// A new origin session is attachable once every pane's daemon runs, which takes a moment after creation.
     static let remoteCompanionReadyBudget: TimeInterval = 20
 
-    /// runAttaching runs `arguments` on `host`'s `agtermctl`, asking it to hold the command of the pane this Mac attaches
-    /// next. A far CLI too old for the intent refuses it before sending anything, so the command then runs once without.
-    /// Nil when `host` cannot be addressed.
-    func runAttaching(host: String, arguments: [String], operands: [String] = []) async -> RemoteCommandResult? {
-        guard let held = try? RemoteSession.controlCommand(host: host, arguments: arguments + ["--attach-pending"], operands: operands),
-              let plain = try? RemoteSession.controlCommand(host: host, arguments: arguments, operands: operands) else { return nil }
+    /// runRemoteControl runs `arguments` on `host`'s `agtermctl`; with `attaching` it asks the host to hold the command of the
+    /// pane this Mac attaches next. A far CLI too old for the intent refuses it before sending anything, so the command
+    /// then runs once without. Nil when `host` cannot be addressed.
+    func runRemoteControl(host: String, arguments: [String], operands: [String] = [], attaching: Bool) async -> RemoteCommandResult? {
+        guard let plain = try? RemoteSession.controlCommand(host: host, arguments: arguments, operands: operands) else { return nil }
+        guard attaching,
+              let held = try? RemoteSession.controlCommand(host: host, arguments: arguments + ["--attach-pending"], operands: operands) else {
+            return await remoteRunner.run(plain, deadline: Self.remoteCompanionDeadline)
+        }
         let result = await remoteRunner.run(held, deadline: Self.remoteCompanionDeadline)
         guard result.refusedArguments else { return result }
         return await remoteRunner.run(plain, deadline: Self.remoteCompanionDeadline)
@@ -111,14 +114,9 @@ extension ControlServer {
             ?? listedOrigin
         let hold = holdCompanionFollow(OriginKey(host: host, endpoint: tree.endpoint, session: group))
         defer { releaseCompanionFollow(hold) }
-        let sent: RemoteCommandResult? = if request.attachesPane {
-            await runAttaching(host: host, arguments: arguments)
-        } else if let argv = try? RemoteSession.controlCommand(host: host, arguments: arguments) {
-            await remoteRunner.run(argv, deadline: Self.remoteCompanionDeadline)
-        } else {
-            nil
+        guard let result = await runRemoteControl(host: host, arguments: arguments, attaching: request.attachesPane) else {
+            return ControlResponse(ok: false, error: "invalid host")
         }
-        guard let result = sent else { return ControlResponse(ok: false, error: "invalid host") }
         if result.refusedArguments {
             return ControlResponse(ok: false, error: "the agterm on \(host) is too old for companions")
         }

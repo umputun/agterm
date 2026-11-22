@@ -2011,7 +2011,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   without it starts at once.
   It is a timing request with no state, so it has no read-back. An older origin drops the field and starts at
   once; a stale far `agtermctl` refuses the flag before sending, and only that `refusedArguments` reply is rerun
-  once without it, keeping the operation id (`ControlServer.runAttaching`, `RemoteCatalogActions.send`).
+  once without it, keeping the operation id (`ControlServer.runRemoteControl`, `RemoteCatalogActions.send`).
   `site/docs.html#remote-window` states what a user sees.
 - A row carries what a PICKER needs, not only what attach needs. Without that a caller has to run a second
   ssh and join `agtermctl tree --json` by session id, paying another authentication for data the walk

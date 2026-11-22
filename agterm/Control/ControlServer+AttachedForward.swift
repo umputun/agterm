@@ -263,16 +263,11 @@ extension ControlServer {
     }
 
     private func runOnOrigin(_ forward: AttachedForward, origin: AttachedOrigin, attaches: Bool) async -> AttachedOutcome {
-        if attaches {
-            guard let result = await runAttaching(host: origin.host, arguments: forward.words, operands: forward.operands) else {
-                return .refused("invalid host")
-            }
-            return forward.outcome(of: result, host: origin.host)
-        }
-        guard let argv = try? RemoteSession.controlCommand(host: origin.host, arguments: forward.words, operands: forward.operands) else {
+        guard let result = await runRemoteControl(host: origin.host, arguments: forward.words, operands: forward.operands,
+                                              attaching: attaches) else {
             return .refused("invalid host")
         }
-        return forward.outcome(of: await remoteRunner.run(argv, deadline: Self.remoteCompanionDeadline), host: origin.host)
+        return forward.outcome(of: result, host: origin.host)
     }
 
     private static func failure(_ outcome: AttachedOutcome) -> ControlResponse {
