@@ -508,7 +508,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   a server window's row is converted by its server (`RemoteOperation.convertCompanion`), as Duplicate as Companion is.
 - `session.companion.move` is its own wire command for the same older-app reason
   (CLI `session move --parent P [--index N]`, too-old text `the running app is too old for companion moves`). `AppStore.moveCompanion` is the seam
-  the sidebar drop, Move to and control share; `canMoveCompanion` and `CompanionMoveRefusal` own the refusals, and
+  the sidebar drop, Move Under and control share; `canMoveCompanion` and `CompanionMoveRefusal` own the refusals, and
   `index` is the slot among the new parent's companions counted without the mover, clamped, nil appending. A top-level
   mover brings its contiguous group, as Convert to Companion does. Each side moves the group it holds: the owner its own
   members, the initiating viewer the rows it shows under the mover, so groupings already diverged stay diverged.

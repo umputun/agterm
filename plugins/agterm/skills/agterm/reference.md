@@ -625,7 +625,7 @@ workspace (rename, delete, select, move, collapse, expand, tint and detach) refu
   companions shown under it (a reorder under the same parent stays here), and another Mac attached
   to the same sessions keeps the old grouping until it reattaches. Wire command `session.companion.move`;
   returns `result.id` and `result.parent`. Read back as the node's `parent` and tree order. GUI twins: a drag in
-  the sidebar tree, a drop on another top-level session's row, and Move to in a companion row's context menu.
+  the sidebar tree, a drop on another top-level session's row, and Move Under in a companion row's context menu.
 - `session move --top-level [WORKSPACE | --after SID | --before SID] [--target T] [--window W]` - make a companion a
   top-level session, keeping its id and running panes: right after the group it leaves when no destination is given,
   appended to a workspace (`root` for the top-level sessions), or beside the anchor's whole group, its former

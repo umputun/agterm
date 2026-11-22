@@ -404,7 +404,7 @@ omitted when expanded).
   `session convert --companion` turns a running top-level session into a companion of a fresh shell opened in its
   place, keeping its program, id and companions (Convert to Companion).
   `session move --parent SID [--index N]` moves a session under another top-level session, any workspace,
-  still running, a top-level one with its companions (Move to in a companion's row menu, or a sidebar drag).
+  still running, a top-level one with its companions (Move Under in a companion's row menu, or a sidebar drag).
   `session move --top-level [WORKSPACE | --after SID | --before SID]` makes a companion a top-level session again,
   after its group when no destination is given (a workspace in Move to, or a drag onto a workspace row or between
   top-level rows).

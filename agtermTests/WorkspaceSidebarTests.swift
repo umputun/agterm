@@ -217,16 +217,16 @@ final class WorkspaceSidebarTests: XCTestCase {
         XCTAssertEqual(try moveToMenu(rows.second.id).items.map(\.title), [rows.workspace.name])
     }
 
-    func testTheCompanionMoveMenuHeadsTheRootsParentsTopLevelSessions() throws {
+    func testMoveUnderOnACompanionHeadsTheRootsTopLevelSessions() throws {
         let rows = try seed()
         let helper = try rows.store.addCompanion(to: rows.named.id).get()
         buildSidebar(for: rows.store)
         rows.store.setSidebarSelection([helper.id])
 
-        let submenu = try moveToMenu(helper.id)
-        let header = try XCTUnwrap(submenu.items.firstIndex(where: \.isSectionHeader))
-        XCTAssertEqual(Array(submenu.items[header...].prefix(3).map(\.title)), [ControlWorkspaceNode.rootLabel, "top", "second"])
-        XCTAssertEqual(submenu.items.prefix(header).last?.isSeparatorItem, true)
+        let submenu = try submenu("Move Under", onRow: helper.id)
+        XCTAssertEqual(Array(submenu.items.prefix(3).map(\.title)), [ControlWorkspaceNode.rootLabel, "top", "second"])
+        XCTAssertEqual(submenu.items.prefix(3).map(\.isSectionHeader), [true, false, false])
+        XCTAssertFalse(try moveToMenu(helper.id).items.contains { $0.isSectionHeader || $0.isSeparatorItem })
     }
 
     func testARootRowFocusesTheRootAndTogglesItsMembership() throws {
@@ -255,8 +255,12 @@ final class WorkspaceSidebarTests: XCTestCase {
     }
 
     private func moveToMenu(_ id: UUID) throws -> NSMenu {
+        try submenu("Move to", onRow: id)
+    }
+
+    private func submenu(_ title: String, onRow id: UUID) throws -> NSMenu {
         let menu = try XCTUnwrap(coordinator.menu(forRow: try row(id)))
-        return try XCTUnwrap(menu.items.first { $0.title == "Move to" }?.submenu, "\(menu.items.map(\.title))")
+        return try XCTUnwrap(menu.items.first { $0.title == title }?.submenu, "\(menu.items.map(\.title))")
     }
 
     private func menuItem(_ title: String, onRow id: UUID) throws -> NSMenuItem? {
