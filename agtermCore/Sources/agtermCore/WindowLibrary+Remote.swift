@@ -144,6 +144,12 @@ extension WindowLibrary {
     func remoteStoreClosing(_ id: UUID) {
         guard windows.first(where: { $0.id == id })?.isRemote == true else { return }
         onRemoteStoreClosed?(id)
+        // a reopen reuses the pane ids, and a wait left here would retry over the reopen's attach
+        for session in stores[id]?.workspaces.flatMap(\.sessions) ?? [] {
+            for pane in [session.paneIdentity, session.splitPaneIdentity, session.scratchClientIdentity].compactMap({ $0 }) {
+                RemoteReconnectBook.shared.cancel(pane: pane)
+            }
+        }
     }
 
     public func remoteViewState(for id: UUID) -> RemoteWindowViewState {
