@@ -94,6 +94,7 @@ Ghostty version preserves skipped cells during VT replay by moving the cursor ac
   does not release; a zero or non-numeric value fails the create, and the variable is unset before exec.
 
 `check.py <zmx>` drives managed clients on PTYs of different sizes against one daemon in a throwaway
-`ZMX_DIR` and exits nonzero when a check fails. Pass a second argument pointing to agterm's patched
-zmx 0.8.1 binary to also verify listing, claiming and reclaiming the lead, typing, reading the screen,
-printing, refusing `write`, `run` and `tail`, and killing across the upgrade.
+`ZMX_DIR` and exits nonzero when a check fails. Pass a second argument pointing to the previous
+release's zmx to also verify listing, claiming and reclaiming the lead, typing, reading the screen,
+printing, `write`, `run` and `tail`, and killing across the upgrade. Against a zmx before 1.0 the new
+client must refuse `write`, `run` and `tail`; against a later one it must use them.

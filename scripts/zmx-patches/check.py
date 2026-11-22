@@ -70,6 +70,49 @@ def listed(name):
     return name.encode() in cli("list", "--short").stdout.split()
 
 
+def legacy_ipc(executable):
+    """legacy_ipc is true for a zmx before 1.0, against whose daemon the new client refuses run, tail and write."""
+    found = re.search(rb"zmx\s+(\d+)\.", cli("version", executable=executable).stdout)
+    return found is not None and int(found.group(1)) < 1
+
+
+def written(path, content):
+    """written waits up to 5 s for path to hold content: `zmx write` has the session's shell write it."""
+    deadline = time.time() + 5
+    while time.time() < deadline:
+        try:
+            with open(path, "rb") as f:
+                if f.read() == content:
+                    return True
+        except OSError:
+            pass
+        time.sleep(0.1)
+    return False
+
+
+def tail_prints(name, typed, marker):
+    """tail_prints reports whether `zmx tail` on name prints marker after typed reaches the session, within 5 s."""
+    env = dict(os.environ, ZMX_DIR=ZDIR)
+    env.pop("ZMX_SESSION", None)
+    proc = subprocess.Popen([ZMX, "tail", name], env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                            stderr=subprocess.DEVNULL)
+    try:
+        time.sleep(0.5)
+        cli("type", name, stdin=typed)
+        seen, deadline = b"", time.time() + 5
+        while marker not in seen and time.time() < deadline:
+            ready, _, _ = select.select([proc.stdout], [], [], 0.2)
+            if ready:
+                chunk = os.read(proc.stdout.fileno(), 4096)
+                if not chunk:
+                    break
+                seen += chunk
+        return marker in seen
+    finally:
+        proc.kill()
+        proc.wait()
+
+
 def check(label, ok, detail=""):
     print(("PASS " if ok else "FAIL ") + label + (" :: " + detail if detail and not ok else ""))
     return ok
@@ -170,13 +213,25 @@ def check_upgrade(previous):
         printed = cli("print", name, stdin=b"OLD-DAEMON-PRINT")
         ok &= check("the new client prints to the previous daemon's clients",
                     printed.returncode == 0 and b"OLD-DAEMON-PRINT" in drain(back[1], 1.0), repr(printed.stderr))
-        ran, tailed = cli("run", name, "true"), cli("tail", name)
-        ok &= check("the new client refuses to run or tail through the previous daemon",
-                    ran.returncode != 0 and b"does not support run" in ran.stderr
-                    and tailed.returncode != 0 and b"does not support tail" in tailed.stderr, repr((ran.stderr, tailed.stderr)))
-        wrote = cli("write", name, os.path.join(ZDIR, "upgrade-write"), stdin=b"OLD-DAEMON-WRITE")
-        ok &= check("the new client refuses to write through the previous daemon",
-                    wrote.returncode != 0 and b"does not support write" in wrote.stderr, repr(wrote.stderr))
+        target = os.path.join(ZDIR, "upgrade-write")
+        if legacy_ipc(previous):
+            ran, tailed = cli("run", name, "true"), cli("tail", name)
+            ok &= check("the new client refuses to run or tail through the previous daemon",
+                        ran.returncode != 0 and b"does not support run" in ran.stderr
+                        and tailed.returncode != 0 and b"does not support tail" in tailed.stderr,
+                        repr((ran.stderr, tailed.stderr)))
+            wrote = cli("write", name, target, stdin=b"OLD-DAEMON-WRITE")
+            ok &= check("the new client refuses to write through the previous daemon",
+                        wrote.returncode != 0 and b"does not support write" in wrote.stderr, repr(wrote.stderr))
+        else:
+            ran = cli("run", name, "sh", "-c", "exit 7")
+            ok &= check("the new client runs a task through the previous daemon and gets its code",
+                        ran.returncode == 7, repr((ran.returncode, ran.stderr)))
+            followed = tail_prints(name, b"printf 'OLD-%s-TAIL\\n' DAEMON\r", b"OLD-DAEMON-TAIL")
+            ok &= check("the new client tails the previous daemon's new output", followed)
+            wrote = cli("write", name, target, stdin=b"OLD-DAEMON-WRITE")
+            ok &= check("the new client writes through the previous daemon",
+                        wrote.returncode == 0 and written(target, b"OLD-DAEMON-WRITE"), repr(wrote.stderr))
         killed = cli("kill", name)
         ok &= check("the new client kills the previous daemon",
                     killed.returncode == 0 and b"name=" + name.encode() not in cli("list").stdout, repr(killed.stderr))
