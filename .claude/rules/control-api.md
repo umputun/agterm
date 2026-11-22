@@ -2230,8 +2230,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - A row attached from another host (`Session.attachedOrigin`; nil for a server window's row and one not yet
   bound) is saved apart in `WorkspaceSnapshot.attached`: its place, view state and binding, never a command,
   cwd or page source, so a build predating the key ignores it rather than starting a shell in it. `bindRemote`
-  saves, since `addSession` saved before the binding existed. A relaunch runs the saved attach lines WITHOUT the
-  lead claim (`attachedSession(from:)`), and `ControlServer.checkRestoredOrigin` asks each host once. A terminal
+  saves, since `addSession` saved before the binding existed. A relaunch, or a reopened window, runs the saved attach
+  lines WITHOUT the lead claim (`attachedSession(from:)`) but with `ZMX_MANAGED_RECLAIM` set to the pane's saved
+  `lead` (`ZmxLeadState.reclaimAfterDrop` at save, nil while it followed), so it takes back an idle vacancy fill
+  the way a reconnect does (Pane lead), and `ControlServer.checkRestoredOrigin` asks each host once. A terminal
   session the tree lists is alive; one it leaves out closes the row (`closeEndedAttachedRow`, the row alone through
   `closeExactly`, its companions moving up and each checked on its own) only when
   the host's complete `zmx list` has no claim for it, since a session in a window closed there is left out but

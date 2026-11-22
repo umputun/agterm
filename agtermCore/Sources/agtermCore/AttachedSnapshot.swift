@@ -28,10 +28,14 @@ public struct AttachedOriginSnapshot: Codable, Equatable, Sendable {
     public struct Pane: Codable, Equatable, Sendable {
         public var pane: UUID
         public var daemon: String
+        /// lead is the attach nonce the next attach reclaims from (`ZmxLeadState.reclaimAfterDrop` when saved);
+        /// nil when the pane followed.
+        public var lead: String?
 
-        public init(pane: UUID, daemon: String) {
+        public init(pane: UUID, daemon: String, lead: String? = nil) {
             self.pane = pane
             self.daemon = daemon
+            self.lead = lead
         }
     }
 
@@ -58,12 +62,16 @@ public struct AttachedOriginSnapshot: Codable, Equatable, Sendable {
 
     /// init(binding:page:) is nil for a binding no attach can be rebuilt from: a server window's row, or one without
     /// an origin.
+    @MainActor
     init?(binding: RemoteBinding, page: Bool) {
         guard !binding.catalogOwned, let origin = binding.origin else { return nil }
+        let panes = binding.daemonsByPane.map {
+            Pane(pane: $0.key, daemon: $0.value, lead: ZmxLeadBook.shared.states[$0.key]?.reclaimAfterDrop)
+        }
         self.init(host: origin.host, sessionID: binding.remoteSessionID, sessionName: origin.sessionName,
                   endpoint: origin.endpoint, presentationVersion: binding.presentationVersion,
                   headless: binding.originHeadless ? true : nil, page: page ? true : nil,
-                  panes: binding.daemonsByPane.map { Pane(pane: $0.key, daemon: $0.value) }.sorted { $0.daemon < $1.daemon })
+                  panes: panes.sorted { $0.daemon < $1.daemon })
     }
 
     var binding: RemoteBinding {

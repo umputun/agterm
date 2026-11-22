@@ -2755,7 +2755,8 @@ be typed.
 
 Closing a remote session here ends only this side's connection: the far-side processes keep running and
 nothing agterm does from this end can kill them. An open attached row is saved and attached again at the next
-launch whatever the restore mode is, without taking the lead from a Mac that took it meanwhile. A row whose
+launch whatever the restore mode is, and a reopened window attaches its rows again too; a pane this Mac led takes
+the lead back under the reconnect rule below. A row whose
 session the origin no longer has closes instead; an attached page waits for the origin to hand it
 over and retries while the host does not answer.
 
