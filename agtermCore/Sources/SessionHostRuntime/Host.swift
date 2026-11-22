@@ -37,6 +37,8 @@ public final class Host {
         let zmxPath: String
         var ensureTimeout: TimeInterval = 10
         var pollInterval: TimeInterval = 0.1
+        /// creatorPoll paces the cheap exit check while the creator runs, ~30 ms; `pollInterval` paces the listings.
+        var creatorPoll: TimeInterval = 0.01
         var terminationGrace: TimeInterval = 0.25
         var upkeepInterval: TimeInterval = 3600
         /// Seconds a created command waits for the pane's attach before it starts with no terminal.
@@ -185,7 +187,8 @@ public final class Host {
                     }
                 } catch { return failure(.started, "daemon readiness could not be inspected") }
             }
-            pause(min(configuration.pollInterval, max(0, deadline - now())))
+            let interval = state == .running ? configuration.creatorPoll : configuration.pollInterval
+            pause(min(interval, max(0, deadline - now())))
         }
         return failure(.started, "timeout waiting for daemon leader")
     }

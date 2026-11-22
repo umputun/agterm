@@ -64,6 +64,17 @@ private let sessionHostFixtureReady = Responsibility.system.isAvailable
         #expect(context.backend.child.terminatedPIDs == [500])
     }
 
+    // regression: a ~30 ms creator was rechecked only after a full listing interval, which delayed every new pane
+    @Test func aCreatorIsAnsweredSoonAfterItExits() throws {
+        let context = try Context()
+        let clock = context.clock
+        context.backend.child.onPoll = { child in if clock.time >= 0.03, child.state == .running { child.exit(0) } }
+        context.backend.records = [[], [context.record]]
+        #expect(context.host.handle(ensure: context.request) == .ok(.init(state: .created, leaderPid: 600)))
+        #expect(context.clock.time < 0.05)
+        #expect(context.backend.listCalls == 2)
+    }
+
     @Test func aRunningCreatorIsNotReadyEvenWithALeaderRow() throws {
         let context = try Context()
         context.backend.records = [[], [context.record]]
@@ -895,7 +906,11 @@ private let sessionHostFixtureReady = Responsibility.system.isAvailable
         }
         var terminations = 0
         var terminatedPIDs: [Int32] = []
-        func poll() -> HostChildState { state }
+        var onPoll: ((Child) -> Void)?
+        func poll() -> HostChildState {
+            onPoll?(self)
+            return state
+        }
         func terminate(grace: TimeInterval) throws {
             terminations += 1
             terminatedPIDs.append(pid)
