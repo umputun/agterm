@@ -5,6 +5,23 @@ import agtermCore
 @testable import agtermctlKit
 
 struct PasteCommandsTests {
+    @Test func sessionPasteStdinSendsTheTextCommand() throws {
+        let command = try Session.Paste.parse(["--stdin", "--pane", "right", "--pane-id", "P", "--target", "9f3c"])
+        let expected = ControlRequest(cmd: .sessionPasteText, target: "9f3c", args: ControlArgs(text: "a\nb\n", pane: "right", paneID: "P"))
+        #expect(try command.makeRequest(input: Data("a\nb\n".utf8)) == expected)
+    }
+
+    @Test(arguments: [(Data(), "stdin is empty: nothing to paste"), (Data([0xFF]), "stdin must be valid UTF-8")])
+    func sessionPasteStdinRefusesUnusableInput(input: Data, error: String) throws {
+        let command = try Session.Paste.parse(["--stdin"])
+        let thrown = #expect(throws: (any Error).self) { try command.makeRequest(input: input) }
+        #expect(thrown.map(Agtermctl.message(for:)) == error)
+    }
+
+    @Test func sessionPastePaneIDRequiresStdin() {
+        #expect(throws: (any Error).self) { try Session.Paste.parse(["--pane-id", "P"]) }
+    }
+
     @Test func receiveStagesTheBundleAndRepliesWithItsPaths() throws {
         let dir = try PasteTestFolder()
         defer { dir.cleanUp() }

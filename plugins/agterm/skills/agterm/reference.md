@@ -769,6 +769,12 @@ error keeps those names for compatibility.
   nothing, and a second paste while the pane is copying answers `a paste is still copying`. Claude Code attaches
   a pasted image path, so ⌘V, not Ctrl-V, pastes a screenshot into Claude Code in a remote pane: its own Ctrl-V
   reads the clipboard of the host it runs on. A ghostty.conf paste binding, and the bundled one at the V position on a Latin alternative layout, paste text only there.
+- `session paste --stdin [--pane left|right|scratch] [--pane-id ID] [--target] [--window W]` — paste the text
+  read from stdin as a paste (wire `session.paste.text`), leaving the clipboard alone: bracketed when the program
+  turned bracketed paste on, so it lands unsubmitted; otherwise each newline submits. `--pane-id` takes
+  `$AGTERM_PANE_ID` and wins over `--pane`, as in `session type`. ESC and control bytes become spaces; empty stdin
+  and NUL are refused. An app predating it answers `the running app is too old for text paste`. agterm-server
+  refuses it directly; a Mac showing a server row pastes through its own pane.
 - `paste receive` — internal, run by agterm over ssh on the host where a pasted file must land; never run it by
   hand.
 - `session select-all [--target] [--window W]` — select the session's entire terminal buffer (main pane),

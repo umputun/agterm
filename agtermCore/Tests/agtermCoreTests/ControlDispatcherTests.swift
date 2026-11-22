@@ -1171,6 +1171,36 @@ struct ControlDispatcherTests {
         #expect(actions.calls.isEmpty)
     }
 
+    @Test func sessionPasteTextRoutesTextPaneAndPaneID() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextSessionPasteResponse = ControlResponse(ok: true, result: ControlResult(id: "session"))
+        var args = ControlArgs(text: "a\nb", pane: "split", paneID: "P")
+        args.window = "win"
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .sessionPasteText, target: "session", args: args))
+
+        #expect(response == ControlResponse(ok: true, result: ControlResult(id: "session")))
+        #expect(actions.calls == [.sessionPasteText(target: "session", window: "win", pane: .right, paneID: "P", text: "a\nb")])
+    }
+
+    @Test(arguments: [
+        (nil, nil, "session.paste.text requires text"),
+        ("", nil, "session.paste.text requires text"),
+        ("a\u{0}b", nil, "text must not contain a NUL byte"),
+        ("a", "other", "--pane must be left, right, or scratch"),
+    ] as [(String?, String?, String)])
+    func sessionPasteTextRefusesWithoutCallingTheAction(text: String?, pane: String?, error: String) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .sessionPasteText, target: "session",
+                                                                args: ControlArgs(text: text, pane: pane)))
+
+        #expect(response == ControlResponse(ok: false, error: error))
+        #expect(actions.calls.isEmpty)
+    }
+
     @Test func sessionSelectAllRoutesTargetAndWindow() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)

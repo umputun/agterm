@@ -1705,6 +1705,7 @@ agtermctl session type --target &quot;$id&quot; $&#39;echo hi\n&#39;   # a backg
 sel=$(agtermctl session copy --target 9f3c)          # the selection; the clipboard is untouched
 agtermctl session text --pane scratch --target 9f3c  # the pane&#39;s text
 agtermctl session paste --target 9f3c                # paste the clipboard, like ⌘V
+printf &#39;a\nb\n&#39; | agtermctl session paste --stdin   # paste text, unsubmitted where the program allows
 agtermctl session select-all --target 9f3c           # like ⌘A; session copy then reads it</code></pre>
 <h3 id="agtermctl-panes">Splits, scratch, quick terminal and search</h3>
 <pre class="bash"><code>agtermctl session split toggle --axis horizontal   # vertical = left/right, horizontal = top/bottom

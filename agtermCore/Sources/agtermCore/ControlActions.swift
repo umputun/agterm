@@ -165,6 +165,10 @@ public protocol ControlActions {
     func typeSession(_ target: String?, window: String?, options: ControlSessionTypeOptions) async -> ControlResponse
     func copySessionSelection(_ target: String?, window: String?) -> ControlResponse
     func pasteSession(_ target: String?, window: String?, pane: StatusPane?) async -> ControlResponse
+    /// pasteSessionText pastes `text` into the addressed pane as a paste, bracketed when its program asked for it;
+    /// `paneID` resolves before `pane` as `session.type`'s does.
+    func pasteSessionText(_ target: String?, window: String?, pane: StatusPane?, paneID: String?,
+                          text: String) async -> ControlResponse
     func selectAllSession(_ target: String?, window: String?) -> ControlResponse
     func searchSession(_ target: String?, window: String?,
                        text: String?, to: String?) async -> ControlResponse

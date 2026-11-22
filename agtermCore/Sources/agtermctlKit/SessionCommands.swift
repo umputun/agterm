@@ -356,16 +356,37 @@ struct Session: ParsableCommand {
     }
 
     struct Paste: RequestCommand {
-        static let configuration = CommandConfiguration(abstract: "Paste the system clipboard into a session (like ⌘V).")
+        static let configuration = CommandConfiguration(
+            abstract: "Paste the system clipboard into a session (like ⌘V), or with --stdin paste text read from stdin.")
         @Option(name: .long, help: "Which pane to paste into: primary/left/top, split/right/bottom, or scratch (even when hidden). Defaults to primary.") var pane: String?
+        @Flag(name: .long, help: "Paste the text read from stdin instead of the clipboard; the clipboard is left alone.") var stdin = false
+        @Option(name: .customLong("pane-id"), help: "Stable pane token ($AGTERM_PANE_ID), with --stdin only; overrides --pane, and unknown without --pane is an error.") var paneID: String?
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
 
-        func validate() throws { try validatePaneArgument(pane) }
+        func validate() throws {
+            try validatePaneArgument(pane)
+            if paneID != nil, !stdin { throw ValidationError("--pane-id requires --stdin") }
+        }
 
         func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: .sessionPaste, target: target.target,
-                           args: options.withWindow(pane.map { ControlArgs(pane: $0) }))
+            if stdin { return try makeRequest(input: FileHandle.standardInput.readDataToEndOfFile()) }
+            return ControlRequest(cmd: .sessionPaste, target: target.target,
+                                  args: options.withWindow(pane.map { ControlArgs(pane: $0) }))
+        }
+
+        func makeRequest(input: Data) throws -> ControlRequest {
+            let text = try decodeTypedStdin(input)
+            guard !text.isEmpty else { throw ValidationError("stdin is empty: nothing to paste") }
+            return ControlRequest(cmd: .sessionPasteText, target: target.target,
+                                  args: options.withWindow(ControlArgs(text: text, pane: pane, paneID: paneID)))
+        }
+
+        // the text form is its own wire command, so an app predating it refuses it instead of pasting the clipboard
+        func run() throws {
+            guard stdin else { return try defaultRun() }
+            try runCompanionRequest(try makeRequest(), options: options, echoID: false,
+                                    tooOld: "the running app is too old for text paste")
         }
     }
 

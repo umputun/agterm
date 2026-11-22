@@ -330,6 +330,7 @@ struct ControlProtocolTests {
             ControlRequest(cmd: .sessionMove, args: ControlArgs(targets: ["9f3c", "abcd"], after: "anchor")),
             ControlRequest(cmd: .sessionCopy, target: "9f3c"),
             ControlRequest(cmd: .sessionPaste, target: "9f3c"),
+            ControlRequest(cmd: .sessionPasteText, target: "9f3c", args: ControlArgs(text: "a\nb", pane: "right", paneID: "P")),
             ControlRequest(cmd: .sessionSelectAll, target: "9f3c"),
             ControlRequest(cmd: .sessionOverlayOpen, target: "9f3c", args: ControlArgs(cwd: "/b", command: "revdiff")),
             ControlRequest(cmd: .sessionOverlayOpen, target: "9f3c", args: ControlArgs(command: "htop", sizePercent: 70)),

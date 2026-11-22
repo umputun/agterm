@@ -447,7 +447,8 @@ omitted when expanded).
 - `session paste` — paste the system clipboard into the session (the socket analogue of ⌘V; read it back with
   `session text`). `--pane left|right|scratch` picks the pane, with the usual role and position aliases;
   omitted is the main pane. Copied files paste as paths and an image-only clipboard as a saved PNG's path; in a
-  remote pane they are copied to that host first ([details](reference.md#session)).
+  remote pane they are copied to that host first ([details](reference.md#session)). `--stdin` pastes text from
+  stdin instead, leaving the clipboard alone; `--pane-id "$AGTERM_PANE_ID"` targets a pane by its token.
 - `session select-all` — select the session's entire terminal buffer (the socket analogue of ⌘A; read the
   selection back with `session copy`).
 - `session text [--all] [--lines N] [--pane left|right|scratch] [--pane-id TOKEN]`: print the session buffer

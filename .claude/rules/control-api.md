@@ -182,7 +182,7 @@ renumbering. Do not reintroduce a count anywhere.
   `.expand`, `.tint`
 - `session.new`, `.duplicate`, `.remote.new`, `.companion.new`, `.companion.page`, `.companion.duplicate`, `.companion.convert`, `.companion.move`, `.companion.promote`, `.companion.page.attach`, `.page`, `.collapse`, `.expand`, `.close`, `.terminate`, `.select`, `.rename`, `.reveal`, `.move`, `.type`, `.split`,
   `.split.close`, `.swap`, `.lead`,
-  `.scratch`, `.focus`, `.resize`, `.go`, `.copy`, `.paste`, `.selectall`, `.text`, `.search`, `.status`,
+  `.scratch`, `.focus`, `.resize`, `.go`, `.copy`, `.paste`, `.paste.text`, `.selectall`, `.text`, `.search`, `.status`,
   `.flag`, `.tint`, `.info`, `.seen`, `.restore`, `.restart`, `.background`, `.overlay.open`, `.overlay.close`, `.overlay.resize`,
   `.overlay.reload`, `.overlay.navigate`,
   `.overlay.result`, `.overlay.submit`, `.overlay.copy`, `.overlay.text`, `.overlay.job.run`, `.overlay.page.serve`, `.overlay.hide`,
@@ -611,6 +611,14 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `session.copy` read-back having no pane either. Omitted, and for select-all always, the pane is
   `Session.addressableSurface = surface ?? splitSurface`, never focus-aware `activeSurface`, so select-all
   and copy share one pane. Read paste through text and select-all through copy.
+- `session.paste.text` (CLI `session paste --stdin`) is its own wire command, never a `text` field on
+  `session.paste`: an older app already decodes `args.text` and would ignore it, pasting the clipboard instead.
+  It goes through `bindingSurface` plus `--pane-id` (`Session.paneAddress`), then `insertPasted`, which is
+  `ghostty_surface_text`: bracketed when the program set mode 2004, no paste-protection prompt, and ESC and the
+  control bytes replaced with spaces by libghostty's paste encoder, so the text cannot close the bracket.
+  `insertPasted` returns nothing, so the arm checks `isRealized` after the expedite. Not in `waitsOnNetwork`:
+  it copies nothing. agterm-server refuses it (`ServerCommandPolicy`) by approved exception: only the daemon's
+  terminal knows mode 2004, so parity needs a zmx patch. Read back through `session.text --pane-id`.
 - Keep standard SwiftUI Edit routing. `GhosttySurfaceView` implements Copy/Paste/Select All and validation;
   focused text fields retain their behavior, terminal Cut stays absent. Do not replace the combined
   pasteboard command group. Remove the separate Undo/Redo group because Command-Z belongs to Reopen Closed
