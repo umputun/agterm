@@ -182,19 +182,21 @@
   `scripts/setup.sh` (the `ZMX_REV` comment that names `DeviceAttributeResponder.swift`)
 - Delete: `docs/backlog/fast-live-command-loses-output-in-host-handoff.md`
 
-- [ ] tests first: ensure spawns `zmx attach --detached NAME payload` with `ZMX_HOLD_UNTIL_ATTACH` from
+- [x] tests first: ensure spawns `zmx attach --detached NAME payload` with `ZMX_HOLD_UNTIL_ATTACH` from
       `Host.Configuration`; a creator exit 0 plus a live host-rooted PTY child answers `.created`; a nonzero exit
       or no row answers `.started` failure; existing-daemon and no-replay cases keep their current outcomes
-- [ ] test the fix end to end through the host: a Live command that writes CPR and OSC 11 at exec gets the pane
+- [x] test the fix end to end through the host: a Live command that writes CPR and OSC 11 at exec gets the pane
       client's replies
-- [ ] convert `paneAttachAfterTheCreatedCommandEndedStartsNoShell` to the new contract: a fast command's
+- [x] convert `paneAttachAfterTheCreatedCommandEndedStartsNoShell` to the new contract: a fast command's
       output reaches the pane's attach and no shell starts; update its `ci-flakes.md` entry
-- [ ] implement the creator spawn through `PTYProcess.spawn`, readiness on creator exit, the bound as a
+- [x] implement the creator spawn through `PTYProcess.spawn`, readiness on creator exit, the bound as a
       `Host.Configuration` field, and remove `DeviceAttributeResponder`, `settleAttributeReplies` and the
       reply-write path; `SessionHost.protocolVersion` stays 1
-- [ ] `swift test --filter SessionHostRuntimeTests` passes; via `-only-testing`:
-      `ZmxLiveUITests/testAWaitCommandKeepsScrollbackPastOneScreenAfterExit` and
+- [x] `swift test --filter SessionHostRuntimeTests` passes
+- [ ] via `-only-testing`: `ZmxLiveUITests/testAWaitCommandKeepsScrollbackPastOneScreenAfterExit` and
       `ZmxLiveUITests/testBundledZmxBacksPrimaryAndSplitAndRunsLongCreationCommandOnce`
+- ⚠️ the two XCUITests need Eugene's go-ahead (`ui-tests.md`: ask before XCUITest; they send real input);
+  asked once at the end of the run, with any other XCUITest the later tasks name
 
 ### Task 3: parked child: no foreground, restart confirms after exec
 

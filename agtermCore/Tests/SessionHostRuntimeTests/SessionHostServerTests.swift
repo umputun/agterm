@@ -21,120 +21,6 @@ private let sessionHostFixtureReady = Responsibility.system.isAvailable
         #expect(FileManager.default.isExecutableFile(atPath: stagedZmxPath), "AGTERM_REQUIRE_ZMX is set but zmx is not staged at \(stagedZmxPath)")
     }
 
-    @Test func nativeReplyWritesPreservePartialAndTransientRemainders() throws {
-        for errors in [[Int32(2), -EINTR, 3], [-EAGAIN], [-EINTR, -EINTR, -EINTR, -EINTR]] {
-            let directory = try temporaryDirectory()
-            defer { try? FileManager.default.removeItem(at: directory) }
-            let output = directory.appendingPathComponent("output")
-            try Data("\u{1B}[c\u{1B}[>c".utf8).write(to: output)
-            let fd = open(output.path, O_RDONLY)
-            try #require(fd >= 0)
-            let process = try PTYProcess.spawn(argv: ["/bin/sleep", "30"], env: [:], cwd: directory.path, rows: 24, cols: 80)
-            defer { close(process.ptyFD) }
-            var steps = errors
-            var received: [UInt8] = []
-            var calls = 0
-            let child = NativeHostChild(.init(pid: process.pid, ptyFD: fd, execErrorFD: process.execErrorFD), writePTY: { target, bytes, count in
-                #expect(target == fd)
-                calls += 1
-                let step = steps.isEmpty ? Int32(count) : steps.removeFirst()
-                if step < 0 { errno = -step; return -1 }
-                let accepted = min(Int(step), count)
-                received += UnsafeBufferPointer(start: bytes.assumingMemoryBound(to: UInt8.self), count: accepted)
-                return accepted
-            })
-            defer { try? child.terminate(grace: 0.5) }
-            #expect(child.poll() == .running)
-            #expect(calls <= 4)
-            for _ in 0..<8 { #expect(child.poll() == .running) }
-            #expect(received == Array("\u{1B}[?62;22c\u{1B}[>1;10;0c".utf8))
-            try child.terminate(grace: 0.5)
-            #expect(child.hasExited)
-        }
-    }
-
-    @Test func nativeReplyBackpressureAndFailedWritesDoNotHoldTermination() throws {
-        for error in [EAGAIN, EIO] {
-            let directory = try temporaryDirectory()
-            defer { try? FileManager.default.removeItem(at: directory) }
-            let output = directory.appendingPathComponent("output")
-            try Data(String(repeating: "\u{1B}[>c", count: 30_000).utf8).write(to: output)
-            let fd = open(output.path, O_RDONLY)
-            try #require(fd >= 0)
-            let process = try PTYProcess.spawn(argv: ["/bin/sleep", "30"], env: [:], cwd: directory.path, rows: 24, cols: 80)
-            defer { close(process.ptyFD) }
-            var calls = 0
-            var maximum = 0
-            var writable = false
-            var pauses = 0
-            let child = NativeHostChild(.init(pid: process.pid, ptyFD: fd, execErrorFD: process.execErrorFD), writePTY: { _, _, count in
-                calls += 1
-                maximum = max(maximum, count)
-                if writable { return count }
-                errno = error
-                return -1
-            }, pause: { interval in
-                pauses += 1
-                Thread.sleep(forTimeInterval: interval)
-            })
-            defer { try? child.terminate(grace: 0.5) }
-            for _ in 0..<20 { #expect(child.poll() == .running) }
-            let stoppedOffset = lseek(fd, 0, SEEK_CUR)
-            let callsBefore = calls
-            for _ in 0..<20 { #expect(child.poll() == .running) }
-            #expect(lseek(fd, 0, SEEK_CUR) == stoppedOffset)
-            #expect(stoppedOffset < 120_000)
-            #expect(maximum <= 64 * 1024)
-            #expect(maximum >= 64 * 1024 - DeviceAttributeResponder.maximumReplyLength)
-            #expect(calls - callsBefore == 20)
-            writable = true
-            _ = child.poll()
-            _ = child.poll()
-            #expect(lseek(fd, 0, SEEK_CUR) > stoppedOffset)
-            writable = false
-            let start = ProcessInfo.processInfo.systemUptime
-            try child.terminate(grace: 0.5)
-            #expect(ProcessInfo.processInfo.systemUptime - start < 1.5)
-            #expect(child.hasExited)
-            if error == EIO { #expect(pauses == 0) }
-        }
-    }
-
-    @Test func nativeExitWithPendingRepliesDoesNotWriteReapedDescriptors() throws {
-        let directory = try temporaryDirectory()
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let output = directory.appendingPathComponent("output")
-        try Data("\u{1B}[c".utf8).write(to: output)
-        let fd = open(output.path, O_RDONLY)
-        try #require(fd >= 0)
-        let process = try PTYProcess.spawn(argv: ["/bin/sleep", "30"], env: [:], cwd: directory.path, rows: 24, cols: 80)
-        defer { close(process.ptyFD) }
-        var calls = 0
-        let child = NativeHostChild(.init(pid: process.pid, ptyFD: fd, execErrorFD: process.execErrorFD), writePTY: { _, _, _ in
-            calls += 1
-            errno = EAGAIN
-            return -1
-        })
-        defer { try? child.terminate(grace: 0.5) }
-        #expect(child.poll() == .running)
-        #expect(calls == 1)
-        #expect(kill(process.pid, SIGKILL) == 0)
-        let deadline = Date().addingTimeInterval(2)
-        while !child.hasExited && Date() < deadline {
-            let callsBeforePoll = calls
-            let state = child.poll()
-            if child.hasExited {
-                #expect(state == .exited)
-                #expect(calls == callsBeforePoll)
-            }
-            Thread.sleep(forTimeInterval: 0.005)
-        }
-        try #require(child.hasExited)
-        let callsAtExit = calls
-        try child.terminate(grace: 0.5)
-        #expect(calls == callsAtExit)
-    }
-
     @Test func existingDaemonDoesNotSpawnOrReplay() throws {
         let context = try Context()
         context.backend.records = [[context.record]]
@@ -143,8 +29,22 @@ private let sessionHostFixtureReady = Responsibility.system.isAvailable
         #expect(context.backend.child.terminations == 0)
     }
 
-    @Test func leaderOnSecondPollCreatesOnceAndReleasesOnlyTheClient() throws {
+    @Test func creationIsAHeldDetachedCreateOfThePayload() throws {
         let context = try Context()
+        context.backend.child.exit(0)
+        context.backend.records = [[], [context.record]]
+        let request = SessionHost.Ensure(name: context.name, argv: context.request.argv + ["/bin/sh", "-c", "codex"],
+                                         cwd: "/tmp", env: context.request.env.merging(["TERM": "xterm-256color"]) { $1 }, rows: 30, cols: 100)
+        #expect(context.host.handle(ensure: request) == .ok(.init(state: .created, leaderPid: 600)))
+        let spawned = try #require(context.backend.spawned.first)
+        #expect(spawned.argv == [request.argv[0], "attach", "--detached", context.name, "/bin/sh", "-c", "codex"])
+        #expect(spawned.env == request.env.merging(["ZMX_HOLD_UNTIL_ATTACH": "7"]) { $1 })
+        #expect([spawned.cwd, "\(spawned.rows)x\(spawned.cols)"] == ["/tmp", "30x100"])
+    }
+
+    @Test func leaderAfterTheCreatorExitedCreatesOnceAndReleasesOnlyTheCreator() throws {
+        let context = try Context()
+        context.backend.child.exit(0)
         context.backend.records = [[], [], [context.record]]
         #expect(context.host.handle(ensure: context.request) == .ok(.init(state: .created, leaderPid: 600)))
         #expect(context.backend.spawns == 1)
@@ -152,21 +52,43 @@ private let sessionHostFixtureReady = Responsibility.system.isAvailable
         #expect(context.backend.child.terminatedPIDs == [500])
     }
 
-    @Test func readinessTimeoutIsStartedAndNeverRetries() throws {
+    @Test func aRunningCreatorIsNotReadyEvenWithALeaderRow() throws {
         let context = try Context()
+        context.backend.records = [[], [context.record]]
         guard case .error(let error) = context.host.handle(ensure: context.request) else { Issue.record("expected timeout"); return }
         #expect(error.stage == .started)
-        #expect(context.backend.spawns == 1)
+        #expect(context.backend.listCalls == 1)
         #expect(context.backend.child.terminatedPIDs == [500])
         #expect(context.clock.time >= 0.3)
     }
 
-    @Test func earlyClientExitIsStartedAndReaped() throws {
+    @Test func aCreatorThatExitedWithoutALeaderRowTimesOutAsStarted() throws {
         let context = try Context()
-        context.backend.child.state = .exited
-        guard case .error(let error) = context.host.handle(ensure: context.request) else { Issue.record("expected early exit"); return }
+        context.backend.child.exit(0)
+        guard case .error(let error) = context.host.handle(ensure: context.request) else { Issue.record("expected timeout"); return }
         #expect(error.stage == .started)
         #expect(context.backend.spawns == 1)
+        #expect(context.backend.listCalls > 1)
+        #expect(context.clock.time >= 0.3)
+    }
+
+    @Test(arguments: [Int32(1 << 8), SIGKILL])
+    func aCreatorThatDidNotExitZeroIsStartedAndReaped(status: Int32) throws {
+        let context = try Context()
+        context.backend.child.exit(status)
+        context.backend.records = [[], [context.record]]
+        guard case .error(let error) = context.host.handle(ensure: context.request) else { Issue.record("expected failure"); return }
+        #expect(error.stage == .started)
+        #expect(context.backend.spawns == 1)
+        #expect(context.backend.listCalls == 1)
+        #expect(context.backend.child.terminations == 1)
+    }
+
+    @Test func aFailedCreatorIsStarted() throws {
+        let context = try Context()
+        context.backend.child.state = .failed
+        guard case .error(let error) = context.host.handle(ensure: context.request) else { Issue.record("expected failure"); return }
+        #expect(error.stage == .started)
         #expect(context.backend.child.terminations == 1)
     }
 
@@ -382,9 +304,11 @@ private let sessionHostFixtureReady = Responsibility.system.isAvailable
         let child = NativeHostChild(process)
         defer { try? child.terminate(grace: 0.5) }
         #expect(child.stopReason == nil)
+        #expect(child.exitStatus == nil)
         let deadline = ProcessInfo.processInfo.systemUptime + 5
         while child.poll() == .running, ProcessInfo.processInfo.systemUptime < deadline { Thread.sleep(forTimeInterval: 0.01) }
         #expect(child.poll() == .exited)
+        #expect(child.exitStatus == 7 << 8)
         #expect(child.stopReason == "exited with wait status \(7 << 8); output: cannot connect")
     }
 
@@ -736,213 +660,18 @@ private let sessionHostFixtureReady = Responsibility.system.isAvailable
         var time: TimeInterval = 0
     }
 
-    @Test func clientlessProbeCanProceedAfterAnUnansweredStartupQuery() throws {
-        let directory = try temporaryDirectory()
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let probe = try AttributeProbe(directory: directory, phases: 2, offsetMilliseconds: 0)
-        let process = try PTYProcess.spawn(argv: probe.argv, env: ["PATH": "/usr/bin:/bin"],
-                                           cwd: directory.path, rows: 24, cols: 80)
-        let child = NativeHostChild(process)
-        defer { try? child.terminate(grace: 0.5) }
-        try probe.wait(for: "written-1", timeout: 3)
-        #expect(!probe.exists("reply-1"))
-        try probe.signal(2)
-        try probe.wait(for: "written-2", timeout: 3)
-        #expect(probe.exists("abandoned-1"))
-        #expect(!probe.exists("reply-1"))
-        #expect(try probe.outcome(2, bound: 0.05) == "TIMEOUT")
-    }
-
-    @Test func teardownAnswersAQueryArrivingAfterItsFirstPass() throws {
-        let directory = try temporaryDirectory()
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let probe = try AttributeProbe(directory: directory, phases: 2, offsetMilliseconds: 0)
-        let process = try PTYProcess.spawn(argv: probe.argv, env: ["PATH": "/usr/bin:/bin"],
-                                           cwd: directory.path, rows: 24, cols: 80)
-        var released = false
-        let child = NativeHostChild(process, pause: { interval in
-            if !released {
-                released = true
-                try? probe.signal(2)
-                try? probe.wait(for: "written-2", timeout: 3)
-            }
-            Thread.sleep(forTimeInterval: interval)
-        }, signal: { pid, number in
-            if number == SIGTERM {
-                do { try probe.wait(for: "reply-2", timeout: 3) } catch { Issue.record(error) }
-            }
-            return kill(pid, number)
-        })
-        defer { try? child.terminate(grace: 0.5) }
-        let deadline = ProcessInfo.processInfo.systemUptime + 3
-        while !probe.exists("reply-1") {
-            try #require(ProcessInfo.processInfo.systemUptime < deadline, "markers=\(probe.markers())")
-            #expect(child.poll() == .running)
-            Thread.sleep(forTimeInterval: 0.002)
-        }
-        try child.terminate(grace: 0.5)
-        #expect(released)
-        #expect(try probe.outcome(2, bound: 0.5) == AttributeProbe.secondary, "markers=\(probe.markers())")
-    }
-
-    @Test func teardownDoesNotSignalAChildThatExitedWhileSettling() throws {
-        let directory = try temporaryDirectory()
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let process = try PTYProcess.spawn(argv: ["/bin/sh", "-c", "printf '\\033[c'; exec /bin/sleep 30"], env: [:],
-                                           cwd: directory.path, rows: 24, cols: 80)
-        var writes = 0
-        var signals: [Int32] = []
-        var killed = false
-        let child = NativeHostChild(process, writePTY: { _, _, count in writes += 1; return count },
-                                    pause: { interval in
-                                        if !killed {
-                                            killed = true
-                                            kill(process.pid, SIGKILL)
-                                            var info = siginfo_t()
-                                            waitid(P_PID, id_t(process.pid), &info, WEXITED | WNOWAIT)
-                                        }
-                                        Thread.sleep(forTimeInterval: interval)
-                                    },
-                                    signal: { pid, number in signals.append(number); return kill(pid, number) })
-        let deadline = ProcessInfo.processInfo.systemUptime + 3
-        while writes == 0 {
-            try #require(ProcessInfo.processInfo.systemUptime < deadline)
-            #expect(child.poll() == .running)
-            Thread.sleep(forTimeInterval: 0.002)
-        }
-        try child.terminate(grace: 0.5)
-        #expect(killed)
-        #expect(child.hasExited)
-        #expect(signals.isEmpty)
-    }
-
-    @Test func teardownWithoutAttributeTrafficSignalsWithoutPausing() throws {
-        let directory = try temporaryDirectory()
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let process = try PTYProcess.spawn(argv: ["/bin/sleep", "30"], env: [:], cwd: directory.path, rows: 24, cols: 80)
-        var pauses = 0
-        var writes = 0
-        let child = NativeHostChild(process, writePTY: { _, _, count in writes += 1; return count }, pause: { _ in pauses += 1 })
-        #expect(child.poll() == .running)
-        try child.terminate(grace: 0.5)
-        #expect(child.hasExited)
-        #expect(pauses == 0)
-        #expect(writes == 0)
-    }
-
-    @Test func teardownSettlingStopsAtItsLimit() throws {
-        let directory = try temporaryDirectory()
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let output = directory.appendingPathComponent("output")
-        try Data("\u{1B}[c".utf8).write(to: output)
-        let fd = open(output.path, O_RDONLY)
-        try #require(fd >= 0)
-        let process = try PTYProcess.spawn(argv: ["/bin/sleep", "30"], env: [:], cwd: directory.path, rows: 24, cols: 80)
-        defer { close(process.ptyFD) }
-        let clock = Clock()
-        var paused: TimeInterval = 0
-        let child = NativeHostChild(.init(pid: process.pid, ptyFD: fd, execErrorFD: process.execErrorFD),
-                                    writePTY: { _, _, _ in errno = EAGAIN; return -1 },
-                                    now: { clock.time }, pause: { clock.time += $0; paused += $0 })
-        #expect(child.poll() == .running)
-        try child.terminate(grace: 0.5)
-        #expect(child.hasExited)
-        #expect(paused >= NativeHostChild.settleLimit)
-        #expect(paused < NativeHostChild.settleLimit + 2 * NativeHostChild.settleStep)
-    }
-
+    // regression: a command that ended before the pane attached lost its output to the creation's own attach
     @Test(.enabled(if: sessionHostFixtureReady, "needs the responsibility SPI and staged zmx"))
-    func attachedWindowRepliesBeforeReadiness() throws {
-        try attachedProbe(transition: false)
-    }
-
-    @Test(.enabled(if: sessionHostFixtureReady, "needs the responsibility SPI and staged zmx"))
-    func readinessTransitionMeasuresWrittenQuerySeparatelyFromReceivedReply() throws {
-        try attachedProbe(transition: true)
-    }
-
-    private func attachedProbe(transition: Bool) throws {
-        let fixture = try Fixture()
-        defer { fixture.cleanup() }
-        let probe = try AttributeProbe(directory: fixture.directory, phases: transition ? 3 : 2)
-        let backend = AttachedBackend(fixture: fixture, probe: probe, transition: transition)
-        let root = try #require(Responsibility.system.responsibleProcess(of: getpid()))
-        let identity = SessionHost.Hello(bundleID: fixture.identity.bundleID, bundlePath: fixture.bundle.path, pid: root)
-        let host = try SessionHostRuntime.Host(configuration: .init(socketDirectory: fixture.environment["ZMX_DIR"]!,
-                                                                  identity: identity, zmxPath: fixture.zmx.path,
-                                                                  ensureTimeout: 12, pollInterval: 0.005), backend: backend)
-        let response = host.handle(ensure: fixture.probeRequest(probe))
-        try #require(backend.sawInitialization,
-                     "stock zmx did not expose the init resize witness; response=\(response); child=\(backend.child?.stopReason ?? "running")")
-        let primaryMatches = try probe.result(1) == AttributeProbe.primary
-        let secondaryMatches = try probe.result(2) == AttributeProbe.secondary
-        #expect(backend.attachedThroughout)
-        #expect(primaryMatches)
-        #expect(secondaryMatches)
-        guard case .ok = response else { Issue.record("creation failed: \(response)"); return }
-        if transition {
-            #expect(probe.exists("written-3"))
-            #expect(try probe.outcome(3, bound: 3) == AttributeProbe.primary, "markers=\(probe.markers())")
-        }
-        print("attached-window: init witness=\(backend.sawInitialization); DA1 exact=\(primaryMatches); DA2 exact=\(secondaryMatches); attach alive=\(backend.attachedThroughout)")
-    }
-
-    @Test(.enabled(if: sessionHostFixtureReady, "needs the responsibility SPI and staged zmx"))
-    func realHostStartupReplyAndClientlessControl() throws {
+    func aFastCommandsOutputReachesThePaneAndNoShellStarts() throws {
         let fixture = try Fixture()
         defer { fixture.cleanup() }
         try fixture.start()
-        let probe = try AttributeProbe(directory: fixture.directory, phases: 2, offsetMilliseconds: 0)
-        let exchange = try fixture.beginExchange(.ensure(fixture.probeRequest(probe)))
-        let startup = try probe.observe(1, bound: 3, exchange: exchange, fixture: fixture)
-        let startupMatches = startup.outcome == AttributeProbe.primary
-        #expect(startupMatches || startup.outcome == "TIMEOUT")
-        guard case .ok = try exchange.finish().last else { Issue.record("real host ensure failed"); return }
-        // each poll spawns a zmx list process, so this one is deliberately slow.
-        while try fixture.list().first?.clients != 0 {
-            guard ProcessInfo.processInfo.systemUptime < exchange.deadline else { throw POSIXError(.ETIMEDOUT) }
-            Thread.sleep(forTimeInterval: 0.02)
-        }
-        try probe.signal(2)
-        let controlOutcome = try probe.outcome(2, bound: 3)
-        let controlMatches = controlOutcome == AttributeProbe.secondary
-        #expect(controlMatches, "DA2 outcome=\(String(reflecting: controlOutcome)); markers=\(probe.markers())")
-        print("real-host startup: phase at emission=\(startup.phase); DA1 exact=\(startupMatches); clientless DA2 exact=\(controlMatches)")
-    }
+        guard let pane = try createdPane(fixture, payload: ["/bin/sh", "-c", "printf FAST-OUTPUT"]) else { return }
+        try #require(try fixture.list().contains(where: { $0.name == pane.name }), "the held command ended before the pane attached")
 
-    // regression: a pane attaching after its created command ended got a fresh login shell instead
-    @Test(.enabled(if: sessionHostFixtureReady, "needs the responsibility SPI and staged zmx"))
-    func paneAttachAfterTheCreatedCommandEndedStartsNoShell() throws {
-        let fixture = try Fixture()
-        defer { fixture.cleanup() }
-        try fixture.start()
-        let gate = fixture.directory.appendingPathComponent("gate")
-        try #require(mkfifo(gate.path, 0o600) == 0)
-        let name = ZmxSupport.daemonName(for: UUID())
-        fixture.names.append(name)
-        let request = SessionHost.Ensure(name: name, argv: [fixture.zmx.path, "attach", name, "/bin/sh", "-c", "read _ < '\(gate.path)'; printf X"],
-                                         cwd: fixture.directory.path, env: fixture.environment, rows: 24, cols: 80)
-        let reply = try #require(try fixture.exchange(.ensure(request)).last)
-        guard case .ok(let ready) = reply, ready.state == .created else {
-            Issue.record("creation was not confirmed: \(reply); log: \(fixture.hostLog())")
-            return
-        }
-
-        var paneArgv: [String] = []
-        let client = Client(connect: { ForwardingPeer(reply: reply) }, diagnostic: { _ in },
-                            execute: { argv, _ in paneArgv = argv })
-        try client.run(request: request, endsPane: true)
-        try #require(!paneArgv.isEmpty)
-        let writer = open(gate.path, O_WRONLY)
-        try #require(writer >= 0)
-        _ = "\n".withCString { write(writer, $0, 1) }
-        close(writer)
-        let gone = Date().addingTimeInterval(5)
-        while try fixture.list().contains(where: { $0.name == name }), Date() < gone { Thread.sleep(forTimeInterval: 0.02) }
-        try #require(try !fixture.list().contains(where: { $0.name == name }), "the created command never ended")
-
-        let pane = try PTYProcess.spawn(argv: paneArgv, env: request.env, cwd: request.cwd, rows: 24, cols: 80)
-        defer { close(pane.ptyFD) }
+        let attach = try PTYProcess.spawn(argv: pane.argv, env: pane.request.env, cwd: pane.request.cwd, rows: 24, cols: 80)
+        let attachChild = NativeHostChild(attach)
+        defer { try? attachChild.terminate(grace: 1) }
         var status: Int32 = 0
         var ended = false
         var lastWait: pid_t = 0
@@ -950,28 +679,82 @@ private let sessionHostFixtureReady = Responsibility.system.isAvailable
         var screen = ""
         let clock = ContinuousClock()
         let windowStart = clock.now
-        let attachDeadline = Date().addingTimeInterval(3)
+        let attachDeadline = Date().addingTimeInterval(10)
         while !ended, Date() < attachDeadline {
             // zmx restores the terminal with TCSAFLUSH on exit, which blocks until the master reads its output
-            screen += Self.available(pane.ptyFD)
-            lastWait = waitpid(pane.pid, &status, WNOHANG)
+            screen += Self.available(attach.ptyFD)
+            lastWait = waitpid(attach.pid, &status, WNOHANG)
             lastErrno = lastWait == -1 ? errno : 0
-            ended = lastWait == pane.pid
+            ended = lastWait == attach.pid
             if !ended { Thread.sleep(forTimeInterval: 0.02) }
         }
+        screen += Self.available(attach.ptyFD)
         let elapsed = clock.now - windowStart
-        #expect(ended, "the pane's attach to an ended command kept running")
+        #expect(ended, "the pane's attach to a fast command kept running")
         if !ended {
             Issue.record("""
                 stall report:
-                \(StalledAttach(pane: pane, argv: paneArgv, daemon: name, elapsed: elapsed, lastWait: lastWait,
+                \(StalledAttach(pane: attach, argv: pane.argv, daemon: pane.name, elapsed: elapsed, lastWait: lastWait,
                                 lastErrno: lastErrno, screen: screen).report(fixture: fixture))
                 """)
-            kill(pane.pid, SIGKILL)
-            _ = waitpid(pane.pid, &status, 0)
         }
-        let leftover = try fixture.list().filter { $0.name == name }
+        #expect(screen.contains("FAST-OUTPUT"), "screen: \(screen.debugDescription)")
+        #expect(!screen.contains("session is gone"), "screen: \(screen.debugDescription)")
+        let leftover = try fixture.list().filter { $0.name == pane.name }
         #expect(leftover.isEmpty, "a daemon started under the ended command's name: \(leftover)")
+    }
+
+    @Test(.enabled(if: sessionHostFixtureReady, "needs the responsibility SPI and staged zmx"))
+    func startupTerminalQueriesReachThePaneAndItsRepliesReachTheCommand() throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.start()
+        let probe = #"stty raw -echo; printf '\033[6n\033]11;?\033\\'; "#
+            + #"IFS= read -r -t 5 -d R cpr && IFS= read -r -t 5 -d '\' osc && "#
+            + #"[ "$cpr" = $'\e[5;7' ] && [ "$osc" = $'\e]11;rgb:3030/3030/3030\e' ] && result=OK || result=MISSING; "#
+            + #"stty sane; printf 'REPLIES-%s.' "$result"; sleep 30"#
+        guard let pane = try createdPane(fixture, payload: ["/bin/bash", "-c", probe]) else { return }
+
+        let attach = try PTYProcess.spawn(argv: pane.argv, env: pane.request.env, cwd: pane.request.cwd, rows: 24, cols: 80)
+        let attachChild = NativeHostChild(attach)
+        defer { try? attachChild.terminate(grace: 1) }
+        var screen = ""
+        var answered = false
+        let deadline = Date().addingTimeInterval(10)
+        while !screen.contains("REPLIES-OK."), !screen.contains("REPLIES-MISSING."), Date() < deadline {
+            screen += Self.available(attach.ptyFD)
+            if !answered, screen.contains("\u{1B}[6n"), screen.contains("\u{1B}]11;?\u{1B}\\") {
+                answered = true
+                let replies = Array("\u{1B}[5;7R\u{1B}]11;rgb:3030/3030/3030\u{1B}\\".utf8)
+                try #require(replies.withUnsafeBytes { write(attach.ptyFD, $0.baseAddress, $0.count) } == replies.count)
+            }
+            Thread.sleep(forTimeInterval: 0.02)
+        }
+        #expect(answered, "the pane never saw the startup queries; screen: \(screen.debugDescription)")
+        #expect(screen.contains("REPLIES-OK."), "screen: \(screen.debugDescription); log: \(fixture.hostLog())")
+    }
+
+    private struct CreatedPane {
+        let name: String
+        let request: SessionHost.Ensure
+        let argv: [String]
+    }
+
+    private func createdPane(_ fixture: Fixture, payload: [String]) throws -> CreatedPane? {
+        let name = ZmxSupport.daemonName(for: UUID())
+        fixture.names.append(name)
+        let request = SessionHost.Ensure(name: name, argv: [fixture.zmx.path, "attach", name] + payload,
+                                         cwd: fixture.directory.path, env: fixture.environment, rows: 24, cols: 80)
+        let reply = try #require(try fixture.exchange(.ensure(request)).last)
+        guard case .ok(let ready) = reply, ready.state == .created else {
+            Issue.record("creation was not confirmed: \(reply); log: \(fixture.hostLog())")
+            return nil
+        }
+        var argv: [String] = []
+        let client = Client(connect: { ForwardingPeer(reply: reply) }, diagnostic: { _ in }, execute: { attach, _ in argv = attach })
+        try client.run(request: request, endsPane: true)
+        try #require(!argv.isEmpty)
+        return CreatedPane(name: name, request: request, argv: argv)
     }
 
     private struct StalledAttach {
@@ -1076,252 +859,16 @@ private let sessionHostFixtureReady = Responsibility.system.isAvailable
         func close() {}
     }
 
-    private static let sweepTrials = 5
-
-    @Test(.enabled(if: sessionHostFixtureReady && ProcessInfo.processInfo.environment["AGTERM_DA_SWEEP"] != nil,
-                  "needs AGTERM_DA_SWEEP and the responsibility SPI and staged zmx"),
-          arguments: [0, 5, 20, 50, 100, 200])
-    func realHostAttachedTimingSweep(offsetMilliseconds: Int) throws {
-        var answered = 0
-        var timedOut = 0
-        var maximumLatency: TimeInterval = 0
-        var maximumOffset: TimeInterval = 0
-        var notCreated = 0
-        var phases: [String: Int] = [:]
-        for _ in 0..<Self.sweepTrials {
-            let outcome = try realHostProbe(offsetMilliseconds: offsetMilliseconds)
-            if outcome.answered {
-                answered += 1
-                maximumLatency = max(maximumLatency, outcome.latency)
-            } else {
-                timedOut += 1
-            }
-            maximumOffset = max(maximumOffset, outcome.achievedOffset)
-            if !outcome.ensured { notCreated += 1 }
-            phases[outcome.phase, default: 0] += 1
-        }
-        let observed = phases.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: ",")
-        print("""
-              DA sweep offset_ms=\(offsetMilliseconds) trials=\(Self.sweepTrials) answered=\(answered) \
-              timed_out=\(timedOut) max_answered_latency_ms=\(Int((maximumLatency * 1000).rounded())) \
-              max_achieved_offset_ms=\(Int((maximumOffset * 1000).rounded())) ensure_not_ok=\(notCreated) \
-              phases=\(observed)
-              """)
-    }
-
-    private struct Trial {
-        let answered: Bool
-        let latency: TimeInterval
-        let achievedOffset: TimeInterval
-        let phase: String
-        let ensured: Bool
-    }
-
-    private func realHostProbe(offsetMilliseconds: Int) throws -> Trial {
-        let fixture = try Fixture()
-        defer { fixture.cleanup() }
-        try fixture.start()
-        let probe = try AttributeProbe(directory: fixture.directory, phases: 1, offsetMilliseconds: offsetMilliseconds)
-        let exchange = try fixture.beginExchange(.ensure(fixture.probeRequest(probe)))
-        let observation = try probe.observe(1, bound: 3, exchange: exchange, fixture: fixture)
-        let answered = observation.outcome == AttributeProbe.primary
-        #expect(answered || observation.outcome == "TIMEOUT")
-        let responses = try exchange.finish()
-        var ensured = false
-        if case .ok = responses.last {
-            ensured = true
-        } else {
-            Issue.record("real host ensure failed at offset \(offsetMilliseconds) ms: \(responses)")
-        }
-        let latency = answered ? try probe.interval(from: "written-1", to: "reply-1") : 3
-        return Trial(answered: answered, latency: latency,
-                     achievedOffset: try probe.interval(from: "started", to: "written-1"),
-                     phase: observation.phase, ensured: ensured)
-    }
-
-    private final class AttachedBackend: HostBackend {
-        let native: NativeHostBackend
-        let fixture: Fixture
-        let probe: AttributeProbe
-        let transition: Bool
-        var child: (any HostChild)?
-        var sawInitialization = false
-        var attachedThroughout = true
-        var released = 0
-
-        init(fixture: Fixture, probe: AttributeProbe, transition: Bool) {
-            self.fixture = fixture
-            self.probe = probe
-            self.transition = transition
-            native = NativeHostBackend(socketDirectory: fixture.environment["ZMX_DIR"]!, zmxPath: fixture.zmx.path,
-                                       environment: fixture.environment)
-        }
-
-        func list(deadline: TimeInterval) throws -> [ZmxSessionRecord] {
-            let records = try native.list(deadline: deadline)
-            guard let child else { return records }
-            attachedThroughout = attachedThroughout && !child.hasExited && kill(child.pid, 0) == 0
-            if !sawInitialization { sawInitialization = fixture.hasInitializationLog() }
-            guard sawInitialization else { return [] }
-            if released == 0 {
-                try probe.signal(1)
-                released = 1
-            }
-            if released == 1 && probe.exists("reply-1") {
-                try probe.signal(2)
-                released = 2
-            }
-            guard probe.exists("reply-2") else { return [] }
-            if transition && released == 2 {
-                try probe.signal(3)
-                released = 3
-                // only the readiness transition waits for emission; regular listing never blocks the drain loop.
-                try probe.wait(for: "written-3", timeout: 1)
-            }
-            return records
-        }
-
-        func spawn(_ request: SessionHost.Ensure) throws -> any HostChild {
-            let child = try native.spawn(request)
-            self.child = child
-            return child
-        }
-
-        func responsibleProcess(of pid: Int32) -> Int32? { native.responsibleProcess(of: pid) }
-        func daemonPID(for leader: Int32) -> Int32? { native.daemonPID(for: leader) }
-        func isAlive(_ pid: Int32) -> Bool { native.isAlive(pid) }
-    }
-
-    private final class AttributeProbe {
-        static let primary = "\u{1B}[?62;22c"
-        static let secondary = "\u{1B}[>1;10;0c"
-        let directory: URL
-        let script: URL
-        let phases: Int
-        let offset: String
-
-        init(directory: URL, phases: Int, offsetMilliseconds: Int = -1) throws {
-            self.directory = directory.appendingPathComponent("probe-\(UUID().uuidString)")
-            self.phases = phases
-            // a negative offset gates phase one on its go marker too.
-            offset = offsetMilliseconds < 0 ? "-1" : String(format: "%.3f", Double(offsetMilliseconds) / 1000)
-            script = self.directory.appendingPathComponent("probe.bash")
-            try FileManager.default.createDirectory(at: self.directory, withIntermediateDirectories: true)
-            let source = #"""
-            marker_dir=$1
-            phases=$2
-            offset=$3
-            printf started > "$marker_dir/started"
-            saved=$(stty -g)
-            reader=
-            trap '[ -z "$reader" ] || { kill -KILL "$reader" 2>/dev/null; wait "$reader" 2>/dev/null; }; stty "$saved"' EXIT
-            phase=1
-            while [ "$phase" -le "$phases" ]; do
-                stty raw -echo
-                if [ "$phase" -eq 1 ] && [ "$offset" != "-1" ]; then
-                    [ "$offset" = "0.000" ] || sleep "$offset"
-                else
-                    deadline=$((SECONDS + 12))
-                    while [ ! -f "$marker_dir/go-$phase" ]; do
-                        [ "$SECONDS" -lt "$deadline" ] || exit 2
-                        sleep 0.005
-                    done
-                fi
-                if [ "$phase" -eq 2 ]; then printf '\033[>c'; else printf '\033[c'; fi
-                printf written > "$marker_dir/written-$phase"
-                # a separate reader lets the next go marker cancel an unanswered phase.
-                (
-                    reply=
-                    if IFS= read -r -d c reply; then
-                        printf '%sc' "$reply" > "$marker_dir/reply-$phase.tmp"
-                        mv "$marker_dir/reply-$phase.tmp" "$marker_dir/reply-$phase"
-                    fi
-                ) < /dev/tty &
-                reader=$!
-                next=$((phase + 1))
-                while [ ! -f "$marker_dir/reply-$phase" ] && [ ! -f "$marker_dir/go-$next" ]; do
-                    kill -0 "$reader" 2>/dev/null || [ -f "$marker_dir/reply-$phase" ] || exit 3
-                    sleep 0.005
-                done
-                if [ ! -f "$marker_dir/reply-$phase" ]; then
-                    kill -KILL "$reader" 2>/dev/null
-                    printf abandoned > "$marker_dir/abandoned-$phase"
-                fi
-                wait "$reader" 2>/dev/null
-                reader=
-                stty "$saved"
-                phase=$((phase + 1))
-            done
-            sleep 30
-            """#
-            try source.write(to: script, atomically: true, encoding: .utf8)
-        }
-
-        var argv: [String] { ["/bin/bash", script.path, directory.path, String(phases), offset] }
-        func markers() -> [String] { (try? FileManager.default.contentsOfDirectory(atPath: directory.path).sorted()) ?? [] }
-        func exists(_ marker: String) -> Bool { FileManager.default.fileExists(atPath: directory.appendingPathComponent(marker).path) }
-        func signal(_ phase: Int) throws { try Data().write(to: directory.appendingPathComponent("go-\(phase)")) }
-        func result(_ phase: Int) throws -> String { try String(contentsOf: directory.appendingPathComponent("reply-\(phase)"), encoding: .utf8) }
-
-        /// The phase is zmx's client count sampled once the query is written: the attach is no child of the host.
-        func observe(_ phase: Int, bound: TimeInterval, exchange: PendingExchange,
-                     fixture: Fixture) throws -> (phase: String, outcome: String) {
-            var label = "unknown"
-            var limit: TimeInterval?
-            var outcome: String?
-            while outcome == nil {
-                if limit == nil, exists("written-\(phase)") {
-                    limit = ProcessInfo.processInfo.systemUptime + bound
-                    label = fixture.clientPhase()
-                }
-                if exists("reply-\(phase)") {
-                    outcome = try result(phase)
-                } else if let limit, ProcessInfo.processInfo.systemUptime >= limit {
-                    outcome = "TIMEOUT"
-                } else {
-                    guard ProcessInfo.processInfo.systemUptime < exchange.deadline else { throw POSIXError(.ETIMEDOUT) }
-                    Thread.sleep(forTimeInterval: 0.001)
-                }
-            }
-            return (label, outcome!)
-        }
-
-        func outcome(_ phase: Int, bound: TimeInterval) throws -> String {
-            let limit = ProcessInfo.processInfo.systemUptime + bound
-            while !exists("reply-\(phase)") {
-                guard ProcessInfo.processInfo.systemUptime < limit else { return "TIMEOUT" }
-                Thread.sleep(forTimeInterval: 0.001)
-            }
-            return try result(phase)
-        }
-
-        /// Marker mtimes are the clock: bash 3.2 has no sub-second time source.
-        func interval(from start: String, to end: String) throws -> TimeInterval {
-            try modified(end).timeIntervalSince(modified(start))
-        }
-
-        private func modified(_ marker: String) throws -> Date {
-            let attributes = try FileManager.default.attributesOfItem(atPath: directory.appendingPathComponent(marker).path)
-            guard let date = attributes[.modificationDate] as? Date else { throw POSIXError(.EIO) }
-            return date
-        }
-        func wait(for marker: String, timeout: TimeInterval) throws {
-            let deadline = ProcessInfo.processInfo.systemUptime + timeout
-            while !exists(marker) {
-                guard ProcessInfo.processInfo.systemUptime < deadline else {
-                    print("probe wait timed out: marker=\(marker); markers=\(markers())")
-                    throw POSIXError(.ETIMEDOUT)
-                }
-                Thread.sleep(forTimeInterval: 0.001)
-            }
-        }
-    }
-
     private final class Child: HostChild {
         let pid: Int32 = 500
         var state: HostChildState = .running
         var hasExited = false
+        var exitStatus: Int32?
         var stopReason: String?
+        func exit(_ status: Int32) {
+            state = .exited
+            exitStatus = status
+        }
         var terminations = 0
         var terminatedPIDs: [Int32] = []
         func poll() -> HostChildState { state }
@@ -1338,6 +885,7 @@ private let sessionHostFixtureReady = Responsibility.system.isAvailable
         var failListing = false
         var listCalls = 0
         var spawns = 0
+        var spawned: [SessionHost.Ensure] = []
         var root: Int32? = getpid()
         var roots: [Int32: Int32] = [:]
         var onList: (() -> Void)?
@@ -1350,6 +898,7 @@ private let sessionHostFixtureReady = Responsibility.system.isAvailable
         }
         func spawn(_ request: SessionHost.Ensure) throws -> any HostChild {
             spawns += 1
+            spawned.append(request)
             return try spawnOverride?(request) ?? child
         }
         func responsibleProcess(of pid: Int32) -> Int32? { roots[pid] ?? root }
@@ -1371,7 +920,8 @@ private let sessionHostFixtureReady = Responsibility.system.isAvailable
             let clock = clock
             let config = SessionHostRuntime.Host.Configuration(socketDirectory: "/tmp/host-unit",
                                             identity: .init(bundleID: "com.umputun.agterm", bundlePath: "/Applications/agterm.app", pid: getpid()),
-                                            zmxPath: request.argv[0], ensureTimeout: 0.3, pollInterval: 0.1, terminationGrace: 0.05)
+                                            zmxPath: request.argv[0], ensureTimeout: 0.3, pollInterval: 0.1, terminationGrace: 0.05,
+                                            attachHold: 7)
             host = try SessionHostRuntime.Host(configuration: config, backend: backend,
                             now: realClock ? { ProcessInfo.processInfo.systemUptime } : { clock.time },
                             pause: realClock ? { Thread.sleep(forTimeInterval: $0) } : { clock.time += $0 })
@@ -1515,32 +1065,6 @@ private let sessionHostFixtureReady = Responsibility.system.isAvailable
             (try? String(contentsOfFile: paths.log, encoding: .utf8)) ?? "none"
         }
 
-        func probeRequest(_ probe: AttributeProbe) -> SessionHost.Ensure {
-            let name = ZmxSupport.daemonName(for: UUID())
-            names.append(name)
-            return .init(name: name, argv: [zmx.path, "attach", name] + probe.argv, cwd: directory.path,
-                         env: environment, rows: 24, cols: 80)
-        }
-
-        func hasInitializationLog() -> Bool {
-            guard let files = FileManager.default.enumerator(at: directory, includingPropertiesForKeys: nil) else { return false }
-            for case let file as URL in files where file.pathExtension == "log" {
-                if let text = try? String(contentsOf: file, encoding: .utf8), text.contains("init resize rows=24 cols=80") { return true }
-            }
-            return false
-        }
-
-        func clientPhase() -> String {
-            guard let clients = (try? list())?.first?.clients else { return "unknown" }
-            return clients > 0 ? "client-connected" : "clientless"
-        }
-
-        func beginExchange(_ request: SessionHost.Request) throws -> PendingExchange {
-            var data = try SessionHost.encodeFrame(SessionHost.Request.hello(identity))
-            data.append(try SessionHost.encodeFrame(request))
-            return try PendingExchange(fixture: self, data: data)
-        }
-
         func exchange(_ request: SessionHost.Request) throws -> [SessionHost.Response] {
             var data = try SessionHost.encodeFrame(SessionHost.Request.hello(identity))
             data.append(try SessionHost.encodeFrame(request))
@@ -1629,51 +1153,6 @@ private let sessionHostFixtureReady = Responsibility.system.isAvailable
                                           reason: process.terminationReason, stderr: stderr)
             }
             return output.fileHandleForReading.readDataToEndOfFile()
-        }
-    }
-
-    private final class PendingExchange {
-        let process = Process()
-        let output: URL
-        let inputHandle: FileHandle
-        let outputHandle: FileHandle
-        let deadline = ProcessInfo.processInfo.systemUptime + 25
-
-        init(fixture: Fixture, data: Data) throws {
-            let input = fixture.directory.appendingPathComponent("request-\(UUID().uuidString)")
-            output = fixture.directory.appendingPathComponent("response-\(UUID().uuidString)")
-            try data.write(to: input)
-            try Data().write(to: output)
-            inputHandle = try FileHandle(forReadingFrom: input)
-            outputHandle = try FileHandle(forWritingTo: output)
-            process.executableURL = fixture.client
-            process.arguments = ["-U", fixture.paths.socket]
-            process.environment = fixture.environment
-            process.standardInput = inputHandle
-            process.standardOutput = outputHandle
-            process.standardError = FileHandle.nullDevice
-            try process.run()
-        }
-
-        deinit {
-            if process.isRunning { kill(process.processIdentifier, SIGKILL) }
-            try? inputHandle.close()
-            try? outputHandle.close()
-        }
-
-        func finish() throws -> [SessionHost.Response] {
-            while process.isRunning {
-                guard ProcessInfo.processInfo.systemUptime < deadline else {
-                    kill(process.processIdentifier, SIGKILL)
-                    throw POSIXError(.ETIMEDOUT)
-                }
-                Thread.sleep(forTimeInterval: 0.001)
-            }
-            return try Data(contentsOf: output).split(separator: 0x0A).map { line in
-                var frame = Data(line)
-                frame.append(0x0A)
-                return try SessionHost.decodeFrame(SessionHost.Response.self, from: frame)
-            }
         }
     }
 }
