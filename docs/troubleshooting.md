@@ -372,16 +372,15 @@ A live session whose pane reads `supervisor` was started through a small helper 
 host, and stays tied to the host that started it. Since [#971](https://github.com/umputun/agterm/issues/971)
 a changed helper build or a new login gets its own host, so new sessions always start under the current
 one; a session that was already running keeps its earlier host, because macOS cannot move a running
-process to another. An update deletes the earlier host's program file, and macOS then refuses that
+process to another. An update deletes the earlier host's program file, and macOS can then refuse that
 session's microphone requests.
 
 `agtermctl tree --json` marks such a pane with `liveHostStale` (or `splitLiveHostStale`). The mark
 means only that the host is older: such a pane may still work, and there is no need to reset after every
 update. When one of these problems shows up, Agterm ▸ Reset Live Sessions… moves those sessions to the
-current host, as described in the previous section: it ends their processes and recreates them, and it can
-include sessions that still work. To check the microphone before ending running work, try it in a new live
-session first. At every
-launch agterm asks each earlier host to stop, and one stops once no live session runs under it. The single
+current host, as described in the previous section: it ends and recreates the panes it selects, which can
+include working panes. To check the microphone before ending running work, try it in a new live session
+first. At every launch agterm asks each earlier host to stop, and one stops once no live session runs under it. The single
 shared host that agterm used before #971 counts as an earlier host.
 
 ## Live sessions close when macOS force-quits a program started in one

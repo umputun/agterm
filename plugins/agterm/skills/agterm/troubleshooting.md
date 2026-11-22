@@ -147,10 +147,10 @@ Check these in order:
 - **An older live session cannot use the microphone or reach the local network after an update, or reports
   `No user exists for uid 501` after a forced logout.** A changed helper build or a new login gets its own session
   host, and a session keeps the host it started under; `agtermctl tree --json` marks it `liveHostStale` (or
-  `splitLiveHostStale` for its right pane). An update deletes the earlier host's program file, and macOS then
-  refuses that session's microphone requests; a new live session still works. The mark alone is no reason to
-  reset. Agterm ▸ Reset Live Sessions… (or `agtermctl zmx reset --force`) moves it to the current host together
-  with every other session the reset selects, working ones included, with the same cost as any reset;
+  `splitLiveHostStale` for its right pane). An update deletes the earlier host's program file, and macOS can then
+  refuse that session's microphone requests; a new live session still works. The mark alone is no reason to
+  reset. Agterm ▸ Reset Live Sessions… (or `agtermctl zmx reset --force`) moves it to the current host: it ends
+  and recreates the panes it selects, which can include working panes, with the same cost as any reset;
   at every launch agterm asks each earlier host to stop, and one stops once no live session runs under it.
 - **Live sessions close about 30 seconds after a GUI program starts from one.** macOS force-quits a program
   switched off in System Settings ▸ General ▸ Login Items ▸ Allow in the Background, together with the
