@@ -163,11 +163,17 @@ extension WorkspaceSidebar.Coordinator {
                 sessionTargets.contains { ownerWorkspaceID(ofSession: $0) != workspace.id }
                     && store.canMoveSessions(sessionTargets, toWorkspace: workspace.id)
             }
-            if sessionCount == 1, let id = sessionTargets.first, let submenu = companionMoveMenu(for: id) {
-                let moveTo = NSMenuItem(title: "Move to", action: nil, keyEquivalent: "")
-                moveTo.submenu = submenu
-                moveTo.isEnabled = !serverBlocked
-                menu.addItem(moveTo)
+            let companionID = sessionCount == 1 ? sessionTargets.first : nil
+            let promotions = companionID.flatMap(companionPromotionMenu(for:))
+            let parents = companionID.flatMap(companionParentMenu(for:))
+            if promotions != nil || parents != nil {
+                for (title, submenu) in [("Move to", promotions), ("Move Under", parents)] {
+                    guard let submenu else { continue }
+                    let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+                    item.submenu = submenu
+                    item.isEnabled = !serverBlocked
+                    menu.addItem(item)
+                }
             } else if !targets.isEmpty || ownerLacksRoot {
                 let moveTo = NSMenuItem(title: "Move to", action: nil, keyEquivalent: "")
                 let submenu = NSMenu()
@@ -326,8 +332,8 @@ extension WorkspaceSidebar.Coordinator {
         store.moveSessions(request.sessionIDs, toWorkspace: targetID)
     }
 
-    private func companionMoveMenu(for id: UUID) -> NSMenu? {
-        guard let parentID = store.session(withID: id)?.parentID else { return nil }
+    private func companionPromotionMenu(for id: UUID) -> NSMenu? {
+        guard store.session(withID: id)?.parentID != nil else { return nil }
         let submenu = NSMenu()
         submenu.autoenablesItems = false
         // an owner predating top-level sessions has no root to promote into
@@ -343,6 +349,13 @@ extension WorkspaceSidebar.Coordinator {
             item.representedObject = SessionBatchRequest(sessionIDs: [id], targetID: workspace.id)
             submenu.addItem(item)
         }
+        return submenu.items.isEmpty ? nil : submenu
+    }
+
+    private func companionParentMenu(for id: UUID) -> NSMenu? {
+        guard let parentID = store.session(withID: id)?.parentID else { return nil }
+        let submenu = NSMenu()
+        submenu.autoenablesItems = false
         for workspace in store.displayWorkspaces {
             let parents = workspace.sessions.filter { candidate in
                 guard candidate.parentID == nil, candidate.id != parentID else { return false }
@@ -350,7 +363,6 @@ extension WorkspaceSidebar.Coordinator {
                 return false
             }
             guard !parents.isEmpty else { continue }
-            if !submenu.items.isEmpty, !submenu.items.contains(where: \.isSectionHeader) { submenu.addItem(.separator()) }
             submenu.addItem(.sectionHeader(title: workspace.label))
             for parent in parents {
                 let item = NSMenuItem(title: parent.displayName, action: #selector(menuMoveCompanion(_:)), keyEquivalent: "")

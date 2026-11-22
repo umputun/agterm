@@ -261,6 +261,7 @@ final class AppActionsRemoteCatalogTests: XCTestCase {
         XCTAssertEqual(submenu.items.map(\.title), [ControlWorkspaceNode.rootLabel] + store.displayWorkspaces.map(\.label))
         XCTAssertFalse(submenu.items[0].isEnabled)
         XCTAssertTrue(submenu.items[1].isEnabled)
+        XCTAssertNil(menu.items.first { $0.title == "Move Under" }, "\(menu.items.map(\.title))")
     }
 
     func testAPromotedCompanionAppendedToItsWorkspaceGoesToTheServerAsAnAppendPastDetachedRows() throws {
