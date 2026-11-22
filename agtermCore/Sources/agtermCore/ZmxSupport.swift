@@ -373,3 +373,11 @@ public enum ZmxSupport {
         return String(format: "%016llx", hash)
     }
 }
+
+/// DaemonProbe is what the kernel shows of a pane's Live daemon: `absent` is no socket at the pane's name, the
+/// one answer acted on as an end; `unknown`, a socket with no leader found or a failed lookup, proves nothing.
+public enum DaemonProbe: Equatable, Sendable {
+    case running(leader: Int32)
+    case absent
+    case unknown
+}

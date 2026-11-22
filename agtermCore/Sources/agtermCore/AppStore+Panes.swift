@@ -250,7 +250,7 @@ extension AppStore {
             launchPaneDrop?([split])
             ZmxLeadBook.shared.forget(pane: split)
             RemoteEndBook.shared.clear(pane: split)
-            MessageBus.shared.dispose(pane: split)
+            disposeMailboxes([split])
             session.daemonBackedPanes.remove(split)
         }
         let wasShown = session.isSplit
@@ -328,7 +328,7 @@ extension AppStore {
         session.daemonBackedPanes.remove(session.paneIdentity)
         ZmxLeadBook.shared.forget(pane: session.paneIdentity)
         RemoteEndBook.shared.clear(pane: session.paneIdentity)
-        MessageBus.shared.dispose(pane: session.paneIdentity)
+        disposeMailboxes([session.paneIdentity])
         // the survivor's override moves left with it; its text file is keyed by the identity promoted below
         dropPaneBackground(.left, of: session)
         (session.paneBackgrounds.left, session.paneBackgrounds.right) = (session.paneBackgrounds.right, nil)
@@ -355,6 +355,10 @@ extension AppStore {
         // for this launch (so a surface built after promotion still runs it).
         session.restoreCommand = session.splitRestoreCommand
         session.pendingRestoreCommand = session.pendingSplitRestoreCommand
+        session.pendingForegroundCommand = session.pendingSplitForegroundCommand
+        session.pendingSplitForegroundCommand = nil
+        // with no survivor surface the primary factory attaches the pane, and starts it here if its daemon is gone
+        if survivor == nil, session.remoteHost == nil, let cwd = session.currentCwd { session.initialCwd = cwd }
         session.splitCwd = nil
         session.splitTitle = nil
         session.initialSplitCwd = nil
@@ -402,9 +406,12 @@ extension AppStore {
     private func hasLiveSplit(_ session: Session, survivor: (any TerminalSurface)?) -> Bool {
         // a hidden split the origin added has no surface until shown, and still runs there
         guard headless else {
-            guard survivor == nil, let split = session.splitPaneIdentity, let state = session.remotePresentation,
-                  !state.binding.catalogOwned else { return survivor != nil }
-            return state.binding.remotePane(forLocal: split) != nil
+            guard survivor == nil, let split = session.splitPaneIdentity else { return survivor != nil }
+            // a split hidden since a Live launch has no surface either; only its socket gone proves it ended
+            guard let state = session.remotePresentation else {
+                return session.locallyManagedPaneIdentities.contains(split) && daemonProbe.map { $0(split) != .absent } == true
+            }
+            return !state.binding.catalogOwned && state.binding.remotePane(forLocal: split) != nil
         }
         return session.splitPaneIdentity.map(session.daemonBackedPanes.contains) ?? false
     }

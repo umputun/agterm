@@ -465,6 +465,7 @@ struct agtermApp: App {
             launchPaneDrop: { identities in
                 for identity in identities { pacer.discard(identity) }
             },
+            daemonProbe: ghostty.launchRestoreMode == .live ? { ZmxDaemonForeground.probe(directory: client.endpoint.socketDirectory, pane: $0) } : nil,
             flaggedLayout: flaggedLayout)
         // the reap waits for the library so a confirmed Live sessions reset can narrow its marker against the
         // current claims first; both finish before any window mounts
@@ -688,9 +689,9 @@ struct agtermApp: App {
             // its own cmd +/-. a respawned parent gets a fresh primary surface, which wires its own.
             let outcome = store.closePrimaryPane(sessionID, alreadyFinalized: alreadyFinalized)
             if outcome == .respawned { publishRespawn?() }
-            if outcome == .promoted,
-               let promoted = store.session(withID: sessionID)?.surface as? GhosttySurfaceView {
-                promoted.onFontSizeChange = { store.setFontSize(sessionID, $0) }
+            if outcome == .promoted {
+                // a split promoted with no surface gets a primary view from the factory, which wires its own
+                (store.session(withID: sessionID)?.surface as? GhosttySurfaceView)?.onFontSizeChange = { store.setFontSize(sessionID, $0) }
                 // the same "session survived ⇒ its split was promoted" test, for a dashboard holding this
                 // session by `<id>:right`. synchronous, so it lands before the reconcile onChange prunes the
                 // cell; this is the only place that can tell promotion from the split's own shell exiting.

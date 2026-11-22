@@ -14,8 +14,15 @@ struct AppStoreMessagesTests {
         let session: Session
     }
 
-    private func fixture(split: Bool = false, scratch: Bool = false) throws -> Fixture {
-        let store = makeStore()
+    private final class DaemonLeaders {
+        var pids: [UUID: Int32] = [:]
+        var states: [UUID: DaemonProbe] = [:]
+    }
+
+    private func fixture(split: Bool = false, scratch: Bool = false, leaders: DaemonLeaders? = nil) throws -> Fixture {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
+        let store = AppStore(persistence: PersistenceStore(directory: dir), paneFinalizer: nil,
+                             daemonProbe: leaders.map { leaders in { leaders.states[$0] ?? leaders.pids[$0].map(DaemonProbe.running) ?? .absent } })
         let work = store.addWorkspace(name: "work")
         _ = store.addWorkspace(name: "other")
         let session = try #require(store.addSession(toWorkspace: work.id, cwd: "/w"))
@@ -299,6 +306,136 @@ struct AppStoreMessagesTests {
 
         #expect(sink.bodies.last == .mail(PresentationMail(panes: [f.session.paneIdentity.uuidString: 1])))
         disposeMailboxes([f.session.paneIdentity])
+    }
+
+    @Test func aSurfacelessPaneWhoseDaemonRunsReceivesMailAndShowsInTheTree() throws {
+        let leaders = DaemonLeaders()
+        let f = try fixture(leaders: leaders)
+        f.store.setSplitVisibility(f.session.id, shown: true)
+        f.store.setSplitVisibility(f.session.id, shown: false)
+        let split = try #require(f.session.splitPaneIdentity)
+        leaders.pids[split] = 100
+
+        #expect(f.store.messageRecipient(session: f.session.id, pane: .id(split))?.pane == split)
+        #expect(f.store.messageRecipient(session: f.session.id, pane: .role(.right))?.pane == split)
+        #expect(f.store.messageRecipients().map(\.pane).contains(split))
+        try deliver(to: [split])
+        let tree = f.store.controlTree(paneForeground: { _ in nil })
+        let right = tree.workspaces.flatMap(\.sessions).first { $0.id == f.session.id.uuidString }?.surfaces?.first { $0.kind == "right" }
+        #expect(right?.paneID == split.uuidString)
+        #expect(right?.pendingMessages == 1)
+        disposeMailboxes([split])
+    }
+
+    @Test func aHiddenScratchWhoseDaemonRunsReceivesMail() throws {
+        let leaders = DaemonLeaders()
+        let f = try fixture(leaders: leaders)
+        let scratch = UUID()
+        f.session.scratchDaemon = Session.ScratchDaemon(identity: scratch, shown: false)
+
+        #expect(f.store.messageRecipient(session: f.session.id, pane: .role(.scratch)) == nil)
+        leaders.pids[scratch] = 100
+        #expect(f.store.messageRecipient(session: f.session.id, pane: .role(.scratch))?.pane == scratch)
+    }
+
+    @Test(arguments: [(DaemonProbe.unknown, 1), (.absent, 0)])
+    func aDaemonThatIsNoLongerFoundRefusesMailAndKeepsItsQueueOnlyWhileUnknown(probe: DaemonProbe, kept: Int) throws {
+        let leaders = DaemonLeaders()
+        let f = try fixture(leaders: leaders)
+        f.store.setSplitVisibility(f.session.id, shown: true)
+        let split = try #require(f.session.splitPaneIdentity)
+        leaders.pids[split] = 100
+        #expect(f.store.messageRecipient(session: f.session.id, pane: .id(split)) != nil)
+        try deliver(to: [split])
+
+        leaders.states[split] = probe
+
+        #expect(f.store.messageRecipient(session: f.session.id, pane: .id(split)) == nil)
+        #expect(MessageBus.shared.pending(for: split) == kept)
+        disposeMailboxes([split])
+    }
+
+    @Test func aDaemonReplacedWhileSurfacelessStartsWithAnEmptyMailbox() throws {
+        let leaders = DaemonLeaders()
+        let f = try fixture(leaders: leaders)
+        f.store.setSplitVisibility(f.session.id, shown: true)
+        let split = try #require(f.session.splitPaneIdentity)
+        leaders.pids[split] = 100
+        #expect(f.store.messageRecipient(session: f.session.id, pane: .id(split)) != nil)
+        try deliver(to: [split])
+
+        leaders.pids[split] = 200
+
+        #expect(f.store.messageRecipient(session: f.session.id, pane: .id(split))?.pane == split)
+        #expect(MessageBus.shared.pending(for: split) == 0)
+    }
+
+    @Test(arguments: [(DaemonProbe.running(leader: 100), true, true, 1), (.running(leader: 200), true, true, 0), (.unknown, true, false, 1),
+                      (.absent, true, false, 0), (.running(leader: 100), false, true, 0)])
+    func aSurfaceThatAppearsKeepsTheMailOnlyOnTheSameDaemon(probe: DaemonProbe, backedByZmx: Bool, resolves: Bool, kept: Int) throws {
+        let leaders = DaemonLeaders()
+        let f = try fixture(leaders: leaders)
+        f.store.setSplitVisibility(f.session.id, shown: true)
+        let split = try #require(f.session.splitPaneIdentity)
+        leaders.pids[split] = 100
+        #expect(f.store.messageRecipient(session: f.session.id, pane: .id(split)) != nil)
+        try deliver(to: [split])
+
+        leaders.states[split] = probe
+        f.session.splitSurface = SpySurface(paneToken: split.uuidString, backedByZmx: backedByZmx)
+
+        #expect((f.store.messageRecipient(session: f.session.id, pane: .id(split)) != nil) == resolves)
+        #expect(MessageBus.shared.pending(for: split) == kept)
+        #expect((f.store.messageRecipient(session: f.session.id, pane: .id(split)) != nil) == resolves)
+        disposeMailboxes([split])
+    }
+
+    @Test func aRealizedPaneKeepsCheckingTheDaemonItsMailWasQueuedFor() throws {
+        let leaders = DaemonLeaders()
+        let f = try fixture(leaders: leaders)
+        f.store.setSplitVisibility(f.session.id, shown: true)
+        let split = try #require(f.session.splitPaneIdentity)
+        leaders.pids[split] = 100
+        #expect(f.store.messageRecipient(session: f.session.id, pane: .id(split)) != nil)
+        try deliver(to: [split])
+        f.session.splitSurface = SpySurface(paneToken: split.uuidString, backedByZmx: true)
+        #expect(f.store.messageRecipient(session: f.session.id, pane: .id(split)) != nil)
+
+        leaders.pids[split] = 200
+
+        #expect(f.store.messageRecipient(session: f.session.id, pane: .id(split))?.pane == split)
+        #expect(MessageBus.shared.pending(for: split) == 0)
+    }
+
+    @Test func theQueuedEventLeavesTheDeliveredMailAlone() throws {
+        let leaders = DaemonLeaders()
+        let f = try fixture(leaders: leaders)
+        f.store.setSplitVisibility(f.session.id, shown: true)
+        let split = try #require(f.session.splitPaneIdentity)
+        leaders.pids[split] = 100
+        let recipient = try #require(f.store.messageRecipient(session: f.session.id, pane: .id(split)))
+        _ = try MessageBus.shared.send("hi", from: nil, to: [recipient], now: 1)
+
+        leaders.pids[split] = 200
+
+        #expect(f.store.emitMessageQueued(UUID(), from: nil, to: recipient))
+        #expect(MessageBus.shared.pending(for: split) == 1)
+        disposeMailboxes([split])
+    }
+
+    @Test func aKilledSurfacelessDaemonTakesItsMailAndItsRecord() throws {
+        let leaders = DaemonLeaders()
+        let f = try fixture(leaders: leaders)
+        f.store.setSplitVisibility(f.session.id, shown: true)
+        let split = try #require(f.session.splitPaneIdentity)
+        leaders.pids[split] = 100
+        #expect(f.store.messageRecipient(session: f.session.id, pane: .id(split)) != nil)
+        try deliver(to: [split])
+
+        f.store.daemonKilled(split)
+
+        #expect(MessageBus.shared.pending(for: split) == 0)
+        #expect(f.store.daemonGenerations[split] == nil)
     }
 
     private func disposeMailboxes(_ panes: [UUID]) { panes.forEach { MessageBus.shared.dispose(pane: $0) } }

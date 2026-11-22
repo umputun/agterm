@@ -6,16 +6,26 @@ extension AppStore {
     func disposeMailboxes(of session: Session) {
         disposeMailboxes([session.paneIdentity] + [session.splitPaneIdentity].compactMap { $0 })
         if let scratch = session.scratchSurface { disposeMailbox(token: scratch.paneToken) }
-        if let scratch = session.scratchDaemon { MessageBus.shared.dispose(pane: scratch.identity) }
+        if let scratch = session.scratchDaemon { disposeMailboxes([scratch.identity]) }
     }
 
+    /// disposeMailboxes drops each pane's mailbox with its daemon generation record.
     func disposeMailboxes(_ panes: [UUID]) {
-        panes.forEach { MessageBus.shared.dispose(pane: $0) }
+        panes.forEach {
+            MessageBus.shared.dispose(pane: $0)
+            daemonGenerations[$0] = nil
+        }
+    }
+
+    /// daemonKilled drops the mail of a pane whose daemon a confirmed kill ended while no surface showed it; a pane
+    /// with a surface loses its mail through that surface's exit instead.
+    public func daemonKilled(_ pane: UUID) {
+        disposeMailboxes([pane])
     }
 
     /// disposeMailbox drops the mailbox keyed by a surface's pane token, the scratch pane's only identity.
     func disposeMailbox(token: String) {
-        if let pane = UUID(uuidString: token) { MessageBus.shared.dispose(pane: pane) }
+        if let pane = UUID(uuidString: token) { disposeMailboxes([pane]) }
     }
 
     /// messageRecipient resolves one pane of `sessionID` to a live pane: a role picks that slot's surface now,
@@ -57,14 +67,14 @@ extension AppStore {
     /// emitMessageQueued emits the `message` event when this store holds the recipient's pane.
     @discardableResult
     public func emitMessageQueued(_ messageID: UUID, from: String?, to recipient: MessageRecipient) -> Bool {
-        guard let session = session(holdingPane: recipient.pane) else { return false }
+        guard let session = session(holding: recipient) else { return false }
         emitMessageEvent(session, pane: recipient.pane, from: from, messageID: messageID)
         return true
     }
 
     /// publishMessageQueued hands a queued message to every viewer of the session holding the recipient's pane.
     public func publishMessageQueued(_ messageID: UUID, from: String?, to recipient: MessageRecipient) {
-        guard let session = session(holdingPane: recipient.pane) else { return }
+        guard let session = session(holding: recipient) else { return }
         presentationHub?.publish(.message(PresentationMessage(pane: recipient.pane, from: from, messageID: messageID)),
                                  session: session.id)
     }
@@ -81,8 +91,13 @@ extension AppStore {
                                                       from: from, messageID: messageID.uuidString))
     }
 
-    private func session(holdingPane pane: UUID) -> Session? {
-        workspaces.flatMap(\.sessions).first { livePanes(of: $0).contains { $0.pane == pane } }
+    // read from the canonical address the recipient was resolved with, never by probing panes again: the mail is
+    // already queued, and a generation check here could drop the message it reports
+    private func session(holding recipient: MessageRecipient) -> Session? {
+        guard let id = recipient.address.split(separator: ":").first.flatMap({ UUID(uuidString: String($0)) }),
+              let session = session(withID: id) else { return nil }
+        let tokens = [session.surface, session.splitSurface, session.scratchSurface].compactMap { $0.flatMap { UUID(uuidString: $0.paneToken) } }
+        return (session.locallyManagedPaneIdentities + tokens).contains(recipient.pane) ? session : nil
     }
 
     /// applyCatalogPanes keeps a remote window row's panes, their mail counts and held state, on what its server's
@@ -92,20 +107,42 @@ extension AppStore {
         session.catalogPanes = Dictionary(panes.map { ($0.identity, $0) }) { $1 }
     }
 
-    /// livePanes are the session's panes a message can reach: a realized surface carrying a pane token, or on a
-    /// headless store, which has no surfaces, a pane whose daemon it owns.
-    private func livePanes(of session: Session) -> [(role: StatusPane, pane: UUID)] {
+    /// livePanes are the session's panes a message can reach: a realized surface carrying a pane token, a local Live
+    /// pane with no realized surface whose daemon runs, or on a headless store, which has no surfaces, a pane whose
+    /// daemon it owns.
+    func livePanes(of session: Session) -> [(role: StatusPane, pane: UUID)] {
         if headless {
             let roles: [(StatusPane, CommandContext.Pane)] = [(.left, .left), (.right, .right), (.scratch, .scratch)]
             return roles.compactMap { role, pane in UUID(uuidString: session.paneToken(for: pane)).map { (role, $0) } }
         }
-        let slots: [(StatusPane, (any TerminalSurface)?)] = [
-            (.left, session.surface), (.right, session.splitSurface), (.scratch, session.scratchSurface),
+        let owned = session.locallyManagedPaneIdentities
+        let slots: [(StatusPane, (any TerminalSurface)?, UUID?)] = [
+            (.left, session.surface, session.paneIdentity), (.right, session.splitSurface, session.splitPaneIdentity),
+            (.scratch, session.scratchSurface, session.localScratchIdentity),
         ]
-        return slots.compactMap { role, surface in
-            guard let surface, surface.isRealized, let pane = UUID(uuidString: surface.paneToken) else { return nil }
-            return (role, pane)
+        return slots.compactMap { role, surface, daemon in
+            let realized = surface.flatMap { $0.isRealized ? UUID(uuidString: $0.paneToken) : nil }
+            guard let daemon, owned.contains(daemon), realized == nil || daemonGenerations[daemon] != nil else {
+                return realized.map { (role, $0) }
+            }
+            if let surface, realized != nil, !surface.backedByZmx {
+                disposeMailboxes([daemon])
+                return realized.map { (role, $0) }
+            }
+            return daemonRuns(daemon) ? (role, daemon) : nil
         }
+    }
+
+    // the record outlives the surface's realization: its attach may still replace the daemon under the same identity,
+    // so a pane keeps the mail only while the leader is the one it was queued for. An absent daemon took its mail with
+    // it, but the record stays so a realized view keeps being probed; an unknown one refuses mail and drops none.
+    private func daemonRuns(_ pane: UUID) -> Bool {
+        let probe = daemonProbe?(pane)
+        if probe == .absent, daemonGenerations[pane] != nil { MessageBus.shared.dispose(pane: pane) }
+        guard case .running(let leader) = probe else { return false }
+        if let recorded = daemonGenerations[pane], recorded != leader { MessageBus.shared.dispose(pane: pane) }
+        daemonGenerations[pane] = leader
+        return true
     }
 
     /// pendingMessages is the tree read-back for one of `session`'s panes, nil at zero: a local pane's from this bus,
