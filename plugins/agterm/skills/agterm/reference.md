@@ -298,7 +298,9 @@ of `{id, kind, active, visible, backedByZmx?, lead?, reconnect?, attachEnded?, p
 `left`|`right`|`scratch`|`overlay`|`overlay-left`|`overlay-right`).
 Primary/split surfaces report `backedByZmx`, a Live scratch reports `true`, and other scratches and overlays omit it. `paneID` is the surface's
 stable token, the value `--pane-id` takes; it follows the terminal through a swap and is omitted for an
-overlay or a pane whose surface is not created yet. `pendingMessages` counts the messages waiting in the
+overlay or a pane whose surface is not created yet. In Live mode a split hidden since a relaunch reports it
+while its program runs; until the split is shown that id reaches it through `msg` and `zmx kill --pane-id`, while the
+surface commands' `--pane-id` answers `unknown pane id` without an explicit `--pane` fallback. `pendingMessages` counts the messages waiting in the
 pane's [msg](#msg) mailbox and is omitted at zero. `remote` is `true` on an origin's main or split pane whose
 next ask, overlay or page goes to an attached Mac (see Remote sessions), omitted otherwise. `lead` is `leader`, `follower`
 or `unowned`: whether this Mac's window size is the one the pane's program sees. A pane that does not
@@ -741,7 +743,8 @@ error keeps those names for compatibility.
   `session text`, no `other` value. `--pane-id` takes a stable pane token (`$AGTERM_PANE_ID`, or
   `surfaces[].paneID` from `tree --json`) and types into that terminal wherever it sits now, overriding
   `--pane`. An unknown token without `--pane` fails with `unknown pane id: <id>`; with `--pane` it uses
-  that pane. `result.pane` names the pane typed into. `--select` realizes the MAIN pane only — a split pane must
+  that pane. A split still hidden since a Live relaunch has no terminal yet, so its id is unknown here until the
+  split is shown. `result.pane` names the pane typed into. `--select` realizes the MAIN pane only — a split pane must
   already exist. Also like `session text`, there is no overlay value: every `--pane` types into the surface
   UNDER a covering overlay, so the keystrokes reach the hidden shell and run there unseen until the overlay
   closes — the call still answers `ok`. That is deliberate: the panes stay drivable whatever is drawn over
@@ -772,8 +775,9 @@ error keeps those names for compatibility.
 - `session paste --stdin [--pane left|right|scratch] [--pane-id ID] [--target] [--window W]` — paste the text
   read from stdin as a paste (wire `session.paste.text`), leaving the clipboard alone: bracketed when the program
   turned bracketed paste on, so it lands unsubmitted; otherwise each newline submits. `--pane-id` takes
-  `$AGTERM_PANE_ID` and wins over `--pane`, as in `session type`. ESC and control bytes become spaces; empty stdin
-  and NUL are refused. An app predating it answers `the running app is too old for text paste`. agterm-server
+  `$AGTERM_PANE_ID` and wins over `--pane`, as in `session type`. Selected control bytes, including ESC, BS, DEL, Ctrl-C,
+  Ctrl-Z, Ctrl-U and Ctrl-W, become spaces; other control bytes and tab pass through, and without bracketed paste each LF
+  arrives as CR. Empty stdin and NUL are refused. An app predating it rejects the request before pasting, usually with `the running app is too old for text paste`. agterm-server
   refuses it directly; a Mac showing a server row pastes through its own pane.
 - `paste receive` — internal, run by agterm over ssh on the host where a pasted file must land; never run it by
   hand.

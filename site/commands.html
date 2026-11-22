@@ -1537,6 +1537,7 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">surfaces[].paneID</span> from <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree --json</span>) and types into that terminal wherever a swap or
                 promotion moved it, overriding <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span>. An unknown token falls back to an explicit
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span> and otherwise fails with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unknown pane id: &lt;id&gt;</span>.
+                A split still hidden since a Live relaunch has no terminal yet, so its id is unknown here until the split is shown.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.pane</span> names the pane typed into.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
@@ -1617,8 +1618,9 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--pane-id</span> takes the stable
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">$AGTERM_PANE_ID</span> token and wins over
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--pane</span>, as in
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session type</span>. Escape and control
-                characters in the text become spaces. Empty stdin and a NUL byte are refused. Not available on agterm-server
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session type</span>. Selected control characters, including
+                Escape, backspace, delete, Ctrl-C, Ctrl-Z, Ctrl-U and Ctrl-W, become spaces; other control characters and
+                tab pass through, and without bracketed paste each newline arrives as a carriage return. Empty stdin and a NUL byte are refused. Not available on agterm-server
                 directly; a Mac showing a server's session pastes into it.
               </p>
             </div>

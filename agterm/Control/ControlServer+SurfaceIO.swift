@@ -109,8 +109,8 @@ extension ControlServer {
     }
 
     /// `session.paste.text`: `text` goes in as a paste, not keystrokes, so a program with bracketed paste on gets it
-    /// framed and unsubmitted. `ghostty_surface_text` skips paste protection's prompt and replaces ESC and the
-    /// control bytes with spaces, so the text cannot end the bracket early.
+    /// framed and unsubmitted. `ghostty_surface_text` skips paste protection's prompt and replaces ESC with a
+    /// space, so the text cannot end the bracket early.
     func pasteSessionText(_ target: String?, window: String?, pane: StatusPane?, paneID: String?,
                           text: String) async -> ControlResponse {
         switch bindingSurface(target, window: window, pane: pane, paneID: paneID) {

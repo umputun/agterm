@@ -614,8 +614,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - `session.paste.text` (CLI `session paste --stdin`) is its own wire command, never a `text` field on
   `session.paste`: an older app already decodes `args.text` and would ignore it, pasting the clipboard instead.
   It goes through `bindingSurface` plus `--pane-id` (`Session.paneAddress`), then `insertPasted`, which is
-  `ghostty_surface_text`: bracketed when the program set mode 2004, no paste-protection prompt, and ESC and the
-  control bytes replaced with spaces by libghostty's paste encoder, so the text cannot close the bracket.
+  `ghostty_surface_text`: bracketed when the program set mode 2004, no paste-protection prompt, and selected control
+  bytes, including ESC, BS, DEL, Ctrl-C, Ctrl-Z, Ctrl-U and Ctrl-W, replaced with spaces by libghostty's paste encoder, so
+  the text cannot close the bracket; other C0 bytes and tab pass through, and LF becomes CR without mode 2004.
   `insertPasted` returns nothing, so the arm checks `isRealized` after the expedite. Not in `waitsOnNetwork`:
   it copies nothing. agterm-server refuses it (`ServerCommandPolicy`) by approved exception: only the daemon's
   terminal knows mode 2004, so parity needs a zmx patch. Read back through `session.text --pane-id`.
@@ -1537,7 +1538,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   fall back on, and `result.id` is the resolved `surface:<session>:<position>`. `ControlActions` keeps
   the two-argument requirement and defaults the overload to refuse a token by name.
 - Each tree surface node carries `paneID`, the live surface's token, omitted for a slot whose surface
-  carries none (an overlay, or a pane whose surface is not created yet).
+  carries none (an overlay, or a pane whose surface is not created yet). A Live split hidden since a relaunch reports
+  its identity while its daemon runs (the mail predicate): `msg` and `zmx.kill.pane` take it, and
+  `Session.paneRole(forToken:)` does not until a surface exists.
 - `session.status --pane-id` (#199) falls back to the role for an absent or unknown token and adds no
   read-back field: it reports only the resolved `statusPane`.
 - Auto-reset clears both session entered and session left. Status renders on selected sessions too.
