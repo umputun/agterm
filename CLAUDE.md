@@ -136,6 +136,9 @@ C-boundary concurrency before changing the bridge.
 - The app build's Bundle helper executables phase runs `swift build` on `agtermCore/.build`, so any SwiftPM
   process holding that directory (a hung `swift test` included) stalls `xcodebuild` there with no output;
   check `ps` for one before reading a quiet build as compiling.
+- Every `xcodebuild` hosted run, `make test-app` or `-only-testing`, rewrites `agtermCore/Package.resolved`'s Sparkle
+  pin and hash. Revert it with `git checkout -- agtermCore/Package.resolved` before committing; it is never part of a
+  feature change.
 - An XCUITest or hosted test run that times out at runner init (`Timed out while enabling automation mode`)
   or waits with zero test cases started: see `.claude/rules/ui-tests.md` before retrying or restarting.
 - A TCC-gated tool run from a shell in the live terminal (`screencapture`, XCUITest) can be denied after a
