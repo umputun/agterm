@@ -150,7 +150,8 @@ C-boundary concurrency before changing the bridge.
 - After the helper binary is replaced, nehelper refuses Local Network for about 30 s while it rebuilds its
   UUID cache (`Caching 0 UUID(s)`, then `Caching 1 UUID(s) for com.umputun.agterm`); retry a failed LAN
   probe after that before treating it as a failure.
-- For maintainer work, ask before splitting a touched long file and do not raise limits reflexively.
+- For maintainer work, ask before splitting a touched long file, except in an autopilot run, which splits
+  it as needed and names the split in its report; never raise limits reflexively.
   Contributors need not refactor preexisting length; mention it without blocking or suggesting a limit bump.
 
 ## Worktrees and local builds
