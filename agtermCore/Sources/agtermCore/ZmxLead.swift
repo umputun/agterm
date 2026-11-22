@@ -179,19 +179,19 @@ public final class ZmxLeadBook {
     public func takeClaim(pane: UUID) -> Bool { claims.remove(pane) != nil }
 
     /// arm stages saved leads, by pane identity, for each pane's first attach after a restore.
-    public func arm(_ leads: [UUID: String]) { pendingReclaims.merge(leads) { _, new in new } }
+    func arm(_ leads: [UUID: String]) { pendingReclaims.merge(leads) { _, new in new } }
 
     /// disarm drops the armed leads of `panes` that no attach took.
-    public func disarm(_ panes: some Sequence<UUID>) { panes.forEach { pendingReclaims[$0] = nil } }
+    func disarm(_ panes: some Sequence<UUID>) { panes.forEach { pendingReclaims[$0] = nil } }
 
     /// pendingReclaim is the saved lead `pane`'s next attach takes back; that attach's `begin` drops it.
     public func pendingReclaim(pane: UUID) -> String? { pendingReclaims[pane] }
 
-    /// savedLead is what a snapshot keeps for `pane`: its attachment's reclaim target, or the armed lead of a pane
-    /// that has not attached since the restore.
-    public func savedLead(pane: UUID) -> String? {
+    /// savedLead is what a snapshot keeps for `pane`: its attachment's reclaim target, the armed lead of a pane that
+    /// has not attached since the restore, or the one a pane parked to reconnect will take back.
+    func savedLead(pane: UUID) -> String? {
         if let state = states[pane] { return state.reclaimAfterDrop }
-        return pendingReclaims[pane]
+        return pendingReclaims[pane] ?? RemoteReconnectBook.shared.entries[pane]?.reclaim
     }
 
     /// Starts over for `pane`: reports of its previous attachment no longer match and are dropped.

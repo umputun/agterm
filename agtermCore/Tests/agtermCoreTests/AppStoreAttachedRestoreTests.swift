@@ -92,6 +92,22 @@ struct AppStoreAttachedRestoreTests {
         #expect(back.splitInitialCommand?.contains(ZmxLeadAttachment.reclaimVariable) == false)
     }
 
+    @Test func closingARowEndsItsPanesWaitToReconnectSoNoOldLeadIsSaved() throws {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let row = try addAttachedRow(to: store, workspace: work.id, split: true)
+        let split = try #require(row.splitPaneIdentity)
+        for pane in [row.paneIdentity, split] {
+            RemoteReconnectBook.shared.wait(pane: pane, session: row.id, host: "box", cover: true, reclaim: "n1", now: Date())
+        }
+
+        store.closeSession(row.id)
+
+        #expect(!RemoteReconnectBook.shared.waiting(pane: row.paneIdentity))
+        #expect(!RemoteReconnectBook.shared.waiting(pane: split))
+        #expect(ZmxLeadBook.shared.savedLead(pane: row.paneIdentity) == nil)
+    }
+
     @Test func aSplitWhoseDaemonIsNotInTheBindingIsDropped() throws {
         let store = makeStore()
         let work = store.addWorkspace(name: "work")

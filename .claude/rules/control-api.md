@@ -2637,8 +2637,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   token every managed client sends in `Identity`, or one that filled a vacancy without a claim and has sent no
   key, paste or mouse press since. Anything else leaves it following, so it never takes a lead someone used.
   A pane's first attach after a window restore, launch or reopen, reclaims the same way. Each save writes
-  `ZmxLeadBook.savedLead` per pane identity: the state's `reclaimAfterDrop`, or for a pane not attached since the
-  restore its armed value. An attached row's attach line takes `AttachedOriginSnapshot.Pane.lead` directly. The
+  `ZmxLeadBook.savedLead` per pane identity: the state's `reclaimAfterDrop`, for a pane not attached since the
+  restore its armed value, and for one parked to reconnect, whose state `remotePaneStopped` dropped, its
+  `RemoteReconnectBook` entry's `reclaim`. An attached row's attach line takes `AttachedOriginSnapshot.Pane.lead` directly. The
   others go through `ZmxLeadBook.arm`: `SessionSnapshot.leads` (local Live primary, split and scratch) in
   `AppStore.restore`, never `session(from:)`, which also rebuilds Recent Closed rows, and
   `RemoteWindowViewState.SessionView.leads` on the mirror's FIRST snapshot only, which disarms whatever that

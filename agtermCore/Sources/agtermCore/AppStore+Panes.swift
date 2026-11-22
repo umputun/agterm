@@ -34,6 +34,8 @@ extension AppStore {
             ([session.paneIdentity] + [session.splitPaneIdentity, session.localScratchIdentity].compactMap { $0 }).forEach {
                 ZmxLeadBook.shared.forget(pane: $0)
                 RemoteEndBook.shared.clear(pane: $0)
+                // a reattach reusing the pane id would otherwise inherit the old wait and save its reclaim
+                RemoteReconnectBook.shared.cancel(pane: $0)
             }
         }
         let identities = PaneIdentityInventory.identities(in: sessions).filter { $0 != alreadyFinalized }

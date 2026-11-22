@@ -200,4 +200,14 @@ struct ZmxLeadTests {
         #expect(book.savedLead(pane: gone) == nil)
         #expect(book.savedLead(pane: unused) == nil)
     }
+
+    @MainActor
+    @Test func aPaneParkedToReconnectSavesTheLeadItWillTakeBack() {
+        let book = ZmxLeadBook()
+        let pane = UUID()
+        RemoteReconnectBook.shared.wait(pane: pane, session: UUID(), host: "box", cover: true, reclaim: "n1", now: Date())
+        defer { RemoteReconnectBook.shared.cancel(pane: pane) }
+
+        #expect(book.savedLead(pane: pane) == "n1")
+    }
 }
