@@ -1709,6 +1709,11 @@ the Mac showing it; `catalog` is served by agterm-server and by that other Mac.
   mode takes them for the window `--window` names by full id and refuses a request naming none
   (`the request names no window on HOST`). That Mac's `window list` and `tree` report `catalogViewers` on a window
   other Macs show, omitted at none.
+- `--attach-pending` on `session new`, `duplicate`, `split`, `scratch`, `restart`, `convert --companion` and
+  `recent open`: agterm-server holds the new terminal pane's command until a terminal attaches, at most 30 s, so a
+  program's startup terminal queries can get answers. A Mac accepts and ignores it. agterm sends it when it
+  creates or restarts a server pane it will attach; a command created on the server without it starts at once (user guide,
+  Open a remote window).
 - On agterm-server: one window (the catalog, `--window` takes its id or `active`); `NAME is not available on
   agterm-server` for every command it does not serve (window mutations, sidebar, font, theme, keymap, quick,
   dashboard, zoom and more; `window list`, `msg send/read/ack` between its own panes and the presenter bridges

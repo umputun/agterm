@@ -341,7 +341,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   publishes the respawn once the shell shows up, within 60 s of the launch. Holds are counted, one per restart, so a
   refused retry releases only its own. A later restart's confirmed kill, the pane closing, a parent respawn
   (`primaryRespawns`) or, on the server, a recorded exit ends the follow without publishing; a confirmed pane is
-  listed running ahead of the inventory (`OriginConfirmations`). A confirmed reply carries `result.restart` (`paneID`, `oldPid`, `newPid`); they are shell pids, the program
+  listed running ahead of the inventory (`OriginConfirmations`). A held new pane is confirmed only after `exec`:
+  `CommandRestore.isHeldCreation` reads the parked creator's argv, which also makes `paneForeground` nil inside the
+  hold. agterm-server announces the respawn as soon as the new daemon is attachable, before `exec`, since a viewer's
+  attach is what releases it; the Mac publishes after confirmation. A confirmed reply carries `result.restart` (`paneID`, `oldPid`, `newPid`); they are shell pids, the program
   reads back as `foreground`. With no `command` the host replays the pane's foreground program: the
   argv `tree` reports, read through `ForegroundProcess.observed` from a fresh leader listing, filtered by
   host-free `RestartReplay.resolve` and launched through `attachCommand(replaying:)`. It starts in that
@@ -1998,6 +2001,15 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `createRemoteSession`, shared by the GUI and control, runs the create once; an unattached session is named with
   `zmx attach HOST ID`, and an undecodable reply is reported as an unknown outcome, never resent. It is in `localOnlyCommands` and `waitsOnNetwork`, and agterm-server
   refuses it as a command that makes a Mac viewer.
+- Every Mac path that creates or restarts an origin pane and then attaches it sends `ControlArgs.attachPending`
+  (CLI `--attach-pending`): the remote session and terminal companion creates, `RemoteOperation.attachesPane`,
+  `AttachedForward.attachesPane` and the attached reopen's `recent open`. agterm-server binds it per request
+  (`AttachIntent`) and starts that pane with `ZMX_HOLD_UNTIL_ATTACH` (`ServerPanes.attachHoldSeconds`, 30 s);
+  a Mac origin ignores it, since its panes attach locally. A create without it starts at once.
+  It is a timing request with no state, so it has no read-back. An older origin drops the field and starts at
+  once; a stale far `agtermctl` refuses the flag before sending, and only that `refusedArguments` reply is rerun
+  once without it, keeping the operation id (`ControlServer.runAttaching`, `RemoteCatalogActions.send`).
+  `site/docs.html#remote-window` states what a user sees.
 - A row carries what a PICKER needs, not only what attach needs. Without that a caller has to run a second
   ssh and join `agtermctl tree --json` by session id, paying another authentication for data the walk
   already held and discarded. The exact fields are below, plus the far node's non-idle

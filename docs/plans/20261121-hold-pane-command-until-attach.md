@@ -268,10 +268,10 @@
   restart and the 10 s reply), `site/commands.html` and `plugins/agterm/skills/agterm/` for the new option,
   `site/docs.html` (the approved limitation for server-originated creates)
 
-- [ ] update each surface once, cross-referencing the contract owner instead of repeating it
-- [ ] run gates once: `cd agtermCore && swift test`, `make test-app`, `make lint`,
+- [x] update each surface once, cross-referencing the contract owner instead of repeating it
+- [x] run gates once: `cd agtermCore && swift test`, `make test-app`, `make lint`,
       `scripts/server-container.sh check`
-- [ ] `lsappinfo list | grep -A4 agterm.debug` after the hosted run; clean up leaked test processes
+- [x] `lsappinfo list | grep -A4 agterm.debug` after the hosted run; clean up leaked test processes
 - [ ] verify the Overview's requirements against the result; move this plan to `docs/plans/completed/`
 
 ## Post-Completion
