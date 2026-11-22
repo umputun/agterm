@@ -558,7 +558,7 @@ final class AppDelegateCaptureTests: XCTestCase {
 }
 
 @MainActor
-private final class LiveDaemons {
+final class LiveDaemons {
     let socketDirectory: String
     private let state: URL
     private let zmx = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
@@ -588,9 +588,13 @@ private final class LiveDaemons {
         }
     }
 
-    func suspend(paneID: UUID) throws {
+    func leaderPID(paneID: UUID) throws -> pid_t {
         let name = ZmxSupport.daemonName(for: paneID)
-        let leader = try XCTUnwrap(ZmxListParser.parse(run(["list"])).first { $0.name == name }?.leaderPID)
+        return try XCTUnwrap(ZmxListParser.parse(run(["list"])).first { $0.name == name }?.leaderPID)
+    }
+
+    func suspend(paneID: UUID) throws {
+        let leader = try leaderPID(paneID: paneID)
         var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, leader]
         var info = kinfo_proc()
         var size = MemoryLayout<kinfo_proc>.size

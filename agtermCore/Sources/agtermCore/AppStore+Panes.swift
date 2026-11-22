@@ -290,11 +290,12 @@ extension AppStore {
     /// The primary pane's shell exited: a live split is PROMOTED into the primary slot and the session
     /// survives as a single pane, otherwise the session closes. The survivor MOVES from `splitSurface` into
     /// `surface` (cwd, title and foreground command migrate too, and `promoteToPrimaryPane` turns off its
-    /// split-role reporting so future pwd/title reports write to the main fields), leaving `surface != nil`,
+    /// split-role reporting so future pwd/title reports write to the main fields), leaving
     /// `splitSurface == nil`, `hasSplit == false`, `splitFocused == false` — so the promoted pane is
     /// addressable as the MAIN/left pane everywhere: `session.type`/`session.text --pane left` (and omitted)
     /// reach it, `{AGT_PANE}` reports `left`, and a later `session.split` opens a fresh RIGHT pane instead of
-    /// displacing it. Called by the primary surface's `onExit`.
+    /// displacing it. Called by the primary surface's `onExit`. A Live split with no surface moves the same way,
+    /// and the primary factory may create the survivor's view.
     /// A local parent with companions respawns when its last pane exits.
     @discardableResult
     public func closePrimaryPane(_ sessionID: UUID, alreadyFinalized: UUID? = nil, now: Date = Date()) -> PrimaryPaneExit {
@@ -401,8 +402,9 @@ extension AppStore {
         if wasShown { emitPaneVisibility(.paneSplit, session: session, shown: false) }
     }
 
-    /// hasLiveSplit is whether a split pane is still running to take the primary slot: its surface on the Mac, its
-    /// daemon on a headless store, where a split identity is minted before any daemon is provisioned for it.
+    /// hasLiveSplit is whether a split pane is still running to take the primary slot: its surface on the Mac, or with
+    /// none a Live split whose socket is not known gone; its daemon on a headless store, where a split identity is
+    /// minted before any daemon is provisioned for it.
     private func hasLiveSplit(_ session: Session, survivor: (any TerminalSurface)?) -> Bool {
         // a hidden split the origin added has no surface until shown, and still runs there
         guard headless else {
