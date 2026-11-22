@@ -18,6 +18,34 @@ struct SnapshotRoundTripTests {
         #expect(ids == [local.id])
     }
 
+    @Test func aLivePaneThatLedOrWasNeverAttachedSavesItsLeadAndARestoreArmsIt() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        let split = UUID(), scratch = UUID()
+        session.hasSplit = true
+        session.splitPaneIdentity = split
+        store.recordLiveScratch(session.id, identity: scratch)
+        let led = ZmxLeadAttachment(claim: false)
+        ZmxLeadBook.shared.begin(led, pane: session.paneIdentity)
+        _ = ZmxLeadBook.shared.apply(try #require(ZmxLeadNotice(title: "zmx-role;\(led.nonce):leader:1")), pane: session.paneIdentity)
+        let followed = ZmxLeadAttachment(claim: true)
+        ZmxLeadBook.shared.begin(followed, pane: split)
+        _ = ZmxLeadBook.shared.apply(try #require(ZmxLeadNotice(title: "zmx-role;\(followed.nonce):follower:1")), pane: split)
+        ZmxLeadBook.shared.arm([scratch: "hidden"])
+
+        let saved = try JSONDecoder().decode(Snapshot.self, from: JSONEncoder().encode(store.snapshot()))
+        #expect(saved.workspaces[0].sessions[0].leads == [session.paneIdentity: led.nonce, scratch: "hidden"])
+        ZmxLeadBook.shared.disarm([scratch])
+
+        let restored = makeStore()
+        restored.restore(from: saved, launchRestore: true)
+
+        #expect(ZmxLeadBook.shared.pendingReclaim(pane: session.paneIdentity) == led.nonce)
+        #expect(ZmxLeadBook.shared.pendingReclaim(pane: scratch) == "hidden")
+        #expect(ZmxLeadBook.shared.pendingReclaim(pane: split) == nil)
+    }
+
     @Test func aWorkspaceOfOnlyRemoteSessionsSnapshotsEmptyRatherThanVanishing() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "remote only")

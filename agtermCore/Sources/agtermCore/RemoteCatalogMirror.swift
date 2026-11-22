@@ -313,7 +313,13 @@ public final class RemoteCatalogMirror {
         store?.catalogMirrored = true
         claimingAll = openClaim && originIsMac
         openClaim = false
+        // the first snapshot only: a resnapshot or a reattached row never takes back a lead saved before the open
+        let leads = windowViewApplied ? [:] : viewState.sessions.values.reduce(into: [UUID: String]()) {
+            $0.merge($1.leads ?? [:]) { _, new in new }
+        }
+        ZmxLeadBook.shared.arm(leads)
         reconcile()
+        ZmxLeadBook.shared.disarm(leads.keys)
         claimingAll = false
         if !windowViewApplied, let store {
             windowViewApplied = true

@@ -151,6 +151,16 @@ struct AppStoreLiveScratchTests {
         #expect(log.identities.contains(session.paneIdentity))
     }
 
+    @Test func closingTheSessionForgetsTheLeadItsScratchSaved() {
+        let identity = liveScratch()
+        ZmxLeadBook.shared.arm([identity: "n1"])
+
+        store.closeSession(session.id)
+
+        #expect(ZmxLeadBook.shared.pendingReclaim(pane: identity) == nil)
+        #expect(ZmxLeadBook.shared.savedLead(pane: identity) == nil)
+    }
+
     @Test func theLayoutNamesTheLiveScratchFromItsRecordToItsEnd() {
         #expect(store.presentationLayout(of: session)?.scratch == nil)
         let identity = liveScratch()

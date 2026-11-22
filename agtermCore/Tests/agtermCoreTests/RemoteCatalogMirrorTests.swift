@@ -46,11 +46,15 @@ final class RemoteCatalogMirrorTests {
         var onViewSave: (() -> Void)?
 
         var claimed: [UUID] = []
+        var reclaims: [UUID: String] = [:]
         func catalogViewStateChanged() {
             viewSaves += 1
             onViewSave?()
         }
-        func attachCommand(host: String, pane: CatalogPane, claim: Bool) -> String { "attach \(host) \(pane.daemon)\(claim ? " claim" : "")" }
+        func attachCommand(host: String, pane: CatalogPane, claim: Bool) -> String {
+            reclaims[pane.identity] = ZmxLeadBook.shared.pendingReclaim(pane: pane.identity)
+            return "attach \(host) \(pane.daemon)\(claim ? " claim" : "")"
+        }
         func catalogClaimLead(_ identity: UUID, session _: UUID) { claimed.append(identity) }
         func catalogRowAdded(_ session: Session) { added.append(session.id) }
         func catalogRowRemoved(_ sessionID: UUID) { removed.append(sessionID) }
@@ -1310,6 +1314,28 @@ final class RemoteCatalogMirrorTests {
     }
 
     private func attach(_ pane: CatalogPane, claim: Bool = false) -> String { "attach box \(pane.daemon)\(claim ? " claim" : "")" }
+
+    @Test func onlyTheFirstSnapshotOffersEachShownPaneItsSavedLead() throws {
+        let left = pane(), right = pane(), hiddenPane = pane(), laterPane = pane()
+        let split = session(panes: [left, right])
+        let hidden = session(panes: [hiddenPane])
+        let later = session(panes: [laterPane])
+        let saved: [UUID: RemoteWindowViewState.SessionView] = [
+            split.id: .init(leads: [left.identity: "n1"]), hidden.id: .init(leads: [hiddenPane.identity: "n2"]),
+            later.id: .init(leads: [laterPane.identity: "n3"]),
+        ]
+        mirror = RemoteCatalogMirror(host: "box", store: store, effects: effects,
+                                     viewState: RemoteWindowViewState(sessions: saved, detachedSessions: [hidden.id]))
+
+        _ = open([split, hidden])
+        _ = mirror.receive(.snapshot(snapshot([split, hidden, later], rev: 1)))
+
+        #expect(store.session(withID: later.id) != nil)
+        #expect(effects.reclaims == [left.identity: "n1"])
+        #expect(ZmxLeadBook.shared.pendingReclaim(pane: left.identity) == nil)
+        #expect(ZmxLeadBook.shared.pendingReclaim(pane: hiddenPane.identity) == nil)
+        #expect(ZmxLeadBook.shared.pendingReclaim(pane: laterPane.identity) == nil)
+    }
 
     @Test func aMacWindowTheUserOpenedClaimsTheLeadOfItsFirstRowsOnly() throws {
         reopen(claimOnOpen: true)

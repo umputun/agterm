@@ -206,9 +206,9 @@ final class RemoteCatalogWindow: RemoteCatalogEffects {
 
     /// attachCommand claims the lead only when the mirror says so, on a user's open or a row this Mac created: a remote
     /// window attaches again on every reconnect, and a claim each time would take the pane from another Mac at every
-    /// network blip. A covered pane takes over on a key.
+    /// network blip. A covered pane takes over on a key; one the window's first snapshot restored can take back its saved lead.
     func attachCommand(host: String, pane: CatalogPane, claim: Bool) -> String {
-        let lead = ZmxLeadAttachment(claim: claim)
+        let lead = ZmxLeadAttachment(claim: claim, reclaim: claim ? nil : ZmxLeadBook.shared.pendingReclaim(pane: pane.identity))
         guard let command = try? RemoteSession.attachPaneCommand(host: host, endpoint: pane.endpoint, daemon: pane.daemon,
                                                                  session: pane.daemon, pane: .left, lead: lead,
                                                                  controlPath: pool.lease("pane:\(pane.identity)")) else {

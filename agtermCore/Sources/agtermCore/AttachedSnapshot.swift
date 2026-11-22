@@ -28,8 +28,8 @@ public struct AttachedOriginSnapshot: Codable, Equatable, Sendable {
     public struct Pane: Codable, Equatable, Sendable {
         public var pane: UUID
         public var daemon: String
-        /// lead is the attach nonce the next attach reclaims from (`ZmxLeadState.reclaimAfterDrop` when saved);
-        /// nil when the pane followed.
+        /// lead is the attach nonce the next attach reclaims from (`ZmxLeadBook.savedLead` when saved); nil when the
+        /// pane followed.
         public var lead: String?
 
         public init(pane: UUID, daemon: String, lead: String? = nil) {
@@ -66,7 +66,7 @@ public struct AttachedOriginSnapshot: Codable, Equatable, Sendable {
     init?(binding: RemoteBinding, page: Bool) {
         guard !binding.catalogOwned, let origin = binding.origin else { return nil }
         let panes = binding.daemonsByPane.map {
-            Pane(pane: $0.key, daemon: $0.value, lead: ZmxLeadBook.shared.states[$0.key]?.reclaimAfterDrop)
+            Pane(pane: $0.key, daemon: $0.value, lead: ZmxLeadBook.shared.savedLead(pane: $0.key))
         }
         self.init(host: origin.host, sessionID: binding.remoteSessionID, sessionName: origin.sessionName,
                   endpoint: origin.endpoint, presentationVersion: binding.presentationVersion,

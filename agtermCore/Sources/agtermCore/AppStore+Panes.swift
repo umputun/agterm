@@ -31,7 +31,7 @@ extension AppStore {
         endPresentations(of: sessions.map(\.id))
         // every pane, an attached one included: its daemon is not ours to kill, its lead state is
         for session in sessions {
-            ([session.paneIdentity] + [session.splitPaneIdentity].compactMap { $0 }).forEach {
+            ([session.paneIdentity] + [session.splitPaneIdentity, session.localScratchIdentity].compactMap { $0 }).forEach {
                 ZmxLeadBook.shared.forget(pane: $0)
                 RemoteEndBook.shared.clear(pane: $0)
             }

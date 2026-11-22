@@ -71,7 +71,15 @@ extension AppStore {
                         lastSelectedAt: session.lastSelectedAt?.timeIntervalSince1970,
                         tint: session.tint, parentID: session.parentID,
                         collapsed: session.isExpanded ? nil : true, ended: session.ended ? true : nil,
-                        scratchPaneIdentity: headless ? nil : session.localScratchIdentity)
+                        scratchPaneIdentity: headless ? nil : session.localScratchIdentity,
+                        leads: savedLeads(session))
+    }
+
+    private func savedLeads(_ session: Session) -> [UUID: String]? {
+        let leads = session.locallyManagedPaneIdentities.reduce(into: [UUID: String]()) { leads, pane in
+            leads[pane] = ZmxLeadBook.shared.savedLead(pane: pane)
+        }
+        return leads.isEmpty ? nil : leads
     }
 
     /// The single workspace-to-disk producer, used by the launch snapshot and by a closed workspace's
@@ -209,6 +217,8 @@ extension AppStore {
             workspaces[index].sessions = Self.regroupedCompanions(workspaces[index].sessions)
         }
         openRestoredPages(snapshot.workspaces.flatMap(\.sessions))
+        // here and not in session(from:), which also rebuilds Recent Closed rows whose daemons were ended
+        ZmxLeadBook.shared.arm(snapshot.workspaces.flatMap(\.sessions).reduce(into: [:]) { $0.merge($1.leads ?? [:]) { _, new in new } })
         // clamp on restore (not just nil-default) so a corrupt or hand-edited snapshot can't drive an
         // out-of-range frame width; the drag and `sidebar.width` clamp to the same bounds.
         sidebarWidth = AppStore.clampSidebarWidth(snapshot.sidebarWidth ?? AppStore.sidebarWidthDefault)
