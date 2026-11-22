@@ -324,7 +324,7 @@ final class WorkspaceSidebarCompanionsTests: XCTestCase {
                        [group.parent.id, group.first.id, group.second.id])
     }
 
-    func testMoveToIsOfferedForAParentAndListsOtherParentsForACompanion() throws {
+    func testMoveUnderListsOtherParentsForACompanionAndIsAbsentForAParent() throws {
         let group = try seed()
         let other = group.store.addWorkspace(name: "other")
         let elsewhere = try XCTUnwrap(group.store.addSession(toWorkspace: other.id, cwd: "/tmp", name: "elsewhere", select: false))
@@ -332,9 +332,10 @@ final class WorkspaceSidebarCompanionsTests: XCTestCase {
 
         let parentMenu = try XCTUnwrap(coordinator.menu(forRow: try row(group.parent.id)))
         XCTAssertNotNil(parentMenu.items.first { $0.title == "Move to" })
+        XCTAssertNil(parentMenu.items.first { $0.title == "Move Under" })
         group.store.setSidebarSelection([group.first.id])
         let companionMenu = try XCTUnwrap(coordinator.menu(forRow: try row(group.first.id)))
-        let submenu = try XCTUnwrap(companionMenu.items.first { $0.title == "Move to" }?.submenu, "\(companionMenu.items.map(\.title))")
+        let submenu = try XCTUnwrap(companionMenu.items.first { $0.title == "Move Under" }?.submenu, "\(companionMenu.items.map(\.title))")
         let titles = submenu.items.map(\.title)
         XCTAssertEqual(Array(titles.suffix(4)), ["work", "after", "other", "elsewhere"], "\(titles)")
         XCTAssertFalse(titles.contains("parent"), "the current parent is no destination")
@@ -412,7 +413,7 @@ final class WorkspaceSidebarCompanionsTests: XCTestCase {
         XCTAssertEqual(group.store.rootWorkspace?.sessions.map(\.id), [group.first.id, top.id])
     }
 
-    func testMoveToOnACompanionListsEveryWorkspaceFirstAndMakesItTopLevelThere() throws {
+    func testMoveToOnACompanionListsEveryWorkspaceAndMakesItTopLevelThere() throws {
         let group = try seed()
         let other = group.store.addWorkspace(name: "other")
         buildSidebar(for: group.store)
@@ -421,11 +422,10 @@ final class WorkspaceSidebarCompanionsTests: XCTestCase {
         let menu = try XCTUnwrap(coordinator.menu(forRow: try row(group.first.id)))
         let submenu = try XCTUnwrap(menu.items.first { $0.title == "Move to" }?.submenu, "\(menu.items.map(\.title))")
         let labels = group.store.displayWorkspaces.map(\.label)
-        XCTAssertEqual(submenu.items.prefix(labels.count).map(\.title), labels)
+        XCTAssertEqual(submenu.items.map(\.title), labels)
         XCTAssertTrue(labels.contains("work"), "\(labels)")
-        XCTAssertTrue(submenu.items[labels.count].isSeparatorItem)
 
-        let item = try XCTUnwrap(submenu.items.prefix(labels.count).first { $0.title == "other" })
+        let item = try XCTUnwrap(submenu.items.first { $0.title == "other" })
         coordinator.perform(item.action, with: item)
 
         XCTAssertNil(group.first.parentID)

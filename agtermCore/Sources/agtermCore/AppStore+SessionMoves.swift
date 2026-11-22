@@ -19,7 +19,7 @@ public enum CompanionMoveRefusal: Error, Equatable, Sendable {
 
 extension AppStore {
     /// canMoveCompanion answers whether `moveCompanion` accepts this parent, without moving; the sidebar asks it so a
-    /// drop indicator or a Move to entry never offers a parent the move refuses.
+    /// drop indicator or a Move Under entry never offers a parent the move refuses.
     public func canMoveCompanion(_ id: UUID, under parentID: UUID) -> Result<Void, CompanionMoveRefusal> {
         guard let row = session(withID: id), let parent = session(withID: parentID) else { return .failure(.noSuchSession) }
         guard parent.parentID == nil else { return .failure(.parentIsCompanion) }
