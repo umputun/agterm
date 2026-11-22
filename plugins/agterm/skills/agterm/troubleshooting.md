@@ -375,7 +375,8 @@ Claude Code's hyperlink allowlist lacks that name, so it prints the URL. agterm 
 Workaround: `FORCE_HYPERLINK=1 claude` (Claude Code reads it before any terminal check), or
 `env = FORCE_HYPERLINK=1` in `~/.config/agterm/ghostty.conf` for every new shell, after a config reload
 (`agtermctl config reload` or File ▸ Reload Config) and a new session; that form also forces links into
-redirected output. `env = TERM_PROGRAM=ghostty` there does nothing: agterm applies its identity after the
+redirected output. Open rules skip OSC 8 file links, so `FORCE_HYPERLINK=0 claude` keeps printed paths
+reaching them. `env = TERM_PROGRAM=ghostty` there does nothing: agterm applies its identity after the
 config file. Do not file an agterm issue for it; the fix belongs upstream (Claude Code recognizing `agterm`
 or `TERM=xterm-ghostty`).
 

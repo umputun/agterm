@@ -1659,7 +1659,7 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
 </tr>
 </tbody>
 </table>
-<p>A tool that picks capabilities from a list of terminal names may need its own override. Claude Code prints links as plain text until <code>FORCE_HYPERLINK=1</code> is set; see <a href="https://github.com/umputun/agterm/blob/master/docs/troubleshooting.md#claude-code-prints-links-as-plain-text-instead-of-clickable-labels">troubleshooting</a>.</p>
+<p>A tool that picks capabilities from a list of terminal names may need its own override. Claude Code prints links as plain text until <code>FORCE_HYPERLINK=1</code> is set; see <a href="https://github.com/umputun/agterm/blob/master/docs/troubleshooting.md#claude-code-prints-links-as-plain-text-instead-of-clickable-labels">troubleshooting</a>. File links that Claude Code emits as OSC 8 skip <a href="#keymap-open">open rules</a>.</p>
 <h3 id="agtermctl-sessions">Sessions and workspaces</h3>
 <p><strong>See and create</strong></p>
 <pre class="bash"><code>agtermctl tree                                   # the workspace/session tree with ids
