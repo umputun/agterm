@@ -299,8 +299,8 @@ of `{id, kind, active, visible, backedByZmx?, lead?, reconnect?, attachEnded?, p
 Primary/split surfaces report `backedByZmx`, a Live scratch reports `true`, and other scratches and overlays omit it. `paneID` is the surface's
 stable token, the value `--pane-id` takes; it follows the terminal through a swap and is omitted for an
 overlay or a pane whose surface is not created yet. In Live mode a split hidden since a relaunch reports it
-while its program runs; until the split is shown that id reaches it through `msg` and `zmx kill --pane-id`, while the
-surface commands' `--pane-id` answers `unknown pane id` without an explicit `--pane` fallback. `pendingMessages` counts the messages waiting in the
+while its program runs. That id names the pane even before its surface exists: `msg` and `zmx kill --pane-id` reach it,
+and a command that needs a surface refuses it until the surface exists. `pendingMessages` counts the messages waiting in the
 pane's [msg](#msg) mailbox and is omitted at zero. `remote` is `true` on an origin's main or split pane whose
 next ask, overlay or page goes to an attached Mac (see Remote sessions), omitted otherwise. `lead` is `leader`, `follower`
 or `unowned`: whether this Mac's window size is the one the pane's program sees. A pane that does not
@@ -743,8 +743,8 @@ error keeps those names for compatibility.
   `session text`, no `other` value. `--pane-id` takes a stable pane token (`$AGTERM_PANE_ID`, or
   `surfaces[].paneID` from `tree --json`) and types into that terminal wherever it sits now, overriding
   `--pane`. An unknown token without `--pane` fails with `unknown pane id: <id>`; with `--pane` it uses
-  that pane. A split still hidden since a Live relaunch has no terminal yet, so its id is unknown here until the
-  split is shown. `result.pane` names the pane typed into. `--select` realizes the MAIN pane only — a split pane must
+  that pane. A split still hidden since a Live relaunch has no terminal yet, so its id answers
+  `session not realized` until the surface exists, as `--pane right` does. `result.pane` names the pane typed into. `--select` realizes the MAIN pane only — a split pane must
   already exist. Also like `session text`, there is no overlay value: every `--pane` types into the surface
   UNDER a covering overlay, so the keystrokes reach the hidden shell and run there unseen until the overlay
   closes — the call still answers `ok`. That is deliberate: the panes stay drivable whatever is drawn over

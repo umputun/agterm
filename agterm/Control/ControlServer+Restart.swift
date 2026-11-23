@@ -214,7 +214,7 @@ extension ControlServer {
         case .pane(let resolved?): pane = resolved
         }
         if pane == .right, session.splitSurface == nil {
-            return .failure(Self.restartFailure("session has no split pane"))
+            return .failure(Self.restartFailure(Self.missingSplit(session)))
         }
         guard let view = (pane == .right ? session.splitSurface : session.surface) as? GhosttySurfaceView,
               let identity = UUID(uuidString: view.paneToken) else {

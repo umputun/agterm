@@ -71,6 +71,44 @@ final class ControlServerSurfaceIOTests: XCTestCase {
         WatermarkStorage.renderedTextURL(sessionID: session.id, paneKey: key).path
     }
 
+    func testAHiddenSplitsIDAnswersNotRealizedLikeItsRole() async throws {
+        let server = makeServer()
+        let (_, session) = try makeSession(split: false)
+        let (_, plain) = try makeSession(split: false)
+        session.hasSplit = true
+        let split = UUID()
+        session.splitPaneIdentity = split
+        let id = session.id.uuidString
+
+        let byID = server.readSessionText(id, window: nil,
+                                          options: ControlSessionTextOptions(pane: nil, paneID: split.uuidString, all: false, lines: nil))
+        let byRole = server.readSessionText(id, window: nil, options: ControlSessionTextOptions(pane: .right, all: false, lines: nil))
+        let typed = await server.typeSession(id, window: nil,
+                                             options: ControlSessionTypeOptions(text: "x", select: false, pane: nil, paneID: split.uuidString))
+        let pasted = await server.pasteSessionText(id, window: nil, pane: nil, paneID: split.uuidString, text: "x")
+        let noSplit = server.readSessionText(plain.id.uuidString, window: nil,
+                                             options: ControlSessionTextOptions(pane: .right, all: false, lines: nil))
+
+        XCTAssertEqual(byID.error, "session not realized")
+        XCTAssertEqual(byRole.error, "session not realized")
+        XCTAssertEqual(typed.error, "session not realized")
+        XCTAssertEqual(pasted.error, "session not realized")
+        XCTAssertEqual(noSplit.error, "session has no split pane")
+    }
+
+    func testAPrimaryIDWithNoPrimarySurfaceIsNotPastedIntoTheSplit() async throws {
+        let server = makeServer()
+        let (_, session) = try makeSession(split: true)
+        session.surface = nil
+        let id = session.id.uuidString
+
+        let byID = await server.pasteSessionText(id, window: nil, pane: nil, paneID: session.paneIdentity.uuidString, text: "x")
+        let bare = await server.pasteSessionText(id, window: nil, pane: nil, paneID: nil, text: "x")
+
+        XCTAssertEqual(byID.error, "session not realized")
+        XCTAssertTrue(bare.ok, "\(bare)")
+    }
+
     func testAPaneOverrideNeedsThatPaneToExist() throws {
         let server = makeServer()
         let (_, session) = try makeSession(split: false)
