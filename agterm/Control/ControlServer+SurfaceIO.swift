@@ -24,13 +24,16 @@ extension ControlServer {
         case .unknownToken(let token): return .failure(Self.unknownPaneID(token))
         case .pane(let resolved): pane = resolved
         }
+        // a token that matched names its own pane, so a primary with no surface is refused rather than
+        // falling back to the split
+        let matchedToken = paneID.map { session.paneRole(forToken: $0) != nil } ?? false
         let chosen: (any TerminalSurface)?
         switch pane {
         case nil, .left:
-            chosen = session.addressableSurface
+            chosen = matchedToken ? session.surface : session.addressableSurface
         case .right:
             guard let split = session.splitSurface else {
-                return .failure(ControlResponse(ok: false, error: "session has no split pane"))
+                return .failure(ControlResponse(ok: false, error: Self.missingSplit(session)))
             }
             chosen = split
         case .scratch:
@@ -323,7 +326,7 @@ extension ControlServer {
             case .left: chosen = session.surface
             case .right:
                 guard let split = session.splitSurface else {
-                    return ControlResponse(ok: false, error: "session has no split pane")
+                    return ControlResponse(ok: false, error: Self.missingSplit(session))
                 }
                 chosen = split
             case .scratch:
@@ -357,6 +360,12 @@ extension ControlServer {
 
     static func unknownPaneID(_ token: String) -> ControlResponse {
         ControlResponse(ok: false, error: "unknown pane id: \(token)")
+    }
+
+    /// The refusal for a right pane with no surface: a split hidden since a Live relaunch exists before its
+    /// surface does, which is not a session without a split.
+    static func missingSplit(_ session: Session?) -> String {
+        session?.hasSplit == true ? "session not realized" : "session has no split pane"
     }
 
     /// Returns the addressed surface's zero-based cursor column. Takes `surface.zoom`'s target vocabulary —
@@ -614,8 +623,8 @@ extension ControlServer {
         case nil, .left:
             break
         case .right:
-            guard let split = store.session(withID: id)?.splitSurface else {
-                return ControlResponse(ok: false, error: "session has no split pane")
+            guard let split = session?.splitSurface else {
+                return ControlResponse(ok: false, error: Self.missingSplit(session))
             }
             // inject returns false when the view exists but its libghostty surface isn't realized yet (there
             // is no realize/select path for the split pane) — report that instead of a false ok.

@@ -1540,7 +1540,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - Each tree surface node carries `paneID`, the live surface's token, omitted for a slot whose surface
   carries none (an overlay, or a pane whose surface is not created yet). A Live split hidden since a relaunch reports
   its identity while its daemon runs (the mail predicate): `msg` and `zmx.kill.pane` take it, and
-  `Session.paneRole(forToken:)` does not until a surface exists.
+  `Session.paneRole(forToken:)` resolves a surfaceless slot by its identity, so a command needing a surface
+  refuses it rather than answering `unknown pane id`. `paneToken(for:)` keeps the daemon gate, the server's
+  mail predicate. A token that matched a primary with no surface never falls back to the split.
 - `session.status --pane-id` (#199) falls back to the role for an absent or unknown token and adds no
   read-back field: it reports only the resolved `statusPane`.
 - Auto-reset clears both session entered and session left. Status renders on selected sessions too.

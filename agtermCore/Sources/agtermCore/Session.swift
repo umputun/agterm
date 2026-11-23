@@ -670,8 +670,8 @@ public final class Session: Identifiable {
     /// command's `AGT_SESSION_PWD` resolves through `cwd(for:)`, so the split's and scratch's values can differ.
     public var effectiveCwd: String { currentCwd ?? initialCwd }
 
-    /// The stable token of the surface currently in `pane`'s slot (`TerminalSurface.paneToken`), the inverse
-    /// of `paneRole(forToken:)`; empty while the slot holds no surface.
+    /// The token of the surface in `pane`'s slot, else a surfaceless daemon-backed pane's identity, else empty.
+    /// Narrower than `paneRole(forToken:)`, which also resolves a surfaceless pane with no daemon.
     public func paneToken(for pane: CommandContext.Pane) -> String {
         switch pane {
         case .left:
@@ -837,16 +837,16 @@ public final class Session: Identifiable {
     /// forwarded by the agent-status hook as `session.status --pane-id`) to the slot it CURRENTLY occupies.
     /// Derived LIVE from slot occupancy, so a promoted split survivor resolves `.left` and a fresh re-split
     /// helper `.right` even though both shells were baked with the same stale `right` role — the #199 fix.
-    /// nil for an empty or unknown token (torn-down surface, or a shell spawned before the token existed), so
-    /// the caller falls back to the baked `--pane`; mirrors the live-role read `GhosttySurfaceView.isSplitPane`
-    /// gives the pane-scoped keystroke-clear (see the Notifications rule).
+    /// A slot with no surface answers to its pane identity, so an id `tree` lists names that pane before its
+    /// surface exists. Returns nil for an empty or unknown token. Mirrors the live-role read
+    /// `GhosttySurfaceView.isSplitPane` gives the pane-scoped keystroke-clear.
     public func paneRole(forToken token: String) -> StatusPane? {
         guard !token.isEmpty else { return nil }
         if surface?.paneToken == token { return .left }
         if splitSurface?.paneToken == token { return .right }
         if scratchSurface?.paneToken == token { return .scratch }
-        if surface == nil, daemonToken(paneIdentity) == token { return .left }
-        if splitSurface == nil, let split = splitPaneIdentity, daemonToken(split) == token { return .right }
+        if surface == nil, paneIdentity.uuidString == token { return .left }
+        if splitSurface == nil, splitPaneIdentity?.uuidString == token { return .right }
         if scratchSurface == nil, (scratchClientIdentity ?? scratchDaemon?.identity)?.uuidString == token { return .scratch }
         return nil
     }

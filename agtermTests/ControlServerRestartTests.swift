@@ -161,6 +161,22 @@ final class ControlServerRestartTests: XCTestCase {
         XCTAssertNotNil(library.store(forSession: session.id))
     }
 
+    func testAHiddenSplitsIDIsRefusedAsNotRealized() async throws {
+        let (session, _) = try livePane()
+        let split = UUID()
+        session.hasSplit = true
+        session.splitPaneIdentity = split
+        var killed: [String] = []
+        let server = makeServer(daemon: ZmxSupport.daemonName(for: split)) { killed.append($0) }
+
+        let response = await server.restartSessionPane(
+            session.id.uuidString, window: nil,
+            options: ControlSessionRestartOptions(command: "cld", pane: nil, paneID: split.uuidString))
+
+        XCTAssertEqual(response.error, "session not realized")
+        XCTAssertEqual(killed, [])
+    }
+
     func testAPaneWithoutALiveDaemonIsRefused() async throws {
         let store = try XCTUnwrap(library.activeStore)
         let session = try XCTUnwrap(store.workspaces.first?.sessions.first)

@@ -754,13 +754,26 @@ struct SessionTests {
         #expect(session.paneToken(for: .scratch) == "")
     }
 
-    @Test func aSurfacelessPaneOutsideTheDaemonSetHasNoToken() {
+    @Test func aSurfacelessPaneOutsideTheDaemonSetResolvesButHasNoToken() {
         let session = Session(initialCwd: "/repo")
         session.splitPaneIdentity = UUID()
         session.daemonBackedPanes = [session.paneIdentity]
 
-        #expect(session.paneRole(forToken: session.splitPaneIdentity!.uuidString) == nil)
+        #expect(session.paneRole(forToken: session.splitPaneIdentity!.uuidString) == .right)
         #expect(session.paneToken(for: .right) == "")
+    }
+
+    @Test func surfacelessPanesWithNoDaemonSetResolveByIdentity() {
+        let session = Session(initialCwd: "/repo")
+        let split = UUID()
+        session.splitPaneIdentity = split
+
+        #expect(session.paneRole(forToken: session.paneIdentity.uuidString) == .left)
+        #expect(session.paneRole(forToken: split.uuidString) == .right)
+        #expect(session.paneRole(forToken: UUID().uuidString) == nil)
+        #expect(session.paneToken(for: .left) == "")
+        #expect(session.paneToken(for: .right) == "")
+        #expect(session.paneAddress(token: split.uuidString, pane: nil) == .pane(.right))
     }
 
     @Test func aLiveSurfaceTokenWinsOverTheDaemonIdentity() {
