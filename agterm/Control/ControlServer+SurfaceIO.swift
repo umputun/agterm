@@ -5,8 +5,8 @@ import agtermCore
 /// watermark, buffer read, in-terminal search, text injection. Split out for the swiftlint size limit.
 extension ControlServer {
     /// bindingSurface is the addressed pane of `session.paste`/`session.selectall`, never the focused one, with its
-    /// spawn expedited: nil and `.left` are `addressableSurface`, so a promoted split survivor is still reached, and
-    /// `.scratch` resolves while hidden. An empty slot and an unrealized view both answer "session not realized".
+    /// spawn expedited: nil and `.left` are `addressableSurface`, so a promoted split survivor is still reached, unless
+    /// `paneID` matched the primary, which then answers for itself; `.scratch` resolves while hidden.
     /// `paneID` resolves before `pane` through `Session.paneAddress`.
     private func bindingSurface(_ target: String?, window: String?, pane requested: StatusPane?,
                                 paneID: String? = nil) -> ControlTargetResolver.Resolution<(GhosttySurfaceView, UUID)> {
@@ -24,8 +24,6 @@ extension ControlServer {
         case .unknownToken(let token): return .failure(Self.unknownPaneID(token))
         case .pane(let resolved): pane = resolved
         }
-        // a token that matched names its own pane, so a primary with no surface is refused rather than
-        // falling back to the split
         let matchedToken = paneID.map { session.paneRole(forToken: $0) != nil } ?? false
         let chosen: (any TerminalSurface)?
         switch pane {
@@ -70,7 +68,7 @@ extension ControlServer {
                 chosen = session.addressableSurface
             case .right:
                 guard let split = session.splitSurface else {
-                    return ControlResponse(ok: false, error: "session has no split pane")
+                    return ControlResponse(ok: false, error: Self.missingSplit(session))
                 }
                 chosen = split
             case .scratch:
@@ -362,8 +360,7 @@ extension ControlServer {
         ControlResponse(ok: false, error: "unknown pane id: \(token)")
     }
 
-    /// The refusal for a right pane with no surface: a split hidden since a Live relaunch exists before its
-    /// surface does, which is not a session without a split.
+    /// The refusal for a right pane with no surface; a split hidden since a Live relaunch has `hasSplit` but no surface.
     static func missingSplit(_ session: Session?) -> String {
         session?.hasSplit == true ? "session not realized" : "session has no split pane"
     }

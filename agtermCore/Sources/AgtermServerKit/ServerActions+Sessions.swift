@@ -321,7 +321,10 @@ extension ServerActions {
             guard let scratch = session.scratchDaemon else { return .refused(ControlResponse(ok: false, error: "session not realized")) }
             return .success((scratch.identity, role))
         }
-        guard let identity = session.paneIdentity(for: role), session.daemonBackedPanes.contains(identity) else {
+        guard let identity = session.paneIdentity(for: role) else {
+            return .refused(ControlResponse(ok: false, error: "session has no split pane"))
+        }
+        guard session.daemonBackedPanes.contains(identity) else {
             return .refused(ControlResponse(ok: false, error: "session not realized"))
         }
         return .success((identity, role))

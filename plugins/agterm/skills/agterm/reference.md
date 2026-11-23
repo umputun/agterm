@@ -835,7 +835,8 @@ error keeps those names for compatibility.
   builtin or a loop included), when the program cannot be read (`sudo`, `top`), when its directory is
   unavailable or when it is in `restore-denylist.conf`; pass `--command` then. An empty `--command`
   is an error, never a replay. The pane keeps its place, stable id and `AGTERM_*` environment and
-  starts blank; nothing is typed. Works on a hidden split and in a background window. Reply after the new
+  starts blank; nothing is typed. Works on a hidden split and in a background window, except that a split still
+  hidden since a Live relaunch on the Mac running it answers `session not realized` until its surface exists. Reply after the new
   shell exists: `restart.oldPid`, `restart.newPid`, `restart.paneID`, `pane`. Those are the pane's shells;
   read the program from `tree`'s `foreground`/`splitForeground`. Live sessions mode, a local pane or a row of
   an agterm-server window (its server restarts it; an Ended row there takes `--command` on the left pane), or a
