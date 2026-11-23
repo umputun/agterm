@@ -97,7 +97,7 @@ all_up="(.remote.state == \"connected\") and ($rows | length) == \$n and ($rows 
 launch() {
   [[ ! -S "$SOCK" ]] || ! ctl tree --json >/dev/null 2>&1 || die "another instance already serves $SOCK"
   local vars pid activated="" end=$((SECONDS + 10))
-  vars="$(env | sed -n 's/^\(\(CLAUDE\|AGTERM_\|GHOSTTY_\)[A-Za-z0-9_]*\)=.*/\1/p' | sed 's/^/-u /' | tr '\n' ' ')"
+  vars="$(env | { grep -oE '^(CLAUDE|AGTERM_|GHOSTTY_)[A-Za-z0-9_]*' || true; } | sed 's/^/-u /' | tr '\n' ' ')"
   # shellcheck disable=SC2086 # vars is a list of `-u NAME` words
   env $vars open -n --env "AGTERM_STATE_DIR=$STATE" --env "PATH=$STATE/bin:$PATH" "$APP"
   for _ in $(seq 10); do
