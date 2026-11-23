@@ -855,7 +855,7 @@ error keeps those names for compatibility.
   surface is not ready. The new primary supplies `tree`'s `cwd`/`title`/`foreground`/`restoreCommand`/
   `commandWait`; the other side supplies `splitCwd`/`splitForeground`/`splitRestoreCommand`/`splitCommandWait`.
 - `session lead [--pane left|right|scratch] [--target] [--window W]`: take the lead of a pane for this Mac, as a
-  key press on its cover does; the pane is then covered on the other Mac. Ok when it already leads,
+  key press or click on its cover does; the pane is then covered on the other Mac. Ok when it already leads,
   `pane has no lead to take` when its terminal reports none, `the scratch terminal has no lead` for a scratch
   outside Live sessions. Read back `surfaces[].lead`.
 - `session scratch [on|off|toggle] [--command CMD] [--follow] [--target] [--window W]` — a third, full-coverage
@@ -2791,7 +2791,7 @@ every pane at once; the same panes on the Mac the session runs on are covered ("
 Each pane's `lead` in `tree` reads `leader`, `follower` or `unowned`. It is absent when the pane has no
 daemon to lead, which is every local pane outside Live sessions mode (`agtermctl restore mode`), and when
 an agterm on either side predates the lead. `agtermctl session lead [--pane left|right]` takes the lead
-for this Mac, as pressing a key on the cover does.
+for this Mac, as a key press or click on the cover does.
 
 A pane or scratch that reconnects after its ssh dropped takes the lead back when this Mac led it at the drop and
 nobody has used it since: this Mac's lost connection still holds the lead, or another Mac took it only

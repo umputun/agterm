@@ -53,6 +53,21 @@ final class PaneLeadCoverTests: XCTestCase {
         XCTAssertEqual(PaneLeadCover.title(state: unowned, remote: true), "Reconnecting…")
     }
 
+    func testTheCoverOffersTheTakeoverOnlyWhereAKeyOrClickCanTakeIt() {
+        let offer = "Press any key or click to use it here"
+        let follower = ZmxLeadState(attachment: ZmxLeadAttachment(claim: true))
+        XCTAssertEqual(PaneLeadCover.hint(state: follower, interactive: true), offer)
+        XCTAssertEqual(PaneLeadCover.hint(state: nil, interactive: true), offer)
+
+        let reconnect = ZmxLeadState(attachment: ZmxLeadAttachment(claim: false), reattaching: true)
+        XCTAssertEqual(PaneLeadCover.hint(state: reconnect, interactive: true), offer)
+
+        let takeover = ZmxLeadState(attachment: ZmxLeadAttachment(claim: true), reattaching: true)
+        XCTAssertNil(PaneLeadCover.hint(state: takeover, interactive: true))
+
+        XCTAssertNil(PaneLeadCover.hint(state: follower, interactive: false), "a dashboard cell owns the click and the keys")
+    }
+
     func testAPaneWithNothingToSayShowsNoNotice() {
         XCTAssertNil(RemotePaneNotice.Kind(identity: pane, host: "mini", keyCloses: true))
         XCTAssertNil(RemotePaneNotice.Kind(identity: nil, host: "mini", keyCloses: true))

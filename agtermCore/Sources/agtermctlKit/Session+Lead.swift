@@ -7,8 +7,8 @@ extension Session {
             abstract: "Take the lead of a pane's terminal for this Mac.",
             discussion: """
                 A session attached from another Mac has one leading client per pane, whose window size the \
-                program sees. A pane that does not lead is covered; this uncovers it, as pressing a key on \
-                the cover does, and covers it on the other Mac. Read each pane's `lead` from `tree`.
+                program sees. A pane that does not lead is covered; this uncovers it, as a key press or \
+                click on the cover does, and covers it on the other Mac. Read each pane's `lead` from `tree`.
                 """)
         @Option(name: .long, help: "Which pane: primary/left/top, split/right/bottom, or a Live scratch. Defaults to primary.") var pane: String?
         @OptionGroup var target: TargetOptions

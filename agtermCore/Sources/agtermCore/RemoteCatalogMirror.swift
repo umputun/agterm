@@ -25,7 +25,7 @@ public protocol RemoteCatalogEffects: AnyObject {
     func catalogViewStateChanged()
     /// catalogWorkspaceCollapsed folds a shown workspace row, as a user's collapse does.
     func catalogWorkspaceCollapsed(_ id: UUID)
-    /// catalogClaimLead takes the lead of a pane whose attach already started, as a key press on its cover does.
+    /// catalogClaimLead takes the lead of a pane whose attach already started, as a key press or click on its cover does.
     func catalogClaimLead(_ identity: UUID, session: UUID)
 }
 
