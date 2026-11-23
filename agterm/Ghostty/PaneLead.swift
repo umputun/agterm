@@ -93,11 +93,25 @@ enum PaneLead {
         return true
     }
 
-    /// A click on the pane's cover asks for what its first key asks for. The pane is focused first, since the
-    /// replacement surface takes focus only from one that holds it.
+    /// A click on the pane's cover asks for what its first key asks for: a retry while the pane waits to reconnect,
+    /// else the takeover. The pane is focused first, since the replacement surface takes focus only from one that holds it.
     static func coverClicked(_ view: GhosttySurfaceView) {
         view.focusAfterReparent()
-        take(view)
+        if !retryReconnect(view) { take(view) }
+    }
+
+    /// A click on the reconnect notice retries now, as its key does, and never takes the lead.
+    static func noticeClicked(_ view: GhosttySurfaceView) {
+        view.focusAfterReparent()
+        retryReconnect(view)
+    }
+
+    /// Makes a waiting pane's next probe due now. False when the pane is not waiting.
+    @discardableResult
+    private static func retryReconnect(_ view: GhosttySurfaceView) -> Bool {
+        guard let pane = UUID(uuidString: view.paneToken), RemoteReconnectBook.shared.waiting(pane: pane) else { return false }
+        RemoteReconnectBook.shared.retryNow(pane: pane, now: Date())
+        return true
     }
 
     /// Takes the lead of a covered pane for the cover's key and click. False when there is nothing to ask for:

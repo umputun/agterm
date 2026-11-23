@@ -135,7 +135,7 @@ launch() {
   [[ ! -S "$SOCK" ]] || ! ctl tree --json >/dev/null 2>&1 || die "another instance already serves $SOCK"
   local before vars pid end=$((SECONDS + 10))
   before=" $(app_pids | tr '\n' ' ') "
-  vars="$(env | sed -n 's/^\(\(CLAUDE\|AGTERM_\|GHOSTTY_\)[A-Za-z0-9_]*\)=.*/\1/p' | sed 's/^/-u /' | tr '\n' ' ')"
+  vars="$(env | { grep -oE '^(CLAUDE|AGTERM_|GHOSTTY_)[A-Za-z0-9_]*' || true; } | sed 's/^/-u /' | tr '\n' ' ')"
   # shellcheck disable=SC2086 # vars is a list of `-u NAME` words
   env $vars open -n --env "AGTERM_STATE_DIR=$STATE" "$APP"
   while [[ -z "$APP_PID" ]] && (( SECONDS < end )); do

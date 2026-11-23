@@ -19,39 +19,43 @@ struct PaneLeadCover: View {
         let identity = session.paneIdentity(for: pane)
         let book = ZmxLeadBook.shared
         let covered = book.covered(pane: identity) && !hidden
+        let waiting = RemoteReconnectBook.shared.waiting(pane: identity)
         ZStack {
-            if covered {
-                background
-                VStack(spacing: 8) {
-                    Image(systemName: "rectangle.on.rectangle.slash")
-                        .font(.system(size: 28, weight: .light))
-                    let state = identity.flatMap { book.states[$0] }
-                    Text(Self.title(state: state, remote: session.remoteHost != nil))
-                        .font(.system(size: 14, weight: .medium))
-                    if let hint = Self.hint(state: state, interactive: interactive) {
-                        Text(hint)
-                            .font(.system(size: 12))
-                            .opacity(0.7)
+            ZStack {
+                if covered {
+                    background
+                    VStack(spacing: 8) {
+                        Image(systemName: "rectangle.on.rectangle.slash")
+                            .font(.system(size: 28, weight: .light))
+                        let state = identity.flatMap { book.states[$0] }
+                        Text(Self.title(state: state, remote: session.remoteHost != nil))
+                            .font(.system(size: 14, weight: .medium))
+                        if let hint = Self.hint(state: state, interactive: interactive, waiting: waiting) {
+                            Text(hint)
+                                .font(.system(size: 12))
+                                .opacity(0.7)
+                        }
                     }
+                    .foregroundStyle(foreground)
+                    .multilineTextAlignment(.center)
+                    .padding()
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("pane-lead-cover-\(pane.rawValue)")
                 }
-                .foregroundStyle(foreground)
-                .multilineTextAlignment(.center)
-                .padding()
-                .accessibilityElement(children: .combine)
-                .accessibilityIdentifier("pane-lead-cover-\(pane.rawValue)")
             }
+            .contentShape(Rectangle())
+            .onTapGesture { takePane() }
+            .allowsHitTesting(covered && interactive)
             if !hidden, let notice = RemotePaneNotice.Kind(identity: identity, host: session.remoteHost,
                                                            keyCloses: session.remotePresentation?.binding.catalogOwned != true) {
-                RemotePaneNotice(kind: notice, pane: pane, background: background, foreground: foreground)
+                RemotePaneNotice(kind: notice, pane: pane, background: background, foreground: foreground,
+                                 retry: interactive ? { retryPane() } : nil)
             }
         }
-        .contentShape(Rectangle())
-        .onTapGesture { takePane() }
-        .allowsHitTesting(covered && interactive)
     }
 
-    static func hint(state: ZmxLeadState?, interactive: Bool) -> String? {
-        guard interactive, state?.reattaching != true || state?.attachment.claim == false else { return nil }
+    static func hint(state: ZmxLeadState?, interactive: Bool, waiting: Bool) -> String? {
+        guard interactive, !waiting, state?.reattaching != true || state?.attachment.claim == false else { return nil }
         return "Press any key or click to use it here"
     }
 
@@ -61,19 +65,27 @@ struct PaneLeadCover: View {
         return remote ? "In use on the Mac it runs on" : "In use from another Mac"
     }
 
-    private func takePane() {
+    private var surfaceView: GhosttySurfaceView? {
         let surface = switch pane {
         case .left: session.surface
         case .right: session.splitSurface
         case .scratch: session.scratchSurface
         }
-        guard let view = surface as? GhosttySurfaceView else { return }
-        PaneLead.coverClicked(view)
+        return surface as? GhosttySurfaceView
+    }
+
+    private func takePane() {
+        if let view = surfaceView { PaneLead.coverClicked(view) }
+    }
+
+    private func retryPane() {
+        if let view = surfaceView { PaneLead.noticeClicked(view) }
     }
 }
 
 /// RemotePaneNotice is the panel over a remote pane whose attach ended: one waiting to reconnect, or one whose
-/// session ended on its origin. The key it names is the pane's own, so the panel never takes hits.
+/// session ended on its origin. Only the reconnecting card takes clicks, and only with `retry`; the rest of the
+/// panel passes them to the pane.
 struct RemotePaneNotice: View {
     enum Kind: Equatable {
         /// reason is what ssh said on the last failed probe, never the outcome of the attach that follows.
@@ -97,6 +109,8 @@ struct RemotePaneNotice: View {
     let pane: StatusPane
     let background: Color
     let foreground: Color
+    /// Retries the reconnect now; nil in a dashboard cell, which owns its clicks and keys, so no hint names either.
+    var retry: (() -> Void)?
 
     var body: some View {
         VStack {
@@ -127,11 +141,18 @@ struct RemotePaneNotice: View {
             .background(background.opacity(0.94), in: .rect(cornerRadius: 10))
             .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(foreground.opacity(0.2)))
             .shadow(color: .black.opacity(0.25), radius: 8, y: 2)
+            .contentShape(.rect(cornerRadius: 10))
+            .onTapGesture { retry?() }
+            .allowsHitTesting(retries)
             .padding(16)
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("remote-pane-notice-\(pane.rawValue)")
         }
-        .allowsHitTesting(false)
+    }
+
+    var retries: Bool {
+        guard case .reconnecting = kind else { return false }
+        return retry != nil
     }
 
     private var symbol: String {
@@ -148,10 +169,10 @@ struct RemotePaneNotice: View {
         }
     }
 
-    private var hint: String? {
+    var hint: String? {
         switch kind {
-        case .reconnecting: "Reconnecting… · any key retries now"
-        case .ended(_, _, let keyCloses): keyCloses ? "Any key closes" : nil
+        case .reconnecting: retries ? "Reconnecting… · any key or click retries now" : "Reconnecting…"
+        case .ended(_, _, let keyCloses): keyCloses && retry != nil ? "Any key closes" : nil
         }
     }
 }

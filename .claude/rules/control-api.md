@@ -2220,7 +2220,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   origin had reported a role or the attach it replaced dropped before its first report, and
   `remotePaneResumed`. Re-running the attach in the shell was rejected: it
   would claim the lead on every retry and skip that cleanup. A key on a waiting pane retries now; Command
-  chords pass. `RemoteLinkObserver` calls `ControlServer.retryRemoteLinksNow` on the display wake
+  chords pass. A click on the reconnecting panel, or on a lead cover still up over a waiting pane, retries too
+  (`PaneLead.coverClicked`, `noticeClicked`) and never claims; a dashboard cell's panel takes no clicks. `RemoteLinkObserver` calls `ControlServer.retryRemoteLinksNow` on the display wake
   `SystemWakeObserver` bridges, which a dark wake or a headless Mac never posts, and on every
   `NWPathMonitor` path change that leaves the path usable, a hand-off that stayed usable included;
   the first path report is the state at start. That makes

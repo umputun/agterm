@@ -33,6 +33,10 @@ These run inside the app, so a mistake can kill the host instead of failing an a
   fails on his machine alone while CI stays green. `defaults read -g NSUserKeyEquivalents` names the
   bindings. Suppress the substitution rather than renaming fixtures: `StockMenuChordTests` needs the
   real "Close" to test chord ownership, and the substitution matches invented titles just as readily.
+- In a hosted `NSHostingView`, neither `NSWindow.sendEvent` nor a direct `mouseDown`/`mouseUp` on the
+  hit-tested view fired `onTapGesture`, not even on a plain `Color` (2026-11-23).
+  Pin the gesture's action in a hosted test; check pointer delivery in `agtermUITests`,
+  or in an isolated Debug instance when it needs a live fixture.
 - Never stub `GhosttyApp`; its handler is the only crash record.
 - `AGTERM_HOSTED_TESTS=1`, set by the `agtermTests` scheme, renders `HostedTestPlaceholder`, skips the
   launch `NSApp.activate()`, and skips the scene task that assigns `appDelegate.library`; it stays nil.
