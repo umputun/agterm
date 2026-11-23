@@ -88,24 +88,26 @@ final class SidebarOutlineView: NSOutlineView {
         return (top as? SidebarNode)?.kind == .session ? 1 : 0
     }
 
-    /// The first disclosure button AppKit made, copied for every later one. Its `_makeOutlineControl` (seen on
-    /// macOS 27.2) registers key-window observers on every window that hold the new button and are never removed,
-    /// so each button it makes is never freed and re-tints on every key change; a copy carries no observers.
-    /// Gated on the version it was verified on, like `frameOfCell`.
-    private var disclosureTemplate: NSButton?
+    /// One disclosure button AppKit made, kept out of every row and copied for each triangle every sidebar shows.
+    /// Its `_makeOutlineControl` (seen on macOS 27.2) registers key-window observers on every window that hold
+    /// the new button and are never removed, so each button it makes is never freed and re-tints on every key
+    /// change; a copy carries no observers. Gated on the version it was verified on, like `frameOfCell`.
+    private static var disclosureTemplate: NSButton?
 
     override func makeView(withIdentifier identifier: NSUserInterfaceItemIdentifier, owner: Any?) -> NSView? {
-        guard #available(macOS 27.0, *), identifier == NSOutlineView.disclosureButtonIdentifier,
-              let template = disclosureTemplate else {
-            let made = super.makeView(withIdentifier: identifier, owner: owner)
-            if identifier == NSOutlineView.disclosureButtonIdentifier, disclosureTemplate == nil {
-                disclosureTemplate = made as? NSButton
-            }
-            return made
+        guard #available(macOS 27.0, *), identifier == NSOutlineView.disclosureButtonIdentifier else {
+            return super.makeView(withIdentifier: identifier, owner: owner)
         }
         // NSTableView's lookup only dequeues a button AppKit set aside; NSOutlineView's makes a new one when none is
-        return dequeueFromTableView(identifier, owner: owner) ?? Self.copy(of: template)
-            ?? super.makeView(withIdentifier: identifier, owner: owner)
+        if let queued = dequeueFromTableView(identifier, owner: owner) { return queued }
+        if Self.disclosureTemplate == nil {
+            Self.disclosureTemplate = super.makeView(withIdentifier: identifier, owner: owner) as? NSButton
+        }
+        guard let template = Self.disclosureTemplate, let copy = Self.copy(of: template) else {
+            return super.makeView(withIdentifier: identifier, owner: owner)
+        }
+        copy.target = self
+        return copy
     }
 
     private func dequeueFromTableView(_ identifier: NSUserInterfaceItemIdentifier, owner: Any?) -> NSView? {
@@ -120,7 +122,6 @@ final class SidebarOutlineView: NSOutlineView {
               let unarchiver = try? NSKeyedUnarchiver(forReadingFrom: data) else { return nil }
         unarchiver.requiresSecureCoding = false
         let copy = unarchiver.decodeObject(forKey: NSKeyedArchiveRootObjectKey) as? NSButton
-        copy?.target = button.target
         copy?.imagePosition = button.imagePosition
         // the template's tint is whatever the last key change left; nothing would ever update a copy's
         copy?.contentTintColor = nil

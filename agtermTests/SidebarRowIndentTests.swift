@@ -155,6 +155,7 @@ final class SidebarRowIndentTests: XCTestCase {
             XCTAssertEqual(triangles.count, 1, "row \(row) should keep exactly one triangle")
             if let triangle = triangles.first {
                 XCTAssertEqual(triangle.state == .on, outline.isItemExpanded(item), "row \(row) triangle state")
+                XCTAssertTrue(triangle.target === outline, "row \(row) triangle must toggle this outline")
                 XCTAssertEqual(rowView.convert(triangle.frame, to: outline).minX, outline.frameOfOutlineCell(atRow: row).minX,
                                "row \(row) triangle position")
             }
