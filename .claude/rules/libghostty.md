@@ -310,6 +310,9 @@ paths:
   is by design, while a report that it still installs an `ssh` wrapper or breaks `ssh` is a regression.
 - A one-shot local OSC 2 is cleared by the next prompt. Hold the shell with
   `printf '\033]2;X\007'; cat` to test; SSH works because it blocks the local prompt cycle.
+- zmx replays each daemon's terminal title in the attach snapshot (since v0.8.0), so a Live reattach
+  restores pane titles with no prompt. A label that changes after relaunch comes from split focus returning
+  to the primary pane, which the snapshot does not save (PR #515 plan), not from a lost title (#1093).
 - `liveFocus` is key window and first responder. The key gate is essential because AppKit retains one
   responder per inactive window. Observe all didBecomeKey/didResignKey events and reevaluate this window.
   Push directly from responder callbacks because AppKit has not updated `window.firstResponder` yet.
