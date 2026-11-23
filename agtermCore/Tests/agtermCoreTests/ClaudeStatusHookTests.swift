@@ -279,6 +279,27 @@ struct ClaudeStatusHookTests {
         #expect(result.calls == ["active --blink"])
     }
 
+    @Test func stopWithOnlyAShellCompletesWhenShellsAreIgnored() throws {
+        let result = try run(chain: ["login", "claude"], args: ["completed", "--auto-reset"],
+                             extraEnv: ["AGTERM_CLAUDE_IGNORE_SHELLS": "1"], input: .pipe(Self.payload("Stop", tasks: Self.runningShell)))
+        #expect(result.calls == ["completed --auto-reset"])
+    }
+
+    @Test(arguments: [runningSubagent, runningWorkflow])
+    func stopWithARunningAgentStaysActiveWhenShellsAreIgnored(_ agent: String) throws {
+        let tasks = "[" + Self.runningShell.dropFirst().dropLast() + "," + agent.dropFirst()
+        let result = try run(chain: ["login", "claude"], args: ["completed", "--auto-reset"],
+                             extraEnv: ["AGTERM_CLAUDE_IGNORE_SHELLS": "1"], input: .pipe(Self.payload("Stop", tasks: tasks)))
+        #expect(result.calls == ["active --blink"])
+    }
+
+    @Test(arguments: ["", "0", "yes"])
+    func stopWithAShellStaysActiveUnlessIgnoreIsOne(_ value: String) throws {
+        let result = try run(chain: ["login", "claude"], args: ["completed", "--auto-reset"],
+                             extraEnv: ["AGTERM_CLAUDE_IGNORE_SHELLS": value], input: .pipe(Self.payload("Stop", tasks: Self.runningShell)))
+        #expect(result.calls == ["active --blink"])
+    }
+
     @Test(arguments: [runningSubagent, runningShell])
     func stopRewriteDropsTheCompletionFlags(_ tasks: String) throws {
         let result = try run(chain: ["login", "claude"],

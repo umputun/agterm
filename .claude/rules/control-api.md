@@ -49,7 +49,9 @@ paths:
   `agterm-claude-status.sh` reads the hook payload (non-terminal stdin, 2-second bound, plutil or jq key paths):
   an event carrying `agent_id` adds `--if-idle` to `active`, and a Stop whose `background_tasks` lists a
   running subagent, workflow or shell posts `active --blink` in place of `completed`, dropping the caller's flags
-  so `--auto-reset` cannot idle the row. Anything else, an unreadable payload included, posts argv.
+  so `--auto-reset` cannot idle the row. `AGTERM_CLAUDE_IGNORE_SHELLS=1` in Claude's environment drops shells from
+  that set; it is a hook-local knob because the hook decides before the status reaches the app, and agterm-server
+  has no settings to read. Anything else, an unreadable payload included, posts argv.
 - Codex maps SessionStart idle; prompt/pre/post tool active; Stop ending `?` blocked, otherwise completed.
   Those first four report nothing for a null `transcript_path`: Codex's ephemeral memory consolidation
   thread fires them but never a user Stop, so they would leave the pane active.
