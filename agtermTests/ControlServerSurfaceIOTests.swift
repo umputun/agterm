@@ -86,6 +86,8 @@ final class ControlServerSurfaceIOTests: XCTestCase {
         let typed = await server.typeSession(id, window: nil,
                                              options: ControlSessionTypeOptions(text: "x", select: false, pane: nil, paneID: split.uuidString))
         let pasted = await server.pasteSessionText(id, window: nil, pane: nil, paneID: split.uuidString, text: "x")
+        let font = server.font(id, window: nil, pane: .right, action: "font.inc")
+        let lead = server.takeSessionLead(id, window: nil, pane: .right)
         let noSplit = server.readSessionText(plain.id.uuidString, window: nil,
                                              options: ControlSessionTextOptions(pane: .right, all: false, lines: nil))
 
@@ -93,6 +95,8 @@ final class ControlServerSurfaceIOTests: XCTestCase {
         XCTAssertEqual(byRole.error, "session not realized")
         XCTAssertEqual(typed.error, "session not realized")
         XCTAssertEqual(pasted.error, "session not realized")
+        XCTAssertEqual(font.error, "session not realized")
+        XCTAssertEqual(lead.error, "session not realized")
         XCTAssertEqual(noSplit.error, "session has no split pane")
     }
 

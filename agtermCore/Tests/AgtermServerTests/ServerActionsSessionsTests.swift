@@ -331,11 +331,25 @@ struct ServerActionsSessionsTests {
 
     @Test func textOfAPaneWithNoDaemonIsNotRealized() throws {
         let session = try harness.session(newSession())
+        session.hasSplit = true
+        session.splitPaneIdentity = UUID()
 
         let reply = harness.actions.readSessionText(session.id.uuidString, window: nil,
                                                     options: ControlSessionTextOptions(pane: .right, paneID: nil, all: false, lines: nil))
 
         #expect(reply == ControlResponse(ok: false, error: "session not realized"))
+    }
+
+    @Test func textAndTypeOfAMissingSplitSayThereIsNone() async throws {
+        let session = try harness.session(newSession())
+
+        let text = harness.actions.readSessionText(session.id.uuidString, window: nil,
+                                                   options: ControlSessionTextOptions(pane: .right, paneID: nil, all: false, lines: nil))
+        let typed = await harness.actions.typeSession(session.id.uuidString, window: nil,
+                                                      options: ControlSessionTypeOptions(text: "x", select: false, pane: .right, paneID: nil))
+
+        #expect(text.error == "session has no split pane")
+        #expect(typed.error == "session has no split pane")
     }
 
     @Test func typeSendsTheTextThenItsFinalReturnApart() async throws {
