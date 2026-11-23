@@ -113,6 +113,55 @@ final class SidebarRowIndentTests: XCTestCase {
         }
     }
 
+    // a fold or a reload hands rows new triangles, and each must still work while old ones are freed
+    func testFoldsAndReloadsLeaveEachExpandableRowOneTriangleAndFreeTheRest() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let parent = try XCTUnwrap(store.activeSession)
+        _ = try store.addCompanion(to: parent.id).get()
+        try buildSidebar()
+        let workspace = try XCTUnwrap(outline.item(atRow: try workspaceRow()))
+        outline.expandItem(outline.item(atRow: try row(of: parent.id)))
+
+        let seen = NSHashTable<NSView>.weakObjects()
+        for _ in 0 ..< 4 {
+            try autoreleasepool {
+                outline.collapseItem(workspace)
+                outline.layoutSubtreeIfNeeded()
+                outline.expandItem(workspace)
+                try assertOneWorkingTrianglePerExpandableRow(collectingInto: seen)
+                coordinator.rebuildAndReload()
+                try assertOneWorkingTrianglePerExpandableRow(collectingInto: seen)
+                RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+            }
+        }
+        // the outline only copies triangles on macOS 27+, the version AppKit's leak was verified on
+        guard #available(macOS 27.0, *) else { return }
+        XCTAssertLessThanOrEqual(seen.allObjects.count, 2 * outline.numberOfRows,
+                                 "triangles from earlier folds and reloads should be freed, not kept alive")
+    }
+
+    private func assertOneWorkingTrianglePerExpandableRow(collectingInto seen: NSHashTable<NSView>) throws {
+        outline.layoutSubtreeIfNeeded()
+        for row in 0 ..< outline.numberOfRows {
+            let item = outline.item(atRow: row)
+            let rowView = try XCTUnwrap(outline.rowView(atRow: row, makeIfNecessary: false))
+            let triangles = rowView.subviews.compactMap { $0 as? NSButton }
+                .filter { $0.identifier == NSOutlineView.disclosureButtonIdentifier }
+            triangles.forEach(seen.add)
+            guard outline.isExpandable(item), !outline.frameOfOutlineCell(atRow: row).isEmpty else {
+                XCTAssertTrue(triangles.isEmpty, "row \(row) is not expandable")
+                continue
+            }
+            XCTAssertEqual(triangles.count, 1, "row \(row) should keep exactly one triangle")
+            if let triangle = triangles.first {
+                XCTAssertEqual(triangle.state == .on, outline.isItemExpanded(item), "row \(row) triangle state")
+                XCTAssertTrue(triangle.target === outline, "row \(row) triangle must toggle this outline")
+                XCTAssertEqual(rowView.convert(triangle.frame, to: outline).minX, outline.frameOfOutlineCell(atRow: row).minX,
+                               "row \(row) triangle position")
+            }
+        }
+    }
+
     private var trimApplies: Bool {
         if #available(macOS 27.0, *) { return true }
         return false
