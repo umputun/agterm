@@ -88,10 +88,7 @@ final class SidebarOutlineView: NSOutlineView {
         return (top as? SidebarNode)?.kind == .session ? 1 : 0
     }
 
-    /// One disclosure button AppKit made, kept out of every row and copied for each triangle every sidebar shows.
-    /// Its `_makeOutlineControl` (seen on macOS 27.2) registers key-window observers on every window that hold
-    /// the new button and are never removed, so each button it makes is never freed and re-tints on every key
-    /// change; a copy carries no observers. Gated on the version it was verified on, like `frameOfCell`.
+    /// One detached template, so AppKit's per-button observer leak (seen on macOS 27.0.1 and 27.2) hits it alone.
     private static var disclosureTemplate: NSButton?
 
     override func makeView(withIdentifier identifier: NSUserInterfaceItemIdentifier, owner: Any?) -> NSView? {

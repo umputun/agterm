@@ -113,7 +113,6 @@ final class SidebarRowIndentTests: XCTestCase {
         }
     }
 
-    // a fold or a reload hands rows new triangles, and each must still work while old ones are freed
     func testFoldsAndReloadsLeaveEachExpandableRowOneTriangleAndFreeTheRest() throws {
         let store = try XCTUnwrap(library.activeStore)
         let parent = try XCTUnwrap(store.activeSession)
