@@ -380,6 +380,17 @@ pane attached; zmx patch 0013 now holds it until that attach, and the test keeps
 - **Fix.** The page holds the counts it reports during setup and sends them after `ready`.
   `TextPageRenderingTests` pins the message order for a diff with changes, one without, and a seeded search.
 
+### `ControlServerPasteTransferTests.testARunnerFailureInsertsNothingAndSaysWhy`
+
+- **Symptom.** `XCTAssertEqual failed: ("Optional("Last login: Mon Nov 23 17:22:29 on ttys001")") is not equal to
+  ("Optional("")")`.
+- **Runs.** 45225768061 (PR #1097, job 137871811443).
+- **Cause, demonstrated.** The pane runs `/bin/cat` through `login`, which prints `Last login` on a runner with
+  no `~/.hushlogin`. The test took its screen baseline before that line arrived and compared it after the paste.
+  Reproduced locally with a pane command that prints a line late while the stub runner holds the copy.
+- **Fix.** The baseline waits until `cat` prints a marker back, which it can only do after `login` wrote its
+  banner and exec'd it.
+
 ### Earlier hosted failures, already fixed on master
 
 - `HtmlOverlayViewTests` line 48 read the page title before it arrived; fixed in #949.

@@ -82,7 +82,7 @@ final class ControlServerPasteTransferTests: XCTestCase {
 
     func testARunnerFailureInsertsNothingAndSaysWhy() async throws {
         let view = try pane(remoteHost: "studio")
-        let shown = view.readScreenText(all: false, lines: nil)
+        let shown = await settledScreen(view)
         runner.reply = RemoteCommandResult(status: 255, stdout: "", stderr: "")
 
         let reason = await view.paste(PasteOffer(urls: [try file("a.txt")]), drop: false).reason
@@ -330,6 +330,15 @@ final class ControlServerPasteTransferTests: XCTestCase {
             pasteboard.clearContents()
             if !saved.isEmpty { pasteboard.writeObjects(saved) }
         }
+    }
+
+    /// cat printing the marker back proves login has exec'd it, so a banner login writes first is already on screen
+    private func settledScreen(_ view: GhosttySurfaceView) async -> String? {
+        view.insertPasted(text: "settled\n")
+        await waitFor("cat prints the marker back") {
+            (view.readScreenText(all: false, lines: nil)?.components(separatedBy: "settled").count ?? 0) > 2
+        }
+        return view.readScreenText(all: false, lines: nil)
     }
 
     private func waitFor(_ what: String, _ condition: () -> Bool) async {
