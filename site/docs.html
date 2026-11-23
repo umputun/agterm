@@ -490,7 +490,7 @@ command &quot;Session here&quot; ctrl+a&gt;n agtermctl session new --cwd &quot;$
 <h3 id="workspaces-sidebar">The sidebar</h3>
 <ul>
 <li>The sidebar is a two-level tree: the top-level sessions first, with no row above them, then the workspaces, each holding sessions. A workspace row has a filled folder icon, a session row an outlined terminal.</li>
-<li>A session is named after its working directory's last folder. Renaming pins a name of your own; clearing it restores automatic naming. Rename inline by double-clicking a row's name.</li>
+<li>An unnamed terminal session uses the focused pane's terminal title when it has one, or else the last folder of its working directory. In a local window, a split reopens with focus on its left or top pane. Renaming pins a name of your own; clearing it restores automatic naming. Rename inline by double-clicking a row's name.</li>
 <li>The four icons at the bottom of the sidebar add a workspace, add a session, and toggle the workspace filter and the flagged view.</li>
 <li>A click on a workspace's icon folds it at once.</li>
 <li><strong>Copy Name</strong> on a session or workspace row copies its name.</li>
