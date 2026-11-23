@@ -1,3 +1,4 @@
+import SwiftUI
 import XCTest
 @testable import agterm
 @testable import agtermCore
@@ -56,16 +57,33 @@ final class PaneLeadCoverTests: XCTestCase {
     func testTheCoverOffersTheTakeoverOnlyWhereAKeyOrClickCanTakeIt() {
         let offer = "Press any key or click to use it here"
         let follower = ZmxLeadState(attachment: ZmxLeadAttachment(claim: true))
-        XCTAssertEqual(PaneLeadCover.hint(state: follower, interactive: true), offer)
-        XCTAssertEqual(PaneLeadCover.hint(state: nil, interactive: true), offer)
+        XCTAssertEqual(PaneLeadCover.hint(state: follower, interactive: true, waiting: false), offer)
+        XCTAssertEqual(PaneLeadCover.hint(state: nil, interactive: true, waiting: false), offer)
 
         let reconnect = ZmxLeadState(attachment: ZmxLeadAttachment(claim: false), reattaching: true)
-        XCTAssertEqual(PaneLeadCover.hint(state: reconnect, interactive: true), offer)
+        XCTAssertEqual(PaneLeadCover.hint(state: reconnect, interactive: true, waiting: false), offer)
 
         let takeover = ZmxLeadState(attachment: ZmxLeadAttachment(claim: true), reattaching: true)
-        XCTAssertNil(PaneLeadCover.hint(state: takeover, interactive: true))
+        XCTAssertNil(PaneLeadCover.hint(state: takeover, interactive: true, waiting: false))
 
-        XCTAssertNil(PaneLeadCover.hint(state: follower, interactive: false), "a dashboard cell owns the click and the keys")
+        XCTAssertNil(PaneLeadCover.hint(state: follower, interactive: false, waiting: false), "a dashboard cell owns the click and the keys")
+        XCTAssertNil(PaneLeadCover.hint(state: follower, interactive: true, waiting: true), "a waiting pane's click retries")
+    }
+
+    func testOnlyAReconnectingNoticeWithARetryTakesClicks() {
+        let reconnecting = RemotePaneNotice.Kind.reconnecting(host: "mini", reason: nil)
+        let ended = RemotePaneNotice.Kind.ended(name: "build", host: "mini", keyCloses: true)
+        func notice(_ kind: RemotePaneNotice.Kind, retry: (() -> Void)?) -> RemotePaneNotice {
+            RemotePaneNotice(kind: kind, pane: .left, background: .black, foreground: .white, retry: retry)
+        }
+
+        XCTAssertTrue(notice(reconnecting, retry: {}).retries)
+        XCTAssertEqual(notice(reconnecting, retry: {}).hint, "Reconnecting… · any key or click retries now")
+        XCTAssertFalse(notice(reconnecting, retry: nil).retries)
+        XCTAssertEqual(notice(reconnecting, retry: nil).hint, "Reconnecting…", "a dashboard cell owns the click and the keys")
+        XCTAssertFalse(notice(ended, retry: {}).retries)
+        XCTAssertEqual(notice(ended, retry: {}).hint, "Any key closes")
+        XCTAssertNil(notice(ended, retry: nil).hint, "a dashboard cell owns the keys")
     }
 
     func testAPaneWithNothingToSayShowsNoNotice() {

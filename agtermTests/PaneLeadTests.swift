@@ -211,6 +211,43 @@ final class PaneLeadTests: XCTestCase {
         XCTAssertEqual(reattached.map(\.claim), [true])
     }
 
+    func testAClickOnACoveredPaneWaitingToReconnectRetriesNowWithoutTakingTheLead() throws {
+        let (view, identity) = pane()
+        PaneLead.report(try notice("n:follower:1"), from: view)
+        let book = RemoteReconnectBook.shared
+        book.wait(pane: identity, session: UUID(), host: "mini", cover: true, now: Date())
+        _ = book.due(now: Date())
+        _ = book.finished(pane: identity, ok: false, now: Date().addingTimeInterval(3600))
+        XCTAssertTrue(view.leadCovered)
+
+        PaneLead.coverClicked(view)
+
+        XCTAssertEqual(book.due(now: Date()), [identity])
+        XCTAssertTrue(reattached.isEmpty, "a retry is a probe, never a claim")
+    }
+
+    func testAClickOnTheReconnectNoticeRetriesNow() {
+        let (view, identity) = pane()
+        let book = RemoteReconnectBook.shared
+        book.wait(pane: identity, session: UUID(), host: "mini", cover: false, now: Date())
+        _ = book.due(now: Date())
+        _ = book.finished(pane: identity, ok: false, now: Date().addingTimeInterval(3600))
+
+        PaneLead.noticeClicked(view)
+
+        XCTAssertEqual(book.due(now: Date()), [identity])
+        XCTAssertTrue(reattached.isEmpty)
+    }
+
+    func testAClickOnTheReconnectNoticeOfAPaneNoLongerWaitingTakesNothing() throws {
+        let (view, _) = pane()
+        PaneLead.report(try notice("n:follower:1"), from: view)
+
+        PaneLead.noticeClicked(view)
+
+        XCTAssertTrue(reattached.isEmpty)
+    }
+
     func testAnUncoveredPanesKeysAreItsOwn() throws {
         let (view, _) = pane()
         PaneLead.report(try notice("n:leader:1"), from: view)

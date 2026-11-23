@@ -308,7 +308,7 @@ lead is covered. Absent until the pane's terminal reports one (see Remote sessio
 `attachEnded` is `true` while a remote pane shows the "SESSION on HOST ended" panel, omitted otherwise.
 `reconnect` is present on a remote pane whose ssh lost its connection while agterm waits to attach it
 again: `failures` is the retry streak, the probes of its host that failed in a row plus one for a link
-that dropped again soon after attaching, started over by a key on the pane, a wake or a network change,
+that dropped again soon after attaching, started over by a key on the pane, a click on its panel, a wake or a network change,
 and `reason` is what ssh said on the last failed probe, omitted
 when it said nothing. Its message can help distinguish an offline host from a refused login. It goes
 when the pane is attached again or closed.
