@@ -89,16 +89,29 @@ enum PaneLead {
         guard event.type == .keyDown, !event.modifierFlags.contains(.command) else { return true }
         // a key held since before a drop sends only repeats while the pane waits, so it was never latched
         guard !event.isARepeat else { return true }
-        if let pane, let state = ZmxLeadBook.shared.states[pane], state.reattaching {
+        if take(view) { takeoverKeyCode = event.keyCode }
+        return true
+    }
+
+    /// A click on the pane's cover asks for what its first key asks for. The pane is focused first, since the
+    /// replacement surface takes focus only from one that holds it.
+    static func coverClicked(_ view: GhosttySurfaceView) {
+        view.focusAfterReparent()
+        take(view)
+    }
+
+    /// Takes the lead of a covered pane for the cover's key and click. False when there is nothing to ask for:
+    /// the pane is not covered, or a takeover is already on its way.
+    @discardableResult
+    static func take(_ view: GhosttySurfaceView) -> Bool {
+        guard view.leadCovered else { return false }
+        if let pane = UUID(uuidString: view.paneToken), let state = ZmxLeadBook.shared.states[pane], state.reattaching {
             // a reconnect or the unowned retry claims nothing, so the press makes its first report take the lead;
             // a takeover is already on its way, its fresh surface covered until that report
-            if !state.attachment.claim {
-                takeoverKeyCode = event.keyCode
-                ZmxLeadBook.shared.claimOnReport(pane: pane)
-            }
+            guard !state.attachment.claim else { return false }
+            ZmxLeadBook.shared.claimOnReport(pane: pane)
             return true
         }
-        takeoverKeyCode = event.keyCode
         reattach?(view, true)
         return true
     }

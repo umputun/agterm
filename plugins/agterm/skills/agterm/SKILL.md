@@ -464,7 +464,7 @@ omitted when expanded).
   transposes a shown split of the other orientation. Hide keeps it alive; `close` destroys the pane and
   whatever runs in it.
 - `session lead [--pane left|right|scratch]`: for a session shared with another Mac, take the lead of a pane here
-  (what a key press on its "in use" cover does). `tree`'s `surfaces[].lead` reads `leader`/`follower`/
+  (what a key press or click on its "in use" cover does). `tree`'s `surfaces[].lead` reads `leader`/`follower`/
   `unowned`. On the Mac the session runs on, a covered pane still takes `session type`/`text`.
 - `session restart --pane-id ID [--command LINE]`: end one pane's shell and its foreground program, and start a
   new login shell there running LINE. Same pane, same stable id, blank screen, nothing typed. Without

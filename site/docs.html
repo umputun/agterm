@@ -880,7 +880,7 @@ agtermctl session new --remote srv --window &quot;$win&quot;                   #
 <p>The program in a pane sees the window size of the one Mac that leads it.</p>
 <ul>
 <li>Attaching takes the lead in every pane, so the session arrives at your size with nothing to press.</li>
-<li>On the other Mac, those panes are covered with a note that they are in use elsewhere. A key press on the cover, or <code>agtermctl session lead</code>, takes the lead back and covers the pane here.</li>
+<li>On the other Mac, those panes are covered with a note that they are in use elsewhere. A key press or click on the cover, or <code>agtermctl session lead</code>, takes the lead back and covers the pane here.</li>
 <li>Scripts typing into a covered pane on the other Mac still work, and so do their screen reads: both go through the session, not the covered view.</li>
 <li>Closing the session here uncovers the panes over there.</li>
 <li>When the connection drops and a pane or the scratch terminal reconnects, it takes the lead back if this Mac led it when the link dropped and nobody has used it since: the lead is still held by this Mac's lost connection, or another Mac took it only because the pane was free and nothing has been typed, pasted or clicked there since. Otherwise the pane comes back covered. After a relaunch or a reopened window, each pane this Mac led when it left takes the lead back the same way: in a session attached from another Mac, in a remote window, and in this Mac's own sessions while another Mac shows them. Opening a window of another Mac takes the lead outright, as the next item says. A session started on the host by an agterm without this behavior keeps leaving the lead where it is until it ends.</li>
