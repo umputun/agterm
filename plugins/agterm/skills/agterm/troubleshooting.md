@@ -299,6 +299,10 @@ The selected directory must already exist. An empty `OPENCODE_CONFIG_DIR` skips 
 Re-run it after switching major versions: v2 removes the marked v1 plugin in its selected directory; v1 leaves the v2 directory alone.
 User-owned or unreadable v1 files are preserved and reported in the install result.
 The v2 CLI plugin follows the selected session and its descendants, excluding background tabs and headless runs.
+For agy (Antigravity CLI), restart it to load the `agterm-status` hook in `~/.gemini/config/hooks.json`; it installs only
+after agy has created `~/.gemini/config`. A session held active by agy's background work releases when that work ends,
+but not when agy exits first: press Esc or Ctrl-C in that pane, or clear the status. Export
+`AGTERM_AGY_IGNORE_BACKGROUND=1` before starting agy to complete each turn regardless.
 The installed wrapper resolves the bundled `agtermctl` itself; a bare development build instead needs
 `agtermctl` on `PATH`. Moving or replacing agterm.app invalidates the path the installer baked in — the
 wrapper then falls back to `agtermctl` on `PATH`, and with nothing there the glyph silently stops

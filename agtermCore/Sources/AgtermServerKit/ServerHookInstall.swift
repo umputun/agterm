@@ -39,7 +39,7 @@ public struct ServerHookInstall {
         let skill = try SkillInstall.install(source: resources.appendingPathComponent("skill/\(SkillInstall.skillName)"), home: home,
                                              codexHome: codexRoot)
         var lines = ["Scripts installed to \(files.destination.path).", outcome.claudeText, outcome.codex.text(codexHome: codexHome),
-                     outcome.pi.text, openCodeResult.text]
+                     outcome.pi.text, outcome.agy.text, openCodeResult.text]
         lines += skill.installed.map { "agterm skill installed for \($0.agent) at \($0.skillDirectory)." }
         lines += skill.skipped.map { "agterm skill not installed for \($0.agent): \($0.reason)." }
         lines.append("The source line was added to ~/.zshrc and ~/.bashrc (and config.fish when fish is set up); "

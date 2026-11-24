@@ -2456,13 +2456,17 @@ agtermctl session tint clear --target &quot;$AGTERM_SESSION_ID&quot;</code></pre
 <td>OpenCode</td>
 <td>a lifecycle plugin for v1 or v2, when its configuration directory already exists</td>
 </tr>
+<tr>
+<td>Antigravity CLI (<code>agy</code>)</td>
+<td>three hooks (<a href="#status-agy">below</a>), when <code>~/.gemini/config</code> already exists</td>
+</tr>
 </tbody>
 </table>
 <p><strong>Where it writes</strong></p>
 <ul>
 <li>The scripts go to <code>~/.config/agterm/agent-status/</code>, with the bundled <code>agtermctl</code>'s absolute path baked in, so they work without the CLI on your PATH.</li>
 <li>A marker-guarded line for the shell integration goes into <code>~/.zshrc</code>, <code>~/.bashrc</code> and <code>~/.config/fish/config.fish</code> (fish only when that directory exists). Open a new terminal for it to take effect.</li>
-<li>The Claude Code hooks are merged into <code>~/.claude/settings.json</code> and the six Codex hooks into <code>~/.codex/config.toml</code>. Before changing either, the installer saves a copy beside it with a <code>.bak</code> suffix.</li>
+<li>The Claude Code hooks are merged into <code>~/.claude/settings.json</code>, the six Codex hooks into <code>~/.codex/config.toml</code>, and the agy hooks into <code>~/.gemini/config/hooks.json</code>. Before changing any of them, the installer saves a copy beside it with a <code>.bak</code> suffix.</li>
 <li>Running it again upgrades agterm-managed integrations and otherwise changes nothing.</li>
 </ul>
 <h4 id="status-claude">Claude Code</h4>
@@ -2530,6 +2534,14 @@ agtermctl session tint clear --target &quot;$AGTERM_SESSION_ID&quot;</code></pre
 <li>The directory comes from that shell's <code>OPENCODE_CONFIG_DIR</code>, then <code>$XDG_CONFIG_HOME/opencode</code>, then <code>~/.config/opencode</code>. An empty <code>OPENCODE_CONFIG_DIR</code> skips v2 with a warning, and so does a shell configuration that cannot be read while <code>~/.config/opencode</code> exists; without that directory OpenCode is skipped as not installed.</li>
 </ul>
 <p>Re-run the installer after switching major versions. A v2 install removes the agterm-marked v1 plugin in its directory; a v1 install leaves the v2 plugin directory alone. A v1 file you own, or one that cannot be read, is kept and reported in the install result.</p>
+<h4 id="status-agy">Antigravity CLI (agy)</h4>
+<ul>
+<li>The hooks live under the name <code>agterm-status</code> in <code>~/.gemini/config/hooks.json</code>; other named hooks there are kept. A model call reports active, a question or permission request from agy reports blocked until you answer it, and the end of a turn reports completed. Restart agy after installing.</li>
+<li>An <code>agterm-status</code> block installed from the cookbook's <code>antigravity-agent-status</code> recipe is replaced; any other block, such as one with a command of your own or <code>"enabled": false</code>, is left untouched and reported in the install result.</li>
+<li>While background work agy started, such as a command, is still running, the end of the turn reports active instead of completed; agy runs a follow-up turn when it finishes, and that turn completes. To leave background work out, export <code>AGTERM_AGY_IGNORE_BACKGROUND=1</code> in the shell that starts agy. A server agy starts as a daemon never holds the session active.</li>
+<li>When agy runs as a worker under another agent with a shell between them, as in a tool call, its hooks stay silent, and so do those of a Claude Code worker agy starts that way.</li>
+<li>Two gaps remain. agy has no event for a command or edit approval prompt, so those show as active, not blocked. And it reports nothing when it exits, so quitting while background work holds the session active leaves it active until you press Esc or Ctrl-C there or clear it.</li>
+</ul>
 <h4 id="codex-hooks-manual">Add Codex hooks by hand</h4>
 <p>The installer never rewrites a <code>~/.codex/config.toml</code> it does not own. If that file already defines its own <code>[hooks…]</code> entries, or is not valid TOML, it is left untouched and the install alert sends you here. With <code>CODEX_HOME</code> set, edit <code>&lt;CODEX_HOME&gt;/config.toml</code> instead.</p>
 <p>Check the shape of your existing hooks first, since that is why the installer declined:</p>
