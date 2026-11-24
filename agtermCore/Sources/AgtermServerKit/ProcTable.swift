@@ -147,19 +147,44 @@ enum ProcDaemon {
 
     /// leader is the shell pid of `target`'s daemon, nil while none runs.
     static func leader(_ target: Target) -> Int32? {
+        scanned { select($0, target: target, row: $1) } ?? nil
+    }
+
+    /// leaders maps every daemon this server created in `directory` with `executable` to its shell pid, from one pass
+    /// over `/proc`; nil when `/proc` cannot be read, and off Linux.
+    static func leaders(directory: String, executable: String) -> [String: Int32]? {
+        scanned { collect($0, directory: directory, executable: executable, row: $1) }
+    }
+
+    private static func scanned<T>(_ body: ([Process], (Int32) -> ZmxDaemonLeader.Row?) -> T) -> T? {
         #if os(Linux)
         guard let entries = try? FileManager.default.contentsOfDirectory(atPath: "/proc") else { return nil }
         let pids = entries.compactMap { Int32($0) }
         let table = StatTable(pids: pids)
-        let processes = pids.lazy.map { pid in
+        let processes = pids.map { pid in
             Process(pid: pid, argv: { read("/proc/\(pid)/cmdline").flatMap(ProcForeground.parseCmdline) },
                     environment: { read("/proc/\(pid)/environ").flatMap(ProcForeground.parseCmdline) },
                     started: { stat(of: pid).flatMap(startTicks(stat:)) }, children: { table.children(of: pid) })
         }
-        return select(processes, target: target, row: table.row(of:))
+        return body(processes, table.row(of:))
         #else
         return nil
         #endif
+    }
+
+    /// collect is `leaders` over given processes. A name two daemons share, as when an earlier one outlives its kill
+    /// with its old shell, goes to the later start, then the higher pid, since starts are counted in 10 ms ticks.
+    static func collect(_ processes: some Sequence<Process>, directory: String, executable: String,
+                        row: (Int32) -> ZmxDaemonLeader.Row?) -> [String: Int32] {
+        var found: [String: (started: Int64, pid: Int32, leader: Int32)] = [:]
+        for process in processes {
+            guard let argv = process.argv(), argv.count > 3, argv.starts(with: [executable, "attach", "--detached"]),
+                  process.environment()?.contains("ZMX_DIR=\(directory)") == true, let started = process.started(),
+                  let leader = ZmxDaemonLeader.leader(ofDaemon: process.pid, children: process.children(), row: row) else { continue }
+            if let best = found[argv[3]], (best.started, best.pid) > (started, process.pid) { continue }
+            found[argv[3]] = (started, process.pid, leader)
+        }
+        return found.mapValues(\.leader)
     }
 
     /// select picks the daemon by the argv `ZmxRunner.create` starts it with, which its fork keeps, by its `ZMX_DIR`,

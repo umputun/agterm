@@ -18,15 +18,14 @@ final class ControlServerZmxTests: XCTestCase {
         session.splitPaneIdentity = UUID()
         session.splitSurface = GhosttySurfaceView(workingDirectory: "/tmp", backedByZmx: true)
         let names = [session.paneIdentity, try XCTUnwrap(session.splitPaneIdentity)].map(ZmxSupport.daemonName)
-        var lists = 0
+        var scans = 0
         var foregroundLists = 0
         var lookups: [Int32: Int] = [:]
         var root: Int32 = 100
-        var failedList = false
-        let client = ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir", runner: { _ in
-            lists += 1
-            if failedList { throw ZmxClient.CommandError.timedOut }
-            return names.map { "name=\($0)\tpid=200\tclients=0" }.joined(separator: "\n")
+        var failedScan = false
+        let client = ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir", runner: { _ in "" }, leaders: {
+            scans += 1
+            return failedScan ? nil : Dictionary(uniqueKeysWithValues: names.map { ($0, 200) })
         })
         let resolver = ZmxForegroundResolver(leaderProvider: { foregroundLists += 1; return [:] }, leaderProbe: { .foreground($0) })
         let probe = LiveAttributionProbe(responsible: { pid in
@@ -40,20 +39,20 @@ final class ControlServerZmxTests: XCTestCase {
         let node = try XCTUnwrap(first.result?.tree?.workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString })
         XCTAssertEqual(node.liveAttribution, "supervisor")
         XCTAssertEqual(node.splitLiveAttribution, "supervisor")
-        XCTAssertEqual(lists, 1)
+        XCTAssertEqual(scans, 1)
         XCTAssertEqual(foregroundLists, 0)
         XCTAssertEqual(lookups, [100: 1, 200: 1])
         XCTAssertEqual(resolver.foregroundPID(sessionName: names[0]), 200)
         root = 200
         let next = server.controlTree(window: nil)
         XCTAssertEqual(next.result?.tree?.workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString }?.liveAttribution, "orphaned")
-        XCTAssertEqual(lists, 2)
+        XCTAssertEqual(scans, 2)
         XCTAssertEqual(lookups, [100: 2, 200: 2])
-        failedList = true
+        failedScan = true
         let unknown = server.controlTree(window: nil)
         XCTAssertEqual(unknown.result?.tree?.workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString }?.liveAttribution, "unknown")
         XCTAssertNil(resolver.foregroundPID(sessionName: names[0]))
-        XCTAssertEqual(lists, 3)
+        XCTAssertEqual(scans, 3)
         XCTAssertEqual(foregroundLists, 0)
         XCTAssertEqual(lookups, [100: 2, 200: 2])
     }
@@ -116,8 +115,8 @@ final class ControlServerZmxTests: XCTestCase {
         let workspace = try XCTUnwrap(store.workspaces.first)
         let session = try XCTUnwrap(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
         session.surface = GhosttySurfaceView(workingDirectory: "/tmp", backedByZmx: true)
-        let row = "name=\(ZmxSupport.daemonName(for: session.paneIdentity))\tpid=200\tclients=1"
-        let client = ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir", runner: { _ in row })
+        let leaders = [ZmxSupport.daemonName(for: session.paneIdentity): pid_t(200)]
+        let client = ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir", runner: { _ in "" }, leaders: { leaders })
         let resolver = ZmxForegroundResolver(leaderProvider: { [:] }, leaderProbe: { .foreground($0) })
         func node(current: String?) throws -> ControlSessionNode {
             let probe = LiveAttributionProbe(responsible: { $0 == 200 ? .live(101) : .live($0) },

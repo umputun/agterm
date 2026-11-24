@@ -561,7 +561,7 @@ final class AppDelegateCaptureTests: XCTestCase {
 final class LiveDaemons {
     let socketDirectory: String
     private let state: URL
-    private let zmx = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+    let zmx = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         .appendingPathComponent("agterm/Resources/zmx/zmx")
     private var names: [String] = []
     private var suspended: [pid_t] = []
@@ -572,7 +572,10 @@ final class LiveDaemons {
     }
 
     func start(paneID: UUID, command: [String]) throws {
-        let name = ZmxSupport.daemonName(for: paneID)
+        try start(name: ZmxSupport.daemonName(for: paneID), command: command)
+    }
+
+    func start(name: String, command: [String]) throws {
         names.append(name)
         _ = try run(["attach", "--detached", name] + command, readsOutput: false)
     }

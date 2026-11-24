@@ -24,34 +24,33 @@ final class ZmxClient {
     }
 
     typealias Runner = (Invocation) throws -> String
+    typealias LeaderScan = () -> [String: pid_t]?
 
     private static let logger = Logger(subsystem: "com.umputun.agterm", category: "ZmxClient")
     private let executablePath: String
     private let socketDirectory: String
     private let timeout: TimeInterval
     private let runner: Runner
+    private let leaderScan: LeaderScan
 
     private let sweeper: ProcessSweeper?
 
     init(executablePath: String, socketDirectory: String, timeout: TimeInterval = 3,
-         sweeper: ProcessSweeper? = nil, runner: @escaping Runner = ZmxClient.run) {
+         sweeper: ProcessSweeper? = nil, runner: @escaping Runner = ZmxClient.run, leaders: LeaderScan? = nil) {
         self.executablePath = executablePath
         self.socketDirectory = socketDirectory
         self.timeout = timeout
         self.sweeper = sweeper
         self.runner = runner
+        leaderScan = leaders ?? { ZmxDaemonForeground.leaders(directory: socketDirectory) }
     }
 
     /// foregroundJobs reads the foreground job of each named daemon's shell, before a kill. A confirmed
     /// kill then sends those jobs the SIGHUP a closed terminal would have: zmx signals only the shell's own
-    /// process group, and a pane's creation command runs in another. `shells` saves the listing when the
-    /// caller already holds the leader pids. Empty without a sweeper or when the listing fails.
-    func foregroundJobs(of names: [String], shells: [String: pid_t]? = nil,
-                        timeout: TimeInterval? = nil) -> [String: [ProcessRecord]] {
-        guard let sweeper else { return [:] }
-        guard let known = shells ?? sessionRecords(timeout: timeout).map({ records in
-            Dictionary(records.compactMap { record in record.leaderPID.map { (record.name, $0) } }) { first, _ in first }
-        }) else { return [:] }
+    /// process group, and a pane's creation command runs in another. `shells` saves the leader scan when the
+    /// caller already holds the leader pids. Empty without a sweeper or when the scan fails.
+    func foregroundJobs(of names: [String], shells: [String: pid_t]? = nil) -> [String: [ProcessRecord]] {
+        guard let sweeper, let known = shells ?? leaderScan() else { return [:] }
         return sweeper.capture(shells: known.filter { names.contains($0.key) })
     }
 
@@ -136,8 +135,9 @@ final class ZmxClient {
         }
     }
 
+    // never `zmx list`: it probes daemons one at a time, so a few stalled ones time out every pane's leader
     func sessionLeaderPIDs() -> [String: pid_t]? {
-        sessionRecords().map(ZmxLeaderMap.leaders(in:))
+        leaderScan()
     }
 
     /// The parsed listing, unreadable rows included, so a caller can tell an absent daemon from one zmx
@@ -218,7 +218,7 @@ final class ZmxClient {
         var seen: Set<String> = []
         let unique = names.filter { seen.insert($0).inserted }
         guard !unique.isEmpty else { return true }
-        let jobs = foregroundJobs(of: unique, shells: shells, timeout: timeout)
+        let jobs = foregroundJobs(of: unique, shells: shells)
         do {
             let output = try invoke(["kill"] + unique + ["--force"], timeout: timeout, mergesStderr: true)
             // only a name zmx confirmed: a stale-socket cleanup leaves the shell, and its job, running

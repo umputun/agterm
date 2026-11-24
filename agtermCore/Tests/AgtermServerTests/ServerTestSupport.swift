@@ -251,6 +251,9 @@ final class ServerHarness {
         actions.restartWaits = (program: .milliseconds(200), shell: .seconds(120), follow: .seconds(180), poll: .milliseconds(10))
         let runner = runner
         actions.daemonLeader = { target in runner.records?.last { $0.name == target.name }?.leaderPID }
+        panes.daemonLeaders = { _, _ in
+            runner.records.map { Dictionary($0.compactMap { record in record.leaderPID.map { (record.name, $0) } }) { _, last in last } }
+        }
         let observer = PaneObserver(store: store, panes: panes, cwd: { _ in nil })
         self.observer = observer
         actions.paneExited = { session, identity in observer.settleExited(session, identity: identity) }

@@ -348,7 +348,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   hold. agterm-server announces the respawn as soon as the new daemon is attachable, before `exec`, since a viewer's
   attach is what releases it; the Mac publishes after confirmation. A confirmed reply carries `result.restart` (`paneID`, `oldPid`, `newPid`); they are shell pids, the program
   reads back as `foreground`. With no `command` the host replays the pane's foreground program: the
-  argv `tree` reports, read through `ForegroundProcess.observed` from a fresh leader listing, filtered by
+  argv `tree` reports, read through `ForegroundProcess.observed` from a fresh leader scan, filtered by
   host-free `RestartReplay.resolve` and launched through `attachCommand(replaying:)`. It starts in that
   process's own working directory, never `session.cwd`: the shell-reported cwd can be stale before the
   first prompt. A process that IS the daemon leader and a shell is refused, to prevent replaying the
@@ -370,7 +370,14 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   also lands during app termination and before panes mount. A stale-socket or failed kill sends nothing.
   This is what a closed terminal does: `nohup`, `disown`ed and other background jobs are never signalled,
   and a foreground program that ignores hangups survives a close. Do not widen it to the shell's process
-  tree. `ProcessSweeper` is nil by default because a test's fake listing names real pids.
+  tree. `ProcessSweeper` is nil by default because a test's fake leaders name real pids.
+- Runtime leader reads never run `zmx list`, which probes daemons one at a time, so a few stalled ones time out
+  every pane's answer. The tree, companion duplicate, restart's old shell and every kill's foreground job read
+  `ZmxClient.sessionLeaderPIDs` on the Mac (each daemon socket's peer pid, `ZmxDaemonForeground.leaders`) and
+  `ServerPanes.daemonShells` on agterm-server (one `/proc` pass, `ProcDaemon.leaders`, since a Linux socket's peer
+  pid names the process that called `listen`), where `zmx.kill`'s leader comes from it too. `zmx.list`, `zmx.tree`,
+  prune, the reset and launch reap, the Mac's `zmx.kill` inventory and the server's observer keep the listing: they
+  need client counts, unclaimed daemons and unreadable rows.
 - `session.scratch` is a third login shell with on/off/toggle; in Live sessions mode it is the daemon
   `Session.ScratchDaemon` names, saved and restored hidden, claimed, reaped and reset like a pane's, and
   ended by its shell's exit or `--command`; a requested-Live fallback keeps it for the next Live launch. It spawns lazily, survives
@@ -493,7 +500,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   sessions): that Mac shows the page's asks in its own window.
 - `session.companion.duplicate` is its own wire command for the same older-app reason.
   `ControlServer.duplicateCompanion` plans every pane through `ForegroundProcess.replayObservation` and host-free
-  `DuplicateReplay` from one fresh leader listing before creating anything; `AppStore.duplicateAsCompanion` then
+  `DuplicateReplay` from one fresh leader scan before creating anything; `AppStore.duplicateAsCompanion` then
   stores each program as `initialCommand`/`splitInitialCommand`, so it runs as a `--command` pane does, ungated by
   restore mode. It stores them only after the copy and its split exist, rewriting the source's session id, pane ids
   and their zmx daemon names to the copy's: an argv carrying its own pane identity, as a codex started with

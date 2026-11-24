@@ -85,10 +85,10 @@ extension ServerActions {
             return ControlResponse(ok: false, error: refusal)
         }
         let daemon = ZmxSupport.daemonName(for: claim.paneIdentity)
-        guard let listed = try? panes.runner.list() else {
-            return ControlResponse(ok: false, error: "could not read the zmx session list")
+        guard let shells = panes.daemonShells() else {
+            return ControlResponse(ok: false, error: "could not read the daemons' shells")
         }
-        guard let leader = listed.first(where: { $0.name == daemon })?.leaderPID else {
+        guard let leader = shells[daemon] else {
             return ControlResponse(ok: false, error: "\(daemon) is not running")
         }
         guard let job = processes.foregroundJob(of: leader) else {

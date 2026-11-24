@@ -28,6 +28,8 @@ final class ServerPanes {
     private var restartHolds: [UUID: Int] = [:]
     /// processes is the host's process table, through which a kill hangs up the pane's foreground job.
     var processes: any ProcessTable = ProcProcessTable()
+    /// daemonLeaders maps every daemon of a socket directory and zmx executable to its shell pid, nil when unreadable.
+    var daemonLeaders: @Sendable (_ directory: String, _ executable: String) -> [String: Int32]? = ProcDaemon.leaders
     private var startedAt: [UUID: Date] = [:]
     /// scratches are the identities this run started under a scratch daemon name, which `end` kills by that name.
     private var scratches: Set<UUID> = []
@@ -149,13 +151,19 @@ final class ServerPanes {
         }
     }
 
-    /// foregroundJobs reads each named daemon's foreground job before a kill ends its shell; empty when the listing
-    /// cannot be read.
+    /// daemonShells is the shell pid of every daemon this server runs, read from `/proc` rather than `zmx list`, which
+    /// waits on every daemon in turn; nil when `/proc` cannot be read.
+    func daemonShells() -> [String: Int32]? {
+        daemonLeaders(configuration.zmxSocketDirectory, configuration.zmxPath)
+    }
+
+    /// foregroundJobs reads each named daemon's foreground job before a kill ends its shell; empty when the daemons'
+    /// shells cannot be read.
     private func foregroundJobs(of names: [String]) -> [String: [ProcessRecord]] {
-        guard !names.isEmpty, let listed = try? runner.list() else { return [:] }
+        guard !names.isEmpty, let shells = daemonShells() else { return [:] }
         var jobs: [String: [ProcessRecord]] = [:]
-        for record in listed where names.contains(record.name) {
-            if let leader = record.leaderPID, let job = processes.foregroundJob(of: leader) { jobs[record.name] = job }
+        for name in names {
+            if let leader = shells[name], let job = processes.foregroundJob(of: leader) { jobs[name] = job }
         }
         return jobs
     }

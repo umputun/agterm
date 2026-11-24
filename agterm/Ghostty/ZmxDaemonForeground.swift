@@ -18,6 +18,22 @@ struct ZmxDaemonForeground {
         withDaemon(socketPath: directory + "/" + name) { ZmxDaemonLeader.leader(ofDaemon: $0, children: children(of: $0), row: row(of:)) }
     }
 
+    /// leaders maps every agterm daemon socket in `directory` to its shell pid; a socket with no leader found is left
+    /// out. An absent directory has no daemons; nil means the directory could not be read.
+    static func leaders(directory: String) -> [String: pid_t]? {
+        let entries: [String]
+        do {
+            entries = try FileManager.default.contentsOfDirectory(atPath: directory)
+        } catch CocoaError.fileReadNoSuchFile {
+            return [:]
+        } catch {
+            return nil
+        }
+        return Dictionary(uniqueKeysWithValues: entries.filter(ZmxSupport.isDaemonName).compactMap { name in
+            leaderPID(directory: directory, name: name).map { (name, $0) }
+        })
+    }
+
     /// probe reports `pane`'s daemon in `directory`: its leader, or absent when no socket exists at the pane's name.
     /// A socket left with no leader found, or a lookup that fails otherwise, is unknown.
     static func probe(directory: String, pane: UUID) -> DaemonProbe {

@@ -285,22 +285,6 @@ final class ZmxClientTests: XCTestCase {
         XCTAssertEqual(arguments, ["kill", "agterm-abcdef0123456789abcdef0123456789", "--force"])
     }
 
-    func testLeaderRefreshUsesOneFullListingAndParsesOnlyAppSessions() {
-        var invocations: [ZmxClient.Invocation] = []
-        let ours = ZmxSupport.daemonName(for: UUID())
-        let client = ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir") {
-            invocations.append($0)
-            return """
-            name=\(ours)\tpid=10\tclients=1\tcreated=1
-            name=other\tpid=11\tclients=0\tcreated=1
-            name=agterm-notes\tpid=12\tclients=0\tcreated=1
-            """
-        }
-
-        XCTAssertEqual(client.sessionLeaderPIDs(), [ours: 10])
-        XCTAssertEqual(invocations.map(\.arguments), [["list"]])
-    }
-
     func testSessionRecordsCanOverrideOnlyItsInvocationTimeout() {
         var invocations: [ZmxClient.Invocation] = []
         let client = ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir", timeout: 3) {
@@ -348,9 +332,10 @@ final class ZmxClientTests: XCTestCase {
              ProcessRecord(pid: 200, started: 5, group: 200)]
         }
         sweeper.signal = signals
-        return ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir", sweeper: sweeper) { invocation in
-            invocation.arguments.first == "list" ? "name=\(Self.sweptDaemon)\tpid=100\tclients=1\tcreated=1" : reply
-        }
+        return ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir", sweeper: sweeper, runner: { invocation in
+            XCTAssertNotEqual(invocation.arguments.first, "list", "a kill reads leaders from the kernel scan")
+            return reply
+        }, leaders: { [Self.sweptDaemon: 100] })
     }
 
     func testAConfirmedKillHangsUpOnlyTheShellsForegroundJob() {
@@ -410,5 +395,47 @@ final class ZmxClientTests: XCTestCase {
         sweeper.send(SIGKILL, to: job)
         XCTAssertEqual(sent, 0)
         XCTAssertEqual(sweeper.capture(shells: ["agterm-a": 100]), [:])
+    }
+
+    func testSessionLeaderPIDsReadsAnAbsentDirectoryAsNoDaemonsAndAnUnreadableOneAsFailure() throws {
+        let absent = ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/agterm-absent-\(UUID().uuidString)") { _ in
+            XCTFail("the scan runs no zmx")
+            return ""
+        }
+        XCTAssertEqual(absent.sessionLeaderPIDs(), [:])
+
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-not-a-dir-\(UUID().uuidString)")
+        try Data().write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let unreadable = ZmxClient(executablePath: "/tmp/zmx", socketDirectory: file.path) { _ in "" }
+        XCTAssertNil(unreadable.sessionLeaderPIDs())
+    }
+
+    func testSessionLeaderPIDsAnswersEveryAppDaemonWhileSeveralAreStopped() throws {
+        let state = FileManager.default.temporaryDirectory
+            .appendingPathComponent("agterm-leaders-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: state, withIntermediateDirectories: true)
+        let daemons = LiveDaemons(stateDirectory: state)
+        defer {
+            daemons.stop()
+            try? FileManager.default.removeItem(at: state)
+        }
+        let panes = (0..<5).map { _ in UUID() }
+        for (index, pane) in panes.enumerated() { try daemons.start(paneID: pane, command: ["/bin/sleep", "\(611 + index)"]) }
+        let foreign = ["other", "agterm-notes"]
+        for name in foreign { try daemons.start(name: name, command: ["/bin/sleep", "620"]) }
+        let names = panes.map(ZmxSupport.daemonName(for:)) + foreign
+        var running: [String: pid_t] = [:]
+        let deadline = Date().addingTimeInterval(10)
+        while running.count < names.count, Date() < deadline {
+            for name in names { running[name] = ZmxDaemonForeground.leaderPID(directory: daemons.socketDirectory, name: name) }
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        }
+        XCTAssertEqual(running.count, names.count)
+        let expected = running.filter { !foreign.contains($0.key) }
+        for pane in panes.dropFirst() { try daemons.suspend(paneID: pane) }
+        let client = ZmxClient(executablePath: daemons.zmx.path, socketDirectory: daemons.socketDirectory)
+
+        XCTAssertEqual(client.sessionLeaderPIDs(), expected)
     }
 }

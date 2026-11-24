@@ -3,8 +3,8 @@ import Darwin
 import Foundation
 import os
 
-/// Maps a wrapped pane's stable zmx name to the daemon-side pty foreground process group. One bounded
-/// `zmx list` refresh populates every pane; per-pane lookups are a cached name lookup plus one sysctl.
+/// Maps a wrapped pane's stable zmx name to the daemon-side pty foreground process group. One leader scan
+/// (`ZmxClient.sessionLeaderPIDs`) populates every pane; per-pane lookups are a cached name lookup plus one sysctl.
 @MainActor
 final class ZmxForegroundResolver {
     enum LeaderProbe: Equatable {
@@ -36,7 +36,7 @@ final class ZmxForegroundResolver {
         leaders = refreshed
     }
 
-    /// A nil snapshot means the listing failed, and stale leaders are dropped rather than kept so no pane
+    /// A nil snapshot means the leader scan failed, and stale leaders are dropped rather than kept so no pane
     /// reports a foreground from a daemon that may be gone. Accepting either counts as a refresh.
     func acceptLeaderSnapshot(_ snapshot: [String: pid_t]?) {
         leaders = snapshot ?? [:]
