@@ -127,6 +127,12 @@ struct ClaudeStatusHookTests {
         #expect(result.exit == 0)
     }
 
+    @Test func workerSpawnedByAgyStaysSilent() throws {
+        let result = try run(chain: ["login", "agy", "zsh", "claude"], args: ["completed", "--auto-reset"])
+        #expect(result.calls.isEmpty)
+        #expect(result.exit == 0)
+    }
+
     @Test func nonExecLauncherChainCountsAsOneAgent() throws {
         let result = try run(chain: ["login", "claude", "claude", "node:claude"], args: ["active", "--blink"])
         #expect(result.calls == ["active --blink"])
@@ -219,10 +225,11 @@ struct ClaudeStatusHookTests {
             Issue.record("integration.sh must define the default AGTERM_AGENT_RE as an anchored alternation")
             return
         }
-        let hookText = try String(contentsOf: URL(fileURLWithPath: Self.hook), encoding: .utf8)
-        guard let arm = hookText.components(separatedBy: "case \"$1\" in ").dropFirst().first?
+        let ownerText = try String(contentsOf: root
+            .appendingPathComponent("agterm/Resources/agent-status/agent-owner.sh"), encoding: .utf8)
+        guard let arm = ownerText.components(separatedBy: "case \"$1\" in ").dropFirst().first?
             .components(separatedBy: ")").first else {
-            Issue.record("agterm-claude-status.sh must classify agents with a `case \"$1\" in ... )` arm")
+            Issue.record("agent-owner.sh must classify agents with a `case \"$1\" in ... )` arm")
             return
         }
         let literals = Set(arm.components(separatedBy: "|").map { $0.trimmingCharacters(in: .whitespaces) })

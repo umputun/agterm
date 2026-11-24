@@ -96,6 +96,95 @@ public enum AgentHooksInstall {
         }
     }
 
+    /// Antigravity CLI (`agy`) hooks: one named hook in `~/.gemini/config/hooks.json`, whose events the adapter maps.
+    enum Agy {
+        /// The adapter every generated command invokes.
+        static let wrapperName = "agterm-agy-status.sh"
+        /// The named hook this installer owns in `hooks.json`.
+        static let hookName = "agterm-status"
+        /// The cookbook recipe's adapter, whose block under the same name an install replaces in place.
+        static let cookbookAdapterName = "agy-status-hook.sh"
+        /// The actions the adapter, or the cookbook's, takes as its one argument.
+        static let actions: Set<String> = ["invocation", "ask", "tool-done", "stop"]
+
+        /// The outcome of merging the named hook into an existing `hooks.json`.
+        enum MergeOutcome: Equatable {
+            case merged(contents: String)
+            case unchanged
+            /// The named hook carries a handler that is neither ours nor the cookbook's.
+            case userOwned
+            case unparseable
+        }
+
+        /// The config directory agy reads, fixed beneath the home.
+        static func configDirectory(home: String) -> String {
+            home + "/.gemini/config"
+        }
+
+        /// The named hook's value: PreInvocation is the turn's work (and the answer after a question), PreToolUse on
+        /// a prompt tool its prompt, Stop its end.
+        static func hookBlock(scriptDir: String) -> [String: Any] {
+            let wrapper = shellQuote(scriptDir + "/" + wrapperName)
+            func handler(_ action: String) -> [String: Any] {
+                ["type": "command", "command": wrapper + " " + action, "timeout": 5]
+            }
+            return [
+                "PreInvocation": [handler("invocation")],
+                "PreToolUse": [["matcher": "ask_question|ask_permission", "hooks": [handler("ask")]]],
+                "Stop": [handler("stop")],
+            ]
+        }
+
+        /// merge the named hook into `existing` (nil or blank = no file yet), preserving every other named hook.
+        /// An existing block is replaced only when every command it holds is our adapter's or the cookbook's.
+        static func mergeHooks(existing: String?, scriptDir: String) -> MergeOutcome {
+            guard var root = try? parsedObject(existing) else { return .unparseable }
+            let block = hookBlock(scriptDir: scriptDir)
+            if let current = root[hookName] {
+                if serialize([hookName: current]) == serialize([hookName: block]) { return .unchanged }
+                let commands = (current as? [String: Any]).flatMap(handlerCommands) ?? []
+                guard !commands.isEmpty, commands.allSatisfy(isAdapterCommand) else { return .userOwned }
+            }
+            root[hookName] = block
+            return .merged(contents: serialize(root, escapingSlashes: false))
+        }
+
+        /// isAdapterCommand accepts only an adapter path, bare or wrapped in one pair of quotes, followed by one action,
+        /// so a command with anything chained onto it is the user's.
+        static func isAdapterCommand(_ command: String) -> Bool {
+            guard let space = command.lastIndex(of: " "), actions.contains(String(command[command.index(after: space)...])) else {
+                return false
+            }
+            var path = Substring(command[..<space])
+            var rejected = "'\";|&`<>()\n \t"
+            if let quote = path.first, quote == "'" || quote == "\"", path.count > 1, path.last == quote {
+                path = path.dropFirst().dropLast()
+                rejected.removeLast(2)
+            }
+            guard !path.contains(where: { rejected.contains($0) }) else { return false }
+            let name = path.split(separator: "/").last.map(String.init)
+            return name == wrapperName || name == cookbookAdapterName
+        }
+
+        // every handler's command in a named hook, flat events and matcher groups alike; nil for any other key or a
+        // handler without a command, such as `"enabled": false`, so a block we did not generate reads as foreign
+        private static func handlerCommands(_ block: [String: Any]) -> [String]? {
+            var commands: [String] = []
+            for value in block.values {
+                guard let entries = value as? [[String: Any]] else { return nil }
+                for entry in entries {
+                    let handlers = entry["hooks"].map { $0 as? [[String: Any]] } ?? [entry]
+                    guard let handlers else { return nil }
+                    for handler in handlers {
+                        guard let command = handler["command"] as? String else { return nil }
+                        commands.append(command)
+                    }
+                }
+            }
+            return commands
+        }
+    }
+
     public enum Codex {
         /// home resolves a `CODEX_HOME` value to Codex's root, nil for the default `~/.codex`: unset, empty, or no
         /// absolute `workingDirectory`. A relative value joins `workingDirectory`, never expanded.
@@ -552,8 +641,9 @@ public enum AgentHooksInstall {
     }
 
     // serialize a dictionary to pretty-printed, sorted JSON text (deterministic for tests + diffs).
-    private static func serialize(_ object: [String: Any]) -> String {
-        let options: JSONSerialization.WritingOptions = [.prettyPrinted, .sortedKeys]
+    private static func serialize(_ object: [String: Any], escapingSlashes: Bool = true) -> String {
+        var options: JSONSerialization.WritingOptions = [.prettyPrinted, .sortedKeys]
+        if !escapingSlashes { options.insert(.withoutEscapingSlashes) }
         guard let data = try? JSONSerialization.data(withJSONObject: object, options: options),
               let text = String(data: data, encoding: .utf8) else {
             return "{}"
