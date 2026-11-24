@@ -29,6 +29,15 @@ extension ProcessTable {
     }
 }
 
+/// ProcFile reads a per-process `/proc` text file.
+enum ProcFile {
+    /// text decodes the file lossily: the kernel cuts a command name to 15 bytes, which can split a multibyte character,
+    /// and a strict decode would then drop the whole line. Nil when the file cannot be read.
+    static func text(atPath path: String) -> String? {
+        FileManager.default.contents(atPath: path).map { String(decoding: $0, as: UTF8.self) }
+    }
+}
+
 /// ProcProcessTable reads `/proc`. Linux only; elsewhere the table cannot be read.
 public struct ProcProcessTable: ProcessTable {
     public init() {}
@@ -41,7 +50,7 @@ public struct ProcProcessTable: ProcessTable {
         let ticks = Int64(sysconf(Int32(_SC_CLK_TCK)))
         return entries.compactMap { entry in
             guard let pid = Int32(entry),
-                  let line = try? String(contentsOfFile: "/proc/\(pid)/stat", encoding: .utf8) else { return nil }
+                  let line = ProcFile.text(atPath: "/proc/\(pid)/stat") else { return nil }
             return Self.record(pid: pid, stat: line, bootTime: boot, ticksPerSecond: ticks)
         }
         #else
@@ -248,7 +257,7 @@ enum ProcDaemon {
     }
 
     private static func stat(of pid: Int32) -> String? {
-        try? String(contentsOfFile: "/proc/\(pid)/stat", encoding: .utf8)
+        ProcFile.text(atPath: "/proc/\(pid)/stat")
     }
 
     /// StatTable reads every process's stat row once, on the first daemon that matches, so children come from the

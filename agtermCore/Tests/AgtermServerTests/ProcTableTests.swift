@@ -12,6 +12,21 @@ struct ProcTableTests {
         #expect(record == ProcessRecord(pid: 4242, started: 1_700_000_000_000_000 + 2_500_000, group: 4240, foreground: 4300))
     }
 
+    @Test func aStatLineWhoseNameTheKernelCutMidCharacterStillParses() throws {
+        let path = FileManager.default.temporaryDirectory.appendingPathComponent("stat-\(UUID().uuidString)").path
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        var bytes = Data("100 (abcdefghijklm".utf8) + Data([0xE2, 0x82])
+        bytes += Data(") S 10 100 100 34816 120 4194560 1 0 0 0 0 0 0 0 20 0 1 0 98765 1000 10".utf8)
+        #expect(FileManager.default.createFile(atPath: path, contents: bytes))
+
+        let line = try #require(ProcFile.text(atPath: path))
+
+        #expect(ProcDaemon.row(pid: 100, stat: line) == ZmxDaemonLeader.Row(parent: 10, ownsTerminal: true, foreground: 120))
+        #expect(ProcProcessTable.record(pid: 100, stat: line, bootTime: 0, ticksPerSecond: 100)?.foreground == 120)
+        #expect(ProcCwd.parseForegroundGroup(line) == 120)
+        #expect(ProcFile.text(atPath: path + "-missing") == nil)
+    }
+
     @Test func aTruncatedStatLineIsNoRecord() {
         #expect(ProcProcessTable.record(pid: 1, stat: "1 (init) S 0 1", bootTime: 0, ticksPerSecond: 100) == nil)
     }

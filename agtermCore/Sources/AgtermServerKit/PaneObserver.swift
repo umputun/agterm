@@ -167,7 +167,7 @@ enum ProcCwd {
     /// foregroundGroup is field 8 of `/proc/<pid>/stat`, the terminal's foreground process group; the fields are
     /// counted after the command name's closing parenthesis, since the name itself may hold spaces.
     static func foregroundGroup(of pid: Int32) -> Int32? {
-        guard let stat = try? String(contentsOfFile: "/proc/\(pid)/stat", encoding: .utf8) else { return nil }
+        guard let stat = ProcFile.text(atPath: "/proc/\(pid)/stat") else { return nil }
         return parseForegroundGroup(stat)
     }
 
