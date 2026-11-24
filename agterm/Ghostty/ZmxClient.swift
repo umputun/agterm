@@ -135,7 +135,6 @@ final class ZmxClient {
         }
     }
 
-    // never `zmx list`: it probes daemons one at a time, so a few stalled ones time out every pane's leader
     func sessionLeaderPIDs() -> [String: pid_t]? {
         leaderScan()
     }

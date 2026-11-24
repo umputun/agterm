@@ -8,7 +8,7 @@ import agtermCore
 extension ControlServer {
     static let respawnLeaderWait: Duration = .seconds(10)
 
-    /// priorLeader is the daemon's leader as last listed, read before the respawn replaces it.
+    /// priorLeader is the daemon's leader as last scanned, read before the respawn replaces it.
     func priorLeader(daemon: String) -> pid_t? {
         zmxForegroundResolver?.cachedLeader(sessionName: daemon)
     }

@@ -56,7 +56,8 @@ struct ServerActionsRemoteTests {
     @Test func eachListedPaneCarriesItsForegroundProgram() async throws {
         let session = try newSession()
         running([session.paneIdentity])
-        harness.panes.leaders = [session.paneIdentity: 100]
+        let shells = [ZmxSupport.daemonName(for: session.paneIdentity): Int32(100)]
+        harness.panes.daemonLeaders = { _, _ in shells }
         harness.actions.foregroundArgv = { _ in ["htop"] }
 
         let tree = try #require(await harness.actions.remoteTree(host: nil).result?.remote)

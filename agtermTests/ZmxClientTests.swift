@@ -433,7 +433,7 @@ final class ZmxClientTests: XCTestCase {
         }
         XCTAssertEqual(running.count, names.count)
         let expected = running.filter { !foreign.contains($0.key) }
-        for pane in panes.dropFirst() { try daemons.suspend(paneID: pane) }
+        for pane in panes.dropFirst() { try daemons.suspend(leader: XCTUnwrap(running[ZmxSupport.daemonName(for: pane)])) }
         let client = ZmxClient(executablePath: daemons.zmx.path, socketDirectory: daemons.socketDirectory)
 
         XCTAssertEqual(client.sessionLeaderPIDs(), expected)

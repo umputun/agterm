@@ -134,6 +134,24 @@ struct ProcTableTests {
                                    row: rows) == ["agterm-a": 100])
     }
 
+    @Test func aZmxPathSpelledThroughASymlinkStillFindsDaemonsStartedFromItsTarget() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("proctable-\(UUID().uuidString)").path
+        try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(atPath: directory) }
+        let binary = directory + "/zmx", link = directory + "/zmx-link"
+        #expect(FileManager.default.createFile(atPath: binary, contents: Data()))
+        try FileManager.default.createSymbolicLink(atPath: link, withDestinationPath: binary)
+        let started = ProcDaemon.Process(pid: 10, argv: { [binary, "attach", "--detached", "agterm-a", "/bin/zsh"] },
+                                         environment: { ["ZMX_DIR=/run/zmx"] }, started: { 600 }, children: { [100] })
+        let relative = ProcDaemon.Process(pid: 20, argv: { ["zmx", "attach", "--detached", "agterm-b", "/bin/zsh"] },
+                                          environment: { ["ZMX_DIR=/run/zmx"] }, started: { 600 }, children: { [200] })
+        let target = ProcDaemon.Target(name: "agterm-a", directory: "/run/zmx", executable: link, launchedAt: 500)
+
+        #expect(ProcDaemon.collect([started, relative], directory: "/run/zmx", executable: link,
+                                   row: shellRow(of: [100: 10, 200: 20])) == ["agterm-a": 100])
+        #expect(ProcDaemon.select([started], target: target, row: shellRow(of: [100: 10])) == 100)
+    }
+
     @Test func aStatLineGivesTheParentWhetherItLeadsASessionWithATerminalAndItsStart() throws {
         let line = "100 (zsh -l) S 10 100 100 34816 120 4194560 1 0 0 0 0 0 0 0 20 0 1 0 98765 1000 10"
         let row = try #require(ProcDaemon.row(pid: 100, stat: line))

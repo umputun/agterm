@@ -72,6 +72,23 @@ struct ServerActionsZmxTests {
         #expect(harness.store.session(withID: session.id) == nil)
     }
 
+    @Test func leaderReadsAnswerFromTheScanWhileTheListingFails() throws {
+        let killed = try newSession(), closed = try newSession()
+        running(killed.paneIdentity, pid: 100)
+        running(closed.paneIdentity, pid: 200)
+        harness.runner.listFails = true
+        harness.actions.foregroundArgv = { $0 == 100 ? ["htop"] : nil }
+
+        let node = try #require(harness.actions.controlTree(window: nil).result?.tree?.workspaces.flatMap(\.sessions)
+            .first { $0.id == killed.id.uuidString })
+        #expect(node.foreground == ["htop"])
+        #expect(harness.actions.killZmxDaemon(target: killed.id.uuidString, window: nil, pane: .left).ok)
+        #expect(harness.actions.closeSession(closed.id.uuidString, window: nil).ok)
+
+        #expect(harness.processes.signals.map(\.signal) == [SIGHUP, SIGHUP])
+        #expect(harness.processes.signals.map(\.pids) == [[1100], [1200]])
+    }
+
     @Test func killingTheLeftPanePromotesTheLiveSplit() throws {
         let session = try newSession()
         _ = harness.actions.splitSession(session.id.uuidString, window: nil, mode: "on")

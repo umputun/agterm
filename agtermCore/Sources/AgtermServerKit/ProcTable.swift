@@ -176,9 +176,10 @@ enum ProcDaemon {
     /// with its old shell, goes to the later start, then the higher pid, since starts are counted in 10 ms ticks.
     static func collect(_ processes: some Sequence<Process>, directory: String, executable: String,
                         row: (Int32) -> ZmxDaemonLeader.Row?) -> [String: Int32] {
+        let zmx = Executable(executable)
         var found: [String: (started: Int64, pid: Int32, leader: Int32)] = [:]
         for process in processes {
-            guard let argv = process.argv(), argv.count > 3, argv.starts(with: [executable, "attach", "--detached"]),
+            guard let argv = process.argv(), argv.count > 3, argv[1] == "attach", argv[2] == "--detached", zmx.matches(argv[0]),
                   process.environment()?.contains("ZMX_DIR=\(directory)") == true, let started = process.started(),
                   let leader = ZmxDaemonLeader.leader(ofDaemon: process.pid, children: process.children(), row: row) else { continue }
             if let best = found[argv[3]], (best.started, best.pid) > (started, process.pid) { continue }
@@ -191,14 +192,33 @@ enum ProcDaemon {
     /// since another state directory can run the same name, and by a start no earlier than the launch: an earlier
     /// daemon of the name can outlive its kill with its old shell.
     static func select(_ processes: some Sequence<Process>, target: Target, row: (Int32) -> ZmxDaemonLeader.Row?) -> Int32? {
+        let zmx = Executable(target.executable)
         for process in processes {
-            guard let argv = process.argv(), argv.starts(with: [target.executable, "attach", "--detached", target.name]),
+            guard let argv = process.argv(), argv.count > 3, argv[1] == "attach", argv[2] == "--detached", argv[3] == target.name,
+                  zmx.matches(argv[0]),
                   process.environment()?.contains("ZMX_DIR=\(target.directory)") == true,
                   let started = process.started(), started >= target.launchedAt,
                   let leader = ZmxDaemonLeader.leader(ofDaemon: process.pid, children: process.children(), row: row) else { continue }
             return leader
         }
         return nil
+    }
+
+    /// Executable matches a daemon's argv[0] against the configured zmx path, literally or through symlinks, since a
+    /// restarted server's `--zmx` can name the binary its surviving daemons started from another way. A relative
+    /// argv[0] would resolve against this server's directory, so only the literal match applies to it.
+    struct Executable {
+        let path: String
+        let resolved: String
+
+        init(_ path: String) {
+            self.path = path
+            resolved = (path as NSString).resolvingSymlinksInPath
+        }
+
+        func matches(_ argv0: String) -> Bool {
+            argv0 == path || (argv0.hasPrefix("/") && (argv0 as NSString).resolvingSymlinksInPath == resolved)
+        }
     }
 
     /// row parses `/proc/<pid>/stat` for the leader check, counting fields after the command name's closing

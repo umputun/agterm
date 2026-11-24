@@ -33,7 +33,8 @@ struct ServerActionsTests {
             name: nil, after: nil, before: nil, noSelect: false)))
         _ = actions().splitSession(session.id.uuidString, window: nil, mode: "on")
         let split = try #require(session.splitPaneIdentity)
-        harness.panes.leaders = [session.paneIdentity: 100, split: 200]
+        let shells = [ZmxSupport.daemonName(for: session.paneIdentity): Int32(100), ZmxSupport.daemonName(for: split): 200]
+        harness.panes.daemonLeaders = { _, _ in shells }
         actions().foregroundArgv = { $0 == 100 ? ["-zsh"] : ["vim", "notes.md"] }
 
         let tree = try #require(actions().controlTree(window: nil).result?.tree)

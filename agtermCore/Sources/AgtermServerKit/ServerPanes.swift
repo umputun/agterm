@@ -21,8 +21,6 @@ final class ServerPanes {
     let programVersion: String
     /// The server's own environment, without the variables a pane gets from the server itself.
     let baseEnvironment: [String: String]
-    /// leaders is each listed pane's shell pid from the last applied listing, which the tree's foreground reads start at.
-    var leaders: [UUID: Int32] = [:]
     /// restartHolds counts, per pane, the restarts replacing its shell that have not yet confirmed or given up on the new
     /// one, which no listing may settle meanwhile; each restart releases only its own hold.
     private var restartHolds: [UUID: Int] = [:]
@@ -151,8 +149,8 @@ final class ServerPanes {
         }
     }
 
-    /// daemonShells is the shell pid of every daemon this server runs, read from `/proc` rather than `zmx list`, which
-    /// waits on every daemon in turn; nil when `/proc` cannot be read.
+    /// daemonShells is the shell pid of every daemon this server runs, from `ProcDaemon.leaders`; nil when `/proc`
+    /// cannot be read.
     func daemonShells() -> [String: Int32]? {
         daemonLeaders(configuration.zmxSocketDirectory, configuration.zmxPath)
     }

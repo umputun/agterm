@@ -47,6 +47,18 @@ struct ServerActionsCompanionsTests {
         #expect(launch.directory == harness.scratch.root)
     }
 
+    @Test func aDuplicateReadsTheSourcesShellsFromTheScanWhileTheListingFails() async throws {
+        let source = try newSession()
+        listed(source.paneIdentity)
+        harness.runner.listFails = true
+        observing(["/usr/bin/top"])
+
+        let reply = await harness.actions.duplicateAsCompanion(source.id.uuidString, window: nil, select: false)
+
+        #expect(try harness.session(reply).parentID == source.id)
+        #expect(harness.runner.launches.last?.argv.last?.contains("/usr/bin/top") == true)
+    }
+
     private func overlay(on session: Session, pane: OverlayPane? = nil, page: HtmlSource? = nil) -> ControlResponse {
         harness.actions.openSessionOverlay(session.id.uuidString, window: nil, options: ControlSessionOverlayOpenOptions(
             command: page == nil ? "top" : "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil, pane: pane, page: page))

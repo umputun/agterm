@@ -337,9 +337,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   the free can land on that address and take the old child's exit, which closed the pane (measured: the
   event carried the old shell's run time). The same call spawns a pane the deck does not lay out, since
   libghostty creates a surface for a view outside any window. The reply waits up to 10 s for a new
-  leader pid read per daemon from the kernel (`ZmxDaemonForeground.leaderPID` on the Mac, `ProcDaemon` by argv and
-  `ZMX_DIR` on agterm-server, where a socket's peer pid names the process that called `listen`), never `zmx list`,
-  which waits on every daemon (#1055). Past that it answers unverified, and a follow keeps the pane's restart hold and
+  leader pid read per daemon from the kernel (the leader-scan bullet below, #1055). Past that it answers unverified, and a follow keeps the pane's restart hold and
   publishes the respawn once the shell shows up, within 60 s of the launch. Holds are counted, one per restart, so a
   refused retry releases only its own. A later restart's confirmed kill, the pane closing, a parent respawn
   (`primaryRespawns`) or, on the server, a recorded exit ends the follow without publishing; a confirmed pane is
@@ -372,12 +370,13 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   and a foreground program that ignores hangups survives a close. Do not widen it to the shell's process
   tree. `ProcessSweeper` is nil by default because a test's fake leaders name real pids.
 - Runtime leader reads never run `zmx list`, which probes daemons one at a time, so a few stalled ones time out
-  every pane's answer. The tree, companion duplicate, restart's old shell and every kill's foreground job read
-  `ZmxClient.sessionLeaderPIDs` on the Mac (each daemon socket's peer pid, `ZmxDaemonForeground.leaders`) and
-  `ServerPanes.daemonShells` on agterm-server (one `/proc` pass, `ProcDaemon.leaders`, since a Linux socket's peer
-  pid names the process that called `listen`), where `zmx.kill`'s leader comes from it too. `zmx.list`, `zmx.tree`,
-  prune, the reset and launch reap, the Mac's `zmx.kill` inventory and the server's observer keep the listing: they
-  need client counts, unclaimed daemons and unreadable rows.
+  every pane's answer. The tree, companion duplicate, restart's old and new shell, and the foreground job of a pane
+  or session kill read `ZmxClient.sessionLeaderPIDs` on the Mac (each daemon socket's peer pid,
+  `ZmxDaemonForeground.leaders`) and `ServerPanes.daemonShells` on agterm-server (one `/proc` pass,
+  `ProcDaemon.leaders`, since a Linux socket's peer pid names the process that called `listen`), where `zmx.kill`'s
+  leader comes from it too. `zmx.list`, `zmx.tree`, prune, the reset and launch reap, the Mac's `zmx.kill` inventory
+  and the server's observer keep the listing, since they need client counts, unclaimed daemons and unreadable rows;
+  the reap, reset and server prune also hang up the foreground jobs of the leader pids that listing read.
 - `session.scratch` is a third login shell with on/off/toggle; in Live sessions mode it is the daemon
   `Session.ScratchDaemon` names, saved and restored hidden, claimed, reaped and reset like a pane's, and
   ended by its shell's exit or `--command`; a requested-Live fallback keeps it for the next Live launch. It spawns lazily, survives

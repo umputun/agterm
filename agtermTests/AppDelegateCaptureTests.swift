@@ -597,7 +597,10 @@ final class LiveDaemons {
     }
 
     func suspend(paneID: UUID) throws {
-        let leader = try leaderPID(paneID: paneID)
+        try suspend(leader: leaderPID(paneID: paneID))
+    }
+
+    func suspend(leader: pid_t) throws {
         var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, leader]
         var info = kinfo_proc()
         var size = MemoryLayout<kinfo_proc>.size

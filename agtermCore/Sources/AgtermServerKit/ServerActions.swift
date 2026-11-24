@@ -104,14 +104,17 @@ public final class ServerActions: ControlActions {
         return ControlResponse(ok: true, result: ControlResult(tree: tree()))
     }
 
-    /// tree is the catalog's tree with each pane's foreground program read through its shell's pid.
+    /// tree is the catalog's tree with each pane's foreground program read through its shell's pid, from one scan.
     func tree() -> ControlTree {
-        store.controlTree(paneForeground: { self.foreground(of: $0.paneIdentity) },
-                          splitPaneForeground: { $0.hasSplit ? $0.splitPaneIdentity.flatMap(self.foreground) : nil }, app: identity)
+        let shells = panes.daemonShells() ?? [:]
+        return store.controlTree(paneForeground: { self.foreground(of: $0.paneIdentity, shells: shells) },
+                                 splitPaneForeground: { session in
+                                     session.hasSplit ? session.splitPaneIdentity.flatMap { self.foreground(of: $0, shells: shells) } : nil
+                                 }, app: identity)
     }
 
-    private func foreground(of identity: UUID) -> CommandRestore.PaneForeground? {
-        guard let leader = panes.leaders[identity], let argv = foregroundArgv(leader) else { return nil }
+    private func foreground(of identity: UUID, shells: [String: Int32]) -> CommandRestore.PaneForeground? {
+        guard let leader = shells[ZmxSupport.daemonName(for: identity)], let argv = foregroundArgv(leader) else { return nil }
         return CommandRestore.paneForeground(argv: argv, extra: (panes.shellPath as NSString).lastPathComponent)
     }
 

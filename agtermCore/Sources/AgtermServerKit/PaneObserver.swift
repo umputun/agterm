@@ -55,14 +55,12 @@ final class PaneObserver {
         let records = panes.endUnownedScratches(records)
         let listed = Dictionary(records.map { ($0.name, $0) }) { first, _ in first }
         var missing: [(session: Session, identities: [UUID])] = []
-        var leaders: [UUID: Int32] = [:]
         // a page row has no daemon, so its absence from a listing never ends it
         for session in store.workspaces.flatMap(\.sessions) where !session.ended && session.content == .terminal {
             var gone: [UUID] = []
             for (identity, role) in panesOf(session) {
                 if let record = listed[ZmxSupport.daemonName(for: identity)] {
                     session.daemonBackedPanes.insert(identity)
-                    leaders[identity] = record.leaderPID
                     updateCwd(of: session, role: role, leader: record.leaderPID)
                 } else if !panes.started(identity, since: listedAt), !panes.isRestarting(identity) {
                     gone.append(identity)
@@ -70,7 +68,6 @@ final class PaneObserver {
             }
             if !gone.isEmpty { missing.append((session, gone)) }
         }
-        panes.leaders = leaders
         for (session, gone) in missing { gone.forEach { session.daemonBackedPanes.remove($0) } }
         for (session, gone) in missing { settle(session, gone: gone) }
         settleScratches(listed, listedAt: listedAt)

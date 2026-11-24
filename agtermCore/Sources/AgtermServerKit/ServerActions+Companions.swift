@@ -4,7 +4,7 @@ import agtermCore
 /// `session.companion.duplicate` and `session.companion.convert` on agterm-server, the Mac's contracts over the
 /// server's daemons.
 extension ServerActions {
-    /// duplicateAsCompanion plans every pane of the source from one fresh listing before creating anything, then
+    /// duplicateAsCompanion plans every pane of the source from one fresh leader scan before creating anything, then
     /// starts the copy's panes with their rebound creation commands. The copy is never selected.
     public func duplicateAsCompanion(_ target: String?, window: String?, select _: Bool) async -> ControlResponse {
         withSession(target, window: window) { source in
