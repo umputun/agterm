@@ -180,7 +180,7 @@ extension ControlServer {
 
     private func replayLaunch(of view: GhosttySurfaceView, leader: pid_t,
                               client: ZmxClient) -> Result<RestartReplay.Launch, RestartReplay.Refusal> {
-        // a failed listing drops the cached leaders, so a daemon that is gone cannot answer for the pane
+        // a failed leader scan drops the cached leaders, so a daemon that is gone cannot answer for the pane
         zmxForegroundResolver?.acceptLeaderSnapshot(client.sessionLeaderPIDs())
         let shell = ProcessInfo.processInfo.environment["SHELL"].map(CommandRestore.basename)
         let observation = ForegroundProcess.replayObservation(for: view, shellBasename: shell,
@@ -255,13 +255,12 @@ extension ControlServer {
         return !client.isRunning(job)
     }
 
-    /// shell returns the leader pid `zmx list` reports for `daemon` once it differs from `otherThan`, nil
+    /// shell returns the leader pid the client's scan reports for `daemon` once it differs from `otherThan`, nil
     /// when none shows up in time.
     func shell(daemon: String, otherThan: pid_t?, client: ZmxClient, within wait: Duration) async -> pid_t? {
         let deadline = ContinuousClock.now + wait
         while ContinuousClock.now < deadline {
-            if let pid = client.sessionRecords(timeout: 1)?.first(where: { $0.name == daemon })?.leaderPID,
-               pid != otherThan { return pid }
+            if let pid = client.sessionLeaderPIDs()?[daemon], pid != otherThan { return pid }
             try? await Task.sleep(for: .milliseconds(100))
         }
         return nil

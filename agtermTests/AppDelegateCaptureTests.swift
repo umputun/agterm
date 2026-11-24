@@ -561,7 +561,7 @@ final class AppDelegateCaptureTests: XCTestCase {
 final class LiveDaemons {
     let socketDirectory: String
     private let state: URL
-    private let zmx = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+    let zmx = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         .appendingPathComponent("agterm/Resources/zmx/zmx")
     private var names: [String] = []
     private var suspended: [pid_t] = []
@@ -572,7 +572,10 @@ final class LiveDaemons {
     }
 
     func start(paneID: UUID, command: [String]) throws {
-        let name = ZmxSupport.daemonName(for: paneID)
+        try start(name: ZmxSupport.daemonName(for: paneID), command: command)
+    }
+
+    func start(name: String, command: [String]) throws {
         names.append(name)
         _ = try run(["attach", "--detached", name] + command, readsOutput: false)
     }
@@ -594,7 +597,10 @@ final class LiveDaemons {
     }
 
     func suspend(paneID: UUID) throws {
-        let leader = try leaderPID(paneID: paneID)
+        try suspend(leader: leaderPID(paneID: paneID))
+    }
+
+    func suspend(leader: pid_t) throws {
         var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, leader]
         var info = kinfo_proc()
         var size = MemoryLayout<kinfo_proc>.size

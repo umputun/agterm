@@ -44,7 +44,7 @@ final class ControlServerRespawnTests: XCTestCase {
 
     func testTheOriginPublishesARespawnOnceADifferentLiveLeaderRunsUnderTheName() async throws {
         let daemon = ZmxSupport.daemonName(for: UUID())
-        let server = makeServer(listing: "name=\(daemon)\tpid=\(getpid())\tclients=0\tcreated=1")
+        let server = makeServer(leaders: [daemon: getpid()])
         let session = try XCTUnwrap(library.activeStore?.activeSession)
         let viewer = Viewer()
         try server.presentationHub.subscribe(session: session.id, hello: PresentationHello(version: PresentationCodec.version, kinds: [], mode: .mirror),
@@ -59,7 +59,7 @@ final class ControlServerRespawnTests: XCTestCase {
     }
 
     func testAHeldViewerPaneReattachesOnlyAfterTheOriginRespawnedIt() throws {
-        let server = makeServer(listing: "")
+        let server = makeServer()
         let (row, view, daemon) = try remoteRow()
 
         server.applyRemoteRespawns(PresentationRespawns(epoch: "e1", generations: [:]), seed: true, forSession: row.id)
@@ -71,7 +71,7 @@ final class ControlServerRespawnTests: XCTestCase {
     }
 
     func testARespawnKnownBeforeTheHeldExitReattachesAtTheExit() throws {
-        let server = makeServer(listing: "")
+        let server = makeServer()
         let (row, view, daemon) = try remoteRow()
 
         server.applyRemoteRespawns(PresentationRespawns(epoch: "e1", generations: [daemon: 2]), seed: true, forSession: row.id)
@@ -83,7 +83,7 @@ final class ControlServerRespawnTests: XCTestCase {
     }
 
     func testALocalWaitExitIsNotEnteredAndAClosedRowsEntryIsPruned() throws {
-        let server = makeServer(listing: "")
+        let server = makeServer()
         let store = try XCTUnwrap(library.activeStore)
         let local = try XCTUnwrap(store.activeSession)
         let localView = GhosttySurfaceView(workingDirectory: "/tmp", backedByZmx: false)
@@ -102,7 +102,7 @@ final class ControlServerRespawnTests: XCTestCase {
 
     // a prune on the hidden-row callback ran before the soft close registered its pending record, so undo lost the held exit
     func testASoftClosedRowKeepsItsHeldExitThroughUndoAndIsPrunedOnceFinal() throws {
-        let server = makeServer(listing: "")
+        let server = makeServer()
         server.attachPresentationHub()
         let store = try XCTUnwrap(library.activeStore)
         let (row, view, daemon) = try remoteRow()
@@ -126,10 +126,11 @@ final class ControlServerRespawnTests: XCTestCase {
         XCTAssertNil(RemoteRespawnBook.shared.entries[row.paneIdentity], "the tick prunes the last row's entry once it is final")
     }
 
-    private func makeServer(listing: String) -> ControlServer {
+    private func makeServer(leaders: [String: pid_t] = [:]) -> ControlServer {
         ControlServer(library: library, actions: AppActions(library: library), settingsModel: settings,
                       identity: AppIdentity(version: "9.9.9", commit: "testsha"),
-                      zmxClient: ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir", runner: { _ in listing }),
+                      zmxClient: ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir", runner: { _ in "" },
+                                           leaders: { leaders }),
                       socketPath: stateDir.appendingPathComponent("control-\(UUID().uuidString).sock").path)
     }
 

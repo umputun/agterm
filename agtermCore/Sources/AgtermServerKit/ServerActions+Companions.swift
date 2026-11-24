@@ -4,7 +4,7 @@ import agtermCore
 /// `session.companion.duplicate` and `session.companion.convert` on agterm-server, the Mac's contracts over the
 /// server's daemons.
 extension ServerActions {
-    /// duplicateAsCompanion plans every pane of the source from one fresh listing before creating anything, then
+    /// duplicateAsCompanion plans every pane of the source from one fresh leader scan before creating anything, then
     /// starts the copy's panes with their rebound creation commands. The copy is never selected.
     public func duplicateAsCompanion(_ target: String?, window: String?, select _: Bool) async -> ControlResponse {
         withSession(target, window: window) { source in
@@ -16,10 +16,9 @@ extension ServerActions {
             guard !source.programOverlayVisible, !holdsRemoteProgram(source, pane: nil) else {
                 return ControlResponse(ok: false, error: "a program overlay covers the session; nothing was created")
             }
-            guard let listed = try? panes.runner.list() else {
-                return ControlResponse(ok: false, error: "could not read the zmx session list")
+            guard let leaders = panes.daemonShells() else {
+                return ControlResponse(ok: false, error: "could not read the daemons' shells")
             }
-            let leaders = Dictionary(listed.compactMap { record in record.leaderPID.map { (record.name, $0) } }) { first, _ in first }
             let left: DuplicateReplay.Plan
             switch duplicatePlan(of: source, pane: .left, leaders: leaders) {
             case .failure(let refusal): return refusal.response

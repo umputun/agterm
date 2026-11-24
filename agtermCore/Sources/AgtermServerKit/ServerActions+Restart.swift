@@ -132,13 +132,15 @@ extension ServerActions {
         }
     }
 
-    /// leader is the pid `zmx list` reports for `daemon` once it differs from `otherThan`, polled until `wait` ends.
+    /// leader is `daemon`'s shell pid from `ServerPanes.daemonShells` once it differs from `otherThan`, polled until
+    /// `wait` ends.
     func leader(of daemon: String, otherThan: Int32?, within wait: Duration) async -> Int32? {
-        let runner = panes.runner
+        let scan = panes.daemonLeaders
+        let (directory, executable) = (panes.configuration.zmxSocketDirectory, panes.configuration.zmxPath)
         let deadline = ContinuousClock.now + wait
         while true {
-            let records = await Task.detached(operation: { try? runner.list() }).value
-            if let pid = records?.first(where: { $0.name == daemon })?.leaderPID, pid != otherThan { return pid }
+            let shells = await Task.detached(operation: { scan(directory, executable) }).value
+            if let pid = shells?[daemon], pid != otherThan { return pid }
             guard ContinuousClock.now < deadline else { return nil }
             try? await Task.sleep(for: restartWaits.poll)
         }

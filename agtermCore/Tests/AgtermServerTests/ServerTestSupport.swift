@@ -83,6 +83,7 @@ final class FakeZmxRunner: ZmxRunner, @unchecked Sendable {
     private var storedCursorColumns: [String: Int] = [:]
     private var storedRecords: [ZmxSessionRecord]? = []
     private var storedKillFails = false
+    private var storedListFails = false
     private var storedConfirmedKills: [(name: String, force: Bool)] = []
     private var storedKillOutcome = ZmxKillOutcome.killed
     private var storedOnCreate: (@Sendable (PaneLaunch) -> Void)?
@@ -114,6 +115,11 @@ final class FakeZmxRunner: ZmxRunner, @unchecked Sendable {
     var records: [ZmxSessionRecord]? {
         get { lock.withLock { storedRecords } }
         set { lock.withLock { storedRecords = newValue } }
+    }
+    /// listFails fails `list()` while `records` still feed the harness's leader scan.
+    var listFails: Bool {
+        get { lock.withLock { storedListFails } }
+        set { lock.withLock { storedListFails = newValue } }
     }
     var confirmedKills: [(name: String, force: Bool)] { lock.withLock { storedConfirmedKills } }
     var killOutcome: ZmxKillOutcome {
@@ -156,7 +162,7 @@ final class FakeZmxRunner: ZmxRunner, @unchecked Sendable {
     }
 
     func list() throws -> [ZmxSessionRecord] {
-        guard let records else { throw ZmxRunnerError.failed("list failed") }
+        guard let records, !listFails else { throw ZmxRunnerError.failed("list failed") }
         return records
     }
 
@@ -251,6 +257,9 @@ final class ServerHarness {
         actions.restartWaits = (program: .milliseconds(200), shell: .seconds(120), follow: .seconds(180), poll: .milliseconds(10))
         let runner = runner
         actions.daemonLeader = { target in runner.records?.last { $0.name == target.name }?.leaderPID }
+        panes.daemonLeaders = { _, _ in
+            runner.records.map { Dictionary($0.compactMap { record in record.leaderPID.map { (record.name, $0) } }) { _, last in last } }
+        }
         let observer = PaneObserver(store: store, panes: panes, cwd: { _ in nil })
         self.observer = observer
         actions.paneExited = { session, identity in observer.settleExited(session, identity: identity) }

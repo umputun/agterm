@@ -29,6 +29,15 @@ extension ProcessTable {
     }
 }
 
+/// ProcFile reads a per-process `/proc` text file.
+enum ProcFile {
+    /// text decodes the file lossily: the kernel cuts a command name to 15 bytes, which can split a multibyte character,
+    /// and a strict decode would then drop the whole line. Nil when the file cannot be read.
+    static func text(atPath path: String) -> String? {
+        FileManager.default.contents(atPath: path).map { String(decoding: $0, as: UTF8.self) }
+    }
+}
+
 /// ProcProcessTable reads `/proc`. Linux only; elsewhere the table cannot be read.
 public struct ProcProcessTable: ProcessTable {
     public init() {}
@@ -41,7 +50,7 @@ public struct ProcProcessTable: ProcessTable {
         let ticks = Int64(sysconf(Int32(_SC_CLK_TCK)))
         return entries.compactMap { entry in
             guard let pid = Int32(entry),
-                  let line = try? String(contentsOfFile: "/proc/\(pid)/stat", encoding: .utf8) else { return nil }
+                  let line = ProcFile.text(atPath: "/proc/\(pid)/stat") else { return nil }
             return Self.record(pid: pid, stat: line, bootTime: boot, ticksPerSecond: ticks)
         }
         #else
@@ -147,33 +156,78 @@ enum ProcDaemon {
 
     /// leader is the shell pid of `target`'s daemon, nil while none runs.
     static func leader(_ target: Target) -> Int32? {
+        scanned { select($0, target: target, row: $1) } ?? nil
+    }
+
+    /// leaders maps every daemon this server created in `directory` with `executable` to its shell pid, from one pass
+    /// over `/proc`; nil when `/proc` cannot be read, and off Linux.
+    static func leaders(directory: String, executable: String) -> [String: Int32]? {
+        scanned { collect($0, directory: directory, executable: executable, row: $1) }
+    }
+
+    private static func scanned<T>(_ body: ([Process], (Int32) -> ZmxDaemonLeader.Row?) -> T) -> T? {
         #if os(Linux)
         guard let entries = try? FileManager.default.contentsOfDirectory(atPath: "/proc") else { return nil }
         let pids = entries.compactMap { Int32($0) }
         let table = StatTable(pids: pids)
-        let processes = pids.lazy.map { pid in
+        let processes = pids.map { pid in
             Process(pid: pid, argv: { read("/proc/\(pid)/cmdline").flatMap(ProcForeground.parseCmdline) },
                     environment: { read("/proc/\(pid)/environ").flatMap(ProcForeground.parseCmdline) },
                     started: { stat(of: pid).flatMap(startTicks(stat:)) }, children: { table.children(of: pid) })
         }
-        return select(processes, target: target, row: table.row(of:))
+        return body(processes, table.row(of:))
         #else
         return nil
         #endif
+    }
+
+    /// collect is `leaders` over given processes. A name two daemons share, as when an earlier one outlives its kill
+    /// with its old shell, goes to the later start, then the higher pid, since starts are counted in 10 ms ticks.
+    static func collect(_ processes: some Sequence<Process>, directory: String, executable: String,
+                        row: (Int32) -> ZmxDaemonLeader.Row?) -> [String: Int32] {
+        let zmx = Executable(executable)
+        var found: [String: (started: Int64, pid: Int32, leader: Int32)] = [:]
+        for process in processes {
+            guard let argv = process.argv(), argv.count > 3, argv[1] == "attach", argv[2] == "--detached", zmx.matches(argv[0]),
+                  process.environment()?.contains("ZMX_DIR=\(directory)") == true, let started = process.started(),
+                  let leader = ZmxDaemonLeader.leader(ofDaemon: process.pid, children: process.children(), row: row) else { continue }
+            if let best = found[argv[3]], (best.started, best.pid) > (started, process.pid) { continue }
+            found[argv[3]] = (started, process.pid, leader)
+        }
+        return found.mapValues(\.leader)
     }
 
     /// select picks the daemon by the argv `ZmxRunner.create` starts it with, which its fork keeps, by its `ZMX_DIR`,
     /// since another state directory can run the same name, and by a start no earlier than the launch: an earlier
     /// daemon of the name can outlive its kill with its old shell.
     static func select(_ processes: some Sequence<Process>, target: Target, row: (Int32) -> ZmxDaemonLeader.Row?) -> Int32? {
+        let zmx = Executable(target.executable)
         for process in processes {
-            guard let argv = process.argv(), argv.starts(with: [target.executable, "attach", "--detached", target.name]),
+            guard let argv = process.argv(), argv.count > 3, argv[1] == "attach", argv[2] == "--detached", argv[3] == target.name,
+                  zmx.matches(argv[0]),
                   process.environment()?.contains("ZMX_DIR=\(target.directory)") == true,
                   let started = process.started(), started >= target.launchedAt,
                   let leader = ZmxDaemonLeader.leader(ofDaemon: process.pid, children: process.children(), row: row) else { continue }
             return leader
         }
         return nil
+    }
+
+    /// Executable matches a daemon's argv[0] against the configured zmx path, literally or through symlinks, since a
+    /// restarted server's `--zmx` can name the binary its surviving daemons started from another way. A relative
+    /// argv[0] would resolve against this server's directory, so only the literal match applies to it.
+    struct Executable {
+        let path: String
+        let resolved: String
+
+        init(_ path: String) {
+            self.path = path
+            resolved = (path as NSString).resolvingSymlinksInPath
+        }
+
+        func matches(_ argv0: String) -> Bool {
+            argv0 == path || (argv0.hasPrefix("/") && (argv0 as NSString).resolvingSymlinksInPath == resolved)
+        }
     }
 
     /// row parses `/proc/<pid>/stat` for the leader check, counting fields after the command name's closing
@@ -203,7 +257,7 @@ enum ProcDaemon {
     }
 
     private static func stat(of pid: Int32) -> String? {
-        try? String(contentsOfFile: "/proc/\(pid)/stat", encoding: .utf8)
+        ProcFile.text(atPath: "/proc/\(pid)/stat")
     }
 
     /// StatTable reads every process's stat row once, on the first daemon that matches, so children come from the

@@ -21,13 +21,13 @@ final class ServerPanes {
     let programVersion: String
     /// The server's own environment, without the variables a pane gets from the server itself.
     let baseEnvironment: [String: String]
-    /// leaders is each listed pane's shell pid from the last applied listing, which the tree's foreground reads start at.
-    var leaders: [UUID: Int32] = [:]
     /// restartHolds counts, per pane, the restarts replacing its shell that have not yet confirmed or given up on the new
     /// one, which no listing may settle meanwhile; each restart releases only its own hold.
     private var restartHolds: [UUID: Int] = [:]
     /// processes is the host's process table, through which a kill hangs up the pane's foreground job.
     var processes: any ProcessTable = ProcProcessTable()
+    /// daemonLeaders maps every daemon of a socket directory and zmx executable to its shell pid, nil when unreadable.
+    var daemonLeaders: @Sendable (_ directory: String, _ executable: String) -> [String: Int32]? = ProcDaemon.leaders
     private var startedAt: [UUID: Date] = [:]
     /// scratches are the identities this run started under a scratch daemon name, which `end` kills by that name.
     private var scratches: Set<UUID> = []
@@ -149,13 +149,19 @@ final class ServerPanes {
         }
     }
 
-    /// foregroundJobs reads each named daemon's foreground job before a kill ends its shell; empty when the listing
+    /// daemonShells is the shell pid of every daemon this server runs, from `ProcDaemon.leaders`; nil when `/proc`
     /// cannot be read.
+    func daemonShells() -> [String: Int32]? {
+        daemonLeaders(configuration.zmxSocketDirectory, configuration.zmxPath)
+    }
+
+    /// foregroundJobs reads each named daemon's foreground job before a kill ends its shell; empty when the daemons'
+    /// shells cannot be read.
     private func foregroundJobs(of names: [String]) -> [String: [ProcessRecord]] {
-        guard !names.isEmpty, let listed = try? runner.list() else { return [:] }
+        guard !names.isEmpty, let shells = daemonShells() else { return [:] }
         var jobs: [String: [ProcessRecord]] = [:]
-        for record in listed where names.contains(record.name) {
-            if let leader = record.leaderPID, let job = processes.foregroundJob(of: leader) { jobs[record.name] = job }
+        for name in names {
+            if let leader = shells[name], let job = processes.foregroundJob(of: leader) { jobs[name] = job }
         }
         return jobs
     }

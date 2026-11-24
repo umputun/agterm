@@ -366,13 +366,10 @@ final class ControlServerRestartTests: XCTestCase {
         let (session, view) = try livePane()
         let daemon = ZmxSupport.daemonName(for: session.paneIdentity)
         var killed = false
-        let client = ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir") { invocation in
-            guard invocation.arguments.first == "list" else {
-                killed = true
-                return "killed session \(invocation.arguments[1])\n"
-            }
-            return "name=\(daemon)\tpid=\(killed ? 4343 : 4242)\tclients=1\tcreated=1"
-        }
+        let client = ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir", runner: { invocation in
+            killed = true
+            return "killed session \(invocation.arguments[1])\n"
+        }, leaders: { [daemon: killed ? 4343 : 4242] })
         let server = makeServer(client: client, leader: 4242, daemon: daemon)
         server.restartLeader = { _ in 4343 }
         let replacement = RealizedReplacement()
@@ -525,13 +522,10 @@ final class ControlServerRestartTests: XCTestCase {
         let (session, view) = try livePane()
         let daemon = ZmxSupport.daemonName(for: session.paneIdentity)
         var kills = 0
-        let client = ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir") { invocation in
-            guard invocation.arguments.first == "list" else {
-                kills += 1
-                return kills == 1 ? "killed session \(invocation.arguments[1])\n" : "error: SessionUnresponsive\n"
-            }
-            return "name=\(daemon)\tpid=4242\tclients=1\tcreated=1"
-        }
+        let client = ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir", runner: { invocation in
+            kills += 1
+            return kills == 1 ? "killed session \(invocation.arguments[1])\n" : "error: SessionUnresponsive\n"
+        }, leaders: { [daemon: 4242] })
         let server = makeServer(client: client, leader: 4242, daemon: daemon)
         let leader = LeaderStub()
         server.restartLeader = { _ in leader.pid }
@@ -701,13 +695,10 @@ final class ControlServerRestartTests: XCTestCase {
 
     private func makeServer(daemon: String, sweeper: ProcessSweeper? = nil, foreground: pid_t? = nil,
                             leader: pid_t = 4242, onKill: @escaping (String) -> Void) -> ControlServer {
-        let client = ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir", sweeper: sweeper) { invocation in
-            guard invocation.arguments.first == "list" else {
-                onKill(invocation.arguments[1])
-                return "killed session \(invocation.arguments[1])\n"
-            }
-            return "name=\(daemon)\tpid=\(leader)\tclients=1\tcreated=1"
-        }
+        let client = ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir", sweeper: sweeper, runner: { invocation in
+            onKill(invocation.arguments[1])
+            return "killed session \(invocation.arguments[1])\n"
+        }, leaders: { [daemon: leader] })
         return makeServer(client: client, leader: leader, daemon: daemon, foreground: foreground)
     }
 
