@@ -20,13 +20,13 @@ The original failure had no retained client diagnostics. The cause and an approp
 Two source-confirmed routes can create a daemon under the app without a timeout; neither is confirmed
 as the route taken in this failure:
 
-- An initial inventory launch, exit or parse failure in
-  `agtermCore/Sources/SessionHostRuntime/HostBackend.swift:149` makes
-  `Host.swift:82` return a `before` failure. `agtermCore/Sources/agtermCore/SessionHost.swift:190`
-  selects `fullAttach`, and `agtermCore/Sources/SessionHostRuntime/Client.swift:45` executes the
-  original attach from the app's child. If the daemon is absent, that client creates it.
-- A temporary attach spawn failure at `agtermCore/Sources/SessionHostRuntime/Host.swift:87`, or an
-  early child exit at `Host.swift:117`, returns a `started` failure. The client selects `uncertain`.
+- An inventory launch, exit, timeout or parse failure in `HostBackend.list` makes
+  `Host.handle(ensure:)` return a `before` failure, `daemon inventory could not be read`.
+  `SessionHost.ClientOutcome` selects `fullAttach`, and `Client.run` executes the original attach from
+  the app's child. If the daemon is absent, that client creates it.
+- Since #1083 the host creates the daemon with `zmx attach --detached` (`Host.creation`). A spawn
+  failure of that creation client in `Host.handle(ensure:)`, or the creator failing in
+  `Host.awaitLeader`, returns a `started` failure. The client selects `uncertain`.
   A `session new --command` request (`--ends-pane`) then attaches with a "session is gone" guard
   (`Client.attachArgv`), which never replays the payload and ends the pane when the daemon is absent, so
   it creates no shell under the app. A replay, a restart and a plain shell still execute bare
@@ -88,8 +88,8 @@ the client's bare attach runs under the app. [Inference] the socket file is not 
 the creating client connects; that is read from the message, not measured. The
 directories are `shc-41C6C839-...`, `shc-077BC984-...` and `shc-C5E60B42-...`.
 
-Since the third sighting the host records why the attach client stopped. On recurrence, read the retained
-`host.log` for `attach client PID for NAME stopped before readiness:`, which carries whichever
+Since the third sighting the host records why the creation client stopped. On recurrence, read the retained
+`host.log` for `creation client PID for NAME failed:`, which carries whichever
 stop details apply (wait status, pre-exec errno, poll error) and the tail of the client's terminal output. The fixture also keeps zmx's
 own logs in `zmx-logs` beside it.
 
