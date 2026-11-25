@@ -560,7 +560,7 @@ final class ScreenshotUITests: ControlAPITestCase {
     }
 
     /// An agent waiting on the user: Claude Code reads how the dashboard caps its grid, marks its session
-    /// blocked and asks through `agtermctl ask`, a native dialog drawn over its own session.
+    /// blocked and asks through `agtermctl ask`, a terminal-style dialog drawn over its own session.
     func testAgentAsk() throws {
         let seeded = try activeSessionID()
         try sizeWindow(heroSize)
@@ -1218,8 +1218,8 @@ final class ScreenshotUITests: ControlAPITestCase {
     }
 
     /// Ready once the agents worked and went quiet with a `← ` send line on screen in either pane and
-    /// Claude's `Verdict:` in the left one. The prompt never spells `Verdict:` and Claude's footer carries
-    /// its `←` mid-line, so neither matches before the exchange happens.
+    /// Claude's `Conclusion:` in the left one, after its last send line. The prompt never spells
+    /// `Conclusion:` and Claude's footer carries its `←` mid-line, so neither matches before the exchange.
     private func chatConcluded(_ session: String) -> Bool {
         guard let node = try? sessionNode(id: session) else { return false }
         let status = node["status"] as? String

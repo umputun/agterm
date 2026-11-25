@@ -11,14 +11,27 @@ helper="$PWD/build/DerivedData/Build/Products/Debug/agterm.app/Contents/MacOS/ag
 domain="gui/$(id -u)"
 
 # each test's session host outlives the app and has no idle exit; stop only a host this run's tests
-# recorded: the Debug helper, `host <namespace> <key> <label>` exactly, and the launchd job owning that pid
+# recorded: the Debug helper on that namespace, through the launchd job owning its pid, or by pid when it
+# was spawned directly (`host <namespace>` alone). A namespace still holding a daemon socket keeps its
+# host and its record, since the host roots that daemon and the record is all that names it.
 retire_hosts() {
   [ -f "$shots/zmx-namespaces" ] || return 0
-  local failed=0 namespace pid exe verb ns key label extra job_pid
+  local failed=0 namespace socket pid exe verb ns key label extra job_pid
   while read -r namespace; do
     [ -n "$namespace" ] || continue
+    for socket in "$namespace"/agterm-*; do
+      [ -S "$socket" ] || continue
+      echo "$namespace still holds zmx daemon ${socket##*/}; its session host is left running" >&2
+      failed=1
+      continue 2
+    done
     while read -r pid exe verb ns key label extra; do
-      [ "$exe" = "$helper" ] && [ "$verb" = host ] && [ "$ns" = "$namespace" ] && [ -n "$label" ] && [ -z "$extra" ] || continue
+      [ "$exe" = "$helper" ] && [ "$verb" = host ] && [ "$ns" = "$namespace" ] && [ -z "$extra" ] || continue
+      if [ -z "$key" ]; then
+        kill -TERM "$pid" || { echo "failed to stop session host $pid" >&2; failed=1; }
+        continue
+      fi
+      [ -n "$label" ] || continue
       job_pid=$(launchctl print "$domain/$label" 2>/dev/null | awk '$1 == "pid" {print $3; exit}')
       if [ "$job_pid" != "$pid" ]; then
         echo "session host $pid is not launchd job $label; left running" >&2
@@ -36,7 +49,13 @@ cleanup() {
   [ -z "$keymap_dir" ] || rm -rf "$keymap_dir"
   retire_hosts || status=1
 }
-trap 'rc=$?; cleanup; [ "$rc" -ne 0 ] && exit "$rc"; exit "${status:-1}"' EXIT
+on_exit() {
+  local rc=$?
+  cleanup
+  [ "$rc" -ne 0 ] && exit "$rc"
+  exit "${status:-1}"
+}
+trap on_exit EXIT
 trap 'status=130; exit' INT
 trap 'status=143; exit' TERM
 
@@ -48,7 +67,7 @@ else
 fi
 
 if ! retire_hosts; then
-  echo "a previous run's session hosts are still running; records kept in $shots" >&2
+  echo "previous screenshot namespaces could not be retired; records kept in $shots" >&2
   trap - EXIT
   exit 1
 fi

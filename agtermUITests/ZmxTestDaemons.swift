@@ -40,16 +40,17 @@ extension ControlAPITestCase {
         }
 
         // a parent that still has companions respawns its shell under the same daemon name, so every companion
-        // ends first: terminal ones by their daemons, page ones (no daemon) by closing them
+        // ends first: by its daemon when it has one, otherwise (a page, a daemon not yet spawned) by closing it
         let alive = try daemonRows("zmx.list before cleanup", namespace: namespace).filter(\.isAlive)
-        let companionIDs = Set(try companionNodes().compactMap { $0["id"] as? String })
+        let companionIDs = Set(try companions().map(\.id))
         var killErrors = try kill(alive.filter { companionIDs.contains($0.sessionID ?? "") })
-        for page in try companionNodes() where page["content"] as? String == "page" {
-            guard let id = page["id"] as? String else { continue }
-            let response = try sendCommand(#"{"cmd":"session.close","target":"\#(id)"}"#)
-            if response["ok"] as? Bool != true { killErrors.append("page \(id): \(response["error"] ?? response)") }
+        let stillAlive = Set(try daemonRows("zmx.list after companion kills", namespace: namespace)
+            .filter(\.isAlive).compactMap(\.sessionID))
+        for companion in try companions() where !stillAlive.contains(companion.id) {
+            let response = try sendControlCommand("session.close", target: companion.id, args: ["window": companion.window])
+            if response["ok"] as? Bool != true { killErrors.append("companion \(companion.id): \(response["error"] ?? response)") }
         }
-        let stranded = Set(try companionNodes().compactMap { $0["parent"] as? String })
+        let stranded = Set(try companions().map(\.parent))
         killErrors += stranded.sorted().map { "\($0): companions left after their kills, parent not killed" }
         killErrors += try kill(alive.filter { !companionIDs.contains($0.sessionID ?? "") && !stranded.contains($0.sessionID ?? "") })
 
@@ -83,8 +84,32 @@ extension ControlAPITestCase {
         return errors
     }
 
-    fileprivate func companionNodes() throws -> [[String: Any]] {
-        try treeWorkspaceNodes().flatMap { $0["sessions"] as? [[String: Any]] ?? [] }.filter { $0["parent"] != nil }
+    fileprivate struct Companion {
+        let id: String
+        let parent: String
+        let window: String
+    }
+
+    /// Companions in every open local window: a bare `tree` answers for the frontmost window only, which in
+    /// the remote scenes is a remote one whose sessions live on the server.
+    fileprivate func companions() throws -> [Companion] {
+        let listed = try sendControlCommand("window.list")
+        guard listed["ok"] as? Bool == true,
+              let windows = (listed["result"] as? [String: Any])?["windows"] as? [[String: Any]] else {
+            throw cleanupFailure("window.list failed: \(listed)")
+        }
+        let local = windows.filter { $0["open"] as? Bool == true && $0["remote"] == nil }.compactMap { $0["id"] as? String }
+        return try local.flatMap { window in
+            let response = try sendControlCommand("tree", args: ["window": window])
+            guard let workspaces = ((response["result"] as? [String: Any])?["tree"] as? [String: Any])?["workspaces"]
+                    as? [[String: Any]] else {
+                throw cleanupFailure("tree of window \(window) failed: \(response)")
+            }
+            return workspaces.flatMap { $0["sessions"] as? [[String: Any]] ?? [] }.compactMap { node -> Companion? in
+                guard let id = node["id"] as? String, let parent = node["parent"] as? String else { return nil }
+                return Companion(id: id, parent: parent, window: window)
+            }
+        }
     }
 
     /// Every daemon in this test's namespace. The endpoint and inventory checks are the safety boundary
