@@ -32,21 +32,25 @@ For the real terminal work, rendering, VT parsing, and shell I/O, `agterm` embed
 <details>
 <summary>More screenshots</summary>
 
+Claude Code and codex discussing agterm's own code across one split session:
+
+![Claude Code and codex](docs/screenshots/pair-codex.png)
+
 The dashboard: several sessions' live output in one view-only grid, watched at once. A single click drops into any of them:
 
 ![Dashboard](docs/screenshots/dashboard.png)
 
-An agent's interactive prompt mid-session, with attention glyphs on the sessions that need you:
+An agent asking you a question mid-session, in a terminal-style dialog with choices, its session marked blocked until you answer:
 
-![Agent prompt](docs/screenshots/agent-prompt.png)
+![Agent question](docs/screenshots/agent-prompt.png)
 
 The yazi file manager in a floating overlay over the active session, from one `command` line in `keymap.conf`:
 
 ![Floating overlay](docs/screenshots/floating-overlay.png)
 
-A split session, two panes side by side on different color themes:
+Backgrounds of your own: a text watermark behind one pane, a solid color behind the other:
 
-![Split session](docs/screenshots/split-theme.png)
+![Split session with its own backgrounds](docs/screenshots/split-theme.png)
 
 </details>
 

@@ -84,7 +84,8 @@ class ControlAPITestCase: XCTestCase {
     /// without driving the Settings window.
     var seededSettings: [String: Any]? { nil }
 
-    /// Opt one focused persistence test into the real bundled zmx path. Every other UI test bypasses it.
+    /// Opts a suite into the real bundled zmx path: the zmx persistence suite and the screenshot scenes, each
+    /// reaping its daemons through `reapTestDaemons`. Every other UI test bypasses it.
     var enablesZmxForUITest: Bool { false }
 
     /// Write `seededSettings` into the state dir before launch, so `SettingsModel.init` picks it up.
@@ -555,6 +556,31 @@ class ControlAPITestCase: XCTestCase {
         return tree["askPending"] as? String
     }
 
+    /// runCLI runs the bundled agtermctl against this test's socket with no AGTERM_* variables, so the
+    /// runner's own terminal cannot lend it an identity.
+    func runCLI(_ arguments: [String]) throws -> (status: Int32, stdout: String, stderr: String) {
+        let process = Process()
+        process.executableURL = Bundle.main.bundleURL.deletingLastPathComponent()
+            .appendingPathComponent("agterm.app/Contents/MacOS/agtermctl")
+        process.arguments = arguments + ["--socket", socketPath]
+        process.environment = ProcessInfo.processInfo.environment.filter { !$0.key.hasPrefix("AGTERM_") }
+        let out = Pipe(), err = Pipe()
+        process.standardOutput = out
+        process.standardError = err
+        try process.run()
+        // both pipes drain at once: a child that fills the stderr pipe blocks before it closes stdout
+        let stderr = PipeSink()
+        let drained = DispatchSemaphore(value: 0)
+        Thread {
+            stderr.data = err.fileHandleForReading.readDataToEndOfFile()
+            drained.signal()
+        }.start()
+        let stdout = out.fileHandleForReading.readDataToEndOfFile()
+        drained.wait()
+        process.waitUntilExit()
+        return (process.terminationStatus, String(decoding: stdout, as: UTF8.self), String(decoding: stderr.data, as: UTF8.self))
+    }
+
     /// Connect to the app's control socket, send `line` (newline-terminated), read the single response
     /// line, and parse it as JSON. Retries the connect briefly since the server's scene `.task` may bind a
     /// beat after the window appears.
@@ -635,4 +661,9 @@ class ControlAPITestCase: XCTestCase {
         NSError(domain: "control-socket", code: Int(code),
                 userInfo: [NSLocalizedDescriptionKey: "\(op) failed: \(String(cString: strerror(code)))"])
     }
+}
+
+/// Holds one pipe's bytes across the reader thread; the semaphore orders the write before the read.
+private final class PipeSink: @unchecked Sendable {
+    var data = Data()
 }
