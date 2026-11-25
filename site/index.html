@@ -40,7 +40,7 @@
     <meta name="theme-color" content="#191d20" />
     <link rel="preload" href="/assets/fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/assets/fonts/ibm-plex-sans-latin.woff2" as="font" type="font/woff2" crossorigin />
-    <link rel="stylesheet" href="/style.css?v=3" />
+    <link rel="stylesheet" href="/style.css?v=4" />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -253,62 +253,9 @@
           "
         >
           <div class="hero-gallery">
-            <img
-              src="/assets/screenshot-main.webp"
+            <img class="on" src="/assets/screenshot-main.webp"
               alt="agterm main window: Claude Code working in a session whose companions are a test log, its copy and a docs page"
-              width="1187"
-              height="696"
-              fetchpriority="high"
-            />
-            <img
-              src="/assets/screenshot-pair-codex.webp"
-              alt="Claude Code and codex discussing agterm's own code across a split session"
-              width="1187"
-              height="696"
-              loading="lazy"
-            />
-            <img
-              src="/assets/screenshot-dashboard.webp"
-              alt="The dashboard: six live sessions in one grid, three agents among them"
-              width="1187"
-              height="696"
-              loading="lazy"
-            />
-            <img
-              src="/assets/screenshot-agent-prompt.webp"
-              alt="An agent asking a question in a terminal-style dialog over its session"
-              width="1187"
-              height="696"
-              loading="lazy"
-            />
-            <img
-              src="/assets/screenshot-sidebar.webp"
-              alt="The sidebar: info lines, status glyphs in different shapes, tints, a companion and a top-level session"
-              width="1187"
-              height="696"
-              loading="lazy"
-            />
-            <img
-              src="/assets/screenshot-page-session.webp"
-              alt="A web page as a session of its own, the dev server serving it as its companion"
-              width="1187"
-              height="696"
-              loading="lazy"
-            />
-            <img
-              src="/assets/screenshot-action-palette.webp"
-              alt="The command palette over a split session"
-              width="1187"
-              height="696"
-              loading="lazy"
-            />
-            <img
-              src="/assets/screenshot-floating-overlay.webp"
-              alt="The yazi file manager in a floating overlay over the active session"
-              width="1187"
-              height="696"
-              loading="lazy"
-            />
+              width="1187" height="696" fetchpriority="high" />
           </div>
         </div>
         <p
@@ -1012,153 +959,188 @@
 
       <!-- ===== SHOWCASE ===== -->
 
-      <div style="max-width: 1140px; margin: 0 auto; padding: 80px 28px 40px">
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 16px">
-          <figure
-            style="
-              margin: 0;
-              background: #22272b;
-              border: 1px solid rgba(255, 255, 255, 0.08);
-              border-radius: 14px;
-              overflow: hidden;
-            "
-          >
-            <img
-              src="/assets/screenshot-session-palette.webp"
-              alt="Session palette"
-              width="1187"
-              height="696"
-              loading="lazy"
-              style="display: block; width: 100%; height: auto; border-bottom: 1px solid rgba(255, 255, 255, 0.06)"
-            />
-            <figcaption style="padding: 16px 20px; font-size: 14px; color: #949ba4">
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: var(--accent, #6d82f3); font-size: 12px"
-                >⌃P</span
-              >
-              &nbsp;Fuzzy session switcher — jump to any session by name or directory.
-            </figcaption>
+      <section class="shots" aria-label="Screenshots">
+        <div class="shots-grid" id="shots">
+          <figure class="shot">
+            <button type="button" class="shot-open" aria-label="Enlarge: agterm main window: Claude Code working in a session whose companions are a test log, its copy and a docs page">
+              <img src="/assets/screenshot-main.webp" alt="agterm main window: Claude Code working in a session whose companions are a test log, its copy and a docs page" width="1187" height="696" loading="lazy" decoding="async" />
+            </button>
+            <figcaption><span class="shot-tag">companions</span> Claude Code working in a session whose companions are a test log, its copy and a docs page.</figcaption>
           </figure>
-          <figure
-            style="
-              margin: 0;
-              background: #22272b;
-              border: 1px solid rgba(255, 255, 255, 0.08);
-              border-radius: 14px;
-              overflow: hidden;
-            "
-          >
-            <img
-              src="/assets/screenshot-agent-prompt.webp"
-              alt="Agent question"
-              width="1187"
-              height="696"
-              loading="lazy"
-              style="display: block; width: 100%; height: auto; border-bottom: 1px solid rgba(255, 255, 255, 0.06)"
-            />
-            <figcaption style="padding: 16px 20px; font-size: 14px; color: #949ba4">
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #f2b45c; font-size: 12px">blocked</span>
-              &nbsp;An agent asks you mid-session: a question dialog with choices, its session marked blocked until you answer.
-            </figcaption>
+          <figure class="shot">
+            <button type="button" class="shot-open" aria-label="Enlarge: Claude Code and codex discussing agterm&#x27;s own code across a split session">
+              <img src="/assets/screenshot-pair-codex.webp" alt="Claude Code and codex discussing agterm&#x27;s own code across a split session" width="1187" height="696" loading="lazy" decoding="async" />
+            </button>
+            <figcaption><span class="shot-tag">/chat</span> Claude Code and codex settle a question about agterm's code across one split session.</figcaption>
           </figure>
-          <figure
-            style="
-              margin: 0;
-              background: #22272b;
-              border: 1px solid rgba(255, 255, 255, 0.08);
-              border-radius: 14px;
-              overflow: hidden;
-            "
-          >
-            <img
-              src="/assets/screenshot-floating-overlay.webp"
-              alt="Floating overlay"
-              width="1187"
-              height="696"
-              loading="lazy"
-              style="display: block; width: 100%; height: auto; border-bottom: 1px solid rgba(255, 255, 255, 0.06)"
-            />
-            <figcaption style="padding: 16px 20px; font-size: 14px; color: #949ba4">
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #5ea1f2; font-size: 12px">overlay</span>
-              &nbsp;The yazi file manager in a floating panel over the active session, from one
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">command</span> line in
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">keymap.conf</span>.
-              <a href="/docs#extend" style="color: #6d82f3">Extend agterm</a>
-            </figcaption>
+          <figure class="shot">
+            <button type="button" class="shot-open" aria-label="Enlarge: The dashboard: six live sessions in one grid, three agents among them">
+              <img src="/assets/screenshot-dashboard.webp" alt="The dashboard: six live sessions in one grid, three agents among them" width="1187" height="696" loading="lazy" decoding="async" />
+            </button>
+            <figcaption><span class="shot-tag">dashboard</span> Six live sessions in one view-only grid: three agents, a test log, the history and the machine's load.</figcaption>
           </figure>
-          <figure
-            style="
-              margin: 0;
-              background: #22272b;
-              border: 1px solid rgba(255, 255, 255, 0.08);
-              border-radius: 14px;
-              overflow: hidden;
-            "
-          >
-            <img
-              src="/assets/screenshot-attention.webp"
-              alt="Attention list"
-              width="1187"
-              height="696"
-              loading="lazy"
-              style="display: block; width: 100%; height: auto; border-bottom: 1px solid rgba(255, 255, 255, 0.06)"
-            />
-            <figcaption style="padding: 16px 20px; font-size: 14px; color: #949ba4">
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: var(--accent, #6d82f3); font-size: 12px"
-                >⌃⇧I</span
-              >
-              &nbsp;The attention list — jump to any session that needs you.
-            </figcaption>
+          <figure class="shot">
+            <button type="button" class="shot-open" aria-label="Enlarge: An agent asking a question in a terminal-style dialog over its session">
+              <img src="/assets/screenshot-agent-prompt.webp" alt="An agent asking a question in a terminal-style dialog over its session" width="1187" height="696" loading="lazy" decoding="async" />
+            </button>
+            <figcaption><span class="shot-tag">blocked</span> An agent asks you mid-session: a question dialog with choices, its session marked blocked until you answer.</figcaption>
           </figure>
-          <figure
-            style="
-              margin: 0;
-              background: #22272b;
-              border: 1px solid rgba(255, 255, 255, 0.08);
-              border-radius: 14px;
-              overflow: hidden;
-            "
-          >
-            <img
-              src="/assets/screenshot-split-theme.webp"
-              alt="Split session with its own backgrounds"
-              width="1187"
-              height="696"
-              loading="lazy"
-              style="display: block; width: 100%; height: auto; border-bottom: 1px solid rgba(255, 255, 255, 0.06)"
-            />
-            <figcaption style="padding: 16px 20px; font-size: 14px; color: #949ba4">
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: var(--accent, #6d82f3); font-size: 12px"
-                >background</span
-              >
-              &nbsp;Backgrounds of your own: a text watermark behind one pane, a solid color behind the other.
-            </figcaption>
+          <figure class="shot">
+            <button type="button" class="shot-open" aria-label="Enlarge: The sidebar: info lines, status glyphs in different shapes, tints, a companion and a top-level session">
+              <img src="/assets/screenshot-sidebar.webp" alt="The sidebar: info lines, status glyphs in different shapes, tints, a companion and a top-level session" width="1187" height="696" loading="lazy" decoding="async" />
+            </button>
+            <figcaption><span class="shot-tag">info</span> Info lines, status glyphs in different shapes, tints, a companion with its own status and a top-level session.</figcaption>
           </figure>
-          <figure
-            style="
-              margin: 0;
-              background: #22272b;
-              border: 1px solid rgba(255, 255, 255, 0.08);
-              border-radius: 14px;
-              overflow: hidden;
-            "
-          >
-            <img
-              src="/assets/screenshot-diff-tui.webp"
-              alt="lazygit running full-screen in a session"
-              width="1187"
-              height="696"
-              loading="lazy"
-              style="display: block; width: 100%; height: auto; border-bottom: 1px solid rgba(255, 255, 255, 0.06)"
-            />
-            <figcaption style="padding: 16px 20px; font-size: 14px; color: #949ba4">
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: var(--accent, #6d82f3); font-size: 12px"
-                >tui</span
-              >
-              &nbsp;A full-screen terminal UI, lazygit here, running inside a session.
-            </figcaption>
+          <figure class="shot">
+            <button type="button" class="shot-open" aria-label="Enlarge: A web page as a session of its own, the dev server serving it as its companion">
+              <img src="/assets/screenshot-page-session.webp" alt="A web page as a session of its own, the dev server serving it as its companion" width="1187" height="696" loading="lazy" decoding="async" />
+            </button>
+            <figcaption><span class="shot-tag">--page</span> A web page as a session of its own, its dev server running as the page's companion.</figcaption>
+          </figure>
+          <figure class="shot">
+            <button type="button" class="shot-open" aria-label="Enlarge: The command palette over a split session">
+              <img src="/assets/screenshot-action-palette.webp" alt="The command palette over a split session" width="1187" height="696" loading="lazy" decoding="async" />
+            </button>
+            <figcaption><span class="shot-tag">palette</span> The command palette over a split session, filtered to the split actions.</figcaption>
+          </figure>
+          <figure class="shot">
+            <button type="button" class="shot-open" aria-label="Enlarge: The yazi file manager in a floating overlay over the active session">
+              <img src="/assets/screenshot-floating-overlay.webp" alt="The yazi file manager in a floating overlay over the active session" width="1187" height="696" loading="lazy" decoding="async" />
+            </button>
+            <figcaption><span class="shot-tag">overlay</span> The yazi file manager in a floating panel over the active session, from one <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">command</span> line in <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">keymap.conf</span>. <a href="/docs#extend" style="color: #6d82f3">Extend agterm</a></figcaption>
+          </figure>
+          <figure class="shot">
+            <button type="button" class="shot-open" aria-label="Enlarge: Fuzzy session palette for jumping to any session by name">
+              <img src="/assets/screenshot-session-palette.webp" alt="Fuzzy session palette for jumping to any session by name" width="1187" height="696" loading="lazy" decoding="async" />
+            </button>
+            <figcaption><span class="shot-tag">⌃P</span> Fuzzy session switcher: jump to any session by name or directory.</figcaption>
+          </figure>
+          <figure class="shot">
+            <button type="button" class="shot-open" aria-label="Enlarge: The attention list showing sessions that need you">
+              <img src="/assets/screenshot-attention.webp" alt="The attention list showing sessions that need you" width="1187" height="696" loading="lazy" decoding="async" />
+            </button>
+            <figcaption><span class="shot-tag">⌃⇧I</span> The attention list: jump to any session that needs you.</figcaption>
+          </figure>
+          <figure class="shot">
+            <button type="button" class="shot-open" aria-label="Enlarge: Split session with its own backgrounds">
+              <img src="/assets/screenshot-split-theme.webp" alt="Split session with its own backgrounds" width="1187" height="696" loading="lazy" decoding="async" />
+            </button>
+            <figcaption><span class="shot-tag">background</span> Backgrounds of your own: a text watermark behind one pane, a solid color behind the other.</figcaption>
+          </figure>
+          <figure class="shot">
+            <button type="button" class="shot-open" aria-label="Enlarge: lazygit running full-screen in a session">
+              <img src="/assets/screenshot-diff-tui.webp" alt="lazygit running full-screen in a session" width="1187" height="696" loading="lazy" decoding="async" />
+            </button>
+            <figcaption><span class="shot-tag">tui</span> A full-screen terminal UI, lazygit here, running inside a session.</figcaption>
+          </figure>
+          <figure class="shot">
+            <button type="button" class="shot-open" aria-label="Enlarge: The keymap editor overlay">
+              <img src="/assets/screenshot-keymap-editor.webp" alt="The keymap editor overlay" width="1187" height="696" loading="lazy" decoding="async" />
+            </button>
+            <figcaption><span class="shot-tag">keymap</span> keymap.conf open in your editor as a floating overlay, from File ▸ Edit Keymap.</figcaption>
+          </figure>
+          <figure class="shot">
+            <button type="button" class="shot-open" aria-label="Enlarge: Claude Code and agy discussing agterm&#x27;s code across a split session">
+              <img src="/assets/screenshot-pair-agy.webp" alt="Claude Code and agy discussing agterm&#x27;s code across a split session" width="1187" height="696" loading="lazy" decoding="async" />
+            </button>
+            <figcaption><span class="shot-tag">/chat</span> Claude Code and agy reach a verdict together, the lower pane on a background of its own.</figcaption>
+          </figure>
+          <figure class="shot">
+            <button type="button" class="shot-open" aria-label="Enlarge: The diff page over a multi-file commit">
+              <img src="/assets/screenshot-diff-page.webp" alt="The diff page over a multi-file commit" width="1187" height="696" loading="lazy" decoding="async" />
+            </button>
+            <figcaption><span class="shot-tag">diff</span> agterm's diff page over a multi-file commit, with its file list open.</figcaption>
+          </figure>
+          <figure class="shot">
+            <button type="button" class="shot-open" aria-label="Enlarge: Source at a marked line over one pane and a followed test log over the other">
+              <img src="/assets/screenshot-source-and-log.webp" alt="Source at a marked line over one pane and a followed test log over the other" width="1187" height="696" loading="lazy" decoding="async" />
+            </button>
+            <figcaption><span class="shot-tag">--text</span> Highlighted source at a marked line over one pane, a test log following its growing end over the other.</figcaption>
+          </figure>
+          <figure class="shot">
+            <button type="button" class="shot-open" aria-label="Enlarge: A HUD with a spinner over a running test log">
+              <img src="/assets/screenshot-hud-spinner.webp" alt="A HUD with a spinner over a running test log" width="1187" height="696" loading="lazy" decoding="async" />
+            </button>
+            <figcaption><span class="shot-tag">hud</span> A HUD with a spinner naming the test run whose log fills the session beneath it.</figcaption>
+          </figure>
+          <figure class="shot">
+            <button type="button" class="shot-open" aria-label="Enlarge: A HUD pinned to the top edge of a session as an alert">
+              <img src="/assets/screenshot-status-bar.webp" alt="A HUD pinned to the top edge of a session as an alert" width="1187" height="696" loading="lazy" decoding="async" />
+            </button>
+            <figcaption><span class="shot-tag">hud</span> A frameless HUD pinned to the top edge as an alert that stays until you close it.</figcaption>
+          </figure>
+          <figure class="shot">
+            <button type="button" class="shot-open" aria-label="Enlarge: The native picker listing release gates">
+              <img src="/assets/screenshot-gate-picker.webp" alt="The native picker listing release gates" width="1187" height="696" loading="lazy" decoding="async" />
+            </button>
+            <figcaption><span class="shot-tag">pick</span> The native picker listing the repo's release gates, the one that already passed marked done.</figcaption>
+          </figure>
+          <figure class="shot">
+            <button type="button" class="shot-open" aria-label="Enlarge: Sessions with unseen notification badges">
+              <img src="/assets/screenshot-notifications.webp" alt="Sessions with unseen notification badges" width="1187" height="696" loading="lazy" decoding="async" />
+            </button>
+            <figcaption><span class="shot-tag">notify</span> Programs that called notify, each session carrying its unseen badge.</figcaption>
+          </figure>
+          <figure class="shot">
+            <button type="button" class="shot-open" aria-label="Enlarge: The compact sidebar holding twenty sessions">
+              <img src="/assets/screenshot-compact-density.webp" alt="The compact sidebar holding twenty sessions" width="1187" height="696" loading="lazy" decoding="async" />
+            </button>
+            <figcaption><span class="shot-tag">compact</span> Compact density: twenty sessions across five workspaces in one sidebar.</figcaption>
+          </figure>
+          <figure class="shot">
+            <button type="button" class="shot-open" aria-label="Enlarge: A custom attention page over its session with review companions">
+              <img src="/assets/screenshot-attention-page.webp" alt="A custom attention page over its session with review companions" width="1187" height="696" loading="lazy" decoding="async" />
+            </button>
+            <figcaption><span class="shot-tag">page</span> A maintainer's own HTML page over its session, listing work that needs attention, each review a companion.</figcaption>
+          </figure>
+          <figure class="shot">
+            <button type="button" class="shot-open" aria-label="Enlarge: A plan annotated in a page over its session">
+              <img src="/assets/screenshot-annotate-document.webp" alt="A plan annotated in a page over its session" width="1187" height="696" loading="lazy" decoding="async" />
+            </button>
+            <figcaption><span class="shot-tag">annotate</span> A plan under review with the annotate-document recipe: one saved note and a second being written.</figcaption>
+          </figure>
+          <figure class="shot">
+            <button type="button" class="shot-open" aria-label="Enlarge: A diff review page as a companion of its session">
+              <img src="/assets/screenshot-webrev-diff.webp" alt="A diff review page as a companion of its session" width="1187" height="696" loading="lazy" decoding="async" />
+            </button>
+            <figcaption><span class="shot-tag">page</span> A custom diff review page over a companion of the session that made the change.</figcaption>
+          </figure>
+          <figure class="shot">
+            <button type="button" class="shot-open" aria-label="Enlarge: Neovim and a shell in a split session, lazygit and htop as companions">
+              <img src="/assets/screenshot-terminal.webp" alt="Neovim and a shell in a split session, lazygit and htop as companions" width="1187" height="696" loading="lazy" decoding="async" />
+            </button>
+            <figcaption><span class="shot-tag">nvim</span> Plain terminal work: neovim beside a shell, lazygit and htop as companions, a docs server in a session of its own.</figcaption>
+          </figure>
+          <figure class="shot">
+            <button type="button" class="shot-open" aria-label="Enlarge: agterm with every optional control hidden">
+              <img src="/assets/screenshot-minimal.webp" alt="agterm with every optional control hidden" width="1187" height="696" loading="lazy" decoding="async" />
+            </button>
+            <figcaption><span class="shot-tag">minimal</span> The least chrome agterm draws: one pane, session names and pill statuses.</figcaption>
+          </figure>
+          <figure class="shot">
+            <button type="button" class="shot-open" aria-label="Enlarge: A remote window of a Linux agterm-server host">
+              <img src="/assets/screenshot-remote-window.webp" alt="A remote window of a Linux agterm-server host" width="1187" height="696" loading="lazy" decoding="async" />
+            </button>
+            <figcaption><span class="shot-tag">remote</span> A remote window of a Linux agterm-server host, its sessions running on the server.</figcaption>
+          </figure>
+          <figure class="shot">
+            <button type="button" class="shot-open" aria-label="Enlarge: A remote session attached into a local workspace">
+              <img src="/assets/screenshot-remote-attach.webp" alt="A remote session attached into a local workspace" width="1187" height="696" loading="lazy" decoding="async" />
+            </button>
+            <figcaption><span class="shot-tag">remote</span> A session from a Linux host attached into a local workspace beside local sessions.</figcaption>
           </figure>
         </div>
-      </div>
+        <div class="shots-nav" hidden>
+          <button type="button" class="shots-step" data-step="-1" aria-label="Previous screenshots">&larr;</button>
+          <span class="shots-page" aria-live="polite"></span>
+          <button type="button" class="shots-step" data-step="1" aria-label="Next screenshots">&rarr;</button>
+        </div>
+        <dialog class="shot-view" aria-label="Screenshot">
+          <form method="dialog"><button class="shot-close" aria-label="Close">&times;</button></form>
+          <img alt="" />
+          <p class="shot-view-caption"></p>
+        </dialog>
+      </section>
 
       <!-- ===== GENERAL-PURPOSE ===== -->
       <div style="max-width: 1140px; margin: 0 auto; padding: 80px 28px 40px">
@@ -1690,6 +1672,105 @@ agtermctl session status completed --auto-reset \
         </div>
       </div>
     </div>
+    <script>
+      (function () {
+        var grid = document.getElementById("shots");
+        if (!grid) return;
+        var figures = Array.prototype.slice.call(grid.querySelectorAll(".shot"));
+        var nav = document.querySelector(".shots-nav");
+        var label = nav.querySelector(".shots-page");
+        // the first figure shown, so a resize that changes the batch size keeps the same shots in view
+        var anchor = 0;
+        // a batch is two rows of whatever column count the layout gives
+        function perPage() {
+          return getComputedStyle(grid).gridTemplateColumns.split(" ").length * 2;
+        }
+        function show() {
+          var per = perPage();
+          var page = Math.floor(anchor / per);
+          figures.forEach(function (f, i) {
+            f.hidden = Math.floor(i / per) !== page;
+          });
+          label.textContent = page + 1 + " / " + Math.ceil(figures.length / per);
+        }
+        nav.hidden = false;
+        nav.addEventListener("click", function (e) {
+          var step = e.target.closest(".shots-step");
+          if (!step) return;
+          var per = perPage();
+          var pages = Math.ceil(figures.length / per);
+          anchor = ((Math.floor(anchor / per) + Number(step.dataset.step) + pages) % pages) * per;
+          show();
+        });
+        window.addEventListener("resize", show);
+        show();
+
+        var view = document.querySelector(".shot-view");
+        var viewImg = view.querySelector("img");
+        var viewCaption = view.querySelector(".shot-view-caption");
+        var opener = null;
+        grid.addEventListener("click", function (e) {
+          var open = e.target.closest(".shot-open");
+          if (!open) return;
+          var img = open.querySelector("img");
+          opener = open;
+          viewImg.src = img.src;
+          viewImg.alt = img.alt;
+          viewCaption.innerHTML = open.parentNode.querySelector("figcaption").innerHTML;
+          view.showModal();
+        });
+        view.addEventListener("click", function (e) {
+          if (e.target === view) view.close();
+        });
+        view.addEventListener("close", function () {
+          if (!opener) return;
+          anchor = figures.indexOf(opener.parentNode);
+          show();
+          opener.focus();
+        });
+
+        var hero = document.querySelector(".hero-gallery");
+        if (!hero) return;
+        var still = window.matchMedia("(prefers-reduced-motion: reduce)");
+        var slides = figures.map(function (f) {
+          var img = f.querySelector("img");
+          return { src: img.getAttribute("src"), alt: img.alt };
+        });
+        var front = hero.querySelector("img");
+        front.src = slides[0].src;
+        front.alt = slides[0].alt;
+        var back = front.cloneNode();
+        back.classList.remove("on");
+        back.removeAttribute("fetchpriority");
+        back.setAttribute("aria-hidden", "true");
+        hero.appendChild(back);
+        var next = 1;
+        // the next slide loads while the current one shows, so a swap never reveals a half-loaded image
+        function preload() {
+          back.src = slides[next].src;
+          back.alt = slides[next].alt;
+        }
+        preload();
+        setInterval(function () {
+          if (still.matches || document.hidden || !back.complete) return;
+          // a failed load is complete too: skip that slide and keep the current one up
+          if (!back.naturalWidth) {
+            next = (next + 1) % slides.length;
+            preload();
+            return;
+          }
+          back.classList.add("on");
+          back.removeAttribute("aria-hidden");
+          front.classList.remove("on");
+          front.setAttribute("aria-hidden", "true");
+          var t = front;
+          front = back;
+          back = t;
+          next = (next + 1) % slides.length;
+          setTimeout(preload, 1000);
+        }, 5000);
+      })();
+    </script>
     <script>
       function cp(b) {
         navigator.clipboard.writeText("brew install --cask umputun/apps/agterm").then(function () {

@@ -385,8 +385,8 @@ C-boundary concurrency before changing the bridge.
 - Hero images must match the fixed `1187 / 696` ratio, about 1.70:1; capture dense dashboards at that
   ratio before WebP conversion; existing shots are 2374x1392. Dense shots (dashboard, agent pair) run
   230-305k at WebP quality 70, single-window shots 90-205k at 82.
-  Crossfade duration is slides times 5 seconds, delays advance by 5 seconds, and the opaque keyframe
-  plateau is about `1/slides`.
+  The index page's `#shots` grid is the one ordered list of full-window shots: its script pages the grid
+  and rotates the hero through the same figures, so a shot is added or reordered there alone.
 - Auto-fit feature grids can strand orphan cards. Use a fixed column count, explicit spans, and narrow
   media fallbacks as in `.surfaces-grid`.
 - Demo and screenshot staging shows two or three agent statuses at most, and never notification badges
