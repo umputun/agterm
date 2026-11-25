@@ -60,24 +60,6 @@ final class ControlMessageUITests: ControlAPITestCase {
 
     // MARK: - helpers
 
-    /// runCLI runs the bundled agtermctl against this test's socket with no AGTERM_* variables, so the
-    /// runner's own terminal cannot lend it an identity.
-    private func runCLI(_ arguments: [String]) throws -> (status: Int32, stdout: String, stderr: String) {
-        let process = Process()
-        process.executableURL = Bundle.main.bundleURL.deletingLastPathComponent()
-            .appendingPathComponent("agterm.app/Contents/MacOS/agtermctl")
-        process.arguments = arguments + ["--socket", socketPath]
-        process.environment = ProcessInfo.processInfo.environment.filter { !$0.key.hasPrefix("AGTERM_") }
-        let out = Pipe(), err = Pipe()
-        process.standardOutput = out
-        process.standardError = err
-        try process.run()
-        let stdout = out.fileHandleForReading.readDataToEndOfFile()
-        let stderr = err.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        return (process.terminationStatus, String(decoding: stdout, as: UTF8.self), String(decoding: stderr, as: UTF8.self))
-    }
-
     /// splitPanes opens a split and waits until both panes are live: each carries a paneID and takes mail.
     private func splitPanes() throws -> (session: String, left: String, right: String) {
         let sessionID = try activeSessionID()
