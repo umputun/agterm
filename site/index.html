@@ -259,15 +259,15 @@
           </div>
         </div>
         <p
+          class="hero-caption"
           style="
             text-align: center;
-            font-family: &quot;JetBrains Mono&quot;, monospace;
-            font-size: 12px;
-            color: #6b727a;
+            font-size: 14px;
+            color: #949ba4;
             margin: 16px 0 0;
           "
         >
-          Workspaces and sessions, the fuzzy palettes, floating overlays, and agent-status glyphs on the rows that need you.
+          <span class="shot-tag">companions</span> Claude Code working in a session whose companions are a test log, its copy and a docs page.
         </p>
       </div>
 
@@ -1734,11 +1734,34 @@ agtermctl session status completed --auto-reset \
         var still = window.matchMedia("(prefers-reduced-motion: reduce)");
         var slides = figures.map(function (f) {
           var img = f.querySelector("img");
-          return { src: img.getAttribute("src"), alt: img.alt };
+          // the rotating copy stays plain text: a link in it would drop keyboard focus at the next swap
+          var cap = f.querySelector("figcaption").cloneNode(true);
+          cap.querySelectorAll("a").forEach(function (a) {
+            a.remove();
+          });
+          return { src: img.getAttribute("src"), alt: img.alt, caption: cap.innerHTML };
         });
         var front = hero.querySelector("img");
+        var caption = document.querySelector(".hero-caption");
         front.src = slides[0].src;
         front.alt = slides[0].alt;
+        caption.innerHTML = slides[0].caption;
+        // reserve the tallest caption's height at this width so a swap never moves the page below
+        function fitCaption() {
+          var shown = caption.innerHTML;
+          var tallest = 0;
+          caption.style.minHeight = "";
+          slides.forEach(function (s) {
+            caption.innerHTML = s.caption;
+            tallest = Math.max(tallest, caption.offsetHeight);
+          });
+          caption.innerHTML = shown;
+          caption.style.minHeight = tallest + "px";
+        }
+        fitCaption();
+        // the web fonts swap in after first paint and can change the wrapping
+        if (document.fonts) document.fonts.ready.then(fitCaption);
+        window.addEventListener("resize", fitCaption);
         var back = front.cloneNode();
         back.classList.remove("on");
         back.removeAttribute("fetchpriority");
@@ -1761,6 +1784,7 @@ agtermctl session status completed --auto-reset \
           }
           back.classList.add("on");
           back.removeAttribute("aria-hidden");
+          caption.innerHTML = slides[next].caption;
           front.classList.remove("on");
           front.setAttribute("aria-hidden", "true");
           var t = front;
