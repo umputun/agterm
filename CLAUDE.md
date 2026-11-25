@@ -395,6 +395,12 @@ C-boundary concurrency before changing the bridge.
   on agterm itself with nothing private in it. A feature that serves agents is shown with real agents on agterm,
   other sessions with made-up output; never another project's content, private folder or host names.
   Start codex with `--no-daemon`: a bare `codex` runs its hooks in the background service, which reports no status.
+- Site and README shots are staged by `agtermUITests/ScreenshotUITests` and captured with
+  `scripts/screenshots.sh [method...]` into `build/screenshots`; the script sets
+  `TEST_RUNNER_AGTERM_SCREENSHOTS=1`, without which the suite skips, and takes over the screen and
+  keyboard. Retake a shot by rerunning its scene.
+  A WKWebView's AX frame can span the whole document, so a scene positions its target relative to
+  `app.windows.firstMatch.frame`; a scroll loop bounded by the web view's own frame can scroll past it.
 
 ## Path-scoped rules
 
