@@ -39,6 +39,11 @@ These run inside the app, so a mistake can kill the host instead of failing an a
   hit-tested view fired `onTapGesture`, not even on a plain `Color` (2026-11-23).
   Pin the gesture's action in a hosted test; check pointer delivery in `agtermUITests`,
   or in an isolated Debug instance when it needs a live fixture.
+- `NSWindow.sendEvent` skips the key-equivalent pass `NSApplication` runs first, and on macOS 26 it turns an
+  unclaimed `⌘.` straight into `cancelOperation:` with no `keyDown`; macOS 27 still sends it to `keyDown`.
+  A hosted test sending a ⌘ chord offers it to `window.performKeyEquivalent` first, as
+  `HtmlPageTestCase.sendKey` does. Owner PRs skip the hosted job, so a hosted test that fails only on CI's
+  macOS 26 first fails on the master push; a throwaway branch with a push-triggered workflow runs it there first.
 - Never stub `GhosttyApp`; its handler is the only crash record.
 - `AGTERM_HOSTED_TESTS=1`, set by the `agtermTests` scheme, renders `HostedTestPlaceholder`, skips the
   launch `NSApp.activate()`, and skips the scene task that assigns `appDelegate.library`; it stays nil.
