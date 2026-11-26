@@ -307,6 +307,12 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         }
         // a split collapse or pane move takes the view out of its window with no visibility update
         webView.onDetach = { [weak self] in self?.endPrompt() }
+        webView.viewer = overlay.source.kind.isViewer
+        // an unhandled Esc returns only after the web process replies, so the page must still hold the keyboard then
+        webView.onCancel = { [weak store, weak webView] in
+            guard let webView, webView.window?.firstResponder === webView else { return }
+            store?.closeViewerOnEscape(id)
+        }
         webView.onUserInput = { [weak self, weak store] in
             self?.promptsSilenced = false
             store?.noteUserActivity()

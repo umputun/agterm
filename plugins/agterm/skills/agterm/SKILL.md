@@ -923,7 +923,7 @@ agtermctl session overlay search --next --target "$AGTERM_SESSION_ID"  # prints 
 
 Matching is case-insensitive plain text. A step pauses a following log page, so the match stays in view; setting the
 query does not. Read back `text.search` (`{query, matches, current}`). The user has the same search in the page's
-bar: `/` or ⌘F focuses it, `n`/`N` step, Esc clears; on a log page `F` toggles follow, `G`/End goes to the bottom and
+bar: `/` or ⌘F focuses it, `n`/`N` step, Esc clears the search or leaves the box, otherwise closes the page; on a log page `F` toggles follow, `G`/End goes to the bottom and
 follows, `g`/Home to the top. A step before the page loads is refused `page not loaded`.
 
 Long lines of a text, log or diff page run off its right edge until wrapped:

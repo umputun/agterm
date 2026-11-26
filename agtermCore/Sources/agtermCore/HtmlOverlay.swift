@@ -97,6 +97,9 @@ public enum ReplicaContent: Equatable, Sendable {
 /// HtmlPageKind is what a page shows, independent of which Mac read its file.
 public enum HtmlPageKind: Equatable, Sendable {
     case file, url, image, markdown, text, document, unreadable
+
+    /// isViewer says whether the page is a file agterm draws itself, the kind Esc closes; a web page owns Esc.
+    public var isViewer: Bool { [.text, .markdown, .image].contains(self) }
 }
 
 /// HtmlOrigin is a web page's origin: lowercase scheme and host plus the effective port, so an omitted

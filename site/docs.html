@@ -2152,6 +2152,7 @@ Claude Code (left) asks codex (right) to check its reading; the reply arrives in
 <li>From a HUD or the quick terminal, or while the session's overlay is busy, the file is revealed instead. A hidden page an earlier click opened is replaced, as with a web link.</li>
 <li>Revealing selects the file without running it, so a link in untrusted output pointing at a <code>.app</code> or <code>.command</code> cannot launch it; opening stays a separate, explicit action. A <code>file://</code> link naming another host is ignored, so a stray link cannot trigger a Finder network mount. Web and <code>mailto</code> links open as before.</li>
 </ul>
+<p>Esc or ⌘. closes a picture, markdown, text, log or diff page, one step per press: it first closes the diff file list, clears the search or leaves the find box, and only then closes the page. A clicked <code>.html</code> page, pages opened with <code>--html</code> or <code>--url</code>, and page companions keep Esc for themselves.</p>
 <p><strong>Text pages</strong> run nothing, load nothing and link nowhere: a URL in a log stays text. Long lines run off the right edge until you wrap them; a wrapped line keeps its number on its first row, and the page keeps the choice until it closes. ⌘F always searches what is on top, so over a page or overlay it never reaches the terminal behind.</p>
 <table>
 <colgroup>
@@ -2174,8 +2175,8 @@ Claude Code (left) asks codex (right) to check its reading; the reply arrives in
 <td>next, previous match (a step pauses a following log)</td>
 </tr>
 <tr>
-<td>Esc</td>
-<td>clear the find box</td>
+<td>Esc or ⌘.</td>
+<td>clear the search or leave the find box; otherwise close the page</td>
 </tr>
 <tr>
 <td><code>w</code> or the Wrap button</td>

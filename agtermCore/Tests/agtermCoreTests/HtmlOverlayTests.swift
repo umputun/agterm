@@ -877,6 +877,45 @@ struct HtmlOverlayTests {
         #expect(session.topmostHtmlOverlay?.source == .file(path: "/tmp/w.html", grantRoot: nil))
     }
 
+    @Test(arguments: [
+        (HtmlSource.text(path: "/tmp/app.log", line: nil), true), (.markdown(path: "/tmp/a.md"), true),
+        (.image(path: "/tmp/a.png"), true), (.replica(path: "/r/a.log", content: .text(line: nil)), true),
+        (.file(path: "/tmp/a.html", grantRoot: nil), false), (.url(URL(string: "http://localhost:5001/")!), false),
+        (.document(path: "/tmp/a.html"), false), (.replica(path: "/r/a.html", content: .html), false),
+    ])
+    func escapeClosesOnlyAViewer(_ source: HtmlSource, _ closes: Bool) throws {
+        let page = HtmlOverlay(source: source)
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
+
+        #expect(store.closeViewerOnEscape(page.id) == closes)
+        #expect(store.htmlOverlaySlot(page.id) == nil ? closes : !closes)
+    }
+
+    @Test func escapeLeavesAViewerThatIsNotOnTop() throws {
+        split()
+        session.splitFocused = false
+        let pane = HtmlOverlay(source: .text(path: "/tmp/r.log", line: nil))
+        #expect(store.openHtmlOverlay(session.id, pane: .right, overlay: pane, sizePercent: nil) == nil)
+        #expect(!store.closeViewerOnEscape(pane.id))
+
+        session.splitFocused = true
+        session.scratchActive = true
+        #expect(!store.closeViewerOnEscape(pane.id))
+
+        session.scratchActive = false
+        #expect(store.closeViewerOnEscape(pane.id))
+        #expect(session.paneOverlay(.right) == nil)
+    }
+
+    @Test func escapeNeverEndsAPageCompanion() throws {
+        let overlay = HtmlOverlay(source: .markdown(path: "/tmp/a.md"))
+        let row = try store.addPageCompanion(to: session.id, overlay: overlay).get()
+
+        #expect(!store.closeViewerOnEscape(overlay.id))
+        #expect(store.session(withID: row.id) != nil)
+        #expect(store.htmlOverlaySlot(overlay.id) != nil)
+    }
+
     @Test func theThemeStylesheetYieldsToAnyPageRule() {
         let theme = HtmlOverlayTheme(background: "#102030", foreground: "#e0e0e0", dark: true)
         #expect(theme.stylesheet(themed: true)

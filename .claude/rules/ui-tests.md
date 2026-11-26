@@ -11,6 +11,8 @@ These run inside the app, so a mistake can kill the host instead of failing an a
 - The run draws nothing on screen. `HostedWindowHider`, the test bundle's principal class, makes every
   window created after bundle load start at `alphaValue` 0; the launch window predates it and is covered
   by `HostedTestPlaceholder`. Windows stay ordered in and key-eligible, so `isVisible` assertions hold.
+  `isKeyWindow` still reads false after `makeKeyAndOrderFront`, since the host never activates the app, while
+  `firstResponder` tracks; a key-window gate cannot be exercised there.
   A test that needs an opaque window sets `alphaValue` itself. View captures (`cacheDisplay`,
   `ImageRenderer`, `WKWebView.takeSnapshot`) are unaffected; a screen-composite capture would be blank.
   A popped-up `NSMenu` is a window-server surface outside `NSApp.windows`, so the hook cannot reach it.
