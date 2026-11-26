@@ -612,13 +612,13 @@ final class ControlServer {
             return
         }
 
-        // a remote window's structural command is decided here and sent from a worker, so the accept thread
-        // never waits on ssh while local structural commands keep their inline order
-        if let route = runBlocking({ await server.remoteRoute(request) }) {
-            if case .refused = route {
-                _ = server.responseWriter(conn, runBlocking { await server.runRemoteRoute(route) })
-                return
-            }
+        // one main-actor entry, blocking this background thread. dispatch refreshes the window cache in that same
+        // execution, so the fast path sees this command's mutations without a second, stallable hop.
+        let response: ControlResponse
+        switch runBlocking({ await server.inlineDisposition(request) }) {
+        case .reply(let reply):
+            response = reply
+        case .remote(let route):
             handedOff = true
             let worker = Thread {
                 defer { close(conn) }
@@ -627,11 +627,7 @@ final class ControlServer {
             worker.name = "com.umputun.agterm.control.remote"
             worker.start()
             return
-        }
-
-        // `zmx tree <this machine>` would otherwise deadlock against itself: the far side's own agtermctl
-        // waits in this server's backlog while this connection holds the only accept thread.
-        if Self.waitsOnNetwork(request.cmd) {
+        case .network:
             handedOff = true
             let worker = Thread {
                 defer { close(conn) }
@@ -641,10 +637,6 @@ final class ControlServer {
             worker.start()
             return
         }
-
-        // hop to the main actor, blocking this background thread. dispatch refreshes the window cache in that
-        // same execution, so the fast path sees this command's mutations without a second, stallable hop.
-        let response = runBlocking { await server.dispatch(request) }
         let written = server.responseWriter(conn, response)
         // the quit after a confirmed reset waits for THIS reply to be on the wire, decided from this request
         // and this response so a remote worker finishing another reply in parallel can never trigger it
@@ -732,6 +724,27 @@ final class ControlServer {
     /// A minimal mutable box to ferry the async result back across the semaphore.
     private final class ResultBox<T>: @unchecked Sendable {
         var value: T?
+    }
+
+    /// Where the accept thread's single main-actor entry sends a request.
+    private enum InlineDisposition: Sendable {
+        case reply(ControlResponse)
+        /// a remote window's route, captured now and sent from a worker so the accept thread never waits on ssh
+        case remote(RemoteRoute)
+        /// dispatched from a worker: `zmx tree <this machine>` would otherwise deadlock, the far side's own
+        /// agtermctl waiting in this server's backlog while this connection holds the only accept thread
+        case network
+    }
+
+    /// inlineDisposition decides the remote route before anything else, so a route is captured against the state
+    /// this request arrived to, and answers every other local request in that same main-actor entry.
+    private func inlineDisposition(_ request: ControlRequest) async -> InlineDisposition {
+        if let route = remoteRoute(request) {
+            if case .refused(let response) = route { return .reply(response) }
+            return .remote(route)
+        }
+        if Self.waitsOnNetwork(request.cmd) { return .network }
+        return .reply(await dispatch(request))
     }
 
     // MARK: - Dispatch

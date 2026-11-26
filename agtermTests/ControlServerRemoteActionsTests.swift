@@ -12,6 +12,7 @@ final class ControlServerRemoteActionsTests: XCTestCase {
     private var runner: Runner!
     private var remoteWindow: UUID!
     private var remoteStore: AppStore!
+    private var socketPath: String!
     private let workspaceID = UUID()
     private let otherWorkspaceID = UUID()
     private let rootID = UUID()
@@ -28,6 +29,13 @@ final class ControlServerRemoteActionsTests: XCTestCase {
         private var results: [String] = []
         var created: UUID?
         var createdPage: UUID?
+        private var renameHold: (entered: @Sendable () -> Void, release: AsyncStream<Void>)?
+
+        func holdRenames(entered: @escaping @Sendable () -> Void) -> AsyncStream<Void>.Continuation {
+            let (stream, continuation) = AsyncStream<Void>.makeStream()
+            lock.withLock { renameHold = (entered, stream) }
+            return continuation
+        }
 
         private var plainRequests: [String] = []
 
@@ -61,6 +69,10 @@ final class ControlServerRemoteActionsTests: XCTestCase {
                     plainRequests.append(line)
                     return RemoteCommandResult(status: 0, stdout: Self.json(ControlResponse(ok: true, result: ControlResult(recent: []))), stderr: "")
                 }
+            }
+            if line.contains("session rename"), let hold = lock.withLock({ renameHold }) {
+                hold.entered()
+                for await _ in hold.release { break }
             }
             guard let opRange = line.range(of: "--op-id ") else { return RemoteCommandResult(status: 0, stdout: "", stderr: "") }
             let opID = String(line[opRange.upperBound...].prefix(36))
@@ -102,9 +114,10 @@ final class ControlServerRemoteActionsTests: XCTestCase {
         settings = SettingsModel(library: library, settingsStore: SettingsStore(directory: stateDir))
         runner = Runner()
         transport = Transport()
+        socketPath = "/tmp/agterm-ra-\(UUID().uuidString.prefix(8)).sock"
         server = ControlServer(library: library, actions: AppActions(library: library), settingsModel: settings,
                                identity: AppIdentity(version: "9.9.9", commit: "testsha"), remoteRunner: runner,
-                               socketPath: stateDir.appendingPathComponent("control-\(UUID().uuidString).sock").path)
+                               socketPath: socketPath)
         server.remoteTransport = transport
         server.wireRemoteCatalogs()
         remoteWindow = library.newRemoteWindow(host: "box").id
@@ -115,6 +128,8 @@ final class ControlServerRemoteActionsTests: XCTestCase {
     override func tearDown() async throws {
         server?.stop()
         server = nil
+        unlink(socketPath)
+        unlink(socketPath + ".lock")
         settings = nil
         library = nil
         try? FileManager.default.removeItem(at: stateDir)
@@ -543,5 +558,65 @@ final class ControlServerRemoteActionsTests: XCTestCase {
         let reattachedNode = try XCTUnwrap(reattachedList.result?.windows?.first { $0.id == remoteWindow.uuidString })
         XCTAssertNil(reattachedNode.remote?.detachedSessions)
         XCTAssertTrue(runner.operations.isEmpty)
+    }
+
+    func testARemoteRenameOverTheSocketLeavesTheAcceptLoopFreeWhileTheServerHoldsIt() async throws {
+        let entry = catalogSession()
+        try open([entry])
+        let held = expectation(description: "the rename reached the server")
+        let release = runner.holdRenames { held.fulfill() }
+        defer { release.finish() }
+        server.start()
+        XCTAssertNotNil(server.boundSocketPath)
+        server.refreshWindowCache()
+        let path: String = socketPath
+
+        let rename = ControlRequest(cmd: .sessionRename, target: entry.id.uuidString, args: ControlArgs(name: "renamed"))
+        let renameReply = Self.offThread { Self.roundTrip(rename, at: path) }
+        await fulfillment(of: [held], timeout: 10)
+
+        let list = await Self.offThread { Self.roundTrip(ControlRequest(cmd: .windowList), at: path) }.value
+        XCTAssertEqual(list?.ok, true, list?.error ?? "no reply")
+
+        release.yield()
+        let renamed = await renameReply.value
+        XCTAssertEqual(renamed?.ok, true, renamed?.error ?? "no reply")
+        XCTAssertTrue(runner.operations.contains { $0.contains("session rename --target \(entry.id.uuidString)") })
+    }
+
+    nonisolated private static func offThread(_ body: @escaping @Sendable () -> ControlResponse?) -> Task<ControlResponse?, Never> {
+        Task {
+            await withCheckedContinuation { continuation in
+                Thread { continuation.resume(returning: body()) }.start()
+            }
+        }
+    }
+
+    nonisolated private static func roundTrip(_ request: ControlRequest, at path: String) -> ControlResponse? {
+        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+        guard fd >= 0 else { return nil }
+        defer { close(fd) }
+        var wait = timeval(tv_sec: 15, tv_usec: 0)
+        setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &wait, socklen_t(MemoryLayout<timeval>.size))
+        var addr = sockaddr_un()
+        addr.sun_family = sa_family_t(AF_UNIX)
+        let capacity = MemoryLayout.size(ofValue: addr.sun_path)
+        withUnsafeMutablePointer(to: &addr.sun_path) { pointer in
+            pointer.withMemoryRebound(to: CChar.self, capacity: capacity) { _ = strlcpy($0, path, capacity) }
+        }
+        let connected = withUnsafePointer(to: &addr) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { connect(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) == 0 }
+        }
+        guard connected, var payload = try? JSONEncoder().encode(request) else { return nil }
+        payload.append(UInt8(ascii: "\n"))
+        guard payload.withUnsafeBytes({ Darwin.write(fd, $0.baseAddress, $0.count) }) == payload.count else { return nil }
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while !data.contains(UInt8(ascii: "\n")) {
+            let n = read(fd, &buffer, buffer.count)
+            guard n > 0 else { break }
+            data.append(contentsOf: buffer[0..<n])
+        }
+        return try? JSONDecoder().decode(ControlResponse.self, from: data.prefix { $0 != UInt8(ascii: "\n") })
     }
 }
