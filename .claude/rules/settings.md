@@ -272,7 +272,8 @@ paths:
 - `confirmCloseSession` defaults off and is read on demand, without a mirror. Prompt only for GUI active
   close and sidebar row close; skip under XCUITest. Control `session.close` must never prompt.
 - `confirmQuit` defaults on (nil) and is read on demand. Off (false) skips only the plain quit alert, never
-  "Restart to update?"; the alert's "Don't ask again" box writes false only when Quit is chosen.
+  "Restart to update?"; the alert's "Don't ask again" box writes false only when Quit is chosen, and its
+  text names Settings ▸ General as where to turn it back on.
 - `hiddenInterfaceElements` stores raw names and preserves unknown values while toggling known ones; empty
   maps nil. Titlebar cases are `sidebarToggle`, `workspaceName`, `sessionName`, `windowName`, `remoteHost`,
   `sessionContext`, `recentSessions`, `scratch`, `split`, `dashboard`, `quickTerminal`, `customCommands`,

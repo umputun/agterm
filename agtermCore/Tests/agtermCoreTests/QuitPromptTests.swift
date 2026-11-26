@@ -3,27 +3,33 @@ import Testing
 
 struct QuitPromptTests {
     @Test func singleWindowSingleSession() {
-        #expect(QuitPrompt.message(windows: 1, sessions: 1, mode: .none) == "This closes 1 window and 1 session, ending all running shells.")
+        #expect(QuitPrompt.message(windows: 1, sessions: 1, mode: .none)
+            == "This closes 1 window and 1 session, ending all running shells.\n\nYou can turn this confirmation back on in Settings ▸ General.")
     }
 
     @Test func singleWindowManySessions() {
-        #expect(QuitPrompt.message(windows: 1, sessions: 3, mode: .none) == "This closes 1 window and 3 sessions, ending all running shells.")
+        #expect(QuitPrompt.message(windows: 1, sessions: 3, mode: .none)
+            == "This closes 1 window and 3 sessions, ending all running shells.\n\nYou can turn this confirmation back on in Settings ▸ General.")
     }
 
     @Test func manyWindowsManySessions() {
-        #expect(QuitPrompt.message(windows: 2, sessions: 5, mode: .none) == "This closes 2 windows and 5 sessions, ending all running shells.")
+        #expect(QuitPrompt.message(windows: 2, sessions: 5, mode: .none)
+            == "This closes 2 windows and 5 sessions, ending all running shells.\n\nYou can turn this confirmation back on in Settings ▸ General.")
     }
 
     @Test func rerunModeKeepsShellClause() {
-        #expect(QuitPrompt.message(windows: 1, sessions: 1, mode: .rerun) == "This closes 1 window and 1 session, ending all running shells.")
+        #expect(QuitPrompt.message(windows: 1, sessions: 1, mode: .rerun)
+            == "This closes 1 window and 1 session, ending all running shells.\n\nYou can turn this confirmation back on in Settings ▸ General.")
     }
 
     @Test func liveModeDropsShellClause() {
-        #expect(QuitPrompt.message(windows: 1, sessions: 18, mode: .live) == "This closes 1 window and 18 sessions.")
+        #expect(QuitPrompt.message(windows: 1, sessions: 18, mode: .live)
+            == "This closes 1 window and 18 sessions.\n\nYou can turn this confirmation back on in Settings ▸ General.")
     }
 
     @Test func liveModePluralizesWindows() {
-        #expect(QuitPrompt.message(windows: 2, sessions: 1, mode: .live) == "This closes 2 windows and 1 session.")
+        #expect(QuitPrompt.message(windows: 2, sessions: 1, mode: .live)
+            == "This closes 2 windows and 1 session.\n\nYou can turn this confirmation back on in Settings ▸ General.")
     }
 
     @Test(arguments: [RestoreMode.none, .rerun])
