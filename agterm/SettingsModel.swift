@@ -135,7 +135,7 @@ final class SettingsModel {
     func setLightTheme(_ value: String?) {
         settings.theme = value
         if value == nil { settings.darkTheme = nil; settings.followSystemAppearance = nil }
-        persistAndApply()
+        commitThemeAndApply()
     }
 
     /// Set the dark slot — the control channel's `theme set --dark`. A name turns syncing on, seeding the
@@ -150,7 +150,7 @@ final class SettingsModel {
             settings.darkTheme = nil
             settings.followSystemAppearance = nil
         }
-        persistAndApply()
+        commitThemeAndApply()
     }
 
     /// Set both sides at once, in a single apply — the control channel's `theme set --light --dark`.
@@ -158,13 +158,13 @@ final class SettingsModel {
         settings.theme = light
         settings.darkTheme = dark
         settings.followSystemAppearance = true
-        persistAndApply()
+        commitThemeAndApply()
     }
 
     /// Settings picker 1: the theme for the CURRENT appearance (`rendersDarkSlot`), with no relabel.
     func setThemeForCurrentAppearance(_ value: String?) {
         if rendersDarkSlot { settings.darkTheme = value } else { settings.theme = value }
-        persistAndApply()
+        commitThemeAndApply()
     }
 
     /// Settings alternate picker (shown only while following): the theme for the OTHER appearance. Clearing
@@ -178,7 +178,7 @@ final class SettingsModel {
         } else {
             settings.darkTheme = value
         }
-        persistAndApply()
+        commitThemeAndApply()
     }
 
     /// Settings "Follow system appearance" toggle. ON seeds the other slot from the current theme (a
@@ -193,7 +193,7 @@ final class SettingsModel {
             settings.darkTheme = nil
             settings.followSystemAppearance = nil
         }
-        persistAndApply()
+        commitThemeAndApply()
     }
 
     /// The light side seeded when a dark theme is chosen while `theme` is nil/empty (ghostty's built-in
@@ -247,7 +247,7 @@ final class SettingsModel {
         settings.restoreMode = value
         settings.restoreRunningCommand = nil
         do {
-            try settingsStore.save(settings)
+            try save()
             return true
         } catch {
             settings.restoreMode = previousMode
@@ -297,7 +297,7 @@ final class SettingsModel {
     func setTerminalInputSource(_ id: String?) {
         guard id != settings.terminalInputSource else { return }
         settings.terminalInputSource = id
-        try? settingsStore.save(settings)
+        try? save()
         TerminalInputSource.shared.setTarget(id)
     }
 
@@ -324,7 +324,7 @@ final class SettingsModel {
     /// nil/false = off: agterm stays self-contained, with the scoped `ghostty.conf` for customizations.
     func setInheritGlobalGhosttyConfig(_ value: Bool?) {
         settings.inheritGlobalGhosttyConfig = value
-        try? settingsStore.save(settings)
+        try? save()
         reloadGhosttyConfig()
     }
     func setActiveStatusColorHex(_ hex: String?) { settings.activeStatusColorHex = hex; persistAndApply() }
@@ -337,56 +337,56 @@ final class SettingsModel {
     func setCompletedStatusShape(_ shape: StatusShape?) { settings.completedStatusShape = shape?.rawValue; persistAndApply() }
     /// Persist the system sound played when a session enters `blocked` (nil/empty = none). Not a ghostty
     /// key and nothing renders it continuously, so it only saves — `ControlServer` reads it on demand.
-    func setBlockedStatusSoundName(_ name: String?) { settings.blockedStatusSoundName = name; try? settingsStore.save(settings) }
+    func setBlockedStatusSoundName(_ name: String?) { settings.blockedStatusSoundName = name; try? save() }
     /// nil restores the default (clear on the first key), keeping the stored file minimal.
     func setStatusReset(_ mode: StatusReset?) { settings.statusReset = mode?.rawValue; persistAndApply() }
     /// nil restores the default (clear the unseen badge on the first key).
     func setBadgeReset(_ mode: StatusReset?) { settings.badgeReset = mode?.rawValue; persistAndApply() }
     /// Persist where a new (⌘T) session opens (nil = home). Read only at the next `AppActions.newSession()`,
     /// so it just saves — no config rewrite or surface reload.
-    func setNewSessionDirectory(_ value: String?) { settings.newSessionDirectory = value; try? settingsStore.save(settings) }
+    func setNewSessionDirectory(_ value: String?) { settings.newSessionDirectory = value; try? save() }
     /// Persist the fixed directory used when `newSessionDirectory` is `custom` (nil/empty falls back to home).
-    func setNewSessionCustomDirectory(_ value: String?) { settings.newSessionCustomDirectory = value; try? settingsStore.save(settings) }
+    func setNewSessionCustomDirectory(_ value: String?) { settings.newSessionCustomDirectory = value; try? save() }
     /// setNewSessionPlacement persists placement for future session creation; nil restores `end`.
-    func setNewSessionPlacement(_ value: String?) { settings.newSessionPlacement = value; try? settingsStore.save(settings) }
+    func setNewSessionPlacement(_ value: String?) { settings.newSessionPlacement = value; try? save() }
     /// Persist whether a GUI session close first asks for confirmation (nil = off). `AppActions` reads it on
     /// demand at close time, so it just saves.
-    func setConfirmCloseSession(_ value: Bool?) { settings.confirmCloseSession = value; try? settingsStore.save(settings) }
+    func setConfirmCloseSession(_ value: Bool?) { settings.confirmCloseSession = value; try? save() }
     /// Persist whether GUI closes use the short undo grace period. nil = on; false = close immediately.
-    func setCloseGraceUndoEnabled(_ value: Bool?) { settings.closeGraceUndoEnabled = value; try? settingsStore.save(settings) }
+    func setCloseGraceUndoEnabled(_ value: Bool?) { settings.closeGraceUndoEnabled = value; try? save() }
     /// stepHtmlOverlayZoom moves every HTML page's zoom by a font binding action and persists it. Saves and
     /// mirrors only: no chrome or config depends on it.
     func stepHtmlOverlayZoom(_ action: String) {
         guard let zoom = HtmlZoom.applying(fontAction: action, to: settings.effectiveHtmlOverlayZoom) else { return }
         settings.htmlOverlayZoom = zoom == 1 ? nil : zoom
-        try? settingsStore.save(settings)
+        try? save()
         applyHtmlOverlayZoom()
     }
     /// Persist that the first-run welcome has been shown, so it never appears again on this state directory.
-    func setWelcomeShown(_ value: Bool?) { settings.welcomeShown = value; try? settingsStore.save(settings) }
+    func setWelcomeShown(_ value: Bool?) { settings.welcomeShown = value; try? save() }
     /// Persist the user-idle auto-follow timeout (nil = off) and push it into every open window's `AppStore`
     /// (a newly opened window seeds itself via `applyWindowSettings(to:)`).
     func setAutoFollowAttention(_ value: String?) {
         settings.autoFollowAttention = value
-        try? settingsStore.save(settings)
+        try? save()
         applyWindowSettingsToAllWindows()
     }
     /// Persist whether auto-follow stays put on a running (`active`) session (nil/false = off) and fan it out.
     func setAutoFollowStayOnActive(_ value: Bool?) {
         settings.autoFollowStayOnActive = value
-        try? settingsStore.save(settings)
+        try? save()
         applyWindowSettingsToAllWindows()
     }
     /// Persist whether attention navigation also stops on `active` sessions (nil = off) and fan it out.
     func setAttentionIncludesActive(_ value: Bool?) {
         settings.attentionIncludesActive = value
-        try? settingsStore.save(settings)
+        try? save()
         applyWindowSettingsToAllWindows()
     }
     /// Persist whether attention navigation walks every open window (nil = off) and fan it out.
     func setAttentionNavigationAcrossWindows(_ value: Bool?) {
         settings.attentionNavigationAcrossWindows = value
-        try? settingsStore.save(settings)
+        try? save()
         applyWindowSettingsToAllWindows()
     }
 
@@ -411,13 +411,7 @@ final class SettingsModel {
 
     private func scheduleBackgroundSave() {
         backgroundSaveDebouncer.schedule(after: Self.backgroundSaveInterval) { [weak self] in
-            guard let self else { return }
-            // pin the theme to the last committed value — a live preview mutates it in place without
-            // persisting. opacity/blur, what this save is for, keep their live values.
-            var snapshot = settings
-            snapshot.theme = committedTheme
-            snapshot.darkTheme = committedDarkTheme
-            try? settingsStore.save(snapshot)
+            try? self?.save()
         }
     }
 
@@ -457,9 +451,9 @@ final class SettingsModel {
             settings.darkTheme = nonActiveOriginal.dark
         }
         if restored { apply() }
-        try? settingsStore.save(settings)
         committedTheme = settings.theme
         committedDarkTheme = settings.darkTheme
+        try? save()
     }
 
     /// Flush pending debounced settings writes synchronously, from `applicationWillTerminate`: a KEYBOARD
@@ -487,7 +481,7 @@ final class SettingsModel {
     /// posts its own diagnostics banner). nil falls back to what `ConfigPaths.configDirectory` resolves.
     func setConfigDirectory(_ value: String?) {
         settings.configDirectory = value
-        try? settingsStore.save(settings)
+        try? save()
         reloadKeymap()
         reloadHooks()
         reloadGhosttyConfig()
@@ -742,10 +736,24 @@ final class SettingsModel {
     }
 
     private func persistAndApply() {
-        try? settingsStore.save(settings)
+        try? save()
+        apply()
+    }
+
+    private func commitThemeAndApply() {
         committedTheme = settings.theme
         committedDarkTheme = settings.darkTheme
+        try? save()
         apply()
+    }
+
+    /// Every settings write goes through here. The theme slots come from the last commit, because a palette
+    /// preview writes them in place and must never reach disk through an unrelated setter.
+    private func save() throws {
+        var snapshot = settings
+        snapshot.theme = committedTheme
+        snapshot.darkTheme = committedDarkTheme
+        try settingsStore.save(snapshot)
     }
 
     /// Apply the current `settings` to the running app WITHOUT persisting: rewrite the ghostty config and

@@ -146,6 +146,43 @@ final class SettingsModelTests: XCTestCase {
         XCTAssertNil(SettingsStore(directory: stateDir).load().sidebarDensity)
     }
 
+    func testDirectSaveDuringThemePreviewKeepsTheCommittedTheme() {
+        let committed = model.settings.theme
+
+        model.previewTheme("Dracula")
+        model.setConfirmCloseSession(true)
+        let saved = SettingsStore(directory: stateDir).load()
+        model.revertThemePreview(theme: committed, darkTheme: nil)
+
+        XCTAssertEqual(saved.theme, committed)
+        XCTAssertEqual(saved.confirmCloseSession, true)
+    }
+
+    func testPersistAndApplyDuringThemePreviewKeepsTheCommittedTheme() {
+        let committed = model.settings.theme
+
+        model.previewTheme("Dracula")
+        model.setSidebarDensity(.compact)
+        let saved = SettingsStore(directory: stateDir).load()
+        model.revertThemePreview(theme: committed, darkTheme: nil)
+        model.setConfirmCloseSession(true)
+
+        XCTAssertEqual(saved.theme, committed)
+        XCTAssertEqual(saved.sidebarDensity, "compact")
+        XCTAssertEqual(SettingsStore(directory: stateDir).load().theme, committed)
+    }
+
+    func testThemeSetterPersistsTheNewTheme() {
+        let original = model.settings.theme
+
+        model.setThemeForCurrentAppearance("Dracula")
+        let saved = SettingsStore(directory: stateDir).load()
+        model.setThemeForCurrentAppearance(original)
+
+        XCTAssertEqual(saved.theme, "Dracula")
+        XCTAssertEqual(SettingsStore(directory: stateDir).load().theme, original)
+    }
+
     func testSetSidebarDensitySkipsAnUnchangedValue() {
         model.setSidebarDensity(.compact)
         let posted = expectation(forNotification: .agtermAppearanceChanged, object: nil)
