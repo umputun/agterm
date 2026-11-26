@@ -81,6 +81,24 @@ final class HtmlOverlayWebViewTests: HtmlPageTestCase {
         try await waitFor("the viewer closed") { self.store.htmlOverlaySlot(overlay.id) == nil }
     }
 
+    func testAHeldCommandPeriodKeyEquivalentIsDroppedOnlyByTheFocusedViewer() async throws {
+        let (_, page, window) = try await shownViewer("a.txt", "alpha\nbeta\nalpha\n")
+        defer { window.orderOut(nil) }
+        try search("alpha", on: page)
+        try await waitForScript(Self.count, in: page.webView) { $0 == "1 of 2" }
+        let held = try XCTUnwrap(NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [.command, .capsLock], timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: window.windowNumber, context: nil, characters: ".", charactersIgnoringModifiers: ".",
+            isARepeat: true, keyCode: 47))
+
+        XCTAssertTrue(page.webView.performKeyEquivalent(with: held))
+        let after = try await shownCount(page)
+        XCTAssertEqual(after, "1 of 2")
+
+        window.makeFirstResponder(nil)
+        XCTAssertFalse(page.webView.performKeyEquivalent(with: held))
+    }
+
     func testAModifiedEscapeLeavesAShownQuery() async throws {
         let (_, page, window) = try await shownViewer("a.txt", "alpha\nbeta\nalpha\n")
         defer { window.orderOut(nil) }
