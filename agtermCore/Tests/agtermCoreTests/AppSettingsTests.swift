@@ -230,6 +230,14 @@ struct AppSettingsTests {
             == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
+    @Test func confirmQuitRoundTripsAndIsNotAConfigLine() throws {
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(confirmQuit: false)))
+        #expect(decoded.confirmQuit == false)
+        let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"theme":"Nord"}"#.utf8))
+        #expect(legacy.confirmQuit == nil)
+        #expect(AppSettings(confirmQuit: false).ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
+    }
+
     @Test func confirmCloseSessionRoundTripsAndIsNotAConfigLine() throws {
         let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(confirmCloseSession: true)))
         #expect(decoded.confirmCloseSession == true)

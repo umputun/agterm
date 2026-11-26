@@ -352,6 +352,8 @@ final class SettingsModel {
     /// Persist whether a GUI session close first asks for confirmation (nil = off). `AppActions` reads it on
     /// demand at close time, so it just saves.
     func setConfirmCloseSession(_ value: Bool?) { settings.confirmCloseSession = value; try? save() }
+    /// Persist whether quitting asks first (nil = on). `AppDelegate` reads it at quit time.
+    func setConfirmQuit(_ value: Bool?) { settings.confirmQuit = value; try? save() }
     /// Persist whether GUI closes use the short undo grace period. nil = on; false = close immediately.
     func setCloseGraceUndoEnabled(_ value: Bool?) { settings.closeGraceUndoEnabled = value; try? save() }
     /// stepHtmlOverlayZoom moves every HTML page's zoom by a font binding action and persists it. Saves and
