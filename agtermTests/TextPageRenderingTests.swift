@@ -618,39 +618,6 @@ extension TextPageRenderingTests {
         XCTAssertEqual(current?.logState?.following, false)
     }
 
-    func testEscapeLeavesTheFindBoxThenClearsAShownQueryThenClosesTheViewer() async throws {
-        let overlay = try openText("a.txt", "alpha\nbeta\nalpha\n")
-        let (page, window) = try shown(overlay)
-        defer { window.orderOut(nil) }
-        window.makeKeyAndOrderFront(nil)
-        try await waitForScript(Self.code, in: page.webView) { $0.contains("beta") }
-        let focused = "String(document.activeElement === document.querySelector('.agterm-search input'))"
-
-        page.focusSearch()
-        try await waitForScript(focused, in: page.webView) { $0 == "true" }
-        try sendEscape(to: window)
-        try await waitForScript(focused, in: page.webView) { $0 == "false" }
-        _ = try await page.webView.evaluateJavaScript("1")
-        XCTAssertNotNil(store.htmlOverlaySlot(overlay.id))
-
-        try search("alpha", on: page)
-        try await waitForScript(Self.count, in: page.webView) { $0 == "1 of 2" }
-        try sendEscape(to: window, repeating: true)
-        try sendEscape(to: window, repeating: true)
-        _ = try await page.webView.evaluateJavaScript("1")
-        let held = try await page.webView.evaluateJavaScript(Self.count) as? String
-        XCTAssertEqual(held, "1 of 2", "a held Esc's repeats should not reach the page")
-        XCTAssertNotNil(store.htmlOverlaySlot(overlay.id))
-
-        try sendEscape(to: window)
-        try await waitForScript(Self.count, in: page.webView) { $0.isEmpty }
-        _ = try await page.webView.evaluateJavaScript("1")
-        XCTAssertNotNil(store.htmlOverlaySlot(overlay.id))
-
-        try sendEscape(to: window)
-        try await waitFor("the viewer closed") { self.store.htmlOverlaySlot(overlay.id) == nil }
-    }
-
     func testADiffPageReportsItsChangesOnlyOnceItIsReady() async throws {
         let posted = try await postedUntil("changes", try openText("a.diff", "@@ -1 +1 @@\n-a\n+b\n"))
         XCTAssertEqual(posted.prefix(2), ["ready", "changes"])

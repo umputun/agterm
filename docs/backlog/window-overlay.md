@@ -39,8 +39,9 @@ with no sessions, and a page over a session needs that session first. Postponed 
 - Input: a window cover ahead of session focus routing. Keep `Session.coverOverlayVisible` and friends
   session-scoped; add the window cover at the window input boundary (`focusActiveSession`, split focus,
   `GhosttySurfaceView` focus retries, custom and built-in chords, Cmd-W ladder, auto-follow, quick terminal,
-  pick/ask/zoom/dashboard precedence). `HtmlOverlayWebView.cancelOperation` absorbs Esc, so Esc does not
-  close a page; keep that. `CustomCommandRunner.runNoSurface` runs a chord against the active session when
+  pick/ask/zoom/dashboard precedence). `HtmlOverlayWebView.cancelOperation` never passes Esc up the
+  responder chain; for a session page it closes only a viewer (`AppStore.closeViewerOnEscape`), and whether
+  Esc dismisses a window-owned page is this item's design decision. `CustomCommandRunner.runNoSurface` runs a chord against the active session when
   a web view holds first responder: gate it while the window overlay is shown.
 - Window teardown must settle `--block` as dismissed and release the web view.
 - Read-back on the window node / tree top level (open, hidden, size, page id); `tree.changed` on real changes.

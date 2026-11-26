@@ -538,7 +538,7 @@
       if (event.key === 'Enter') {
         event.preventDefault();
         jump(!event.shiftKey);
-      } else if (event.key === 'Escape') {
+      } else if (cancels(event)) {
         event.preventDefault();
         clear();
       }
@@ -1008,7 +1008,7 @@
       } else if (event.key === 'Enter') {
         event.preventDefault();
         if (shown.length) pick(shown[selected]);
-      } else if (event.key === 'Escape') {
+      } else if (cancels(event)) {
         event.preventDefault();
         close();
       }
@@ -1146,16 +1146,33 @@
     };
   }
 
+  // AppKit sends both Esc and ⌘. as cancelOperation:, which closes the page when no layer here takes them
+  function cancels(event) {
+    return event.key === 'Escape' || commandPeriod(event);
+  }
+
+  function commandPeriod(event) {
+    return event.key === '.' && event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey;
+  }
+
   // page keys act outside the field; the field handles its own Return and Escape
   function keys(event) {
-    if (event.target === finder.field || event.metaKey || event.ctrlKey || event.altKey) return;
+    if (event.target === finder.field) return;
+    const bare = !event.metaKey && !event.ctrlKey && !event.altKey;
+    if ((event.key === 'Escape' && bare) || commandPeriod(event)) {
+      if (finder.hasQuery()) {
+        event.preventDefault();
+        finder.clear();
+      }
+      return;
+    }
+    if (!bare) return;
     const handled = (() => {
       if (event.key === '/') {
         finder.field.focus();
         finder.field.select();
         return true;
       }
-      if (event.key === 'Escape' && finder.hasQuery()) { finder.clear(); return true; }
       if (event.key === 'n' && finder.hasQuery()) { finder.jump(true); return true; }
       if (event.key === 'N' && finder.hasQuery()) { finder.jump(false); return true; }
       if (event.key === ']' && changes) { changes.step(true); return true; }

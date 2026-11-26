@@ -1102,8 +1102,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - An Esc a page leaves unhandled reaches `HtmlOverlayWebView.cancelOperation`, which never passes it up the chain
   (#753, full screen) and reports it to `AppStore.closeViewerOnEscape`: only an `HtmlPageKind.isViewer` page on top of
   a terminal session closes, since a web page owns Esc for its forms and a page row is its session. The reply is
-  asynchronous, so the close also requires the web view to still be its window's first responder. A viewer drops
-  a repeated Esc in `keyDown`, before WebKit, because a flag read at `cancelOperation` would describe a later event.
+  asynchronous, so the close also requires the web view to still be its window's first responder. AppKit sends ⌘. as
+  the same cancel, so `text.js`'s layers take both chords. A viewer drops a repeated cancel before WebKit (Esc in
+  `keyDown`, ⌘. in `performKeyEquivalent`), because a flag read at `cancelOperation` would describe a later event.
   Once the page closes, later repeats reach whatever takes focus. It is a gesture over `overlay.close` with no control twin.
 - A synthetic `a.click()` reaches the policy exactly like a real click (`.linkActivated`, button 0, no
   flags), so every hand-off the page starts goes through `HtmlBrowser.confirm`, a nonblocking sheet with

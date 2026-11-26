@@ -109,9 +109,22 @@ final class HtmlOverlayWebView: WKWebView {
 
     override func keyDown(with event: NSEvent) {
         onUserInput?()
-        // a viewer steps back one layer per Esc press, so a held Esc's repeats never reach the page
-        if viewer, event.isARepeat, event.keyCode == 53 { return }
+        // a viewer steps back one layer per press, so a held cancel's repeats never reach the page
+        if viewer, event.isARepeat, Self.cancels(event) { return }
         super.keyDown(with: event)
+    }
+
+    // ⌘. arrives as a key equivalent, which every view in the window is offered, so only the focused page drops it
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if viewer, event.isARepeat, Self.cancels(event), window?.firstResponder === self { return true }
+        return super.performKeyEquivalent(with: event)
+    }
+
+    // the two chords AppKit sends as cancelOperation:
+    private static func cancels(_ event: NSEvent) -> Bool {
+        if event.keyCode == 53 { return true }
+        return event.charactersIgnoringModifiers == "."
+            && event.modifierFlags.intersection([.command, .option, .control, .shift]) == .command
     }
 
     // an Esc the page leaves unhandled comes back from WebKit as cancelOperation:; it never goes up the responder

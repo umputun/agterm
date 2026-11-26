@@ -139,11 +139,16 @@ class HtmlPageTestCase: XCTestCase {
     }
 
     func sendEscape(to window: NSWindow, repeating: Bool = false) throws {
+        try sendKey("\u{1b}", keyCode: 53, to: window, repeating: repeating)
+    }
+
+    func sendKey(_ characters: String, keyCode: UInt16, modifiers: NSEvent.ModifierFlags = [], to window: NSWindow,
+                 repeating: Bool = false) throws {
         for type in [NSEvent.EventType.keyDown, .keyUp] {
             window.sendEvent(try XCTUnwrap(NSEvent.keyEvent(
-                with: type, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
-                windowNumber: window.windowNumber, context: nil, characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}",
-                isARepeat: repeating && type == .keyDown, keyCode: 53)))
+                with: type, location: .zero, modifierFlags: modifiers, timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: window.windowNumber, context: nil, characters: characters, charactersIgnoringModifiers: characters,
+                isARepeat: repeating && type == .keyDown, keyCode: keyCode)))
         }
     }
 
