@@ -53,6 +53,9 @@ paths:
   `settings-theme-dark` appears only while following and edits the other appearance. The primary picker
   offers nil only when not following because dual conditionals need two named themes.
 - Palette preview writes the visible slot; commit persists it and restores the captured off-screen slot.
+  Every settings write goes through `SettingsModel.save()`, which takes both theme slots from the last commit,
+  so a non-theme setter run mid-preview never persists the preview. Only the theme setters and the palette
+  commit move that committed pair.
   The effective row opens selected, so its initial preview is a no-op. A config-changing preview also
   clears per-session font zoom, and cancel does not restore zoom; this matches Settings because
   libghostty has no cheap colors-only reload.
