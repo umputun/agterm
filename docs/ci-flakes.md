@@ -242,6 +242,9 @@ pane attached; zmx patch 0013 now holds it until that attach, and the test keeps
 - **Cause, demonstrated.** The archive was down: `archive.ubuntu.com` timed out from a Mac outside GitHub's network
   at the same time, and answered again about 25 minutes after the first failure.
 - **Fix.** None in the repository. Rerun the failed job once the archive answers.
+- **Variant, a mirror mid-sync.** Job 139842358038 (run 45800532014, PR #1113): `security.ubuntu.com` served a
+  `noble-security/main` `Packages.gz` whose size did not match its Release file, apt printed
+  `File has unexpected size ... Mirror sync in progress?` and the step exited 100. Rerun 139844200541 passed.
 
 ### Linux test process killed by SIGPIPE
 
