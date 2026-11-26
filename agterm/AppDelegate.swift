@@ -445,7 +445,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Confirm a user-initiated quit (menu Quit / ⌘Q) when windows are open. Skip system shutdown,
-    /// restart, logout, XCUITest, auto-quit after the last window closes, or an unwired library.
+    /// restart, logout, XCUITest, auto-quit after the last window closes, an unwired library, or
+    /// `AppSettings.confirmQuit` off.
     func applicationShouldTerminate(_: NSApplication) -> NSApplication.TerminateReply {
         guard !ContentView.isUITestLaunch, let library else { return .terminateNow }
         if QuitReason.isSystemQuit(NSAppleEventManager.shared().currentAppleEvent) { return .terminateNow }
@@ -457,6 +458,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .restart: return confirmRestart(library: library)
         case .quit: break
         }
+        if settingsModel?.settings.confirmQuit == false { return .terminateNow }
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = "Quit Agterm?"
@@ -464,7 +466,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                                    mode: GhosttyApp.shared.restoreLaunchDecision.active)
         alert.addButton(withTitle: "Quit")
         alert.addButton(withTitle: "Cancel")
-        return alert.runModal() == .alertFirstButtonReturn ? .terminateNow : .terminateCancel
+        alert.showsSuppressionButton = true
+        alert.suppressionButton?.title = "Don't ask again"
+        guard alert.runModal() == .alertFirstButtonReturn else { return .terminateCancel }
+        // Cancel ignores the box: it was not a quit, so nothing was confirmed to stop asking about.
+        if alert.suppressionButton?.state == .on { settingsModel?.setConfirmQuit(false) }
+        return .terminateNow
     }
 
     private func confirmRestart(library: WindowLibrary) -> NSApplication.TerminateReply {

@@ -144,6 +144,8 @@ private struct GeneralSettingsView: View {
                 }
                 Toggle("Confirm before closing a session", isOn: confirmCloseSession)
                     .accessibilityIdentifier("settings-confirm-close-session")
+                Toggle("Confirm before quitting", isOn: confirmQuit)
+                    .accessibilityIdentifier("settings-confirm-quit")
                 Toggle("Allow undo after closing sessions and workspaces", isOn: closeGraceUndoEnabled)
                     .accessibilityIdentifier("settings-close-grace-undo")
                 Picker("Flagged view layout", selection: flaggedViewLayout) {
@@ -168,6 +170,12 @@ private struct GeneralSettingsView: View {
     private var confirmCloseSession: Binding<Bool> {
         Binding(get: { model.settings.confirmCloseSession ?? false },
                 set: { model.setConfirmCloseSession($0 ? true : nil) })
+    }
+
+    /// Default ON; off stores false, matching the quit alert's "Don't ask again".
+    private var confirmQuit: Binding<Bool> {
+        Binding(get: { model.settings.confirmQuit ?? true },
+                set: { model.setConfirmQuit($0 ? nil : false) })
     }
 
     /// Default ON; turning it off stores false and makes GUI closes immediate.

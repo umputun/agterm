@@ -158,6 +158,18 @@ final class SettingsModelTests: XCTestCase {
         XCTAssertEqual(saved.confirmCloseSession, true)
     }
 
+    func testConfirmQuitOffDuringThemePreviewKeepsTheCommittedTheme() {
+        let committed = model.settings.theme
+
+        model.previewTheme("Dracula")
+        model.setConfirmQuit(false)
+        let saved = SettingsStore(directory: stateDir).load()
+        model.revertThemePreview(theme: committed, darkTheme: nil)
+
+        XCTAssertEqual(saved.theme, committed)
+        XCTAssertEqual(saved.confirmQuit, false)
+    }
+
     func testPersistAndApplyDuringThemePreviewKeepsTheCommittedTheme() {
         let committed = model.settings.theme
 

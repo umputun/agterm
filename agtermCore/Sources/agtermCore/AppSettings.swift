@@ -444,6 +444,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// Whether a GUI session close (⌘W, the File/palette Close Session, the sidebar row's Close) confirms
     /// first; nil = off. Read on demand; the control channel's `session.close` never prompts.
     public var confirmCloseSession: Bool?
+    /// Whether ⌘Q / menu Quit asks "Quit Agterm?" first; nil = on. Its "Don't ask again" box stores false.
+    public var confirmQuit: Bool?
     /// Whether GUI closes keep a short undo grace period before final teardown; nil = on. When off they
     /// are immediate but still enter File > Open Recent.
     public var closeGraceUndoEnabled: Bool?
@@ -518,7 +520,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
                 workspaceRowClickExpands: Bool? = nil,
                 newSessionDirectory: String? = nil, newSessionCustomDirectory: String? = nil,
                 newSessionPlacement: String? = nil,
-                confirmCloseSession: Bool? = nil, closeGraceUndoEnabled: Bool? = nil,
+                confirmCloseSession: Bool? = nil, confirmQuit: Bool? = nil, closeGraceUndoEnabled: Bool? = nil,
                 autoFollowAttention: String? = nil,
                 autoFollowStayOnActive: Bool? = nil, attentionIncludesActive: Bool? = nil,
                 attentionNavigationAcrossWindows: Bool? = nil, sidebarFontSize: Double? = nil,
@@ -569,6 +571,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.newSessionCustomDirectory = newSessionCustomDirectory
         self.newSessionPlacement = newSessionPlacement
         self.confirmCloseSession = confirmCloseSession
+        self.confirmQuit = confirmQuit
         self.closeGraceUndoEnabled = closeGraceUndoEnabled
         self.autoFollowAttention = autoFollowAttention
         self.autoFollowStayOnActive = autoFollowStayOnActive
