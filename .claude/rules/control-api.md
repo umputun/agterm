@@ -2175,6 +2175,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   window's route is captured there, against the state the request arrived to, and sent from a worker; then
   `zmx.tree`, `zmx.attach`, `zmx.attach.group` and the rest of `waitsOnNetwork` wait on the network,
   so `handleConnection` moves each to a worker thread and that thread's descriptor close moves with it.
+  When no route is prepared and the command waits on the network, its worker starts dispatch later.
+  Dispatch resolves the target it executes on the main actor.
   `zmx.present`, `session.overlay.job.run` and `session.overlay.page.serve` are streaming hand-offs: each is
   dispatched inline, its
   ordinary reply is written, and on ok the descriptor passes to a `ControlStreamOwner` whose reader thread

@@ -737,7 +737,8 @@ final class ControlServer {
     }
 
     /// inlineDisposition decides the remote route before anything else, so a route is captured against the state
-    /// this request arrived to, and answers every other local request in that same main-actor entry.
+    /// this request arrived to. A request that neither routes nor waits on the network is dispatched in that same entry;
+    /// for a network one its worker starts dispatch later, and dispatch resolves the target it executes on.
     private func inlineDisposition(_ request: ControlRequest) async -> InlineDisposition {
         if let route = remoteRoute(request) {
             if case .refused(let response) = route { return .reply(response) }
