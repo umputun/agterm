@@ -2171,8 +2171,12 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - The runner is async behind an injected seam. `ControlActions` is `@MainActor`, so a blocking wait would
   freeze the UI for the whole network deadline, and the fake is what lets the end-to-end tests run without
   a second Mac.
-- Commands leave the accept thread in two ways. `zmx.tree`, `zmx.attach` and `zmx.attach.group` wait on the network,
+- Commands leave the accept thread in two ways. One main-actor entry, `inlineDisposition`, decides first: a remote
+  window's route is captured there, against the state the request arrived to, and sent from a worker; then
+  `zmx.tree`, `zmx.attach`, `zmx.attach.group` and the rest of `waitsOnNetwork` wait on the network,
   so `handleConnection` moves each to a worker thread and that thread's descriptor close moves with it.
+  When no route is prepared and the command waits on the network, its worker starts dispatch later.
+  Dispatch resolves the target it executes on the main actor.
   `zmx.present`, `session.overlay.job.run` and `session.overlay.page.serve` are streaming hand-offs: each is
   dispatched inline, its
   ordinary reply is written, and on ok the descriptor passes to a `ControlStreamOwner` whose reader thread
