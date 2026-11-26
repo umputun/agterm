@@ -451,6 +451,14 @@ extension AppStore {
         return slot.pane.map { closePaneOverlay(slot.session.id, pane: $0) } ?? closeOverlay(slot.session.id)
     }
 
+    /// closeViewerOnEscape closes page `id` for an Esc it left unhandled, only while it is the viewer on top of a
+    /// terminal session. A web page keeps Esc for its own forms, and a page companion is its session, which Esc never ends.
+    @discardableResult public func closeViewerOnEscape(_ id: UUID) -> Bool {
+        guard let slot = htmlOverlaySlot(id), slot.session.content == .terminal,
+              let page = slot.session.topmostHtmlOverlay, page.id == id, page.source.kind.isViewer else { return false }
+        return closeHtmlOverlay(id)
+    }
+
     /// htmlOverlayNodes lists the pages in `session`'s slots, session-wide first: a local page as its web view last
     /// reported it, a page shown on the presenting Mac as that Mac last reported it, with no zoom of this Mac's.
     func htmlOverlayNodes(_ session: Session, zoom: Double?) -> [ControlHtmlOverlayNode]? {

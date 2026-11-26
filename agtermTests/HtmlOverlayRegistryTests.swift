@@ -1229,15 +1229,6 @@ final class HtmlOverlayRegistryTests: HtmlPageTestCase {
         return window
     }
 
-    private func sendEscape(to window: NSWindow) throws {
-        for type in [NSEvent.EventType.keyDown, .keyUp] {
-            window.sendEvent(try XCTUnwrap(NSEvent.keyEvent(
-                with: type, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
-                windowNumber: window.windowNumber, context: nil, characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}",
-                isARepeat: false, keyCode: 53)))
-        }
-    }
-
     func testPageScriptRunsOnlyWhenTheOverlayAllowsIt() async throws {
         let body = #"<title>S</title><p id="i">static</p><script>document.getElementById('i').textContent = 'inline'</script>"#
             + #"<script src="ext.js"></script><iframe srcdoc="<script>parent.document.documentElement.dataset.frame = 'ran'</script>"></iframe>"#

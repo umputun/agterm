@@ -581,6 +581,7 @@
     return {
       field,
       jump,
+      clear,
       hasQuery: () => query !== '',
       start() {
         mapNodes();
@@ -1154,6 +1155,7 @@
         finder.field.select();
         return true;
       }
+      if (event.key === 'Escape' && finder.hasQuery()) { finder.clear(); return true; }
       if (event.key === 'n' && finder.hasQuery()) { finder.jump(true); return true; }
       if (event.key === 'N' && finder.hasQuery()) { finder.jump(false); return true; }
       if (event.key === ']' && changes) { changes.step(true); return true; }

@@ -1099,6 +1099,12 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   The close is deferred one task because releasing the page clears the delegate WebKit is calling through.
   A session in an undoable close has no slot to find, so the page keeps the request and `apply` finishes
   it at the next mount.
+- An Esc a page leaves unhandled reaches `HtmlOverlayWebView.cancelOperation`, which never passes it up the chain
+  (#753, full screen) and reports it to `AppStore.closeViewerOnEscape`: only an `HtmlPageKind.isViewer` page on top of
+  a terminal session closes, since a web page owns Esc for its forms and a page row is its session. The reply is
+  asynchronous, so the close also requires the web view to still be its window's first responder. A viewer drops
+  a repeated Esc in `keyDown`, before WebKit, because a flag read at `cancelOperation` would describe a later event.
+  Once the page closes, later repeats reach whatever takes focus. It is a gesture over `overlay.close` with no control twin.
 - A synthetic `a.click()` reaches the policy exactly like a real click (`.linkActivated`, button 0, no
   flags), so every hand-off the page starts goes through `HtmlBrowser.confirm`, a nonblocking sheet with
   Cancel as default; nothing in control dispatch waits on it. One pending prompt per page, a decline silences the

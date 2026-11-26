@@ -2145,6 +2145,7 @@ Claude Code (left) asks codex (right) to check its reading; the reply arrives in
 </tbody>
 </table>
 <p>Markdown, text, log and diff pages wear the terminal's theme and open at the link-open size, 95% when links open in the browser. An <a href="#keymap-open"><code>open</code> rule</a> in <code>keymap.conf</code> opens a file type with your own program instead.</p>
+<p>Esc closes a picture, markdown, text, log or diff page, one step per press: it first closes the diff file list, clears the search or leaves the find box, and only then closes the page. A clicked <code>.html</code> page, pages opened with <code>--html</code> or <code>--url</code>, and page companions keep Esc for themselves.</p>
 <ul>
 <li><code>./main.go:42:7</code>, as compilers and test runners print it, opens the file at that line. A relative path is looked up in the pane's own directory.</li>
 <li>A <code>.</code>, <code>?</code>, <code>!</code> or <code>;</code> ending a sentence after a path is dropped when only the file without it exists.</li>
@@ -2175,7 +2176,7 @@ Claude Code (left) asks codex (right) to check its reading; the reply arrives in
 </tr>
 <tr>
 <td>Esc</td>
-<td>clear the find box</td>
+<td>clear the search or leave the find box; otherwise close the page</td>
 </tr>
 <tr>
 <td><code>w</code> or the Wrap button</td>

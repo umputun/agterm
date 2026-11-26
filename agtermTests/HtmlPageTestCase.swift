@@ -138,6 +138,15 @@ class HtmlPageTestCase: XCTestCase {
         _ = try await inRenderer("window.dispatchEvent(new KeyboardEvent('keydown', { key: \(try json(key)) })); true", view)
     }
 
+    func sendEscape(to window: NSWindow, repeating: Bool = false) throws {
+        for type in [NSEvent.EventType.keyDown, .keyUp] {
+            window.sendEvent(try XCTUnwrap(NSEvent.keyEvent(
+                with: type, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: window.windowNumber, context: nil, characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}",
+                isARepeat: repeating && type == .keyDown, keyCode: 53)))
+        }
+    }
+
     func shown(_ overlay: HtmlOverlay) throws -> (HtmlOverlayPage, NSWindow) {
         let page = registry.page(for: overlay, store: store)
         return (page, try host(page.webView))

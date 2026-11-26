@@ -10,6 +10,8 @@ final class HtmlOverlayWebView: WKWebView {
     var onClick: (() -> Void)?
     var onUserInput: (() -> Void)?
     var onDetach: (() -> Void)?
+    var onCancel: (() -> Void)?
+    var viewer = false
     private var parkedDragTypes: [NSPasteboard.PasteboardType] = []
     private var dropsEnabled = true
 
@@ -107,12 +109,16 @@ final class HtmlOverlayWebView: WKWebView {
 
     override func keyDown(with event: NSEvent) {
         onUserInput?()
+        // a viewer steps back one layer per Esc press, so a held Esc's repeats never reach the page
+        if viewer, event.isARepeat, event.keyCode == 53 { return }
         super.keyDown(with: event)
     }
 
-    // an Esc the page leaves unhandled comes back from WebKit as cancelOperation: up the responder chain,
-    // and the window's own handler takes a full-screen window out of full screen
-    override func cancelOperation(_ sender: Any?) {}
+    // an Esc the page leaves unhandled comes back from WebKit as cancelOperation:; it never goes up the responder
+    // chain, where the window's own handler takes a full-screen window out of full screen
+    override func cancelOperation(_ sender: Any?) {
+        onCancel?()
+    }
 
     override func mouseDown(with event: NSEvent) {
         onUserInput?()
