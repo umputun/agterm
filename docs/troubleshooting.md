@@ -365,24 +365,30 @@ System Settings ▸ Privacy & Security ▸ Microphone.
 After an update, a command in a live session cannot record from the microphone (Claude Code voice mode
 reports `No audio detected from microphone`, `ffmpeg` reports `Cannot use MacBook Pro Microphone`) or
 fails to reach a host on your network (`No route to host`, `EHOSTUNREACH`), while the same command works
-in a new session. After macOS forced a logout, a command in an older session reports
-`No user exists for uid 501`.
+in a new session. After a logout and login, a command in a session started before the logout can fail to
+reach services of the ended login. Reported examples: `No user exists for uid 501`;
+`security list-keychains` reports `One or more parameters passed to a function were not valid`;
+`security find-identity -v -p codesigning` finds `0 valid identities`, so `codesign` reports
+`no identity found`; `gh` cannot read its token from the keychain; `pgrep` reports
+`sysmond service not found`; `launchctl managername` prints `Could not get manager name` instead of `Aqua`.
 
 A live session whose pane reads `supervisor` was started through a small helper process, the session
 host, and stays tied to the host that started it. Since [#971](https://github.com/umputun/agterm/issues/971)
-a changed helper build or a new login gets its own host, so new sessions always start under the current
-one; a session that was already running keeps its earlier host, because macOS cannot move a running
+a changed helper build or a new login gets its own host, so new sessions start under the current one; a session that was already running keeps its earlier host, because macOS cannot move a running
 process to another. An update deletes the earlier host's program file, and macOS can then refuse that
-session's microphone requests.
+session's microphone requests. On macOS 27 and later the host can run as a job inside the login session,
+so after a logout it can end with it: a session that survived then reads `orphaned` instead, as described in
+the previous section, and the reset and the one-pane restart below move it the same way.
 
-`agtermctl tree --json` marks such a pane with `liveHostStale` (or `splitLiveHostStale`). The mark
+`agtermctl tree --json` marks a pane still supervised by an earlier host with `liveHostStale` (or
+`splitLiveHostStale`). The mark
 means only that the host is older: such a pane may still work, and there is no need to reset after every
 update. When one of these problems shows up, Agterm ▸ Reset Live Sessions… moves those sessions to the
 current host, as described in the previous section: it ends and recreates the panes it selects, which can
 include working panes. To check the microphone before ending running work, try it in a new live session
 first. To move one pane without the reset, run
-`agtermctl session restart --target <session> --pane left --command '<command>'` from another pane
-(`--pane right` for the split): it ends that pane's shell and running program, then starts the command in a
+`agtermctl session restart --target 'SESSION_ID' --pane left --command 'COMMAND'` from another pane, with the
+session's ID from `agtermctl tree` and the command to start in it (`--pane right` for the split): it ends that pane's shell and running program, then starts the command in a
 new shell. Pass `--command`: without it the restart refuses a pane at a shell prompt.
 After a successful restart, `agtermctl tree` should show the pane as `supervisor` without
 `(earlier helper)`. At every launch agterm asks each earlier host to stop, and one stops once no live session runs under it. The single

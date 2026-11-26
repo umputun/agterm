@@ -144,16 +144,20 @@ Check these in order:
   session keeps the zmx it was created with through app updates. `agtermctl zmx list` marks such rows
   `outdated`; Agterm ▸ Reset Live Sessions… (or `agtermctl zmx reset --force`) recreates them on the current
   zmx, with the same cost as any reset: running work stops and agent conversations need resuming.
-- **An older live session cannot use the microphone or reach the local network after an update, or reports
-  `No user exists for uid 501` after a forced logout.** A changed helper build or a new login gets its own session
-  host, and a session keeps the host it started under; `agtermctl tree --json` marks it `liveHostStale` (or
-  `splitLiveHostStale` for its right pane). An update deletes the earlier host's program file, and macOS can then
+- **An older live session cannot use the microphone or reach the local network after an update, or after a
+  logout cannot reach services of the ended login** (`No user exists for uid 501`, no keychain or codesign
+  identities, `pgrep` reports `sysmond service not found`, `launchctl managername` prints
+  `Could not get manager name`). A changed helper build or a new login gets its own session host, and a session
+  keeps the host it started under while that host runs; `agtermctl tree --json` marks a pane still supervised by
+  an earlier host `liveHostStale` (or `splitLiveHostStale` for its right pane). On macOS 27 and later the host can run inside the login session
+  and end with it at logout; a surviving session then reads `orphaned`, and the same reset or restart moves it. An update deletes the earlier host's program file, and macOS can then
   refuse that session's microphone requests; a new live session still works. The mark alone is no reason to
   reset. Agterm ▸ Reset Live Sessions… (or `agtermctl zmx reset --force`) moves it to the current host: it ends
   and recreates the panes it selects, which can include working panes, with the same cost as any reset;
   at every launch agterm asks each earlier host to stop, and one stops once no live session runs under it.
-  One pane moves alone with `agtermctl session restart --target <session> --pane left --command '<command>'`
-  (`--pane right` for the split) run from another pane: it ends that pane's shell and program and starts the
+  One pane moves alone with `agtermctl session restart --target 'SESSION_ID' --pane left --command 'COMMAND'`,
+  the session's ID from `agtermctl tree` and the command to start (`--pane right` for the split), run from
+  another pane: it ends that pane's shell and program and starts the
   command in a new shell; without `--command` it refuses a pane at a shell prompt. After a successful
   restart the pane should read `supervisor` with no stale mark.
 - **Live sessions close about 30 seconds after a GUI program starts from one.** macOS force-quits a program
