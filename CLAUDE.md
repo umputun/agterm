@@ -189,6 +189,10 @@ C-boundary concurrency before changing the bridge.
 - Debug Swift code lives in `agterm.debug.dylib`; inspect it or object files, not the stub executable.
 - For throwaway launch-time probes, append to a temp file. `NSLog` from `open -n` is unreliable; production
   logging uses `os.Logger`.
+- A hidden (`open -n -j`) Debug instance enters App Nap well after launch, not at once:
+  about 70 to 95 s in the #1108 runs.
+  A test that needs it napped waits for RunningBoard's `Set AppNap state: ... active:Y` line
+  for that pid in `log stream`.
 - `scripts/run.sh` activates an existing instance instead of loading a rebuild. Use a distinct isolated
   launch for current code.
 - Stop an isolated Live-mode Debug instance and its daemons before rebuilding the same DerivedData.
