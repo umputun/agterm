@@ -1,5 +1,35 @@
 # Changelog
 
+## v0.45.0 - 2026-11-27
+
+### New Features
+
+- **Status hooks for GitHub Copilot CLI.** Help ▸ Install Agent Status Hooks and `agterm-server install-hooks` now set up Copilot CLI when `~/.copilot` (or `COPILOT_HOME`) exists. A prompt or tool call shows active, a permission prompt blocked, the end of a turn completed, and `/exit` or `/clear` idle; a subagent's stop no longer completes the turn early, and a `copilot -p` started by another agent leaves its spawner's session alone. An unchanged copy of the `copilot-agent-status` recipe's hook file is moved to `.bak` so statuses are not posted twice. The guide lists the remaining gaps #1120 @stn1slv #1121 @umputun
+- **Status hooks for the Antigravity CLI (agy).** Help ▸ Install Agent Status Hooks and `agterm-server install-hooks` set up agy when `~/.gemini/config` exists: a model call shows active, an agy question or `ask_permission` request blocked, the end of a turn completed. A turn that leaves background work running keeps the session active; `AGTERM_AGY_IGNORE_BACKGROUND=1` completes each turn anyway. An `agterm-status` block from the cookbook recipe is replaced, and a customized one is kept and reported #1102 @umputun
+- **Esc closes viewer pages.** Pictures, markdown, text, logs, diffs and JSONL pages close with Esc or `⌘.`, one layer per press: an open diff file list closes first, then a find box or search is cleared, then the page closes. Web pages keep Esc for their own forms, and page companions stay open #1110 @umputun
+- **The quit confirmation can be turned off.** The "Quit Agterm?" alert has a **Don't ask again** checkbox, and Settings ▸ General ▸ Confirm before quitting turns it back on #1112 @NickKibish #1115 @umputun
+- `AGTERM_CLAUDE_IGNORE_SHELLS=1` in Claude Code's environment stops a long-running background shell, such as a poller, from holding the session active after each turn; a running subagent or workflow still does #1098 @umputun #1096
+- `agtermctl session paste --stdin` pastes text from stdin into a pane without touching the clipboard, with bracketed paste framing for programs that ask for it. `--pane-id` reaches the split and the scratch. Called directly on agterm-server it is refused, while a Mac showing that server's pane pastes into it. The `annotate-pane-output` recipe now returns its notes to the pane it was opened from without using the clipboard #1091 @umputun
+- `copilot-session-resume` cookbook recipe: when agterm replays commands, in Re-run commands mode or Live sessions mode with the program gone, each pane resumes its own tracked Copilot CLI conversation. It needs the native Copilot CLI and zsh; the README lists its limits #1123 #1124 @stn1slv
+
+### Improved
+
+- a click on the "In use from another Mac" cover takes the pane's lead, as a key press does. A click on the "Connection to HOST lost" panel, or on the cover of a pane waiting to reconnect, retries the connection at once #1095 #1100 @umputun
+- ⌘-clicking a source location such as `./register.tsx:109` opens it as a text page instead of Finder: JSX, TSX and other formats the highlighter knows are highlighted, and others such as Dart and Zig open as plain text #1090 @umputun
+- the Claude Code and Codex status hooks give up after 5 s instead of the agents' 600 s default, so a slow control socket holds an agent's step for at most 5 s. Run Help ▸ Install Agent Status Hooks again to apply it; Codex hooks added by hand need `timeout = 5` on each hook #1125 @umputun
+
+### Bug Fixes
+
+- **`agtermctl` no longer stalls for up to 30 s on a hidden, napping agterm.** agterm could enter App Nap while it served its control socket, so under CPU load a hidden app answered slowly. It now keeps normal priority while the socket is bound; the display and system still sleep on idle #1125 @umputun #1108
+- **closing a pane no longer freezes the app** when its program ignores the hangup. The pane's surface is retired and freed once its threads exit, and quit waits up to 1 s for pending hangups to finish #1125 @umputun
+- sidebar disclosure buttons leaked on macOS 27, which after a few days made each window switch slow and could send a fast Space switch back to the Space just left #1097 @paul-nameless
+- closing a session that an older build had saved in two windows ended the shell the other window still showed. A pane another window, a closed window or a pending undo still holds keeps its daemon #1122 @umputun
+- a theme being previewed in the picker could be saved by an unrelated settings change, so agterm reopened with a theme never confirmed #1113 @umputun
+- a Codex started by Claude Code, such as a review worker, posted its status to Claude's session and reset it to idle mid-run #1117 @umputun
+- on a Linux agterm-server host whose `plutil` is GNUstep's, the Claude Code status hook misread subagent and background-task events even with `jq` installed #1121 @umputun
+- a few stopped Live daemons made `zmx list` time out, which broke the tree's foreground program, Duplicate as Companion, restart and the hangup a kill sends. These now read pane leaders from the kernel, on the Mac and on agterm-server #1101 @umputun
+- a split or scratch hidden at quit took no mail after a Live relaunch, and an exit in the primary killed a hidden split. Such a pane now takes mail while its daemon runs. A hidden split's `--pane-id` is recognized, and commands that need its surface answer `session not realized` until it is shown. An exit in the primary promotes a surviving hidden split #1091 #1092 @umputun
+
 ## v0.44.1 - 2026-11-22
 
 ### Improved
