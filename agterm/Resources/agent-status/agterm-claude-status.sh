@@ -19,8 +19,9 @@ spawned_by_agent && exit 0
 payload=
 [ -t 0 ] || IFS= read -r -d '' -t 2 payload || true
 
+# the platform picks the parser: a Linux /usr/bin/plutil may be GNUstep's, which has no `-extract raw`
 field() { # key path value, array length for an array, empty when absent or unparseable
-  if [ -x /usr/bin/plutil ]; then
+  if [[ $OSTYPE == darwin* ]]; then
     if v=$(printf '%s' "$payload" | /usr/bin/plutil -extract "$1" raw -o - - 2>/dev/null); then printf '%s' "$v"; fi
   elif command -v jq >/dev/null 2>&1; then
     printf '%s' "$payload" | jq -r --arg p "$1" \

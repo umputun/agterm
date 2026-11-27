@@ -1022,7 +1022,7 @@ agtermctl session new --remote srv --window &quot;$win&quot;                   #
 <ul>
 <li>The Codex hooks need jq on the host; without it they are skipped and the install reports the hooks incomplete.</li>
 <li>Copilot CLI's hooks go to <code>COPILOT_HOME</code> when it is set and not empty, resolved like <code>CODEX_HOME</code>, otherwise to <code>~/.copilot</code>, and only when that directory exists.</li>
-<li>The Copilot CLI hooks use jq on the host to tell a subagent from the main agent; without it a subagent's tool clears a pending permission prompt, its stop reports completed during the turn, and a <code>copilot -p</code> run ends idle.</li>
+<li>The Claude Code and Copilot CLI hooks read their payload with jq on the host to tell a subagent from the main agent. Without it, a Claude Code subagent's activity replaces the main agent's status and a turn that leaves background agents running reports completed; a Copilot CLI subagent's tool clears a pending permission prompt, its stop reports completed during the turn, and a <code>copilot -p</code> run ends idle.</li>
 <li>Codex's hooks and skill go to <code>CODEX_HOME</code> when it is set and not empty (a relative one is resolved against the working directory), otherwise to <code>~/.codex</code>. A <code>CODEX_HOME</code> that does not exist is reported and skipped.</li>
 <li>OpenCode's plugin is installed only where its config directory exists, for the version <code>opencode --version</code> reports or the one <code>--opencode v1|v2</code> names.</li>
 </ul>

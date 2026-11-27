@@ -126,8 +126,20 @@ struct CopilotStatusHookTests {
         #expect(result.calls == ["idle"])
     }
 
-    @Test(.enabled(if: !FileManager.default.fileExists(atPath: "/usr/bin/plutil")))
-    func withoutAParserSubagentsAreNotToldApart() throws {
+    @Test func linuxReadsThePayloadWithJq() throws {
+        // a GNUstep plutil at /usr/bin rejects -extract raw, and the adapter took it over an installed jq
+        let fm = FileManager.default
+        let bin = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("agterm-jq-\(UUID().uuidString)")
+        try fm.createDirectory(at: bin, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: bin) }
+        try "#!/bin/sh\ncat >/dev/null\necho a1\n".writeExecutable(to: bin.appendingPathComponent("jq"))
+
+        let result = try run("work", payload: Self.tool(), extraEnv: ["OSTYPE": "linux-gnu", "PATH": "\(bin.path):/usr/bin:/bin"])
+
+        #expect(result.calls == ["active --blink --if-idle"])
+    }
+
+    @Test func withoutAParserSubagentsAreNotToldApart() throws {
         let fm = FileManager.default
         let bin = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("agterm-nojq-\(UUID().uuidString)")
         try fm.createDirectory(at: bin, withIntermediateDirectories: true)
@@ -137,7 +149,7 @@ struct CopilotStatusHookTests {
         }
         try fm.createSymbolicLink(at: bin.appendingPathComponent("bash"), withDestinationURL: URL(fileURLWithPath: "/bin/bash"))
 
-        let result = try run("work", payload: Self.tool(agentID: "a1"), extraEnv: ["PATH": bin.path])
+        let result = try run("work", payload: Self.tool(agentID: "a1"), extraEnv: ["OSTYPE": "linux-gnu", "PATH": bin.path])
 
         #expect(result.calls == ["active --blink"])
     }

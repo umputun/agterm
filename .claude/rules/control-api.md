@@ -46,7 +46,8 @@ paths:
   `Notification[permission_prompt]` waits about six idle seconds and stays for the sandboxed network
   prompt, which `PermissionRequest` skips. The main thread's PostToolUse clears a prior block because there is
   no answer event; a subagent's cannot, being `--if-idle`.
-  `agterm-claude-status.sh` reads the hook payload (non-terminal stdin, 2-second bound, plutil or jq key paths):
+  `agterm-claude-status.sh` reads the hook payload (non-terminal stdin, 2-second bound, plutil key paths on macOS and
+  jq on Linux, picked by `$OSTYPE` because a Linux `/usr/bin/plutil` may be GNUstep's, which has no `-extract raw`):
   an event carrying `agent_id` adds `--if-idle` to `active`, and a Stop whose `background_tasks` lists a
   running subagent, workflow or shell posts `active --blink` in place of `completed`, dropping the caller's flags
   so `--auto-reset` cannot idle the row. Anything else, an unreadable payload included, posts argv.
@@ -64,7 +65,8 @@ paths:
   command in it is `AgentHooksInstall.Agy.isAdapterCommand`: our adapter's or the cookbook's path plus one action.
 - Copilot CLI (installed only when `~/.copilot`, or `COPILOT_HOME` resolved like `CODEX_HOME`, exists) gets
   its own `hooks/agterm-status.json`, rewritten only while every hook in it is our adapter plus one action.
-  The adapter maps prompt and finished tools to `active --blink` (`--if-idle` with `agentId`),
+  The adapter reads the payload as the Claude one does and maps prompt and finished tools to `active --blink`
+  (`--if-idle` with `agentId`),
   `notification[permission_prompt]` to blocked, the main agent's `agentStop` to completed, and `sessionEnd` to idle
   unless its reason is `complete` (`-p`). It prints nothing: stdout is parsed as hook output.
   Measured on 1.0.116: a subagent fires its own `agentStop`, and Autopilot answers `ask_user` itself and fires
