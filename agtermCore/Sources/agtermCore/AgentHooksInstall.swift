@@ -388,12 +388,12 @@ public enum AgentHooksInstall {
     /// merge the agent-status hooks into an existing Claude Code `settings.json`.
     ///
     /// `existing` is the current contents (nil/empty = start from a fresh object). Returns the new JSON and
-    /// whether it differs; idempotent — hooks already present (detected by the adapter command) and carrying
-    /// their timeout return the input with `changed == false`. Unrelated hooks and keys are preserved; invalid
-    /// JSON, and a `hooks` or written-event value of the wrong shape, throw rather than overwrite what could
-    /// not be read. Entries a PRIOR install pointed straight at the generic wrapper are migrated onto the
-    /// Claude adapter first, so the ownership guard reaches an existing install rather than only a fresh one,
-    /// and an adapter entry without a timeout gets one in place.
+    /// whether it differs; idempotent — hooks already present (detected by the adapter command) return the
+    /// input with `changed == false` unless one matching the generated command exactly lacks a `timeout`,
+    /// which then gets one in place. Unrelated hooks and keys are preserved; invalid JSON, and a `hooks` or
+    /// written-event value of the wrong shape, throw rather than overwrite what could not be read. Entries a
+    /// PRIOR install pointed straight at the generic wrapper are migrated onto the Claude adapter first, so
+    /// the ownership guard reaches an existing install rather than only a fresh one.
     public static func mergeClaudeSettings(existing: String?, scriptDir: String) throws -> (json: String, changed: Bool) {
         let command = wrapperCommand(scriptDir: scriptDir)
         var root = try parsedObject(existing)

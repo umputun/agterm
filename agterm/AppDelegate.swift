@@ -519,8 +519,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // flush pending debounced settings writes (a keyboard-driven opacity/blur change holds a ~0.3s save
         // no drag-end commit fires) so they survive ⌘Q.
         settingsModel?.flushPendingSaves()
-        // windows still open close after this returns, and the last one's willClose waits instead
-        if WindowRegistry.shared.registeredCount == 0 { SurfaceRetirement.shared.drainForQuit() }
+        SurfaceRetirement.shared.drainForQuitOnceWindowless()
     }
 
     struct ExitFlushSteps {

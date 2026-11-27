@@ -72,6 +72,19 @@ final class SurfaceRetirementTests: XCTestCase {
         stoppedGroup = 0
     }
 
+    /// resumeAfterTenSeconds resumes the stopped child off the main thread, so a call that blocks on it fails
+    /// its assertion instead of hanging the test host.
+    private func resumeAfterTenSeconds() -> (item: DispatchWorkItem, fired: OSAllocatedUnfairLock<Bool>) {
+        let fired = OSAllocatedUnfairLock(initialState: false)
+        let group = stoppedGroup
+        let item = DispatchWorkItem { @Sendable in
+            fired.withLock { $0 = true }
+            killpg(group, SIGCONT)
+        }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 10, execute: item)
+        return (item, fired)
+    }
+
     private func waitUntil(_ condition: () -> Bool) async {
         let deadline = Date().addingTimeInterval(60)
         while !condition(), Date() < deadline {
@@ -105,18 +118,12 @@ final class SurfaceRetirementTests: XCTestCase {
 
     func testTeardownRetiresASurfaceWhoseChildHasNotExited() async throws {
         _ = try stopChild()
-        let resumedByFallback = OSAllocatedUnfairLock(initialState: false)
-        let group = stoppedGroup
-        let fallback = DispatchWorkItem { @Sendable in
-            resumedByFallback.withLock { $0 = true }
-            killpg(group, SIGCONT)
-        }
-        defer { fallback.cancel() }
-        DispatchQueue.global().asyncAfter(deadline: .now() + 10, execute: fallback)
+        let fallback = resumeAfterTenSeconds()
+        defer { fallback.item.cancel() }
 
         terminal.teardown()
 
-        XCTAssertFalse(resumedByFallback.withLock { $0 }, "teardown waited for the stopped child")
+        XCTAssertFalse(fallback.fired.withLock { $0 }, "teardown waited for the stopped child")
         XCTAssertNil(terminal.surface)
         XCTAssertFalse(terminal.configCStrings.isEmpty, "a stopped child keeps the surface retired, not freed")
 
@@ -151,11 +158,14 @@ final class SurfaceRetirementTests: XCTestCase {
     func testDrainForQuitLeavesAStoppedChildPendingPastItsBudget() async throws {
         _ = try stopChild()
         terminal.retireSurface(into: retirement)
+        let fallback = resumeAfterTenSeconds()
+        defer { fallback.item.cancel() }
         let start = ContinuousClock.now
 
         retirement.drainForQuit(budget: .milliseconds(200))
 
         let waited = ContinuousClock.now - start
+        XCTAssertFalse(fallback.fired.withLock { $0 }, "the drain outlived its budget")
         XCTAssertGreaterThanOrEqual(waited, .milliseconds(200))
         XCTAssertLessThan(waited, .seconds(10))
         XCTAssertEqual(retirement.pendingCount, 1)

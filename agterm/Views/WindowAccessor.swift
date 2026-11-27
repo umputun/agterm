@@ -211,11 +211,7 @@ struct WindowAccessor: NSViewRepresentable {
                         session.discardHudBody() // an unrealized HUD has no teardown to delete its body file
                         session.discardInfo()
                     }
-                    // a quit closes the windows after applicationWillTerminate, so the last one waits for every
-                    // pane's hangup at once; a window closed first has its wait in applicationWillTerminate.
-                    if library.isTerminating, WindowRegistry.shared.registeredCount == 0 {
-                        SurfaceRetirement.shared.drainForQuit()
-                    }
+                    if library.isTerminating { SurfaceRetirement.shared.drainForQuitOnceWindowless() }
                     library.closeWindow(windowID)
                     // the unregister above refreshed window.list while the store was still open
                     NotificationCenter.default.post(name: .agtermWindowCatalogChanged, object: nil)
