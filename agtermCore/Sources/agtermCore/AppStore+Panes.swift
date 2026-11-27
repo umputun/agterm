@@ -265,8 +265,8 @@ extension AppStore {
             if !splitHeldElsewhere {
                 ZmxLeadBook.shared.forget(pane: split)
                 RemoteEndBook.shared.clear(pane: split)
+                disposeMailboxes([split])
             }
-            disposeMailboxes([split])
             session.daemonBackedPanes.remove(split)
         }
         let wasShown = session.isSplit

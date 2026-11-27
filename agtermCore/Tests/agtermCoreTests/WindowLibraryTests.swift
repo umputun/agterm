@@ -1584,10 +1584,14 @@ final class WindowLibraryTests {
         let shared = try sharedPane(log)
         defer { shared.library.finalizeAllPendingCloses() }
         hold(shared, as: holder)
+        let split = try #require(shared.session.splitPaneIdentity)
+        defer { MessageBus.shared.dispose(pane: split) }
+        _ = try MessageBus.shared.send("hi", from: nil, to: [MessageRecipient(pane: split, address: "S:\(split)")], now: 1)
 
         shared.store.closeSplit(shared.session.id)
 
         #expect(log.identities.isEmpty)
+        #expect(MessageBus.shared.pending(for: split) == 1)
     }
 
     @Test(arguments: SharedPaneHolder.allCases)
