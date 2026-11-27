@@ -6,7 +6,7 @@ enum OpenCodeEnvironmentProbe {
         let version: AgentHooksInstall.OpenCode.Version?
         let v2ConfigurationDirectory: String?
         let codexHome: String?
-        var copilotHome: String?
+        let copilotHome: String?
     }
 
     static func detect(environment: [String: String], timeout: TimeInterval = 3,

@@ -53,7 +53,8 @@ final class AgentHooksInstallerTests: XCTestCase {
         let original = "model = \"default\"\n"
         try fm.createDirectory(at: defaultRoot, withIntermediateDirectories: true)
         try original.write(to: defaultConfig, atomically: true, encoding: .utf8)
-        let probe = OpenCodeEnvironmentProbe.Result(version: .v1, v2ConfigurationDirectory: nil, codexHome: custom.path)
+        let probe = OpenCodeEnvironmentProbe.Result(version: .v1, v2ConfigurationDirectory: nil, codexHome: custom.path,
+                                                    copilotHome: nil)
 
         for rootExists in [false, true] {
             if rootExists { try fm.createDirectory(at: custom, withIntermediateDirectories: true) }
@@ -75,6 +76,34 @@ final class AgentHooksInstallerTests: XCTestCase {
             XCTAssertEqual(try String(contentsOf: defaultConfig, encoding: .utf8), original)
             XCTAssertFalse(fm.fileExists(atPath: defaultConfig.path + ".bak"))
             XCTAssertFalse(report.text.contains("~/.codex"))
+        }
+    }
+
+    func testCapturedCopilotRootControlsBothHooksFileAndAlertText() throws {
+        let fm = FileManager.default
+        let directory = fm.temporaryDirectory.appendingPathComponent("hooks-report-\(UUID().uuidString)")
+        defer { try? fm.removeItem(at: directory) }
+        let home = directory.appendingPathComponent("home")
+        let defaultRoot = home.appendingPathComponent(".copilot")
+        let custom = directory.appendingPathComponent("custom copilot")
+        try fm.createDirectory(at: defaultRoot, withIntermediateDirectories: true)
+        let probe = OpenCodeEnvironmentProbe.Result(version: .v1, v2ConfigurationDirectory: nil, codexHome: nil,
+                                                    copilotHome: custom.path)
+
+        for rootExists in [false, true] {
+            if rootExists { try fm.createDirectory(at: custom, withIntermediateDirectories: true) }
+            let report = try AgentHooksInstaller.install(probe: probe, home: home)
+
+            let hooks = custom.appendingPathComponent("hooks/agterm-status.json")
+            if rootExists {
+                XCTAssertTrue(try String(contentsOf: hooks, encoding: .utf8).contains("agterm-copilot-status.sh"))
+                XCTAssertTrue(report.text.contains("Copilot CLI hooks installed to \(hooks.path)"))
+            } else {
+                XCTAssertFalse(fm.fileExists(atPath: custom.path))
+                XCTAssertTrue(report.text.contains("No \(custom.path) found (your COPILOT_HOME), so Copilot CLI hooks were skipped."))
+            }
+            XCTAssertFalse(fm.fileExists(atPath: defaultRoot.appendingPathComponent("hooks").path))
+            XCTAssertFalse(report.text.contains("~/.copilot"))
         }
     }
 

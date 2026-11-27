@@ -87,6 +87,20 @@ final class OpenCodeEnvironmentProbeTests: XCTestCase {
         }
     }
 
+    func testExportedCopilotHomeIsCapturedBesideCodexHome() async throws {
+        for shell in ["/bin/zsh", "/bin/bash"] {
+            let result = try await probeResult(script: "printf '2.0.12\\n'", startup: """
+            export CODEX_HOME='/custom/codex'
+            export COPILOT_HOME='/custom/copilot home'
+            """, shell: shell)
+            XCTAssertEqual(result?.copilotHome, "/custom/copilot home")
+            XCTAssertEqual(result?.codexHome, "/custom/codex")
+            XCTAssertEqual(result?.version, .v2)
+        }
+        let unset = try await probeResult(script: "exit 1", startup: "unset COPILOT_HOME")
+        XCTAssertNil(unset?.copilotHome)
+    }
+
     func testExportedCodexHomeIsCapturedFromFish() async throws {
         guard let fish = ["/opt/homebrew/bin/fish", "/usr/local/bin/fish"].first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else {
             throw XCTSkip("fish is not installed")

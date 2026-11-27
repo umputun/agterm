@@ -475,10 +475,8 @@ extension AgentHooksFiles.AgyResult {
 }
 
 extension AgentHooksFiles.CopilotResult {
-    /// text is the one-line report of this outcome; Copilot reads its hooks when it starts.
-    public var text: String { text(copilotHome: nil) }
-
-    /// Reports the selected root, `COPILOT_HOME`'s when the caller resolved one.
+    /// text reports this outcome in one line for the selected root, `COPILOT_HOME`'s when the caller resolved one.
+    /// Copilot reads its hooks when it starts.
     public func text(copilotHome: String?) -> String {
         let directory = copilotHome ?? "~/.copilot"
         let file = directory + "/hooks/" + AgentHooksInstall.Copilot.fileName

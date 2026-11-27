@@ -305,8 +305,8 @@ struct AgentHooksFilesTests {
     @Test(arguments: [AgentHooksFiles.CopilotResult.installed, .alreadyConfigured, .replacedCookbook, .cookbookKept, .userOwned,
                       .unparseable, .unreadable, .writeFailed, .noCopilot])
     func copilotResultTextStaysOnOneLine(_ result: AgentHooksFiles.CopilotResult) {
-        #expect(!result.text.isEmpty)
-        #expect(!result.text.contains("\n"))
+        #expect(!result.text(copilotHome: nil).isEmpty)
+        #expect(!result.text(copilotHome: nil).contains("\n"))
         #expect(result.isWarning == [.cookbookKept, .userOwned, .unparseable, .unreadable, .writeFailed].contains(result))
     }
 
