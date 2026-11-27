@@ -73,7 +73,7 @@ final class CustomCommandRunner {
     private var commandEngine = CustomCommandEngine(commands: [])
 
     private var keyMonitor: Any?
-    private var leaderTimer: Timer?
+    private(set) var leaderTimer: Timer?
     private var keymapObserver: NSObjectProtocol?
     private var menuActionObserver: NSObjectProtocol?
     private var resignActiveObserver: NSObjectProtocol?

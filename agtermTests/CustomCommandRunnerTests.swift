@@ -334,8 +334,10 @@ final class CustomCommandRunnerTests: XCTestCase {
 
     func testFunctionKeyReleaseSurvivesLeaderTimeout() throws {
         let fix = try fixture(keymap: "map f5>x toggle_sidebar\n")
+        let before = Date()
         XCTAssertTrue(fix.runner.handleKeyEvent(functionKey(), in: window))
-        RunLoop.current.run(until: Date().addingTimeInterval(1.7))
+        try assertLeaderTimer(of: fix.runner, firesAfter: 1.5, scheduledWithin: before...Date())
+        waitForLeaderTimer(of: fix.runner)
         XCTAssertTrue(fix.runner.handleKeyEvent(functionKey(repeating: true), in: window))
         XCTAssertFalse(fix.runner.handleKeyEvent(keyDown("x", keyCode: 7, mods: []), in: window))
         XCTAssertEqual(fix.store.sidebarVisible, fix.sidebarBefore)
@@ -345,6 +347,22 @@ final class CustomCommandRunnerTests: XCTestCase {
     private var leader: NSEvent { keyDown("a", keyCode: 0, mods: [.control]) }
     private var sidebarTail: NSEvent { keyDown("s", keyCode: 1, mods: []) }
     private var tailUp: NSEvent { keyDown("s", keyCode: 1, mods: [], type: .keyUp) }
+
+    private func assertLeaderTimer(of runner: CustomCommandRunner, firesAfter interval: TimeInterval,
+                                   scheduledWithin span: ClosedRange<Date>,
+                                   file: StaticString = #filePath, line: UInt = #line) throws {
+        let fire = try XCTUnwrap(runner.leaderTimer, "no timeout is running", file: file, line: line).fireDate
+        XCTAssertGreaterThanOrEqual(fire.timeIntervalSince(span.lowerBound), interval - 0.01, file: file, line: line)
+        XCTAssertLessThanOrEqual(fire.timeIntervalSince(span.upperBound), interval + 0.01, file: file, line: line)
+    }
+
+    private func waitForLeaderTimer(of runner: CustomCommandRunner, file: StaticString = #filePath, line: UInt = #line) {
+        let deadline = Date().addingTimeInterval(5)
+        while runner.leaderTimer != nil, Date() < deadline {
+            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.02))
+        }
+        XCTAssertNil(runner.leaderTimer, "the timeout never fired", file: file, line: line)
+    }
 
     func testBuiltinSequenceAlternativeRunsTheActionAndIsConsumed() throws {
         let fix = try fixture()
@@ -368,8 +386,10 @@ final class CustomCommandRunnerTests: XCTestCase {
 
         XCTAssertTrue(fix.runner.handleKeyDown(leader, in: window))
         XCTAssertTrue(fix.runner.handleKeyDown(sidebarTail, in: window))
+        let released = Date()
         _ = fix.runner.handleKeyEvent(tailUp, in: window)
-        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.7))
+        try assertLeaderTimer(of: fix.runner, firesAfter: 0.5, scheduledWithin: released...Date())
+        waitForLeaderTimer(of: fix.runner)
         XCTAssertFalse(fix.runner.handleKeyDown(sidebarTail, in: window), "the window times out after release")
         XCTAssertEqual(fix.store.sidebarVisible, !fix.sidebarBefore)
     }
@@ -402,8 +422,10 @@ final class CustomCommandRunnerTests: XCTestCase {
         XCTAssertTrue(fix.runner.handleKeyEvent(heldTail, in: window))
         XCTAssertEqual(fix.store.sidebarVisible, fix.sidebarBefore, "the first autorepeat after the key-repeat delay fires")
 
+        let released = Date()
         XCTAssertTrue(fix.runner.handleKeyEvent(tailUp, in: window))
-        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.7))
+        try assertLeaderTimer(of: fix.runner, firesAfter: 0.5, scheduledWithin: released...Date())
+        waitForLeaderTimer(of: fix.runner)
         XCTAssertFalse(fix.runner.handleKeyEvent(sidebarTail, in: window), "release starts the timeout")
     }
 
@@ -412,10 +434,11 @@ final class CustomCommandRunnerTests: XCTestCase {
 
         XCTAssertTrue(fix.runner.handleKeyEvent(leader, in: window))
         XCTAssertTrue(fix.runner.handleKeyEvent(sidebarTail, in: window))
+        let pressed = Date()
         XCTAssertTrue(fix.runner.handleKeyEvent(leader, in: window))
         XCTAssertTrue(fix.runner.handleKeyEvent(tailUp, in: window))
-        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.7))
-        XCTAssertTrue(fix.runner.handleKeyEvent(sidebarTail, in: window), "the leader is still armed past repeatTimeout")
+        try assertLeaderTimer(of: fix.runner, firesAfter: 1.5, scheduledWithin: pressed...Date())
+        XCTAssertTrue(fix.runner.handleKeyEvent(sidebarTail, in: window), "the leader stays armed on its own timeout")
         XCTAssertEqual(fix.store.sidebarVisible, fix.sidebarBefore)
     }
 
