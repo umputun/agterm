@@ -212,8 +212,10 @@ class Waiter:
     """
 
     BUSY_POLL_SECONDS = 1.0
-    READ_ATTEMPTS = 3
+    ACK_ATTEMPTS = 3
     RETRY_SECONDS = 1.0
+    # kept well under TAKEOVER_SECONDS, so a waiter whose Claude Code exited mid-outage still frees the lock
+    RETRY_MAX_SECONDS = 10.0
     LOCK_POLL_SECONDS = 1.0
     # a waiter whose Claude Code exited notices after its current read round, then frees the lock
     TAKEOVER_SECONDS = WAIT_ROUND_SECONDS + 15
@@ -285,8 +287,24 @@ class Waiter:
                 time.sleep(self.LOCK_POLL_SECONDS)
 
     def loop(self) -> int:
+        retry = 0.0
         while os.getppid() == self.parent:
-            messages = self.peek()
+            try:
+                messages = self.peek()
+            except ChatError as e:
+                # a read can hang for the whole takeover window, so a successor must not wait out a backoff too
+                if os.getppid() != self.parent:
+                    break
+                # agterm restarting, or quit while the sessions live on: a waiter that exited here would
+                # leave this Claude Code deaf until its next turn
+                if not retry:
+                    self.log(f"error: {e}; retrying until agterm answers")
+                retry = min(retry * 2 or self.RETRY_SECONDS, self.RETRY_MAX_SECONDS)
+                time.sleep(retry)
+                continue
+            if retry:
+                self.log("msg read works again")
+                retry = 0.0
             # the wait can outlive the Claude Code that started it; mail taken then reaches nobody
             if not messages or os.getppid() != self.parent:
                 continue
@@ -296,11 +314,28 @@ class Waiter:
             # write before the ack: a pipe Claude closed fails here and leaves the mail in the mailbox
             sys.stderr.write("\n\n".join(render(m) for m in messages) + "\n")
             sys.stderr.flush()
-            agtermctl("msg", "ack", "--as", self.identity(), *[m["id"] for m in messages])
+            self.ack(messages)
+            # a Claude Code that exited during the ack must not leave its successor a busy mark
+            if os.getppid() != self.parent:
+                break
             # the turn this starts is Stop-hook feedback, which fires no UserPromptSubmit
             self.mark_busy()
             return WAKE
         return 0
+
+    def ack(self, messages: list[dict[str, Any]]) -> None:
+        """acks mail already written to Claude; mail it fails to ack can arrive again, which beats losing it."""
+        for attempt in range(self.ACK_ATTEMPTS):
+            if attempt:
+                time.sleep(self.RETRY_SECONDS)
+            if os.getppid() != self.parent:
+                return
+            try:
+                agtermctl("msg", "ack", "--as", self.identity(), *[m["id"] for m in messages])
+                return
+            except (ChatError, OSError, subprocess.TimeoutExpired) as e:
+                error = e
+        self.log(f"error: msg ack failed {self.ACK_ATTEMPTS} times, waking Claude anyway: {error}")
 
     def identity(self) -> str:
         return f"{self.sid}:{self.pane}"
@@ -308,17 +343,15 @@ class Waiter:
     def peek(self) -> list[dict[str, Any]]:
         args = ctl_args("msg", "read", "--wait", "--timeout", str(WAIT_ROUND_SECONDS), "--json", "--as",
                         self.identity())
-        res = None
-        for attempt in range(self.READ_ATTEMPTS):
-            if attempt:
-                time.sleep(self.RETRY_SECONDS)
+        try:
             res = run(args, timeout=WAIT_ROUND_SECONDS + 15)
             if res.returncode == 124:
                 return []
             if res.returncode == 0:
                 return (json.loads(res.stdout).get("result") or {}).get("messages") or []
-        detail = (res.stderr or res.stdout).strip() if res else ""
-        raise ChatError(f"msg read failed {self.READ_ATTEMPTS} times: {detail}")
+        except (OSError, ValueError, subprocess.TimeoutExpired) as e:
+            raise ChatError(f"msg read failed: {e}") from None
+        raise ChatError(f"msg read failed: {(res.stderr or res.stdout).strip()}")
 
 
 class Courier:
