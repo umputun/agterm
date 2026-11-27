@@ -297,6 +297,66 @@ struct AgentHooksInstallTests {
         #expect(events(result.json).count == 5)
     }
 
+    private func timeout(_ entry: [String: Any]) -> Int? {
+        (entry["hooks"] as? [[String: Any]])?.first?["timeout"] as? Int
+    }
+
+    private func untimedAdapterSettings(stopExtra: String = "") -> String {
+        let adapter = AgentHooksInstall.claudeWrapperPath(scriptDir: scriptDir)
+        return """
+        {
+          "hooks": {
+            "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "'\(adapter)' active --blink"}]}],
+            "PostToolUse": [{"hooks": [{"type": "command", "command": "'\(adapter)' active --blink"}]}],
+            "Stop": [{"hooks": [{"type": "command", "command": "'\(adapter)' completed --auto-reset"\(stopExtra)}]}],
+            "PermissionRequest": [{"hooks": [{"type": "command", "command": "'\(adapter)' blocked"}]}],
+            "Notification": [{"matcher": "permission_prompt", "hooks": [{"type": "command", "command": "'\(adapter)' blocked"}]}]
+          }
+        }
+        """
+    }
+
+    @Test func mergeGivesEveryGeneratedEntryTheStatusHookTimeout() throws {
+        let result = try AgentHooksInstall.mergeClaudeSettings(existing: nil, scriptDir: scriptDir)
+        let evts = events(result.json)
+        #expect(evts.count == 5)
+        for (event, entries) in evts {
+            #expect(entries.map(timeout) == [AgentHooksInstall.statusHookTimeout], "\(event)")
+        }
+    }
+
+    @Test func mergeAddsTheTimeoutToAnInstallThatPredatesIt() throws {
+        let first = try AgentHooksInstall.mergeClaudeSettings(existing: untimedAdapterSettings(), scriptDir: scriptDir)
+        #expect(first.changed)
+        let evts = events(first.json)
+        #expect(evts.values.allSatisfy { $0.count == 1 }, "the timeout is added in place, not as a second entry")
+        for (event, entries) in evts {
+            #expect(entries.map(timeout) == [AgentHooksInstall.statusHookTimeout], "\(event)")
+        }
+        #expect(evts["Notification"]?.first?["matcher"] as? String == "permission_prompt")
+
+        let second = try AgentHooksInstall.mergeClaudeSettings(existing: first.json, scriptDir: scriptDir)
+        #expect(!second.changed)
+    }
+
+    @Test func mergeKeepsATimeoutTheUserSet() throws {
+        let result = try AgentHooksInstall.mergeClaudeSettings(existing: untimedAdapterSettings(stopExtra: #", "timeout": 30"#),
+                                                               scriptDir: scriptDir)
+        let evts = events(result.json)
+        #expect(evts["Stop"]?.map(timeout) == [30])
+        #expect(evts["PostToolUse"]?.map(timeout) == [AgentHooksInstall.statusHookTimeout])
+    }
+
+    @Test func mergeLeavesAUserHookWithoutATimeout() throws {
+        let result = try AgentHooksInstall.mergeClaudeSettings(existing: legacySettings(extraUserHook: "/usr/bin/other.sh"),
+                                                               scriptDir: scriptDir)
+        let prompt = events(result.json)["UserPromptSubmit"] ?? []
+        let user = prompt.first { command($0) == "/usr/bin/other.sh" }
+        #expect(user != nil)
+        #expect(user.flatMap(timeout) == nil)
+        #expect(prompt.compactMap(timeout) == [AgentHooksInstall.statusHookTimeout], "the migrated entry gets the timeout")
+    }
+
     @Test func mergeHandlesEmptyExisting() throws {
         let result = try AgentHooksInstall.mergeClaudeSettings(existing: "", scriptDir: scriptDir)
         #expect(result.changed)
@@ -310,6 +370,13 @@ struct AgentHooksInstallTests {
             #expect(block.contains("[[hooks.\(event).hooks]]"))
         }
         #expect(block.contains("type = \"command\""))
+    }
+
+    @Test func codexHooksBlockBoundsEveryHook() {
+        let block = AgentHooksInstall.codexHooksBlock(scriptDir: scriptDir)
+        let lines = block.components(separatedBy: "\n")
+        #expect(lines.filter { $0 == "timeout = \(AgentHooksInstall.statusHookTimeout)" }.count == 6)
+        #expect(lines.filter { $0.hasPrefix("command = ") }.count == 6)
     }
 
     @Test func codexHooksBlockMapsActionsAndBakesWrapperPath() {

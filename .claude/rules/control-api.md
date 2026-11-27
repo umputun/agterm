@@ -41,6 +41,10 @@ paths:
 - Agent Hooks installation copies generic, Claude, Codex, agy, Copilot, Pi, OpenCode, and shell assets under
   `~/.config/agterm/agent-status`, baking the bundled CLI. Marker merges are idempotent and preserve
   unrelated config; unreadable config is never treated as absent.
+- Every generated status hook carries `AgentHooksInstall.statusHookTimeout` (5 s); Claude Code and Codex
+  otherwise wait 600 s, holding the agent's step on a stalled socket. A re-run adds it to a Claude entry
+  that matches the generated command byte for byte and has no `timeout`; a re-run regenerates the
+  Codex managed block whole.
 - Claude maps prompt/tool work to `active --blink`, Stop to `completed --auto-reset`, and a permission
   request to blocked. `PermissionRequest` fires as the prompt opens.
   `Notification[permission_prompt]` waits about six idle seconds and stays for the sandboxed network
