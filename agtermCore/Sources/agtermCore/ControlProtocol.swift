@@ -1,3 +1,5 @@
+import Foundation
+
 /// A control command name, the `cmd` field of a `ControlRequest`. Raw values are the wire strings the CLI
 /// and the socket server share; an unknown one fails to decode into an "unknown command" error, not a crash.
 public enum Command: String, Codable, Sendable, CaseIterable {
@@ -11,6 +13,7 @@ public enum Command: String, Codable, Sendable, CaseIterable {
     case sessionNew = "session.new"
     case sessionDuplicate = "session.duplicate"
     case sessionClose = "session.close"
+    case sessionCloseChecked = "session.closeChecked"
     case sessionTerminate = "session.terminate"
     case sessionUndo = "session.undo"
     case sessionSelect = "session.select"
@@ -211,6 +214,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var targets: [String]?
     /// For `session.close`: ask for the undo grace and a `result.undoable` answer.
     public var undoable: Bool?
+    /// Required by `session.closeChecked`; an empty array expects no companions.
+    public var expectCompanions: [UUID]?
     /// Target workspace for `session.new` (the workspace to add to) and `session.move` (the destination).
     /// Resolved by id / unique prefix / `active`, never by name — use `workspaceName` for name targeting.
     public var workspace: String?
@@ -559,7 +564,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 tail: Int? = nil, followFile: Bool? = nil,
                 cancelButton: String? = nil, input: String? = nil,
                 placeholder: String? = nil, choices: [ControlAskChoice]? = nil, multiple: Bool? = nil,
-                checked: [String]? = nil, other: String? = nil, undoable: Bool? = nil,
+                checked: [String]? = nil, other: String? = nil, undoable: Bool? = nil, expectCompanions: [UUID]? = nil,
                 tint: String? = nil, tintOn: [String]? = nil, recipients: [String]? = nil,
                 identity: String? = nil, ack: Bool? = nil, ids: [String]? = nil) {
         self.name = name
@@ -665,6 +670,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.checked = checked
         self.other = other
         self.undoable = undoable
+        self.expectCompanions = expectCompanions
         self.recipients = recipients
         self.identity = identity
         self.ack = ack

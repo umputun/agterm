@@ -1569,6 +1569,7 @@ agtermctl notify &quot;needs input&quot; --target &quot;$AGT_SESSION_ID&quot; --
 <p><strong>What a command acts on when the page leaves it out:</strong></p>
 <ul>
 <li>A session command with no target acts on the page's own session; a window command on the page's window.</li>
+<li><code>session.closeChecked</code> requires a full target UUID. Only local pages can send it.</li>
 <li><code>session.overlay.close</code>, <code>reload</code>, <code>resize</code>, <code>navigate</code> and <code>submit</code> act on the page itself; <code>reload</code> re-reads the shown page.</li>
 <li><code>hide</code>, <code>show</code> and <code>toggle</code> act on the page's pane, or on every overlay of its session for a page that covers the whole session.</li>
 <li>An explicit target, <code>active</code> or window is used as given. Global commands stay global, and <code>window.go</code>, <code>sidebar</code> and <code>sidebar mode</code> act from the frontmost window, as over the socket.</li>
@@ -1687,6 +1688,9 @@ agtermctl session move &quot;$ws&quot; --target 9f3c --target abcd   # a batch, 
 <p><strong>Close</strong></p>
 <pre class="bash"><code>agtermctl session close --target 9f3c --target abcd   # one undo for the whole batch
 agtermctl session close --target 9f3c --undoable      # with ⌘W&#39;s undo time</code></pre>
+<p>Read the local window with <code>tree --window WINDOW --json</code>. To close a session only when its companions still match that snapshot, pass the session's full UUID and the comma-separated UUIDs of sessions whose <code>parent</code> is that UUID. Include page companions and companions folded under their parent. Use an empty string if there were none.</p>
+<pre class="bash"><code>agtermctl session close --window &quot;$window_id&quot; --target &quot;$session_id&quot; --expect-companions &quot;$companion_ids&quot;</code></pre>
+<p>If the set changed or a companion in the group is pending undo, the command fails and leaves the group intact. When a remote window is open or multiple local windows hold the session UUID, pass the local window's full UUID with <code>--window</code>. To verify the result, read the same local window again. See the <a href="/commands#session">session command reference</a> for supported options.</p>
 <p><strong>Workspaces</strong></p>
 <pre class="bash"><code>agtermctl workspace go --to next          # select the next workspace&#39;s first session
 agtermctl workspace move --to top

@@ -682,6 +682,15 @@ workspace (rename, delete, select, move, collapse, expand, tint and detach) refu
   closed closes; a companion it did not end stays here at top level. Any other session closes as without it. Several targets send one close per host; when a host fails or gives no
   answer, the error names it and what did close, and an unanswered host is never asked again. An app too old for
   it refuses with `the running app is too old for terminate`.
+- `session close --target UUID --expect-companions UUIDS [--window W]` — close one local session immediately only
+  if the set of its companion IDs matches. Use full UUIDs separated by commas, including folded companions and
+  pages, or `''` for none. The command refuses a changed set, a companion pending undo, and remote sessions.
+  Pass the local window's full UUID with `--window` when any remote window is open or multiple local windows hold
+  the UUID, including a local copy pending undo. This form excludes `--undoable`, `--terminate`, and
+  catalog operation options. The `session.closeChecked` wire command requires `target` and `args.expectCompanions`
+  (an array of UUID strings, `[]` for none). It returns the immediate single-target close's fields. Older apps and
+  remote pages reject the command. Pass the same full local window UUID with `--window` when reading the initial
+  `tree --json`, closing the session and confirming the removals with `tree --json`.
 - `session undo --target UNDO_ID [--window W]` — undo a close still inside its grace. `UNDO_ID` is the
   `result.undoID` an undoable close answered; the whole close comes back with its running shells. Once the grace
   ended or the close was undone it errors `the close is no longer undoable`, and the sessions stay in Recent Closed

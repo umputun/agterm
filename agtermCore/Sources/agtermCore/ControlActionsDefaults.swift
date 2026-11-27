@@ -331,6 +331,10 @@ public extension ControlActions {
         return closeSessions(targets, window: window)
     }
 
+    func closeSessionChecked(_: UUID, window _: UUID?, expectCompanions _: Set<UUID>) -> Result<CheckedSessionClose, CheckedSessionClose.Refusal> {
+        .failure(.unsupported)
+    }
+
     func terminateSessions(_: [String], window _: String?, undoable _: Bool) -> ControlResponse {
         ControlResponse(ok: false, error: "session.terminate is not supported by this control host")
     }

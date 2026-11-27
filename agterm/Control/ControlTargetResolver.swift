@@ -95,6 +95,21 @@ final class ControlTargetResolver {
         }
     }
 
+    /// Remote catalogs cannot rule out another owner while disconnected or while a copy is pending undo.
+    func resolveExactSession(_ id: UUID, window: UUID?) -> Result<AppStore, CheckedSessionClose.Refusal> {
+        if let window {
+            switch resolveWindowStore(window.uuidString) {
+            case .success(let store): return .success(store)
+            case .failure(let response): return .failure(.unresolvedWindow(response.error ?? "could not resolve window"))
+            }
+        }
+        guard library.openRemoteStores.isEmpty else { return .failure(.windowRequired) }
+        let owners = library.openStores(holdingSession: id)
+        guard let owner = owners.first else { return .failure(.missingSession) }
+        guard owners.count == 1 else { return .failure(.ambiguousSession) }
+        return .success(owner)
+    }
+
     /// Resolve `target` (defaulting to `active`) to a workspace and its owning store, then run `body`.
     /// Same windowed/cross-window rules as `resolveSession`.
     func resolveWorkspace(_ target: String?, window: String?,

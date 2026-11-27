@@ -152,6 +152,19 @@ final class ControlServerAttachedForwardTests: XCTestCase {
         XCTAssertTrue(store.session(withID: row.id) === row)
     }
 
+    func testCheckedCloseLeavesAnAttachedSessionOpenWithoutContactingItsOrigin() async throws {
+        let runner = ScriptedRunner([])
+        let (server, store) = try makeServer(runner)
+        let row = try attachedRow(in: store)
+
+        let reply = await server.dispatch(ControlRequest(
+            cmd: .sessionCloseChecked, target: row.id.uuidString, args: ControlArgs(expectCompanions: [])))
+
+        XCTAssertEqual(reply.error, "session.closeChecked requires a local session and local companions")
+        XCTAssertTrue(store.session(withID: row.id) === row)
+        XCTAssertTrue(runner.invocations.isEmpty)
+    }
+
     func testAKillRunsOnTheOriginPinnedToItsPaneAndActiveStaysLocal() async throws {
         let runner = ScriptedRunner([ok()])
         let (server, store) = try makeServer(runner)

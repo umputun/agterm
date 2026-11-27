@@ -192,7 +192,7 @@ renumbering. Do not reintroduce a count anywhere.
 - `tree`, `events.read`
 - `workspace.new`, `.rename`, `.delete`, `.select`, `.go`, `.move`, `.focus`, `.filter`, `.flag`, `.collapse`,
   `.expand`, `.tint`
-- `session.new`, `.duplicate`, `.remote.new`, `.companion.new`, `.companion.page`, `.companion.duplicate`, `.companion.convert`, `.companion.move`, `.companion.promote`, `.companion.page.attach`, `.page`, `.collapse`, `.expand`, `.close`, `.terminate`, `.select`, `.rename`, `.reveal`, `.move`, `.type`, `.split`,
+- `session.new`, `.duplicate`, `.remote.new`, `.companion.new`, `.companion.page`, `.companion.duplicate`, `.companion.convert`, `.companion.move`, `.companion.promote`, `.companion.page.attach`, `.page`, `.collapse`, `.expand`, `.close`, `.closeChecked`, `.terminate`, `.select`, `.rename`, `.reveal`, `.move`, `.type`, `.split`,
   `.split.close`, `.swap`, `.lead`,
   `.scratch`, `.focus`, `.resize`, `.go`, `.copy`, `.paste`, `.paste.text`, `.selectall`, `.text`, `.search`, `.status`,
   `.flag`, `.tint`, `.info`, `.seen`, `.restore`, `.restart`, `.background`, `.overlay.open`, `.overlay.close`, `.overlay.resize`,
@@ -263,6 +263,11 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 ## Organization commands
 
 - `workspace.delete` deletes the last named workspace too, leaving the root, and never shows the GUI alert.
+- `session.closeChecked` takes one full `target` UUID and `args.expectCompanions` (an empty array expects none).
+  Its separate opcode makes old servers refuse it. On the main actor `AppStore` compares the companion set and
+  refuses any pending companion close that hard close would finalize before closing the same group. The command never forwards to
+  another host or takes a catalog receipt. Read back removals through `tree` and `result.closed` as for `session.close`.
+  An open remote window requires a full local window UUID. Catalog snapshots cannot rule out copies pending undo.
 - `session.close` keeps legacy one-target hard close. Repeated targets are atomic and deduplicated; one
   unique target remains the legacy hard path. Multi-target close follows `closeGraceUndoEnabled`, creates
   one grouped undo/reopen record, and returns actual `affected`; selecting any recent group member restores
@@ -1145,7 +1150,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   Each admitted request calls its reply closure exactly once; a page its command closed never sees it.
 - `HtmlBridge` speaks the wire protocol only (`{cmd, target, args}`, dotted names, typed fields) and
   fills only what a page left out: its session for session-targeted commands (the `session.` names bar
-  `new`, `go` and `overlay.job.run`, plus `notify`, the `font.*` trio, `keymap.run` and a non-GUI
+  `new`, `go`, `undo`, `closeChecked` and `overlay.job.run`, plus `notify`, the `font.*` trio, `keymap.run` and a non-GUI
   `ask.open`), its pane
   for its own overlay commands, its window as `target` for the window-object commands and as `args.window`
   otherwise. An explicit target, `active`, window or batch resolves as over the socket; `zmx.attach`,
@@ -1523,8 +1528,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - `ControlEventPayload` and `EventFormatter.human` must include every override; human status prints color
   and shape. Tree reports state, pane, true blink, per-call color, and per-call shape only while non-idle.
   It reports `statusChangedAt` whenever it exists, including idle.
-- `statusChangedAt` is `Session.statusChangedAt` as epoch seconds — a plain `Double`, since
-  `ControlProtocol.swift` imports no Foundation. It shares the `ControlEvent.ts` clock so a poller can
+- `statusChangedAt` is `Session.statusChangedAt` as epoch seconds. It shares the `ControlEvent.ts` clock so a poller can
   compare the two, and `setAgentIndicator` stamps it BEFORE the unchanged-indicator early return, which is
   what makes every set, including idle and repeated values, refresh the age. Automatic and manual clears
   also count. Ephemeral: never persisted, absent before any set and after restore.

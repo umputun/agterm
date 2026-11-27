@@ -194,6 +194,10 @@ extension WindowLibrary {
         }
     }
 
+    public func openStores(holdingSession id: UUID) -> [AppStore] {
+        openStores().filter { $0.session(withID: id) != nil || $0.pendingCloseSession(withID: id) != nil }
+    }
+
     /// Every session id held by an open store other than `store`, live or parked in a pending close. The
     /// restoring store must rebuild none of these.
     private func sessionIDsHeld(outside store: AppStore) -> Set<UUID> {

@@ -16,7 +16,7 @@ func companionSend(_ send: @escaping (ControlRequest) throws -> SocketReply, jso
     }
 }
 
-func runCompanionRequest(_ request: ControlRequest, options: ClientOptions, echoID: Bool,
+func runCompanionRequest(_ request: ControlRequest, options: any ConnectionOptions, echoID: Bool,
                          tooOld: String = "the running app is too old for companions") throws {
     let reply = try companionSend(SocketClient(path: options.socketPath()).send, json: options.json, tooOld: tooOld)(request)
     SocketClient.printResponse(reply, json: options.json, echoID: echoID)

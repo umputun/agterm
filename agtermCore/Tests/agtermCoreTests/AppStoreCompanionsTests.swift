@@ -413,6 +413,45 @@ struct AppStoreCompanionsTests {
         #expect(store.workspaces.first { $0.id == home.id }?.sessions.isEmpty == true)
     }
 
+    @Test func checkedCloseIncludesCollapsedPageCompanionsAndIgnoresListOrder() throws {
+        let g = try CompanionGroup()
+        let page = try g.store.addPageCompanion(to: g.parent.id, overlay: HtmlOverlay(source: .file(path: "/tmp/p.html", grantRoot: nil))).get()
+        #expect(g.store.setSessionExpanded(g.parent.id, expanded: false))
+
+        let result = try g.store.closeSessionChecked(g.parent.id, expectCompanions: [page.id, g.second.id, g.first.id]).get()
+
+        #expect(result.closed == [g.parent.id, g.first.id, g.second.id, page.id])
+        #expect(g.order == [g.after.id])
+        #expect(try g.store.closeSessionChecked(g.after.id, expectCompanions: []).get().closed == [g.after.id])
+    }
+
+    @Test(arguments: [false, true])
+    func checkedCloseRejectsMissingOrReplacedCompanions(replace: Bool) throws {
+        let g = try CompanionGroup()
+        g.store.closeSession(g.first.id)
+        if replace { _ = try g.store.addCompanion(to: g.parent.id).get() }
+        let before = g.store.controlTree()
+
+        let result = g.store.closeSessionChecked(g.parent.id, expectCompanions: [g.first.id, g.second.id])
+
+        guard case .failure(.companionsChanged) = result else { Issue.record("expected changed companions"); return }
+        #expect(g.store.controlTree() == before)
+    }
+
+    @Test func checkedCloseLeavesAnUndoableCompanionOfAConvertedParentParked() throws {
+        let g = try CompanionGroup()
+        #expect(g.store.softCloseSession(g.first.id, grace: 60))
+        let newParent = try g.store.convertToCompanion(g.parent.id).get()
+        let before = g.store.controlTree()
+
+        let result = g.store.closeSessionChecked(newParent.id, expectCompanions: [g.parent.id, g.second.id])
+
+        guard case .failure(.parkedCompanions) = result else { Issue.record("expected parked companions"); return }
+        #expect(g.store.controlTree() == before)
+        #expect(g.store.pendingCloseSession(withID: g.first.id) === g.first)
+        #expect(g.store.undoPendingClose())
+    }
+
     // a companion parked by a soft close came back top-level after its parent closed for good
     @Test func aParentsHardCloseEndsTheUndoOfItsParkedCompanions() throws {
         let store = makeStore()

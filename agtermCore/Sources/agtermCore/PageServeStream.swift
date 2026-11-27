@@ -385,6 +385,9 @@ public final class PageServeStream {
         case .success(let value): built = value
         case .failure(let refusal): return .failure(id: id, error: refusal.message)
         }
+        guard built.cmd != .sessionCloseChecked else {
+            return .failure(id: id, error: "session.closeChecked is unavailable from a remote page")
+        }
         guard let response = await host.dispatchPageBridge(built) else {
             return .failure(id: id, error: "control is unavailable")
         }

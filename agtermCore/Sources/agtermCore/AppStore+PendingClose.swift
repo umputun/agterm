@@ -504,16 +504,18 @@ extension AppStore {
     /// finalizeParkedCompanions makes final the pending close of every companion of `parentIDs`, which are closing
     /// for good: undone, one would come back with no parent to sit under.
     func finalizeParkedCompanions(of parentIDs: [UUID]) {
-        let parents = Set(parentIDs)
-        let parked = pendingCloseRecords.values.flatMap { record -> [Session] in
+        for session in parkedCompanions(of: Set(parentIDs)) {
+            finalizePendingClose(ofSession: session.id)
+        }
+    }
+
+    func parkedCompanions(of parents: Set<UUID>) -> [Session] {
+        pendingCloseRecords.values.flatMap { record -> [Session] in
             switch record {
             case .sessions(let close): close.sessions.map(\.session)
             case .workspace(let close): close.workspace.sessions
             }
         }.filter { $0.parentID.map(parents.contains) == true }
-        for session in parked {
-            finalizePendingClose(ofSession: session.id)
-        }
     }
 
     /// A workspace to stand in for one a restore needs but the tree no longer holds. Prefer the newest

@@ -46,8 +46,8 @@ public enum HtmlBridge {
     // each needs more than one request and reply: a stream handed over, or work done after the reply
     private static let refused: Set<Command> = [.zmxPresent, .catalogSubscribe, .sessionOverlayJobRun, .sessionOverlayPageServe, .zmxReset,
                                                 .sessionCompanionPageAttach]
-    // commands that address no session, or address it some other way than by `target`
-    private static let notSessionTargeted: Set<Command> = [.sessionNew, .sessionRemoteNew, .sessionGo, .sessionUndo, .sessionOverlayJobRun,
+    // commands that cannot default to the page's session
+    private static let notSessionTargeted: Set<Command> = [.sessionNew, .sessionRemoteNew, .sessionGo, .sessionUndo, .sessionCloseChecked, .sessionOverlayJobRun,
                                                                   .sessionOverlayPageServe]
     // session commands outside the `session.` names; `ask.open` joins them unless it asks in the window's GUI
     private static let sessionTargeted: Set<Command> = [.notify, .fontInc, .fontDec, .fontReset, .keymapRun]

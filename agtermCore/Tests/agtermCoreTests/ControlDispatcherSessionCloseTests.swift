@@ -4,6 +4,40 @@ import Testing
 
 @MainActor
 struct ControlDispatcherSessionCloseTests {
+    @Test func checkedCloseRoundTripsAndAnUnsupportedHostRefusesIt() async throws {
+        let actions = MockControlActions()
+        let id = UUID().uuidString
+        let request = ControlRequest(cmd: .sessionCloseChecked, target: id, args: ControlArgs(expectCompanions: []))
+        let wire = try JSONEncoder().encode(request)
+        let decoded = try JSONDecoder().decode(ControlRequest.self, from: wire)
+
+        #expect(decoded == request)
+        #expect(String(decoding: wire, as: UTF8.self).contains("session.closeChecked"))
+        let denied = await ControlDispatcher(actions: actions).dispatch(decoded)
+        #expect(denied?.ok == false)
+        #expect(denied?.error?.contains("not supported") == true)
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func checkedCloseRequiresAnExplicitUUIDAndCompanionList() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        let id = UUID().uuidString
+        let expected = ControlArgs(expectCompanions: [])
+        let requests = [ControlRequest(cmd: .sessionCloseChecked, args: expected),
+                        ControlRequest(cmd: .sessionCloseChecked, target: "active", args: expected),
+                        ControlRequest(cmd: .sessionCloseChecked, target: id),
+                        ControlRequest(cmd: .sessionCloseChecked, target: id, args: ControlArgs(window: "active", expectCompanions: [])),
+                        ControlRequest(cmd: .sessionCloseChecked, target: id, args: ControlArgs(targets: [id], expectCompanions: [])),
+                        ControlRequest(cmd: .sessionCloseChecked, target: id, args: ControlArgs(undoable: true, expectCompanions: []))]
+        for request in requests {
+            let reply = await dispatcher.dispatch(request)
+            #expect(reply?.ok == false)
+            #expect(reply?.error?.contains("not supported") != true)
+        }
+        #expect(actions.calls.isEmpty)
+    }
+
     @Test func aHostWithoutTheUndoableFormsRefusesRatherThanHardClosing() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
