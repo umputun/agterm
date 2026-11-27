@@ -489,17 +489,16 @@ extension AppStore {
     /// intact and an undo reinserts them, so a restore that rebuilt one from a snapshot would put two
     /// objects under a single id. Callers union this with the tree's ids to decide what is already taken.
     func pendingHeldSessionIDs() -> Set<UUID> {
-        Set(pendingHeldSessions().map(\.id))
-    }
-
-    /// The sessions a pending close still holds, whose daemons an undo needs alive.
-    func pendingHeldSessions() -> [Session] {
-        pendingCloseRecords.values.flatMap { record -> [Session] in
+        var held: Set<UUID> = []
+        for record in pendingCloseRecords.values {
             switch record {
-            case .sessions(let close): close.sessions.map(\.session)
-            case .workspace(let close): close.workspace.sessions
+            case .sessions(let close):
+                held.formUnion(close.sessions.map(\.session.id))
+            case .workspace(let close):
+                held.formUnion(close.workspace.sessions.map(\.id))
             }
         }
+        return held
     }
 
     /// finalizeParkedCompanions makes final the pending close of every companion of `parentIDs`, which are closing

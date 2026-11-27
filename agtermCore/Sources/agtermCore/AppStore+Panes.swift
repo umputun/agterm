@@ -27,19 +27,32 @@ extension AppStore {
     /// `alreadyFinalized` names a pane whose daemon the CALLER has destroyed, so the teardown does not ask
     /// the finalizer to kill a name that is already gone. Only `zmx kill` passes one.
     func finalizePaneIdentities(_ sessions: [Session], alreadyFinalized: UUID? = nil) {
+        let held = heldElsewhere?() ?? HeldElsewhere()
         // before the kill below, so a viewer's `ended` is queued ahead of the attach exit the kill causes
-        endPresentations(of: sessions.map(\.id))
+        let ended = sessions.map(\.id).filter { !held.sessions.contains($0) }
+        if !ended.isEmpty { endPresentations(of: ended) }
         // every pane, an attached one included: its daemon is not ours to kill, its lead state is
         for session in sessions {
-            ([session.paneIdentity] + [session.splitPaneIdentity, session.localScratchIdentity].compactMap { $0 }).forEach {
-                ZmxLeadBook.shared.forget(pane: $0)
-                RemoteEndBook.shared.clear(pane: $0)
-                // a reattach reusing the pane id would otherwise inherit the old wait and save its reclaim
-                RemoteReconnectBook.shared.cancel(pane: $0)
-            }
+            ([session.paneIdentity] + [session.splitPaneIdentity, session.localScratchIdentity].compactMap { $0 })
+                .filter { !held.panes.contains($0) }
+                .forEach {
+                    ZmxLeadBook.shared.forget(pane: $0)
+                    RemoteEndBook.shared.clear(pane: $0)
+                    // a reattach reusing the pane id would otherwise inherit the old wait and save its reclaim
+                    RemoteReconnectBook.shared.cancel(pane: $0)
+                }
         }
-        let identities = PaneIdentityInventory.identities(in: sessions).filter { $0 != alreadyFinalized }
+        let identities = PaneIdentityInventory.identities(in: sessions)
+            .filter { $0 != alreadyFinalized && !held.panes.contains($0) }
         if !identities.isEmpty { paneFinalizer?(identities) }
+    }
+
+    /// HeldElsewhere is what the library's other windows hold, open or closed, live or pending undo. An older
+    /// build could persist one session, pane identities included, in two windows, and one daemon and one
+    /// presentation serve both, so a close here leaves them to the last holder.
+    struct HeldElsewhere {
+        var panes: Set<UUID> = []
+        var sessions: Set<UUID> = []
     }
 
     /// endPresentations records `ids` as removed for good and ends their viewers' streams with `ended`.
@@ -242,14 +255,17 @@ extension AppStore {
            session.askPaneIdentity == splitIdentity { session.cancelPendingAsk() }
         // through the ownership projection, not the raw identity: a remote split's daemon is on another
         // machine and this finalizer only ever kills local ones
-        if let splitPaneIdentity = session.splitPaneIdentity, splitPaneIdentity != alreadyFinalized,
+        let splitHeldElsewhere = session.splitPaneIdentity.map { heldElsewhere?().panes.contains($0) ?? false } ?? false
+        if let splitPaneIdentity = session.splitPaneIdentity, splitPaneIdentity != alreadyFinalized, !splitHeldElsewhere,
            session.locallyManagedPaneIdentities.contains(splitPaneIdentity) {
             paneFinalizer?([splitPaneIdentity])
         }
         if let split = session.splitPaneIdentity {
             launchPaneDrop?([split])
-            ZmxLeadBook.shared.forget(pane: split)
-            RemoteEndBook.shared.clear(pane: split)
+            if !splitHeldElsewhere {
+                ZmxLeadBook.shared.forget(pane: split)
+                RemoteEndBook.shared.clear(pane: split)
+            }
             disposeMailboxes([split])
             session.daemonBackedPanes.remove(split)
         }
@@ -758,8 +774,10 @@ extension AppStore {
     }
 
     private func endLiveScratch(_ identity: UUID, of session: Session) {
-        ZmxLeadBook.shared.forget(pane: identity)
-        paneFinalizer?([identity])
+        if heldElsewhere?().panes.contains(identity) != true {
+            ZmxLeadBook.shared.forget(pane: identity)
+            paneFinalizer?([identity])
+        }
         session.scratchDaemon = nil
         savePaneLayout(session)
         scheduleTreeChanged()
