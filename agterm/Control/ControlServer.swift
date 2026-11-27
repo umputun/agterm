@@ -33,7 +33,16 @@ final class ControlServer {
     let resolver: ControlTargetResolver
 
     /// The accept loop that owns the listening socket, nil when not listening. `start()` is idempotent on this.
-    private var listener: ControlAcceptLoop?
+    private var listener: ControlAcceptLoop? {
+        didSet { holdNapActivity(listener != nil) }
+    }
+
+    /// Keeps App Nap off while the socket is bound: a napped app runs at priority 4, and under CPU load
+    /// its threads wait seconds for a core, so every caller, agent hooks included, times out.
+    private var napActivity: NSObjectProtocol?
+
+    /// holdsNapActivity reports whether the App Nap opt-out is held, true exactly while the socket is bound.
+    var holdsNapActivity: Bool { napActivity != nil }
 
     /// The held ownership lock fd, or -1 when this process does not own `socketPath`.
     private var lockFD: Int32 = -1
@@ -432,6 +441,18 @@ final class ControlServer {
         loop.stop()
         listener = nil
         unlink(socketPath)
+    }
+
+    private func holdNapActivity(_ hold: Bool) {
+        if hold, napActivity == nil {
+            napActivity = ProcessInfo.processInfo.beginActivity(
+                options: .userInitiatedAllowingIdleSystemSleep, reason: "control socket serves agterm clients")
+            return
+        }
+        if !hold, let activity = napActivity {
+            ProcessInfo.processInfo.endActivity(activity)
+            napActivity = nil
+        }
     }
 
     /// Take the exclusive advisory lock that marks this process the owner of `socketPath`, held from init

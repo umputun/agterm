@@ -124,6 +124,11 @@ paths:
   Support. CLI `--socket` overrides. Explicit short paths avoid Unix `sun_path` near 104 bytes. Use 0600.
 - Each connection sets `SO_NOSIGPIPE` and a 5-second receive timeout. Close on non-EINTR read failure,
   including EAGAIN. Start is idempotent and logs bind failure without blocking launch.
+- While `listener` is set, `ControlServer` holds a `userInitiatedAllowingIdleSystemSleep` activity, so the app
+  never naps while it serves. A napped app runs at priority 4, and under CPU load its idle accept and main
+  threads waited 23-40 s for a core (#1108); no request-side change helps, since the clamp is process-wide.
+  The display and the system still sleep on idle. Measured on Debug builds, a napped instance and one holding the
+  activity drew a 20 Hz full-screen redraw at the same 1.1% CPU and idled within noise (1.0% and 0.9%).
 - `agtermctl events` branches on the connect errno: once it holds a cursor it retries `ECONNREFUSED`
   with that cursor, bounded by `EventStreamState.retryBudget`, and treats every other failure as fatal.
   A change to what a refused or absent server returns must keep that path in step.

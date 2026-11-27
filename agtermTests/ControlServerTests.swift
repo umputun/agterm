@@ -46,6 +46,31 @@ final class ControlServerTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: socketPath), "stop should unlink the path")
     }
 
+    func testTheNapActivityIsHeldExactlyWhileTheSocketIsBound() {
+        let server = makeServer()
+        XCTAssertFalse(server.holdsNapActivity)
+
+        server.start()
+        XCTAssertTrue(server.holdsNapActivity, "a bound socket must keep App Nap off")
+        server.start()
+        XCTAssertTrue(server.holdsNapActivity)
+
+        server.stop()
+        XCTAssertFalse(server.holdsNapActivity, "stop must release the App Nap opt-out")
+    }
+
+    func testARefusedServerHoldsNoNapActivity() {
+        let first = makeServer()
+        first.start()
+
+        let second = makeServer()
+        second.start()
+
+        XCTAssertNil(second.boundSocketPath)
+        XCTAssertFalse(second.holdsNapActivity, "an instance serving nothing must not keep the app awake")
+        XCTAssertTrue(first.holdsNapActivity)
+    }
+
     /// The defect this pins: a second instance resolving the same path used to unlink the first one's live
     /// socket and bind its own, leaving the first listening on an fd nothing could reach again.
     func testStartRefusesAPathAnotherInstanceIsServing() {
