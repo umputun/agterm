@@ -33,7 +33,7 @@ final class SurfaceRetirementTests: XCTestCase {
     override func tearDown() async throws {
         if stoppedGroup > 0 { killpg(stoppedGroup, SIGCONT) }
         await waitUntil { self.retirement.pendingCount == 0 }
-        terminal.teardown()
+        terminal.destroySurface()
         window.orderOut(nil)
         if let stateDir { try? FileManager.default.removeItem(at: stateDir) }
         try await super.tearDown()
@@ -102,14 +102,50 @@ final class SurfaceRetirementTests: XCTestCase {
         XCTAssertFalse(terminal.layer === ghosttyLayer)
     }
 
+    func testTeardownRetiresASurfaceWhoseChildHasNotExited() async throws {
+        _ = try stopChild()
+
+        terminal.teardown()
+
+        XCTAssertNil(terminal.surface)
+        XCTAssertFalse(terminal.configCStrings.isEmpty, "a stopped child keeps the surface retired, not freed")
+
+        resumeChild()
+        await waitUntil { self.terminal.configCStrings.isEmpty }
+        XCTAssertTrue(terminal.configCStrings.isEmpty)
+    }
+
+    func testARetiredSurfaceHandsOffItsExitCodeAndDropsItsFilesAtOnce() async throws {
+        _ = try stopChild()
+        let dir = FileManager.default.temporaryDirectory
+        let codeFile = dir.appendingPathComponent("agterm-retire-code-\(UUID().uuidString)").path
+        let bodyFile = dir.appendingPathComponent("agterm-retire-hud-\(UUID().uuidString)").path
+        try "7\n".write(toFile: codeFile, atomically: true, encoding: .utf8)
+        try "body".write(toFile: bodyFile, atomically: true, encoding: .utf8)
+        terminal.overlayCodeFile = codeFile
+        terminal.hudBodyFile = bodyFile
+        var captured: Int?
+        terminal.onExitCodeCaptured = { captured = $0 }
+        terminal.onExit = {}
+
+        terminal.retireSurface(into: retirement)
+
+        XCTAssertEqual(retirement.pendingCount, 1)
+        XCTAssertEqual(captured, 7)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: codeFile))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: bodyFile), "a replacement HUD writes this same path")
+        XCTAssertNil(terminal.hudBodyFile)
+        XCTAssertNil(terminal.onExit, "a surface that never frees must not keep the store alive")
+    }
+
     func testCallbacksForARetiredSurfaceAreIgnored() async throws {
         let surface = try stopChild()
         var exited = false
         var searchEnded = false
-        terminal.onExit = { exited = true }
-        terminal.onSearchEnd = { searchEnded = true }
 
         terminal.retireSurface(into: retirement)
+        terminal.onExit = { exited = true }
+        terminal.onSearchEnd = { searchEnded = true }
         let callbacks = GhosttyCallbacks()
         var target = ghostty_target_s()
         target.tag = GHOSTTY_TARGET_SURFACE
@@ -134,7 +170,7 @@ final class SurfaceRetirementTests: XCTestCase {
                                                      cwd: NSHomeDirectory()))
         let identity = UUID()
         defer { ZmxLeadBook.shared.forget(pane: identity) }
-        terminal.teardown()
+        terminal.destroySurface()
         terminal = makeTerminal(env: ["AGTERM_PANE_ID": identity.uuidString], backedByZmx: true)
         ZmxLeadBook.shared.begin(ZmxLeadAttachment(nonce: "n", claim: true), pane: identity)
         _ = ZmxLeadBook.shared.apply(try XCTUnwrap(ZmxLeadNotice(title: "zmx-role;n:follower:1")), pane: identity)
