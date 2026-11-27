@@ -196,6 +196,8 @@ public final class AppStore {
     /// remoteTextDeadline is how long a text page action waits for the presenter's result.
     @ObservationIgnored public var remoteTextDeadline = PresentationPageResult.deadline
     @ObservationIgnored let paneFinalizer: (([UUID]) -> Void)?
+    /// heldElsewhere reports what the library's other windows hold of this one's panes; nil outside a library.
+    @ObservationIgnored var heldElsewhere: (() -> HeldElsewhere)?
     /// daemonProbe reports a pane's Live daemon from the kernel. The app sets it only for a Live launch; without it
     /// a pane with no realized surface takes no mail and a hidden split dies with the primary.
     @ObservationIgnored let daemonProbe: ((UUID) -> DaemonProbe)?

@@ -751,6 +751,8 @@ public final class WindowLibrary {
         )
         store.flaggedLayout = flaggedLayout
         store.recentClosedWindow = windowID
+        // a remote window's panes are daemons on its server, never killed here
+        if !remote { store.heldElsewhere = { [weak self] in self?.held(outside: windowID) ?? AppStore.HeldElsewhere() } }
         return store
     }
 
@@ -834,23 +836,34 @@ public final class WindowLibrary {
 
     private func finalizeWindowPanes(_ id: UUID) {
         guard windows.first(where: { $0.id == id })?.isRemote != true else { return }
+        let held = held(outside: id)
         // each window's sessions are ended before the kill, as `finalizePaneIdentities` does
         if let store = stores[id] {
             let sessions = store.workspaces.flatMap(\.sessions)
-            endPresentations(of: sessions.map(\.id))
-            let identities = PaneIdentityInventory.identities(in: sessions)
+            endPresentations(of: sessions.map(\.id).filter { !held.sessions.contains($0) })
+            let identities = PaneIdentityInventory.identities(in: sessions).filter { !held.panes.contains($0) }
             if let paneFinalizer, !identities.isEmpty { paneFinalizer(identities) }
             return
         }
         do {
             var snapshot = try persistenceStore(for: id).loadChecked()
             // a closed window's session can still have subscribed viewers
-            endPresentations(of: snapshot.workspaces.flatMap(\.sessions).map(\.id))
-            let identities = PaneIdentityInventory.upgrade(&snapshot).identities
+            endPresentations(of: snapshot.workspaces.flatMap(\.sessions).map(\.id).filter { !held.sessions.contains($0) })
+            let identities = PaneIdentityInventory.upgrade(&snapshot).identities.filter { !held.panes.contains($0) }
             if let paneFinalizer, !identities.isEmpty { paneFinalizer(Array(identities)) }
         } catch {
             log("window delete could not inventory panes for \(id): \(error)")
         }
+    }
+
+    /// held gathers what every window but `windowID` claims, through the walk `paneClaims` reports.
+    private func held(outside windowID: UUID) -> AppStore.HeldElsewhere {
+        var held = AppStore.HeldElsewhere()
+        for claim in paneClaims().claims where claim.windowID != windowID {
+            held.panes.insert(claim.paneIdentity)
+            held.sessions.insert(claim.sessionID)
+        }
+        return held
     }
 
     private func scheduleTreeChanged(for windowID: UUID) {
