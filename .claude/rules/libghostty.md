@@ -111,9 +111,13 @@ paths:
   `Contents/Resources/terminfo`. Never set `TERMINFO`; libghostty derives and overwrites it at spawn.
 - Sessions own surfaces. The eager detail deck mounts every session once in a ZStack and toggles only
   opacity, hit testing, and active state. Rehosting through identity changes invalidates Metal drawables.
-- `dismantleNSView` is a no-op. Free only through `destroySurface`, or `retireSurface` for a pane swapped out
-  while the app may be hidden (scripts/ghostty-patches 0003). After reading overlay exit status,
-  nil every store-capturing callback to break the store/session/surface/closure cycle.
+- `dismantleNSView` is a no-op. Every close and pane swap frees through `retireSurface` (scripts/ghostty-patches
+  0003); `destroySurface` is the synchronous free. Both run `releaseCallbacksAndFiles` before the free: it reads
+  the overlay exit status, deletes the HUD body file, then nils every store-capturing callback to break the
+  store/session/surface/closure cycle, so none of it waits on a retired surface.
+  A retired surface takes no config, binding or IO pushes (the 0003 README says why).
+  Quit runs `SurfaceRetirement.drainForQuitOnceWindowless` from the last window's `willClose` and from
+  `applicationWillTerminate`, and only the later of the two finds no window left; its doc owns why and how long.
 - Create surfaces only with nonzero backing size; otherwise Metal stays blank. Defer through
   `pendingSurfaceCreation` until `setFrameSize`.
 - After the size guard `createSurface()` asks the launch `SpawnPacer` for a permit, then resolves the

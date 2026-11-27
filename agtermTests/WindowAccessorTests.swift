@@ -1,4 +1,5 @@
 import AppKit
+import GhosttyKit
 import XCTest
 @testable import agterm
 import agtermCore
@@ -104,6 +105,73 @@ final class WindowAccessorTests: XCTestCase {
         XCTAssertTrue(library.isOpen(windowID))
         XCTAssertTrue(store.session(withID: session.id) === session)
         XCTAssertFalse(WindowRegistry.shared.isRegistered(windowID))
+    }
+
+    func testAQuitDrainsRetiredSurfacesWhenItsLastWindowCloses() throws {
+        let (pending, _) = try closeWindowHoldingALiveSurface(terminating: true)
+
+        XCTAssertEqual(SurfaceRetirement.shared.pendingCount, pending)
+    }
+
+    func testAWindowClosedBeforeQuitLeavesTheDrainToTermination() throws {
+        let (pending, group) = try closeWindowHoldingALiveSurface(terminating: false)
+        defer { killpg(group, SIGCONT) }
+        XCTAssertEqual(SurfaceRetirement.shared.pendingCount, pending + 1)
+        killpg(group, SIGCONT)
+
+        SurfaceRetirement.shared.drainForQuitOnceWindowless()
+
+        XCTAssertEqual(SurfaceRetirement.shared.pendingCount, pending)
+    }
+
+    /// closeWindowHoldingALiveSurface closes the probe's window with a running `/bin/cat` as its session's
+    /// surface and returns the retirement count from before the close, plus cat's process group. No run-loop
+    /// turn follows the close, so the 20 ms sweep cannot free the surface behind the drain's back. A close
+    /// outside a quit stops the group first, so the surface cannot free inside the close; the caller resumes it.
+    private func closeWindowHoldingALiveSurface(terminating: Bool) throws -> (pending: Int, group: pid_t) {
+        let windowID = try XCTUnwrap(library.activeWindowID)
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.activeSession)
+        let host = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 300), styleMask: [.titled],
+                            backing: .buffered, defer: false)
+        host.isReleasedWhenClosed = false
+        defer { host.orderOut(nil) }
+        let terminal = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), command: "/bin/cat")
+        terminal.frame = NSRect(x: 0, y: 0, width: 600, height: 300)
+        host.contentView?.addSubview(terminal)
+        terminal.createSurface()
+        defer { terminal.destroySurface() }
+        let surface = try XCTUnwrap(terminal.surface)
+        let deadline = Date().addingTimeInterval(30)
+        while !Self.runsCat(pid_t(ghostty_surface_foreground_pid(surface))), Date() < deadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.02))
+        }
+        let foreground = pid_t(ghostty_surface_foreground_pid(surface))
+        // fatal: killpg(0, SIGSTOP) would stop the test runner itself
+        let group = try XCTUnwrap(Self.runsCat(foreground) ? foreground : nil, "the drain budget would cover the spawn")
+        session.surface = terminal
+        window.contentView = WindowAccessor.TitleProbeView(windowID: windowID, library: library, store: store)
+        drain()
+        XCTAssertEqual(WindowRegistry.shared.registeredCount, 1, "another registered window would hold the drain")
+        let pending = SurfaceRetirement.shared.pendingCount
+        library.isTerminating = terminating
+        if !terminating { XCTAssertEqual(killpg(group, SIGSTOP), 0) }
+
+        window.close()
+
+        XCTAssertNil(terminal.surface)
+        return (pending, group)
+    }
+
+    private static func runsCat(_ group: pid_t) -> Bool {
+        guard group > 0 else { return false }
+        var pids = [pid_t](repeating: 0, count: 32)
+        _ = proc_listpgrppids(group, &pids, Int32(pids.count * MemoryLayout<pid_t>.size))
+        return pids.filter { $0 > 0 }.contains { pid in
+            var buffer = [CChar](repeating: 0, count: 256)
+            proc_name(pid, &buffer, UInt32(buffer.count))
+            return String(decoding: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self) == "cat"
+        }
     }
 
     private func attachedProbe() throws -> WindowAccessor.TitleProbeView {

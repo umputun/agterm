@@ -394,6 +394,19 @@ pane attached; zmx patch 0013 now holds it until that attach, and the test keeps
 - **Fix.** The baseline waits until `cat` prints a marker back, which it can only do after `login` wrote its
   banner and exec'd it.
 
+### `CustomCommandRunnerTests.testRepeatingSequenceTailRepeatsUntilEscOrTimeout`
+
+- **Symptom.** `XCTAssertFalse failed - the window times out after release`, then
+  `XCTAssertEqual failed: ("true") is not equal to ("false")` on `sidebarVisible`.
+- **Runs.** Local only, one full `make test-app` on 2026-11-27 at load average 22; the test took 1.33 s against
+  0.77 s alone, and passed alone and in its class.
+- **Cause, demonstrated.** The test spun the run loop 0.7 s for the 0.5 s repeat timer, so a main thread held
+  more than 200 ms left the window open. RunningBoard kept the host at `timer:Tier0`, so App Nap was not it.
+  A main-queue block sleeping 0.7 s from 0.1 s after the release failed the old wait every time.
+- **Fix.** The release asserts the timer's `fireDate` lies 0.5 s after a window bracketing the keyUp, then the test
+  waits up to 5 s for `leaderTimer` to clear. The other fixed waits on the leader and repeat timers in that file
+  take the same form.
+
 ### Earlier hosted failures, already fixed on master
 
 - `HtmlOverlayViewTests` line 48 read the page title before it arrived; fixed in #949.

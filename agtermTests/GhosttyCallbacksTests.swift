@@ -57,16 +57,29 @@ final class GhosttyCallbacksTests: XCTestCase {
         }
     }
 
+    func testAWriteFromARetiredSurfaceIsDropped() {
+        let view = GhosttySurfaceView(workingDirectory: "/tmp")
+        seed(selection, "old selection")
+        write("from a live pane", location: GHOSTTY_CLIPBOARD_SELECTION, from: view)
+        XCTAssertEqual(selection.string(forType: .string), "from a live pane")
+
+        view.retired.withLock { $0 = true }
+        write("from a closed pane", location: GHOSTTY_CLIPBOARD_SELECTION, from: view)
+
+        XCTAssertEqual(selection.string(forType: .string), "from a live pane")
+    }
+
     func testSelectionPasteboardIsNamedForThisBundle() {
         XCTAssertNotEqual(selection.name, NSPasteboard.general.name)
         XCTAssertEqual(selection.name.rawValue, (Bundle.main.bundleIdentifier ?? "") + ".selection")
     }
 
-    private func write(_ text: String, location: ghostty_clipboard_e) {
+    private func write(_ text: String, location: ghostty_clipboard_e, from view: GhosttySurfaceView? = nil) {
+        let ud = view.map { Unmanaged.passUnretained($0).toOpaque() }
         "text/plain".withCString { mime in
             text.withCString { data in
                 var item = ghostty_clipboard_content_s(mime: mime, data: data, len: text.utf8.count)
-                GhosttyApp.shared.callbacks.writeClipboard(ud: nil, location: location, content: &item, len: 1, confirm: false)
+                GhosttyApp.shared.callbacks.writeClipboard(ud: ud, location: location, content: &item, len: 1, confirm: false)
             }
         }
     }

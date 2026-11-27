@@ -27,6 +27,44 @@ final class SurfaceRetirement {
         schedule()
     }
 
+    /// drainForQuit frees every retired surface whose threads exit within `budget`. Each io thread hangs up its
+    /// child as it exits, and no sweep runs once the app exits, so quit waits here for that hangup; the bound
+    /// keeps a child that ignores it from holding quit.
+    func drainForQuit(budget: Duration = .seconds(1)) {
+        guard !entries.isEmpty else { return }
+        let deadline = ContinuousClock.now + budget
+        while true {
+            // an exiting io thread reports its child's exit to the app mailbox and blocks while it is full,
+            // and only a tick empties it while this loop holds the main thread
+            GhosttyApp.shared.tick()
+            freeExited()
+            if entries.isEmpty { return }
+            if ContinuousClock.now >= deadline {
+                logger.error("quit left \(self.entries.count, privacy: .public) retired surfaces whose threads had not exited")
+                return
+            }
+            Thread.sleep(forTimeInterval: 0.005)
+        }
+    }
+
+    /// drainForQuitOnceWindowless drains only once no window is left registered: a quit closes its windows after
+    /// applicationWillTerminate, a window closed by hand closes before it, and the later of the two waits for all.
+    func drainForQuitOnceWindowless() {
+        guard WindowRegistry.shared.registeredCount == 0 else { return }
+        drainForQuit()
+    }
+
+    private func freeExited() {
+        var index = entries.startIndex
+        while index < entries.endIndex {
+            guard ghostty_surface_try_free(entries[index].surface) else {
+                index += 1
+                continue
+            }
+            entries.remove(at: index).view.finishDestroy()
+        }
+    }
+
     private func schedule() {
         guard !scheduled, !entries.isEmpty else { return }
         scheduled = true

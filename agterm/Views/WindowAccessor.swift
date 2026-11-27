@@ -211,6 +211,7 @@ struct WindowAccessor: NSViewRepresentable {
                         session.discardHudBody() // an unrealized HUD has no teardown to delete its body file
                         session.discardInfo()
                     }
+                    if library.isTerminating { SurfaceRetirement.shared.drainForQuitOnceWindowless() }
                     library.closeWindow(windowID)
                     // the unregister above refreshed window.list while the store was still open
                     NotificationCenter.default.post(name: .agtermWindowCatalogChanged, object: nil)

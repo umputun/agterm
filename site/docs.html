@@ -2470,6 +2470,7 @@ agtermctl session tint clear --target &quot;$AGTERM_SESSION_ID&quot;</code></pre
 </tr>
 </tbody>
 </table>
+<p>The Claude Code, Codex, agy and Copilot CLI hooks each give up after 5 seconds, so an agent never waits on a status update agterm is slow to take. Hooks installed by an earlier version get that limit when you run the installer again. Codex hooks you added by hand are not updated: add <code>timeout = 5</code> to each one yourself, as in <a href="#codex-hooks-manual">the manual setup</a>.</p>
 <p><strong>Where it writes</strong></p>
 <ul>
 <li>The scripts go to <code>~/.config/agterm/agent-status/</code>, with the bundled <code>agtermctl</code>'s absolute path baked in, so they work without the CLI on your PATH.</li>
@@ -2571,31 +2572,37 @@ agtermctl session tint clear --target &quot;$AGTERM_SESSION_ID&quot;</code></pre
 [[hooks.SessionStart.hooks]]
 type = &quot;command&quot;
 command = &quot;&#39;/Users/you/.config/agterm/agent-status/agterm-codex-status.sh&#39; session-start&quot;
+timeout = 5
 
 [[hooks.UserPromptSubmit]]
 [[hooks.UserPromptSubmit.hooks]]
 type = &quot;command&quot;
 command = &quot;&#39;/Users/you/.config/agterm/agent-status/agterm-codex-status.sh&#39; user-prompt-submit&quot;
+timeout = 5
 
 [[hooks.PreToolUse]]
 [[hooks.PreToolUse.hooks]]
 type = &quot;command&quot;
 command = &quot;&#39;/Users/you/.config/agterm/agent-status/agterm-codex-status.sh&#39; pre-tool-use&quot;
+timeout = 5
 
 [[hooks.PostToolUse]]
 [[hooks.PostToolUse.hooks]]
 type = &quot;command&quot;
 command = &quot;&#39;/Users/you/.config/agterm/agent-status/agterm-codex-status.sh&#39; post-tool-use&quot;
+timeout = 5
 
 [[hooks.PermissionRequest]]
 [[hooks.PermissionRequest.hooks]]
 type = &quot;command&quot;
 command = &quot;&#39;/Users/you/.config/agterm/agent-status/agterm-codex-status.sh&#39; permission-request&quot;
+timeout = 5
 
 [[hooks.Stop]]
 [[hooks.Stop.hooks]]
 type = &quot;command&quot;
-command = &quot;&#39;/Users/you/.config/agterm/agent-status/agterm-codex-status.sh&#39; stop&quot;</code></pre>
+command = &quot;&#39;/Users/you/.config/agterm/agent-status/agterm-codex-status.sh&#39; stop&quot;
+timeout = 5</code></pre>
 <p>The adapter script is already in place: the installer copies it to <code>~/.config/agterm/agent-status/</code> on every run, whether or not the config merge succeeded. Once the blocks are added, run <code>/hooks</code> in Codex and approve them. For a file that is not valid TOML, fixing it and running the installer again is easier: it merges the blocks for you.</p>
 </section>
 

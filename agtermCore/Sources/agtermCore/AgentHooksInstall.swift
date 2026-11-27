@@ -126,7 +126,7 @@ public enum AgentHooksInstall {
         static func hookBlock(scriptDir: String) -> [String: Any] {
             let wrapper = shellQuote(scriptDir + "/" + wrapperName)
             func handler(_ action: String) -> [String: Any] {
-                ["type": "command", "command": wrapper + " " + action, "timeout": 5]
+                ["type": "command", "command": wrapper + " " + action, "timeout": AgentHooksInstall.statusHookTimeout]
             }
             return [
                 "PreInvocation": [handler("invocation")],
@@ -226,7 +226,7 @@ public enum AgentHooksInstall {
         static func hooksFile(scriptDir: String) -> [String: Any] {
             let wrapper = shellQuote(scriptDir + "/" + wrapperName)
             func handler(_ action: String, matcher: String? = nil) -> [[String: Any]] {
-                var entry: [String: Any] = ["type": "command", "bash": wrapper + " " + action, "timeoutSec": 5]
+                var entry: [String: Any] = ["type": "command", "bash": wrapper + " " + action, "timeoutSec": AgentHooksInstall.statusHookTimeout]
                 entry["matcher"] = matcher
                 return [entry]
             }
@@ -350,6 +350,10 @@ public enum AgentHooksInstall {
         ("Stop", "stop"),
     ]
 
+    /// statusHookTimeout is the seconds an agent gives one generated status hook before cancelling it; the
+    /// agent's action goes ahead either way. Claude Code and Codex otherwise wait 600 s.
+    static let statusHookTimeout = 5
+
     /// The destination directory for Pi's auto-discovered global extensions.
     static func piExtensionDirectory(home: String) -> String {
         home + "/.pi/agent/extensions"
@@ -385,7 +389,8 @@ public enum AgentHooksInstall {
     ///
     /// `existing` is the current contents (nil/empty = start from a fresh object). Returns the new JSON and
     /// whether it differs; idempotent — hooks already present (detected by the adapter command) return the
-    /// input with `changed == false`. Unrelated hooks and keys are preserved; invalid JSON, and a `hooks` or
+    /// input with `changed == false` unless one matching the generated command exactly lacks a `timeout`,
+    /// which then gets one in place. Unrelated hooks and keys are preserved; invalid JSON, and a `hooks` or
     /// written-event value of the wrong shape, throw rather than overwrite what could not be read. Entries a
     /// PRIOR install pointed straight at the generic wrapper are migrated onto the Claude adapter first, so
     /// the ownership guard reaches an existing install rather than only a fresh one.
@@ -395,6 +400,7 @@ public enum AgentHooksInstall {
 
         var hooks = try claudeHooksObject(root)
         var didChange = migrateClaudeEntriesToAdapter(&hooks, scriptDir: scriptDir)
+        if addClaudeHookTimeouts(&hooks, scriptDir: scriptDir) { didChange = true }
         for hook in claudeHooks {
             var entries = hooks[hook.event] as? [[String: Any]] ?? [] // shape already checked above
             if entries.contains(where: { entryUsesWrapper($0, scriptDir: scriptDir) }) {
@@ -635,6 +641,7 @@ public enum AgentHooksInstall {
             [[hooks.\(hook.event).hooks]]
             type = "command"
             command = \(tomlBasicString(wrapper + " " + hook.action))
+            timeout = \(statusHookTimeout)
             """
         }.joined(separator: "\n\n")
     }
@@ -704,10 +711,40 @@ public enum AgentHooksInstall {
         return didChange
     }
 
-    // a single Claude hook entry: { (matcher?), hooks: [{ type: command, command }] }.
+    // add `timeout` to every entry this installer generated without one, returning whether anything changed.
+    // claude code otherwise waits up to 600 s on a status write the agent's turn does not need. a command is
+    // ours only when it matches the generated one byte for byte, and a timeout the user set is kept.
+    private static func addClaudeHookTimeouts(_ hooks: inout [String: Any], scriptDir: String) -> Bool {
+        let command = wrapperCommand(scriptDir: scriptDir)
+        var didChange = false
+        for hook in claudeHooks {
+            guard var entries = hooks[hook.event] as? [[String: Any]] else { continue }
+            var eventChanged = false
+            for index in entries.indices {
+                guard var commands = entries[index]["hooks"] as? [[String: Any]] else { continue }
+                var entryChanged = false
+                for slot in commands.indices
+                where commands[slot]["command"] as? String == command + hook.state && commands[slot]["timeout"] == nil {
+                    commands[slot]["timeout"] = statusHookTimeout
+                    entryChanged = true
+                }
+                if entryChanged {
+                    entries[index]["hooks"] = commands
+                    eventChanged = true
+                }
+            }
+            if eventChanged {
+                hooks[hook.event] = entries
+                didChange = true
+            }
+        }
+        return didChange
+    }
+
+    // a single Claude hook entry: { (matcher?), hooks: [{ type: command, command, timeout }] }.
     private static func hookEntry(command: String, state: String, matcher: String?) -> [String: Any] {
         var entry: [String: Any] = [
-            "hooks": [["type": "command", "command": command + state]],
+            "hooks": [["type": "command", "command": command + state, "timeout": statusHookTimeout]],
         ]
         if let matcher {
             entry["matcher"] = matcher

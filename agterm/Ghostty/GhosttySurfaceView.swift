@@ -865,25 +865,15 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
         return surface
     }
 
-    func finishDestroy() {
+    /// releaseCallbacksAndFiles ends everything the view owes the app once its surface is detached: the
+    /// overlay exit code, the HUD body file, the accessibility posts and the store-capturing callbacks.
+    /// It runs before the free on both paths, since a retired surface may not be freed for a long time.
+    func releaseCallbacksAndFiles() {
         linkHover?.label = nil
-        // release the custom layer libghostty installed and this view still retains. The current pin clears
-        // its display callback in `IOSurfaceLayer.release`, so this defends builds predating that fix, where
-        // the callback kept pointing at the freed renderer and the next CoreAnimation display locked a mutex
-        // in freed memory (#443). Must follow the free, which joins the render thread: dropping the layer
-        // while it still paints trades one use-after-free for another.
-        dropGhosttyLayer()
         // the other end of the `surface != nil` term: this element just left the a11y tree, and a client
         // holding it needs to re-resolve rather than keep writing into a closed session's pane.
         postAccessibilityExposureChange()
         postAccessibilityFocusChange()
-        configCStrings.forEach { free($0) }
-        configCStrings = []
-        // the env structs only point into the freed configCStrings buffers; clear them too.
-        envVars = []
-        // free the retained per-surface watermark configs — the surface (their only consumer) is gone.
-        ownedConfigs.forEach { ghostty_config_free($0) }
-        ownedConfigs = []
         // read the wrapper-captured exit status, hand it off, then delete the temp file. runs on every
         // in-process teardown: natural exit, explicit close, force-close.
         if let f = overlayCodeFile {
@@ -896,14 +886,15 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
             try? FileManager.default.removeItem(atPath: f)
             overlayCodeFile = nil
         }
-        // the HUD's body file has no status to read: deleting it IS the teardown, on every path.
+        // the HUD's body file has no status to read: deleting it IS the teardown, on every path. a replacement
+        // HUD writes the same per-session path, so this cannot wait for a retired surface's free.
         if let f = hudBodyFile {
             try? FileManager.default.removeItem(atPath: f)
             hudBodyFile = nil
         }
         // nil the store-capturing callbacks last to break the store -> session -> surface -> closure -> store
         // retain cycle. MUST stay after the onExitCodeCaptured?(code) call above, which niling earlier would
-        // silently drop. no libghostty callback fires once the surface is freed.
+        // silently drop. a detached or retired surface's reports are dropped by the callbacks.
         onExit = nil
         onExitHeld = nil
         onExitCodeCaptured = nil
@@ -917,6 +908,23 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
         onSearchEnd = nil
         onSearchTotal = nil
         onSearchSelected = nil
+    }
+
+    /// finishDestroy releases what libghostty's threads may still touch, so it runs only after the free.
+    func finishDestroy() {
+        // release the custom layer libghostty installed and this view still retains. The current pin clears
+        // its display callback in `IOSurfaceLayer.release`, so this defends builds predating that fix, where
+        // the callback kept pointing at the freed renderer and the next CoreAnimation display locked a mutex
+        // in freed memory (#443). Must follow the free, which joins the render thread: dropping the layer
+        // while it still paints trades one use-after-free for another.
+        dropGhosttyLayer()
+        configCStrings.forEach { free($0) }
+        configCStrings = []
+        // the env structs only point into the freed configCStrings buffers; clear them too.
+        envVars = []
+        // free the retained per-surface watermark configs — the surface (their only consumer) is gone.
+        ownedConfigs.forEach { ghostty_config_free($0) }
+        ownedConfigs = []
     }
 
     /// Swaps libghostty's `CALayer` subclass out for a plain one, keeping the last painted frame as its
@@ -933,9 +941,10 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
         layer = plain
     }
 
-    /// `TerminalSurface` conformance: the model calls this when the owning session is closed.
+    /// `TerminalSurface` conformance: the model calls this when the owning session is closed. It retires
+    /// rather than frees, so a child slow to exit or ignoring its hangup never holds the main thread.
     func teardown() {
-        destroySurface()
+        retireSurface()
     }
 
     /// `TerminalSurface.isRealized`: the libghostty surface — and with it the spawned program — exists. False

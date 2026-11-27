@@ -1,5 +1,5 @@
 diff --git a/include/ghostty.h b/include/ghostty.h
-index 9a12b9c..e92b1c1 100644
+index 9a12b9cad..e92b1c143 100644
 --- a/include/ghostty.h
 +++ b/include/ghostty.h
 @@ -1178,6 +1178,7 @@ GHOSTTY_API ghostty_surface_config_s ghostty_surface_config_new();
@@ -11,7 +11,7 @@ index 9a12b9c..e92b1c1 100644
  GHOSTTY_API ghostty_app_t ghostty_surface_app(ghostty_surface_t);
  GHOSTTY_API ghostty_surface_config_s ghostty_surface_inherited_config(ghostty_surface_t, ghostty_surface_context_e);
 diff --git a/src/App.zig b/src/App.zig
-index 7667260..8c65cb3 100644
+index 766726014..8c65cb345 100644
 --- a/src/App.zig
 +++ b/src/App.zig
 @@ -660,6 +660,10 @@ pub const TeardownDrain = struct {
@@ -71,10 +71,10 @@ index 7667260..8c65cb3 100644
      return .{ .surface_message = .{ .surface = surface, .message = .ring_bell } };
  }
 diff --git a/src/Surface.zig b/src/Surface.zig
-index 6a080fc..3204643 100644
+index 6a080fccd..f883e2907 100644
 --- a/src/Surface.zig
 +++ b/src/Surface.zig
-@@ -135,6 +135,14 @@ io: termio.Termio,
+@@ -135,6 +135,16 @@ io: termio.Termio,
  io_thread: termio.Thread,
  io_thr: std.Thread,
  
@@ -83,13 +83,15 @@ index 6a080fc..3204643 100644
 +renderer_exited: std.atomic.Value(bool) = .init(false),
 +io_exited: std.atomic.Value(bool) = .init(false),
 +
-+/// True once `beginStop` has notified the workers; repeated calls do nothing.
-+stop_requested: bool = false,
++/// Set by `beginStop`. A stopping surface's renderer and IO mailboxes have no reader, so
++/// every path that would push to them (config, bindings, IO, search results) drops instead
++/// of blocking the app thread on a full queue. Atomic: the search thread reads it.
++stop_requested: std.atomic.Value(bool) = .init(false),
 +
  /// Terminal inspector
  inspector: ?*inspectorpkg.Inspector = null,
  
-@@ -754,16 +762,16 @@ pub fn init(
+@@ -754,16 +764,16 @@ pub fn init(
      // Start our renderer thread
      self.renderer_thr = try std.Thread.spawn(
          .{},
@@ -110,7 +112,7 @@ index 6a080fc..3204643 100644
      );
      self.io_thr.setName(global.io(), "io") catch {};
  
-@@ -827,6 +835,35 @@ pub fn init(
+@@ -827,6 +837,36 @@ pub fn init(
      app.first = false;
  }
  
@@ -130,8 +132,9 @@ index 6a080fc..3204643 100644
 +/// joins return at once. The surface stays fully allocated until then; the
 +/// notify `deinit` sends again is harmless.
 +pub fn beginStop(self: *Surface) void {
-+    if (self.stop_requested) return;
-+    self.stop_requested = true;
++    if (self.stop_requested.swap(true, .acq_rel)) return;
++    if (self.search) |*s| s.state.stop.notify() catch |err|
++        log.err("error notifying search thread to stop, may stall err={}", .{err});
 +    self.renderer_thread.stop.notify() catch |err|
 +        log.err("error notifying renderer thread to stop, may stall err={}", .{err});
 +    self.io_thread.stop.notify() catch |err|
@@ -146,7 +149,43 @@ index 6a080fc..3204643 100644
  pub fn deinit(self: *Surface) void {
      var drain: App.TeardownDrain = .{ .app = self.app, .surface = self };
      drain.start();
-@@ -6754,3 +6791,32 @@ test "promptClickRelativeRow" {
+@@ -906,6 +946,11 @@ fn queueIo(
+     msg: termio.Message,
+     mutex: termio.Termio.MutexState,
+ ) void {
++    if (self.stop_requested.load(.acquire)) {
++        msg.deinit();
++        return;
++    }
++
+     // In readonly mode, we don't allow any writes through to the pty.
+     if (self.readonly) {
+         switch (msg) {
+@@ -1503,6 +1548,7 @@ fn searchCallback_(
+     event: terminal.search.Thread.Event,
+ ) !void {
+     // NOTE: This runs on the search thread.
++    if (self.stop_requested.load(.acquire)) return;
+ 
+     switch (event) {
+         .viewport_matches => |matches_unowned| {
+@@ -1810,6 +1856,7 @@ pub fn updateConfig(
+     self: *Surface,
+     original: *const configpkg.Config,
+ ) !void {
++    if (self.stop_requested.load(.acquire)) return;
+     // Apply our conditional state. If we fail to apply the conditional state
+     // then we log and attempt to move forward with the old config.
+     var config_: ?configpkg.Config = original.changeConditionalState(
+@@ -4941,6 +4988,7 @@ fn showMouse(self: *Surface) void {
+ /// will ever return false. We can expand this in the future if it becomes
+ /// useful. We did previous/next tab so we could implement #498.
+ pub fn performBindingAction(self: *Surface, action: input.Binding.Action) !bool {
++    if (self.stop_requested.load(.acquire)) return false;
+     // Forward app-scoped actions to the app. Some app-scoped actions are
+     // special-cased here because they do some special things when performed
+     // from the surface.
+@@ -6754,3 +6802,39 @@ test "promptClickRelativeRow" {
          try testing.expectEqual(case.expected, promptClickRelativeRow(&pages, prompt, click));
      }
  }
@@ -169,6 +208,13 @@ index 6a080fc..3204643 100644
 +    try std.testing.expect(exited.load(.acquire));
 +}
 +
++test "teardown: a stopping surface drops io messages its stopped io thread would never read" {
++    var surface: Surface = undefined;
++    surface.stop_requested = .init(true);
++    // more than the 64 slots the io mailbox holds, each send of which would block on a full queue
++    for (0..100) |_| surface.queueIo(.{ .write_small = .{ .data = undefined, .len = 0 } }, .unlocked);
++}
++
 +test "teardown: threadsExited waits for both workers" {
 +    var surface: Surface = undefined;
 +    surface.renderer_exited = .init(false);
@@ -180,7 +226,7 @@ index 6a080fc..3204643 100644
 +    try std.testing.expect(surface.threadsExited());
 +}
 diff --git a/src/apprt/embedded.zig b/src/apprt/embedded.zig
-index 697f0a7..e677ab1 100644
+index 697f0a786..e677ab120 100644
 --- a/src/apprt/embedded.zig
 +++ b/src/apprt/embedded.zig
 @@ -1860,6 +1860,17 @@ pub const CAPI = struct {
