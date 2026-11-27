@@ -361,7 +361,7 @@ struct ClaudeStatusHookTests {
     #endif
 
     @Test func linuxReadsThePayloadWithJq() throws {
-        // a GNUstep plutil at /usr/bin rejects -extract raw, and the adapter took it over an installed jq
+        // regression: a GNUstep /usr/bin/plutil, which rejects -extract raw, must not shadow jq on linux
         let fm = FileManager.default
         let bin = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("agterm-jq-\(UUID().uuidString)")
         try fm.createDirectory(at: bin, withIntermediateDirectories: true)
@@ -380,7 +380,8 @@ struct ClaudeStatusHookTests {
         try fm.createDirectory(at: bin, withIntermediateDirectories: true)
         defer { try? fm.removeItem(at: bin) }
         for tool in ["ps", "dirname"] {
-            try fm.createSymbolicLink(at: bin.appendingPathComponent(tool), withDestinationURL: URL(fileURLWithPath: "/usr/bin/\(tool)"))
+            let path = try #require(["/bin/\(tool)", "/usr/bin/\(tool)"].first { fm.fileExists(atPath: $0) })
+            try fm.createSymbolicLink(at: bin.appendingPathComponent(tool), withDestinationURL: URL(fileURLWithPath: path))
         }
         try fm.createSymbolicLink(at: bin.appendingPathComponent("bash"), withDestinationURL: URL(fileURLWithPath: "/bin/bash"))
 

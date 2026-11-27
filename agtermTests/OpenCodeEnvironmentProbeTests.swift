@@ -98,6 +98,7 @@ final class OpenCodeEnvironmentProbeTests: XCTestCase {
             XCTAssertEqual(result?.version, .v2)
         }
         let unset = try await probeResult(script: "exit 1", startup: "unset COPILOT_HOME")
+        XCTAssertNotNil(unset)
         XCTAssertNil(unset?.copilotHome)
     }
 
@@ -136,10 +137,11 @@ final class OpenCodeEnvironmentProbeTests: XCTestCase {
         XCTAssertEqual(result?.codexHome, "/codex $HOME ~")
     }
 
-    func testCodexHomeSurvivesMissingFailingAndUnsupportedOpenCode() async throws {
+    func testAgentHomesSurviveMissingFailingAndUnsupportedOpenCode() async throws {
         for script in [nil, "exit 1", "printf '3.0.0\\n'"] {
-            let result = try await probeResult(script: script, startup: "export CODEX_HOME='/custom/codex'")
+            let result = try await probeResult(script: script, startup: "export CODEX_HOME='/custom/codex' COPILOT_HOME='/custom/copilot'")
             XCTAssertEqual(result?.codexHome, "/custom/codex")
+            XCTAssertEqual(result?.copilotHome, "/custom/copilot")
             XCTAssertNil(result?.version)
         }
     }

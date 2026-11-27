@@ -204,7 +204,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Install jq, zsh, fish and tcsh
-        # jq: the codex status hook reads its JSON with it where plutil does not exist; the shells: tests run
+        # jq: the codex, claude and copilot status hooks read their JSON with it on Linux; the shells: tests run
         # scripts under each login shell the remote commands must survive, and server panes run zsh, fish and bash
         run: apt-get update && apt-get install -y --no-install-recommends jq zsh fish tcsh xz-utils curl ca-certificates git
       - name: Read the pinned zmx and ghostty revisions
