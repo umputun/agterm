@@ -25,8 +25,7 @@ function copilot {
 
   # agterm replays the argv the pane was running, which starts with `own` and, for a resumed
   # conversation, `--session-id <id>`. Drop both and decide again from the mapping, which /clear or
-  # /resume may have moved since that launch. A pane with no mapping of its own starts fresh: Duplicate
-  # as Companion replays the source pane's line, and its id would put two copilots on one session.
+  # /resume may have moved since that launch. A pane with no mapping of its own starts fresh.
   # Drop -i too, so a restart never sends its prompt again.
   local replay=
   if [[ $1 == $own ]]; then
