@@ -7,7 +7,8 @@ public struct ServerHookInstall {
     public var resourcesDirectory: String
     public var home: URL
     public var toolPath: String
-    /// environment supplies PATH, for jq and opencode, OpenCode's config directory variables and `CODEX_HOME`.
+    /// environment supplies PATH, for jq and opencode, OpenCode's config directory variables, `CODEX_HOME` and
+    /// `COPILOT_HOME`.
     public var environment: [String: String]
     /// openCode is the version the caller named; nil reads `opencode --version`.
     public var openCode: AgentHooksInstall.OpenCode.Version?
@@ -32,14 +33,16 @@ public struct ServerHookInstall {
         let codexHome = AgentHooksInstall.Codex.home(codexHome: environment["CODEX_HOME"],
                                                      workingDirectory: FileManager.default.currentDirectoryPath)
         let codexRoot = codexHome.map { URL(fileURLWithPath: $0) }
+        let copilotHome = AgentHooksInstall.Copilot.home(copilotHome: environment["COPILOT_HOME"],
+                                                         workingDirectory: FileManager.default.currentDirectoryPath)
         let files = AgentHooksFiles(source: resources.appendingPathComponent("agent-status"), home: home, toolPath: toolPath,
-                                    codexHome: codexRoot)
+                                    codexHome: codexRoot, copilotHome: copilotHome.map { URL(fileURLWithPath: $0) })
         let outcome = try files.install(jqAvailable: executable(named: "jq") != nil)
         let openCodeResult = try installOpenCode(files)
         let skill = try SkillInstall.install(source: resources.appendingPathComponent("skill/\(SkillInstall.skillName)"), home: home,
                                              codexHome: codexRoot)
         var lines = ["Scripts installed to \(files.destination.path).", outcome.claudeText, outcome.codex.text(codexHome: codexHome),
-                     outcome.pi.text, outcome.agy.text, openCodeResult.text]
+                     outcome.pi.text, outcome.agy.text, outcome.copilot.text(copilotHome: copilotHome), openCodeResult.text]
         lines += skill.installed.map { "agterm skill installed for \($0.agent) at \($0.skillDirectory)." }
         lines += skill.skipped.map { "agterm skill not installed for \($0.agent): \($0.reason)." }
         lines.append("The source line was added to ~/.zshrc and ~/.bashrc (and config.fish when fish is set up); "

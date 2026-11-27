@@ -307,6 +307,9 @@ For agy (Antigravity CLI), restart it to load the `agterm-status` hook in `~/.ge
 after agy has created `~/.gemini/config`. A session held active by agy's background work releases when that work ends,
 but not when agy exits first: press Esc or Ctrl-C in that pane, or clear the status. Export
 `AGTERM_AGY_IGNORE_BACKGROUND=1` before starting agy to complete each turn regardless.
+For GitHub Copilot CLI, restart it to load `~/.copilot/hooks/agterm-status.json` (under `COPILOT_HOME` when set); it
+installs only after Copilot has created that directory. A cookbook `copilot-status-hooks.json` beside it reports every
+status twice; the installer moves an unchanged one aside.
 The installed wrapper resolves the bundled `agtermctl` itself; a bare development build instead needs
 `agtermctl` on `PATH`. Moving or replacing agterm.app invalidates the path the installer baked in — the
 wrapper then falls back to `agtermctl` on `PATH`, and with nothing there the glyph silently stops

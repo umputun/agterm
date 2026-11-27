@@ -133,6 +133,12 @@ struct ClaudeStatusHookTests {
         #expect(result.exit == 0)
     }
 
+    @Test func workerSpawnedByCopilotStaysSilent() throws {
+        let result = try run(chain: ["login", "copilot", "zsh", "claude"], args: ["completed", "--auto-reset"])
+        #expect(result.calls.isEmpty)
+        #expect(result.exit == 0)
+    }
+
     @Test func nonExecLauncherChainCountsAsOneAgent() throws {
         let result = try run(chain: ["login", "claude", "claude", "node:claude"], args: ["active", "--blink"])
         #expect(result.calls == ["active --blink"])

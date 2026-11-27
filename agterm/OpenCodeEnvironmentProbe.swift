@@ -6,6 +6,7 @@ enum OpenCodeEnvironmentProbe {
         let version: AgentHooksInstall.OpenCode.Version?
         let v2ConfigurationDirectory: String?
         let codexHome: String?
+        var copilotHome: String?
     }
 
     static func detect(environment: [String: String], timeout: TimeInterval = 3,
@@ -27,8 +28,9 @@ enum OpenCodeEnvironmentProbe {
         let process = Process()
         process.executableURL = executableURL ?? URL(fileURLWithPath: shell)
         // A POSIX hop reads only exported values, including fish's, before the version command can fail.
-        let command = "/usr/bin/printf '\\n\(marker)\\n%s\\000%s\\000%s\\000%s\\000%s\\000%s\\000' "
-            + "\"$HOME\" \"$PWD\" \"${OPENCODE_CONFIG_DIR+x}\" \"${OPENCODE_CONFIG_DIR-}\" \"${XDG_CONFIG_HOME-}\" \"${CODEX_HOME-}\"; "
+        let command = "/usr/bin/printf '\\n\(marker)\\n%s\\000%s\\000%s\\000%s\\000%s\\000%s\\000%s\\000' "
+            + "\"$HOME\" \"$PWD\" \"${OPENCODE_CONFIG_DIR+x}\" \"${OPENCODE_CONFIG_DIR-}\" \"${XDG_CONFIG_HOME-}\" \"${CODEX_HOME-}\" "
+            + "\"${COPILOT_HOME-}\"; "
             + "exec /usr/bin/env opencode --version"
         process.arguments = ["-ilc", "exec /bin/sh -c " + CommandRestore.shellQuotedLine([command])]
         process.environment = environment
@@ -53,17 +55,19 @@ enum OpenCodeEnvironmentProbe {
         }
         guard let output = capture.collect(until: .now() + ProcessOutputCapture.terminationGrace),
               let boundary = output.stdout.range(of: "\n\(marker)\n") else { return nil }
-        let fields = output.stdout[boundary.upperBound...].split(separator: "\0", maxSplits: 6, omittingEmptySubsequences: false).map(String.init)
-        guard fields.count == 7 else { return nil }
+        let fields = output.stdout[boundary.upperBound...].split(separator: "\0", maxSplits: 7, omittingEmptySubsequences: false).map(String.init)
+        guard fields.count == 8 else { return nil }
         let home = fields[0].isEmpty ? FileManager.default.homeDirectoryForCurrentUser.path : fields[0]
         let codexHome = timedOut ? nil : AgentHooksInstall.Codex.home(codexHome: fields[5], workingDirectory: fields[1])
+        let copilotHome = timedOut ? nil : AgentHooksInstall.Copilot.home(copilotHome: fields[6], workingDirectory: fields[1])
         return Result(
-            version: !timedOut && process.terminationStatus == 0 ? AgentHooksInstall.OpenCode.Version(versionOutput: fields[6]) : nil,
+            version: !timedOut && process.terminationStatus == 0 ? AgentHooksInstall.OpenCode.Version(versionOutput: fields[7]) : nil,
             v2ConfigurationDirectory: AgentHooksInstall.OpenCode.configurationDirectory(
                 home: home, opencodeConfigDirectory: fields[2].isEmpty ? nil : fields[3],
                 xdgConfigHome: fields[4], workingDirectory: fields[1]
             ),
-            codexHome: codexHome
+            codexHome: codexHome,
+            copilotHome: copilotHome
         )
     }
 }

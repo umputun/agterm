@@ -28,6 +28,7 @@ enum AgentHooksInstaller {
 
     private struct InstallOutcome {
         let codexHome: String?
+        let copilotHome: String?
         let files: AgentHooksFiles.Outcome
         let opencode: OpenCodeResult
 
@@ -59,10 +60,11 @@ enum AgentHooksInstaller {
     ) throws -> (isWarning: Bool, text: String, docs: URL?) {
         guard let bundledFolder else { throw AgentHooksFiles.Failure(message: "The agent-status scripts are not bundled in this build.") }
         let files = AgentHooksFiles(source: bundledFolder, home: home, toolPath: bundledTool?.path,
-                                    codexHome: probe?.codexHome.map { URL(fileURLWithPath: $0) })
+                                    codexHome: probe?.codexHome.map { URL(fileURLWithPath: $0) },
+                                    copilotHome: probe?.copilotHome.map { URL(fileURLWithPath: $0) })
         let outcome = try files.install()
         let opencode = try installOpenCodePlugin(home: home, scriptDirectory: files.destination, probe: probe)
-        let result = InstallOutcome(codexHome: probe?.codexHome, files: outcome, opencode: opencode)
+        let result = InstallOutcome(codexHome: probe?.codexHome, copilotHome: probe?.copilotHome, files: outcome, opencode: opencode)
         return (result.isWarning, successText(result, destination: files.destination),
                 outcome.codex.needsManualMerge ? codexManualDocsURL : nil)
     }
@@ -101,6 +103,7 @@ enum AgentHooksInstaller {
         \(outcome.files.codex.text(codexHome: outcome.codexHome))
         \(outcome.files.pi.text)
         \(outcome.files.agy.text)
+        \(outcome.files.copilot.text(copilotHome: outcome.copilotHome))
         \(outcome.opencode.text)
         The source line was added to ~/.zshrc, ~/.bashrc (and ~/.config/fish/config.fish if fish is installed).
 
