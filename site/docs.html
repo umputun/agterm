@@ -2480,6 +2480,7 @@ agtermctl session tint clear --target &quot;$AGTERM_SESSION_ID&quot;</code></pre
 </ul>
 <h4 id="status-codex">Codex</h4>
 <ul>
+<li>When another agent starts Codex as a worker, as in <code>codex exec</code> from a tool call or a review tool, its hooks stay silent while they run beneath that agent, so the status of the pane that started it is not overwritten.</li>
 <li>A permission request is only a candidate, because it fires before Auto Review. The adapter keeps automatic decisions active and turns the row blocked only once a real approval or structured question appears in that pane.</li>
 <li>On Stop, a final message that ends a sentence with <code>?</code> reports blocked. This is a guess from the text: it ignores code in single and triple backticks, and a <code>?</code> that stands alone, opens quoted text, or sits inside a word (as in a URL query string) does not count. Every other final message reports completed and auto-resets.</li>
 <li><strong>Run <code>/hooks</code> in Codex after installing or upgrading</strong> and approve the hooks. Codex runs changed command hooks only once they are approved, so until then they do nothing.</li>

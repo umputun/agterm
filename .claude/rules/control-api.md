@@ -52,7 +52,8 @@ paths:
   so `--auto-reset` cannot idle the row. Anything else, an unreadable payload included, posts argv.
   `AGTERM_CLAUDE_IGNORE_SHELLS=1` (exactly `1`) in Claude's environment drops shells from that running set; it is a
   hook-local knob because the hook decides before the status reaches the app, and agterm-server has no settings to read.
-- `agent-owner.sh` holds the worker walk both the Claude and agy adapters source; its `is_agent` list must keep every
+- `agent-owner.sh` holds the worker walk the Claude, Codex and agy adapters source (Codex after its watcher entry,
+  before any token or status write); its `is_agent` list must keep every
   hook-driven agent and the `AGTERM_AGENT_RE` default, which `ClaudeStatusHookTests` pins.
 - agy (installed only when `~/.gemini/config` exists) maps PreInvocation to `active --blink`, PreToolUse on
   `ask_question|ask_permission` to blocked, and Stop to completed, or `active --blink` while `fullyIdle` is false

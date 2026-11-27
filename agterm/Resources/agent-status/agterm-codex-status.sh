@@ -137,6 +137,9 @@ if [ "$action" = "__watch-blocked" ]; then
   exit 0
 fi
 
+. "$script_dir/agent-owner.sh"
+spawned_by_agent && exit 0
+
 case "$action" in
   session-start|user-prompt-submit|pre-tool-use|post-tool-use)
     # codex's memory consolidation thread reaches these hooks but no user Stop handler, so its

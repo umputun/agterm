@@ -1,5 +1,3 @@
-# Sourced by the Claude and agy status adapters; defines spawned_by_agent.
-#
 # A worker agent spawned from inside a session (headless `claude -p` from a tool call, a second CLI
 # agent) inherits the spawner's AGTERM_* environment, so its own hooks would repaint the SPAWNER's
 # row. Decide from process topology, not terminal state. The hook is a descendant of the agent that
