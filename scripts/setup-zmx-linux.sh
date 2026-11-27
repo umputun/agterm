@@ -9,31 +9,33 @@ OUT="build/linux"
 
 # ghostty's build installs src/shell-integration verbatim, so the source at the pin is the shipped set; the Mac
 # staging is not used for it because its stamp can claim a rev its files never came from.
-# The stamp includes the archive hash so a change in the verified input restages the files.
+# Fetch the pinned Git commit so changes to GitHub's archive compression cannot invalidate the pin.
+# The stamp records the verified fetch method and revision so older staging is refreshed.
 stage_shell_integration() (
-  local rev stamp stamp_file="$OUT/.shell-integration-stamp" work archive
-  # SHA-256 of the codeload tarball for GHOSTTY_REV in setup.sh. Update it with that pin.
-  local sha256=7759929eadaddf602d6fd5ad6b3403d854b91b7083975cd984bb525bc8275187
+  local rev stamp stamp_file="$OUT/.shell-integration-stamp" work fetched_rev
   rev="$(sed -nE 's/^GHOSTTY_REV="([^"]+)".*/\1/p' scripts/setup.sh)"
-  stamp="tar-sha256 $rev $sha256"
+  stamp="git-https $rev"
   if [[ -f "$stamp_file" && "$(cat "$stamp_file")" == "$stamp" ]]; then
     echo "linux shell integration already current"
     return 0
   fi
   work="$(mktemp -d)"
   trap 'rm -r -- "$work"' EXIT
-  archive="$work/ghostty.tar.gz"
-  curl --disable -fsSL --proto =https --proto-redir =https \
-    -o "$archive" "https://codeload.github.com/ghostty-org/ghostty/tar.gz/$rev"
-  if ! printf '%s  %s\n' "$sha256" "$archive" | shasum -a 256 -c - >/dev/null; then
-    echo "ghostty tarball for $rev failed SHA-256 verification" >&2
+  git init -q "$work"
+  git -C "$work" remote add origin "https://github.com/ghostty-org/ghostty"
+  GIT_ALLOW_PROTOCOL=https git -C "$work" -c http.followRedirects=false fetch -q --depth 1 origin "$rev"
+  fetched_rev="$(git -C "$work" rev-parse --verify 'FETCH_HEAD^{commit}')"
+  if [[ "$fetched_rev" != "$rev" ]]; then
+    echo "fetched Ghostty commit $fetched_rev does not match GHOSTTY_REV $rev" >&2
     exit 1
   fi
-  tar -xzf "$archive" -C "$work" "ghostty-$rev/src/shell-integration"
-  rm -rf "$OUT/ghostty"
+  git -C "$work" checkout -q "$fetched_rev" -- src/shell-integration
+  if [[ -d "$OUT/ghostty" ]]; then
+    rm -r -- "$OUT/ghostty"
+  fi
   mkdir -p "$OUT/ghostty/shell-integration"
   for shell in zsh fish bash; do
-    cp -R "$work/ghostty-$rev/src/shell-integration/$shell" "$OUT/ghostty/shell-integration/$shell"
+    cp -R "$work/src/shell-integration/$shell" "$OUT/ghostty/shell-integration/$shell"
   done
   echo "$stamp" >"$stamp_file"
   echo "linux shell integration staged in $OUT at $rev"
