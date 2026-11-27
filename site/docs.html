@@ -1021,6 +1021,8 @@ agtermctl session new --remote srv --window &quot;$win&quot;                   #
 <p><strong>Agent hooks on the host.</strong></p>
 <ul>
 <li>The Codex hooks need jq on the host; without it they are skipped and the install reports the hooks incomplete.</li>
+<li>Copilot CLI's hooks go to <code>COPILOT_HOME</code> when it is set and not empty, resolved like <code>CODEX_HOME</code>, otherwise to <code>~/.copilot</code>, and only when that directory exists.</li>
+<li>The Copilot CLI hooks use jq on the host to tell a subagent from the main agent; without it a subagent's tool clears a pending permission prompt, its stop reports completed during the turn, and a <code>copilot -p</code> run ends idle.</li>
 <li>Codex's hooks and skill go to <code>CODEX_HOME</code> when it is set and not empty (a relative one is resolved against the working directory), otherwise to <code>~/.codex</code>. A <code>CODEX_HOME</code> that does not exist is reported and skipped.</li>
 <li>OpenCode's plugin is installed only where its config directory exists, for the version <code>opencode --version</code> reports or the one <code>--opencode v1|v2</code> names.</li>
 </ul>
@@ -2462,13 +2464,17 @@ agtermctl session tint clear --target &quot;$AGTERM_SESSION_ID&quot;</code></pre
 <td>Antigravity CLI (<code>agy</code>)</td>
 <td>three hooks (<a href="#status-agy">below</a>), when <code>~/.gemini/config</code> already exists</td>
 </tr>
+<tr>
+<td>GitHub Copilot CLI</td>
+<td>six hooks through an adapter (<a href="#status-copilot">below</a>), when <code>~/.copilot</code>, or <code>COPILOT_HOME</code> if set, already exists</td>
+</tr>
 </tbody>
 </table>
 <p><strong>Where it writes</strong></p>
 <ul>
 <li>The scripts go to <code>~/.config/agterm/agent-status/</code>, with the bundled <code>agtermctl</code>'s absolute path baked in, so they work without the CLI on your PATH.</li>
 <li>A marker-guarded line for the shell integration goes into <code>~/.zshrc</code>, <code>~/.bashrc</code> and <code>~/.config/fish/config.fish</code> (fish only when that directory exists). Open a new terminal for it to take effect.</li>
-<li>The Claude Code hooks are merged into <code>~/.claude/settings.json</code>, the six Codex hooks into <code>~/.codex/config.toml</code>, and the agy hooks into <code>~/.gemini/config/hooks.json</code>. Before changing any of them, the installer saves a copy beside it with a <code>.bak</code> suffix.</li>
+<li>The Claude Code hooks are merged into <code>~/.claude/settings.json</code>, the six Codex hooks into <code>~/.codex/config.toml</code>, and the agy hooks into <code>~/.gemini/config/hooks.json</code>. Before changing any of them, the installer saves a copy beside it with a <code>.bak</code> suffix. The Copilot CLI hooks get a file of their own, <code>~/.copilot/hooks/agterm-status.json</code>, under <code>COPILOT_HOME</code> when your login shell sets it.</li>
 <li>Running it again upgrades agterm-managed integrations and otherwise changes nothing.</li>
 </ul>
 <h4 id="status-claude">Claude Code</h4>
@@ -2544,6 +2550,13 @@ agtermctl session tint clear --target &quot;$AGTERM_SESSION_ID&quot;</code></pre
 <li>While background work agy started, such as a command, is still running, the end of the turn reports active instead of completed; agy runs a follow-up turn when it finishes, and that turn completes. To leave background work out, export <code>AGTERM_AGY_IGNORE_BACKGROUND=1</code> in the shell that starts agy. A server agy starts as a daemon never holds the session active.</li>
 <li>When agy runs as a worker under another agent with a shell between them, as in a tool call, its hooks stay silent, and so do those of a Claude Code worker agy starts that way.</li>
 <li>Two gaps remain. agy has no event for a command or edit approval prompt, so those show as active, not blocked. And it reports nothing when it exits, so quitting while background work holds the session active leaves it active until you press Esc or Ctrl-C there or clear it.</li>
+</ul>
+<h4 id="status-copilot">GitHub Copilot CLI</h4>
+<ul>
+<li>A prompt and each finished tool report active, a permission prompt reports blocked until you answer it, and the end of a turn reports completed. Leaving Copilot with <code>/exit</code> or <code>/clear</code> clears the status, while a <code>copilot -p</code> run keeps its completed status. Restart Copilot after installing.</li>
+<li>A <code>copilot-status-hooks.json</code> from the cookbook's <code>copilot-agent-status</code> recipe is moved aside to a <code>.bak</code> copy; a changed one, or an <code>agterm-status.json</code> holding hooks of your own, is left untouched and reported in the install result.</li>
+<li>When Copilot runs as a worker under another agent with a shell between them, as in a tool call, its hooks stay silent, and so do those of a Claude Code worker Copilot starts that way. A subagent's work does not clear a pending permission prompt.</li>
+<li>Three gaps remain. A question Copilot asks you shows as active, not blocked, since Copilot reports a question only after its Autopilot mode has answered it. When the key that answers a subagent's permission prompt leaves the block in place, the row stays blocked until the main agent's next event. And Copilot reports nothing when a turn is interrupted, so press Esc or Ctrl-C in that pane, as for other agents, to clear the status.</li>
 </ul>
 <h4 id="codex-hooks-manual">Add Codex hooks by hand</h4>
 <p>The installer never rewrites a <code>~/.codex/config.toml</code> it does not own. If that file already defines its own <code>[hooks…]</code> entries, or is not valid TOML, it is left untouched and the install alert sends you here. With <code>CODEX_HOME</code> set, edit <code>&lt;CODEX_HOME&gt;/config.toml</code> instead.</p>

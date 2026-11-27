@@ -149,21 +149,8 @@ public enum AgentHooksInstall {
             return .merged(contents: serialize(root, escapingSlashes: false))
         }
 
-        /// isAdapterCommand accepts only an adapter path, bare or wrapped in one pair of quotes, followed by one action,
-        /// so a command with anything chained onto it is the user's.
         static func isAdapterCommand(_ command: String) -> Bool {
-            guard let space = command.lastIndex(of: " "), actions.contains(String(command[command.index(after: space)...])) else {
-                return false
-            }
-            var path = Substring(command[..<space])
-            var rejected = "'\";|&`<>()\n \t"
-            if let quote = path.first, quote == "'" || quote == "\"", path.count > 1, path.last == quote {
-                path = path.dropFirst().dropLast()
-                rejected.removeLast(2)
-            }
-            guard !path.contains(where: { rejected.contains($0) }) else { return false }
-            let name = path.split(separator: "/").last.map(String.init)
-            return name == wrapperName || name == cookbookAdapterName
+            AgentHooksInstall.isAdapterCommand(command, names: [wrapperName, cookbookAdapterName], actions: actions)
         }
 
         // every handler's command in a named hook, flat events and matcher groups alike; nil for any other key or a
@@ -179,6 +166,133 @@ public enum AgentHooksInstall {
                         guard let command = handler["command"] as? String else { return nil }
                         commands.append(command)
                     }
+                }
+            }
+            return commands
+        }
+    }
+
+    /// isAdapterCommand accepts only a path named in `names`, bare or wrapped in one pair of quotes, followed by one of
+    /// `actions`, so a command with anything chained onto it is the user's.
+    static func isAdapterCommand(_ command: String, names: Set<String>, actions: Set<String>) -> Bool {
+        guard let space = command.lastIndex(of: " "), actions.contains(String(command[command.index(after: space)...])) else {
+            return false
+        }
+        var path = Substring(command[..<space])
+        var rejected = "'\";|&`<>()\n \t"
+        if let quote = path.first, quote == "'" || quote == "\"", path.count > 1, path.last == quote {
+            path = path.dropFirst().dropLast()
+            rejected.removeLast(2)
+        }
+        guard !path.contains(where: { rejected.contains($0) }) else { return false }
+        return path.split(separator: "/").last.map { names.contains(String($0)) } ?? false
+    }
+
+    /// GitHub Copilot CLI hooks: one agterm-owned file among the `*.json` files Copilot loads from its `hooks`
+    /// directory, whose events the adapter maps.
+    public enum Copilot {
+        /// The adapter every generated command invokes.
+        static let wrapperName = "agterm-copilot-status.sh"
+        /// The hooks file this installer owns.
+        static let fileName = "agterm-status.json"
+        /// The cookbook recipe's hooks file, removed by an install while it is the recipe exactly as published.
+        static let cookbookFileName = "copilot-status-hooks.json"
+        /// The actions the adapter takes as its one argument.
+        static let actions: Set<String> = ["work", "ask", "stop", "end"]
+
+        private static let handlerKeys: Set<String> = ["type", "bash", "command", "timeoutSec", "matcher"]
+
+        /// The outcome of writing the hooks file over an existing one.
+        enum MergeOutcome: Equatable {
+            case merged(contents: String)
+            case unchanged
+            /// The file holds a hook that is not our adapter's.
+            case userOwned
+            case unparseable
+        }
+
+        /// The config directory Copilot reads when `COPILOT_HOME` names none.
+        static func configDirectory(home: String) -> String {
+            home + "/.copilot"
+        }
+
+        /// home resolves a `COPILOT_HOME` value as `Codex.home` resolves `CODEX_HOME`, nil for the default `~/.copilot`.
+        public static func home(copilotHome: String?, workingDirectory: String) -> String? {
+            Codex.home(codexHome: copilotHome, workingDirectory: workingDirectory)
+        }
+
+        /// The hooks file: a prompt and every finished tool are work, a permission prompt blocked, the main
+        /// agent's stop completed, and the session's end idle unless a `-p` run completed.
+        static func hooksFile(scriptDir: String) -> [String: Any] {
+            let wrapper = shellQuote(scriptDir + "/" + wrapperName)
+            func handler(_ action: String, matcher: String? = nil) -> [[String: Any]] {
+                var entry: [String: Any] = ["type": "command", "bash": wrapper + " " + action, "timeoutSec": 5]
+                entry["matcher"] = matcher
+                return [entry]
+            }
+            return ["version": 1, "hooks": [
+                "userPromptSubmitted": handler("work"),
+                "postToolUse": handler("work"),
+                "postToolUseFailure": handler("work"),
+                "notification": handler("ask", matcher: "permission_prompt"),
+                "agentStop": handler("stop"),
+                "sessionEnd": handler("end"),
+            ]]
+        }
+
+        /// mergeHooks returns the hooks file to write over `existing` (nil or blank = no file yet), rewriting a file only
+        /// while every hook in it runs our adapter with one action.
+        static func mergeHooks(existing: String?, scriptDir: String) -> MergeOutcome {
+            let contents = serialize(hooksFile(scriptDir: scriptDir), escapingSlashes: false)
+            guard let existing, !existing.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return .merged(contents: contents)
+            }
+            guard let root = try? parsedObject(existing) else { return .unparseable }
+            if serialize(root, escapingSlashes: false) == contents { return .unchanged }
+            let isOurs: (String) -> Bool = { isAdapterCommand($0, names: [wrapperName], actions: actions) }
+            guard let commands = commands(in: root), !commands.isEmpty, commands.allSatisfy(isOurs) else { return .userOwned }
+            return .merged(contents: contents)
+        }
+
+        /// isCookbookFile is true when `text` is the cookbook recipe's hooks file as published, events, matcher and timeouts
+        /// included, so a recipe the user adjusted is never moved aside.
+        static func isCookbookFile(_ text: String) -> Bool {
+            guard let root = try? parsedObject(text) else { return false }
+            return serialize(root) == serialize(cookbookRecipe)
+        }
+
+        /// callsAgtermWrapper is true when `text` runs agterm's generic status wrapper or this adapter anywhere, so a file
+        /// holding it would post statuses beside the installed hooks.
+        static func callsAgtermWrapper(_ text: String) -> Bool {
+            text.contains(AgentHooksInstall.wrapperName) || text.contains(wrapperName)
+        }
+
+        private static var cookbookRecipe: [String: Any] {
+            func handler(_ arguments: String, matcher: String? = nil) -> [[String: Any]] {
+                var entry: [String: Any] = ["type": "command", "timeoutSec": 5,
+                                            "bash": "$HOME/.config/agterm/agent-status/" + AgentHooksInstall.wrapperName + " " + arguments]
+                entry["matcher"] = matcher
+                return [entry]
+            }
+            return ["version": 1, "hooks": [
+                "userPromptSubmitted": handler("active --blink"),
+                "postToolUse": handler("active --blink"),
+                "agentStop": handler("completed --auto-reset"),
+                "notification": handler("blocked", matcher: "permission_prompt"),
+            ]]
+        }
+
+        // every handler's command; nil for any shape we would not write, such as a top-level `disableAllHooks`, an `env`
+        // or `cwd` on a handler, a handler with no command, or an event the user emptied to switch it off
+        private static func commands(in root: [String: Any]) -> [String]? {
+            guard Set(root.keys).isSubset(of: ["version", "hooks"]), let hooks = root["hooks"] as? [String: Any] else { return nil }
+            var commands: [String] = []
+            for value in hooks.values {
+                guard let handlers = value as? [[String: Any]], !handlers.isEmpty else { return nil }
+                for handler in handlers {
+                    let lines = ["bash", "command"].compactMap { handler[$0] }
+                    guard Set(handler.keys).isSubset(of: handlerKeys), !lines.isEmpty, let lines = lines as? [String] else { return nil }
+                    commands += lines
                 }
             }
             return commands

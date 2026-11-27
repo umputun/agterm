@@ -27,7 +27,7 @@
 # so an override can be valid there and invalid here. `[[` then returns 2, which lands on "not an
 # agent" and keeps the walk fail-open; the redirect swallows bash's complaint about the expression.
 is_agent() {
-  case "$1" in claude | codex | agy | kimi | opencode | pi | gemini | cursor-agent | aider | crush | goose) return 0 ;; esac
+  case "$1" in claude | codex | agy | copilot | kimi | opencode | pi | gemini | cursor-agent | aider | crush | goose) return 0 ;; esac
   if [ -n "${AGTERM_AGENT_RE:-}" ]; then
     [[ $1 =~ $AGTERM_AGENT_RE ]] 2>/dev/null && return 0
   fi

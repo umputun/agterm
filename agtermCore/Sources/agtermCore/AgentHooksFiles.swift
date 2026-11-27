@@ -55,6 +55,23 @@ public struct AgentHooksFiles {
         }
     }
 
+    /// CopilotResult is the outcome of writing `~/.copilot/hooks/agterm-status.json`.
+    public enum CopilotResult: Equatable, Sendable {
+        case installed, alreadyConfigured, userOwned, unparseable, unreadable, writeFailed, noCopilot
+        /// replacedCookbook is a set-up hooks file with the cookbook recipe's moved to `.bak`.
+        case replacedCookbook
+        /// cookbookKept is a set-up hooks file beside a `copilot-status-hooks.json` left in place: it runs agterm's scripts
+        /// but differs from the published recipe, or it could not be read, backed up or removed.
+        case cookbookKept
+
+        public var isWarning: Bool {
+            switch self {
+            case .userOwned, .unparseable, .unreadable, .writeFailed, .cookbookKept: true
+            case .installed, .alreadyConfigured, .noCopilot, .replacedCookbook: false
+            }
+        }
+    }
+
     /// OpenCodeResult is the OpenCode plugin's outcome; only version-specific results carry a version.
     public enum OpenCodeResult: Equatable, Sendable {
         case installed(AgentHooksInstall.OpenCode.Version, path: String)
@@ -81,8 +98,9 @@ public struct AgentHooksFiles {
         public let codex: CodexResult
         public let pi: PiResult
         public let agy: AgyResult
+        public let copilot: CopilotResult
 
-        public var isWarning: Bool { settingsSkipped || codex.isWarning || pi.isWarning || agy.isWarning }
+        public var isWarning: Bool { settingsSkipped || codex.isWarning || pi.isWarning || agy.isWarning || copilot.isWarning }
     }
 
     public let source: URL
@@ -93,11 +111,15 @@ public struct AgentHooksFiles {
     /// codexHome overrides the default `home/.codex`; a missing override is skipped without fallback.
     public let codexHome: URL?
 
-    public init(source: URL, home: URL, toolPath: String?, codexHome: URL? = nil) {
+    /// copilotHome overrides the default `home/.copilot` the same way.
+    public let copilotHome: URL?
+
+    public init(source: URL, home: URL, toolPath: String?, codexHome: URL? = nil, copilotHome: URL? = nil) {
         self.source = source
         self.home = home
         self.toolPath = toolPath
         self.codexHome = codexHome
+        self.copilotHome = copilotHome
     }
 
     /// destination is where the scripts are installed and every config points.
@@ -116,7 +138,8 @@ public struct AgentHooksFiles {
         let codex = try mergeCodexConfig(jqAvailable: jqAvailable)
         let pi = try installPiExtension()
         let agy = mergeAgyHooks()
-        return Outcome(settingsSkipped: settingsSkipped, codex: codex, pi: pi, agy: agy)
+        let copilot = installCopilotHooks()
+        return Outcome(settingsSkipped: settingsSkipped, codex: codex, pi: pi, agy: agy, copilot: copilot)
     }
 
     private func copyScripts() throws {
@@ -247,6 +270,52 @@ public struct AgentHooksFiles {
             }
             return .merged
         }
+    }
+
+    // only an existing Copilot root is touched; the file is ours alone, so it gets no backup, and a failed write is
+    // reported like agy's so the installer's later steps still run
+    private func installCopilotHooks() -> CopilotResult {
+        let configDir = copilotHome ?? URL(fileURLWithPath: AgentHooksInstall.Copilot.configDirectory(home: home.path))
+        guard FileManager.default.fileExists(atPath: configDir.path) else { return .noCopilot }
+        let hooksDir = configDir.appendingPathComponent("hooks")
+        let target = hooksDir.appendingPathComponent(AgentHooksInstall.Copilot.fileName)
+        let existing: String?
+        do { existing = try Self.readExisting(at: target) } catch { return .unreadable }
+        let result: CopilotResult
+        switch AgentHooksInstall.Copilot.mergeHooks(existing: existing, scriptDir: destination.path) {
+        case .unchanged: result = .alreadyConfigured
+        case .userOwned: return .userOwned
+        case .unparseable: return .unparseable
+        case .merged(let contents):
+            do {
+                try FileManager.default.createDirectory(at: hooksDir, withIntermediateDirectories: true)
+                let mode = AgentHooksInstall.posixMode(ofFile: (Self.symlinkTarget(of: target) ?? target).path)
+                try writePreservingSymlink(contents, to: target, posixMode: mode)
+            } catch {
+                return .writeFailed
+            }
+            result = .installed
+        }
+        return removeCopilotCookbookFile(in: hooksDir) ?? result
+    }
+
+    // the recipe's file would post every status a second time, past the worker guard; it is removed only while it is the
+    // recipe as published, saved beside it as .bak, which Copilot does not load. nil when there is none, or when a file
+    // by that name runs nothing of agterm's
+    private func removeCopilotCookbookFile(in hooksDir: URL) -> CopilotResult? {
+        let cookbook = hooksDir.appendingPathComponent(AgentHooksInstall.Copilot.cookbookFileName)
+        let text: String?
+        do { text = try Self.readExisting(at: cookbook) } catch { return .cookbookKept }
+        guard let text, AgentHooksInstall.Copilot.callsAgtermWrapper(text) else { return nil }
+        guard AgentHooksInstall.Copilot.isCookbookFile(text) else { return .cookbookKept }
+        do {
+            let mode = AgentHooksInstall.posixMode(ofFile: (Self.symlinkTarget(of: cookbook) ?? cookbook).path)
+            try AgentHooksInstall.writeFile(text, toPath: AgentHooksInstall.backupPath(for: cookbook.path), posixMode: mode)
+            try FileManager.default.removeItem(at: cookbook)
+        } catch {
+            return .cookbookKept
+        }
+        return .replacedCookbook
     }
 
     /// installOpenCodePlugin writes the `version` plugin into `configurationDirectory` from `scriptDirectory`, the
@@ -401,6 +470,44 @@ extension AgentHooksFiles.AgyResult {
             return "agy hooks couldn't be written to ~/.gemini/config/hooks.json (check its permissions, or its link's target), so they were skipped."
         case .noAgy:
             return "No ~/.gemini/config found, so agy hooks were skipped. Start agy once, then run this again."
+        }
+    }
+}
+
+extension AgentHooksFiles.CopilotResult {
+    /// text is the one-line report of this outcome; Copilot reads its hooks when it starts.
+    public var text: String { text(copilotHome: nil) }
+
+    /// Reports the selected root, `COPILOT_HOME`'s when the caller resolved one.
+    public func text(copilotHome: String?) -> String {
+        let directory = copilotHome ?? "~/.copilot"
+        let file = directory + "/hooks/" + AgentHooksInstall.Copilot.fileName
+        let cookbook = directory + "/hooks/" + AgentHooksInstall.Copilot.cookbookFileName
+        switch self {
+        case .installed:
+            return "Copilot CLI hooks installed to \(file). Restart Copilot to load them."
+        case .alreadyConfigured:
+            return "Copilot CLI hooks are already present in \(file)."
+        case .replacedCookbook:
+            return "Copilot CLI hooks are set up in \(file), and the cookbook recipe's \(cookbook) was moved to .bak. "
+                + "Restart Copilot to load them."
+        case .cookbookKept:
+            return "Copilot CLI hooks are set up in \(file), but \(cookbook) was left in place because it differs from the "
+                + "published recipe or could not be read or moved; remove agterm's hooks from it, then restart Copilot."
+        case .userOwned:
+            return "\(file) holds hooks agterm did not write, so agterm left it untouched."
+        case .unparseable:
+            return "Your \(file) isn't valid JSON, so agterm left it untouched. Fix or remove it and run this again."
+        case .unreadable:
+            return "Your \(file) exists but couldn't be read, so agterm left it untouched."
+        case .writeFailed:
+            return "Copilot CLI hooks couldn't be written to \(directory)/hooks/ (check its permissions, or its link's target), so they were skipped."
+        case .noCopilot:
+            if copilotHome != nil {
+                return "No \(directory) found (your COPILOT_HOME), so Copilot CLI hooks were skipped. "
+                    + "Create it or fix COPILOT_HOME, then run this again."
+            }
+            return "No \(directory) found, so Copilot CLI hooks were skipped. Start Copilot once, then run this again."
         }
     }
 }

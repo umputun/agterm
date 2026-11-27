@@ -38,7 +38,7 @@ paths:
 - Xcode's CLI phase builds Release, copies/signs `agtermctl`, then deep re-signs the app; shallow signing
   fails with `agterm.debug.dylib`. The Help installer links into `/usr/local/bin`, directly or through one
   admin prompt. Host-free `CLIInstall` owns paths/quoting; app code owns filesystem/auth.
-- Agent Hooks installation copies generic, Claude, Codex, agy, Pi, OpenCode, and shell assets under
+- Agent Hooks installation copies generic, Claude, Codex, agy, Copilot, Pi, OpenCode, and shell assets under
   `~/.config/agterm/agent-status`, baking the bundled CLI. Marker merges are idempotent and preserve
   unrelated config; unreadable config is never treated as absent.
 - Claude maps prompt/tool work to `active --blink`, Stop to `completed --auto-reset`, and a permission
@@ -52,8 +52,8 @@ paths:
   so `--auto-reset` cannot idle the row. Anything else, an unreadable payload included, posts argv.
   `AGTERM_CLAUDE_IGNORE_SHELLS=1` (exactly `1`) in Claude's environment drops shells from that running set; it is a
   hook-local knob because the hook decides before the status reaches the app, and agterm-server has no settings to read.
-- `agent-owner.sh` holds the worker walk the Claude, Codex and agy adapters source (Codex after its watcher entry,
-  before any token or status write); its `is_agent` list must keep every
+- `agent-owner.sh` holds the worker walk the Claude, Codex, agy and Copilot adapters source
+  (Codex after its watcher entry, before any token or status write); its `is_agent` list must keep every
   hook-driven agent and the `AGTERM_AGENT_RE` default, which `ClaudeStatusHookTests` pins.
 - agy (installed only when `~/.gemini/config` exists) maps PreInvocation to `active --blink`, PreToolUse on
   `ask_question|ask_permission` to blocked, and Stop to completed, or `active --blink` while `fullyIdle` is false
@@ -62,6 +62,16 @@ paths:
   reference says it auto-approves; it does not), SessionStart fires only with the first prompt, Esc and exit fire no
   hook, and a daemon server leaves `fullyIdle` true. The named hook `agterm-status` is replaced only when every
   command in it is `AgentHooksInstall.Agy.isAdapterCommand`: our adapter's or the cookbook's path plus one action.
+- Copilot CLI (installed only when `~/.copilot`, or `COPILOT_HOME` resolved like `CODEX_HOME`, exists) gets
+  its own `hooks/agterm-status.json`, rewritten only while every hook in it is our adapter plus one action.
+  The adapter maps prompt and finished tools to `active --blink` (`--if-idle` with `agentId`),
+  `notification[permission_prompt]` to blocked, the main agent's `agentStop` to completed, and `sessionEnd` to idle
+  unless its reason is `complete` (`-p`). It prints nothing: stdout is parsed as hook output.
+  Measured on 1.0.116: a subagent fires its own `agentStop`, and Autopilot answers `ask_user` itself and fires
+  `elicitation_dialog` after the tool's postToolUse, so questions stay unmapped.
+  A subagent's permission `notification` carries no `agentId` (1.0.117), so only the answering key or the main
+  agent clears its block.
+  A cookbook `copilot-status-hooks.json` identical to the published recipe is moved to `.bak`.
 - Codex maps SessionStart idle; prompt/pre/post tool active; Stop ending `?` blocked, otherwise completed.
   Those first four report nothing for a null `transcript_path`: Codex's ephemeral memory consolidation
   thread fires them but never a user Stop, so they would leave the pane active.
