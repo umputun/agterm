@@ -148,6 +148,32 @@ struct ServerHookInstallTests {
         #expect(try fixture.read(".codex/config.toml").contains(".config/agterm/agent-status"))
     }
 
+    @Test func copilotHomeReceivesTheHooks() throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        try fixture.directory(".copilot")
+        try fixture.directory("custom-copilot")
+        let copilotHome = fixture.home.appendingPathComponent("custom-copilot").path
+
+        let report = try install(fixture, environment: ["COPILOT_HOME": copilotHome])
+
+        #expect(report.lines.contains(AgentHooksFiles.CopilotResult.installed.text(copilotHome: copilotHome)))
+        #expect(try fixture.read("custom-copilot/hooks/agterm-status.json").contains("agterm-copilot-status.sh"))
+        #expect(!FileManager.default.fileExists(atPath: fixture.home.appendingPathComponent(".copilot/hooks").path))
+    }
+
+    @Test func missingCopilotHomeIsReportedWithoutFallingBackToTheDefault() throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        try fixture.directory(".copilot")
+        let copilotHome = fixture.home.appendingPathComponent("absent-copilot").path
+
+        let report = try install(fixture, environment: ["COPILOT_HOME": copilotHome])
+
+        #expect(report.lines.contains(AgentHooksFiles.CopilotResult.noCopilot.text(copilotHome: copilotHome)))
+        #expect(!FileManager.default.fileExists(atPath: fixture.home.appendingPathComponent(".copilot/hooks").path))
+    }
+
     @Test func openCodeVersionComesFromItsCommand() throws {
         let fixture = try makeFixture()
         defer { try? FileManager.default.removeItem(at: fixture.root) }

@@ -35,7 +35,8 @@ final class WelcomeAlertTests: XCTestCase {
     }
 
     func testCombinedInstallationProbesOnceAndFinishesSkillBeforeHooks() async {
-        let captured = OpenCodeEnvironmentProbe.Result(version: .v2, v2ConfigurationDirectory: "/opencode", codexHome: "/custom/codex")
+        let captured = OpenCodeEnvironmentProbe.Result(version: .v2, v2ConfigurationDirectory: "/opencode", codexHome: "/custom/codex",
+                                                      copilotHome: nil)
         var events: [String] = []
         await AgentInstallers.run(skill: true, hooks: true, probe: {
             events.append("probe")
@@ -57,8 +58,10 @@ final class WelcomeAlertTests: XCTestCase {
         let hooksProbeStarted = expectation(description: "hooks probe started")
         let hooksResultOpened = expectation(description: "hooks result opened")
         let skillRequested = expectation(description: "skill requested while hooks are probing")
-        let hooksCapture = OpenCodeEnvironmentProbe.Result(version: .v1, v2ConfigurationDirectory: nil, codexHome: "/first/codex")
-        let skillCapture = OpenCodeEnvironmentProbe.Result(version: .v2, v2ConfigurationDirectory: nil, codexHome: "/second/codex")
+        let hooksCapture = OpenCodeEnvironmentProbe.Result(version: .v1, v2ConfigurationDirectory: nil, codexHome: "/first/codex",
+                                                          copilotHome: nil)
+        let skillCapture = OpenCodeEnvironmentProbe.Result(version: .v2, v2ConfigurationDirectory: nil, codexHome: "/second/codex",
+                                                          copilotHome: nil)
         var finishProbe: CheckedContinuation<OpenCodeEnvironmentProbe.Result?, Never>?
         var dismissHooks: CheckedContinuation<Void, Never>?
         var events: [String] = []
