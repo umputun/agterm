@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      { "type": "command", "bash": "\"${COPILOT_HOOK_DIR:-${COPILOT_HOME:-$HOME/.copilot}/hooks}/copilot-resume-hook.sh\"" }
+    ]
+  }
+}
