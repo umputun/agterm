@@ -1526,6 +1526,62 @@ final class WindowLibraryTests {
         #expect(!expected.isEmpty)
     }
 
+    private struct SharedPane {
+        let library: WindowLibrary
+        let store: AppStore
+        let other: AppStore
+        let session: Session
+        let window: WindowInfo
+    }
+
+    // an older build could persist one session, pane identity included, in two windows
+    private func sharedPane(_ log: DropLog) throws -> SharedPane {
+        let library = WindowLibrary(directory: directory, paneFinalizer: { log.identities += $0 })
+        let first = library.newWindow(name: "first")
+        let store = try #require(library.store(for: first.id))
+        let session = try #require(store.addSession(toWorkspace: store.workspaces[0].id, cwd: "/tmp"))
+        let other = try #require(library.store(for: library.newWindow(name: "second").id))
+        let copy = SessionSnapshot(id: session.id, paneIdentity: session.paneIdentity, customName: "copy", cwd: "/tmp")
+        other.restore(from: Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: "other", sessions: [copy])]))
+        log.identities = []
+        return SharedPane(library: library, store: store, other: other, session: session, window: first)
+    }
+
+    @Test(arguments: [false, true])
+    func aHardCloseLeavesAPaneAnotherWindowStillHolds(otherPending: Bool) throws {
+        let log = DropLog()
+        let shared = try sharedPane(log)
+        defer { shared.library.finalizeAllPendingCloses() }
+        if otherPending { #expect(shared.other.softCloseSession(shared.session.id, grace: 60)) }
+
+        shared.store.closeSession(shared.session.id)
+
+        #expect(!log.identities.contains(shared.session.paneIdentity))
+    }
+
+    @Test func theLastWindowHoldingASharedPaneEndsIt() throws {
+        let log = DropLog()
+        let shared = try sharedPane(log)
+        shared.store.closeSession(shared.session.id)
+
+        shared.other.closeSession(shared.session.id)
+
+        #expect(log.identities.contains(shared.session.paneIdentity))
+    }
+
+    @Test func removingAWindowLeavesAPaneAnotherWindowStillHolds() throws {
+        let log = DropLog()
+        let shared = try sharedPane(log)
+        let ownPanes = Set(PaneIdentityInventory.identities(in: shared.store.workspaces.flatMap(\.sessions)))
+            .subtracting([shared.session.paneIdentity])
+
+        shared.library.removeWindow(shared.window.id)
+
+        #expect(!log.identities.contains(shared.session.paneIdentity))
+        #expect(!ownPanes.isEmpty)
+        #expect(ownPanes.isSubset(of: Set(log.identities)))
+    }
+
     private final class EndedLog {
         var watched: UUID?
         var viewer: PresentationHubTests.Sink?

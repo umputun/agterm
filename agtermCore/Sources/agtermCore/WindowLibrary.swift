@@ -745,7 +745,12 @@ public final class WindowLibrary {
                     session: draft.session, payload: draft.payload))
                 self.onControlEvent?(event)
             },
-            paneFinalizer: paneFinalizer,
+            paneFinalizer: paneFinalizer.map { finalize in
+                { [weak self] identities in
+                    let owned = self?.unshared(identities, outside: windowID) ?? identities
+                    if !owned.isEmpty { finalize(owned) }
+                }
+            },
             launchPaneDrop: launchPaneDrop,
             daemonProbe: daemonProbe
         )
@@ -838,7 +843,7 @@ public final class WindowLibrary {
         if let store = stores[id] {
             let sessions = store.workspaces.flatMap(\.sessions)
             endPresentations(of: sessions.map(\.id))
-            let identities = PaneIdentityInventory.identities(in: sessions)
+            let identities = unshared(PaneIdentityInventory.identities(in: sessions), outside: id)
             if let paneFinalizer, !identities.isEmpty { paneFinalizer(identities) }
             return
         }
@@ -846,11 +851,21 @@ public final class WindowLibrary {
             var snapshot = try persistenceStore(for: id).loadChecked()
             // a closed window's session can still have subscribed viewers
             endPresentations(of: snapshot.workspaces.flatMap(\.sessions).map(\.id))
-            let identities = PaneIdentityInventory.upgrade(&snapshot).identities
-            if let paneFinalizer, !identities.isEmpty { paneFinalizer(Array(identities)) }
+            let identities = unshared(Array(PaneIdentityInventory.upgrade(&snapshot).identities), outside: id)
+            if let paneFinalizer, !identities.isEmpty { paneFinalizer(identities) }
         } catch {
             log("window delete could not inventory panes for \(id): \(error)")
         }
+    }
+
+    /// unshared drops the identities another open window still holds, live or pending undo. A snapshot an older
+    /// build wrote can carry one session, pane identity included, in two windows, and one daemon serves both.
+    private func unshared(_ identities: [UUID], outside windowID: UUID) -> [UUID] {
+        var held: Set<UUID> = []
+        for (id, store) in stores where id != windowID {
+            held.formUnion(PaneIdentityInventory.identities(in: store.workspaces.flatMap(\.sessions) + store.pendingHeldSessions()))
+        }
+        return identities.filter { !held.contains($0) }
     }
 
     private func scheduleTreeChanged(for windowID: UUID) {
