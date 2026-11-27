@@ -19,8 +19,23 @@ struct CodexStatusHookTests {
             .path
     }
 
+    // the login boundary keeps the test runner's agent from being counted as a spawner
+    private static func spawnArguments(in dir: URL, chain: [String] = ["login"], command: [String]) throws -> [String] {
+        let spawner = dir.appendingPathComponent("spawn-chain.sh")
+        try """
+        #!/bin/bash
+        levels=()
+        while [ "$1" != "--" ]; do levels+=("$1"); shift; done
+        shift
+        [ "${#levels[@]}" -eq 0 ] && { "$@"; exit $?; }
+        ( exec -a "${levels[0]}" /bin/bash "$0" "${levels[@]:1}" -- "$@" )
+        exit $?
+        """.writeExecutable(to: spawner)
+        return [spawner.path] + chain + ["--", "/bin/bash"] + command
+    }
+
     private func run(_ action: String, screen: String = "", screens: [String] = [], worker: Bool = false,
-                     supersedeTokenOnRead: Bool = false,
+                     supersedeTokenOnRead: Bool = false, chain: [String] = ["login"],
                      input: String = "") throws -> HookRun {
         let fm = FileManager.default
         let dir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("agterm-codex-hook-\(UUID().uuidString)")
@@ -56,7 +71,8 @@ struct CodexStatusHookTests {
 
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/bin/bash")
-        proc.arguments = worker ? [Self.hook, "__watch-blocked", "token", tokenFile.path] : [Self.hook, action]
+        let hookArgs = worker ? [Self.hook, "__watch-blocked", "token", tokenFile.path] : [Self.hook, action]
+        proc.arguments = try Self.spawnArguments(in: dir, chain: chain, command: hookArgs)
         var environment = [
             "AGTERMCTL": agtermctl.path,
             "AGTERM_STATUS_WRAPPER": statusWrapper.path,
@@ -101,6 +117,20 @@ struct CodexStatusHookTests {
         #expect(try run("pre-tool-use").statusCalls == ["active --blink"])
         #expect(try run("post-tool-use").statusCalls == ["active --blink"])
         #expect(try run("stop").statusCalls == ["completed --auto-reset"])
+    }
+
+    @Test(arguments: ["session-start", "user-prompt-submit", "permission-request", "stop"])
+    func workerSpawnedByAnotherAgentLeavesStatusAndWatcherAlone(action: String) throws {
+        let input = #"{"hook_event_name":"x","transcript_path":"/tmp/rollout.jsonl"}"#
+        let result = try run(action, chain: ["login", "claude", "bash", "codex"], input: input)
+        #expect(result.statusCalls.isEmpty)
+        #expect(result.token == "token\n")
+        #expect(result.exit == 0)
+    }
+
+    @Test func paneCodexUnderItsLauncherReports() throws {
+        let input = #"{"hook_event_name":"x","transcript_path":"/tmp/rollout.jsonl"}"#
+        #expect(try run("session-start", chain: ["login", "zsh", "codex"], input: input).statusCalls == ["idle"])
     }
 
     // codex's memory consolidation thread reaches these user hooks but no user Stop, leaving the pane active
@@ -251,7 +281,7 @@ struct CodexStatusHookTests {
 
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/bin/bash")
-        proc.arguments = [Self.hook, "session-start"]
+        proc.arguments = try Self.spawnArguments(in: dir, command: [Self.hook, "session-start"])
         proc.environment = [
             "AGTERM_SESSION_ID": "sid",
             "AGTERM_PANE": "right",
