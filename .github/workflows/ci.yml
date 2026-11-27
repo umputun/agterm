@@ -88,7 +88,7 @@ jobs:
           path: |
             build/linux/ghostty
             build/linux/.shell-integration-stamp
-          key: shell-integration-macos-v2-${{ steps.revisions.outputs.ghostty }}
+          key: shell-integration-macos-v3-${{ steps.revisions.outputs.ghostty }}-${{ hashFiles('scripts/setup-zmx-linux.sh') }}
       # the server's real-daemon panes load it; this job builds no libghostty, so it comes from ghostty's source at the pin
       - name: Stage the shell integration
         run: scripts/setup-zmx-linux.sh --shell-integration
@@ -198,7 +198,7 @@ jobs:
     # build, then the watchdog's 10-minute test cap and its diagnostics
     timeout-minutes: 45
     container:
-      image: swift:6.3.2-noble
+      image: swift:6.3.2-noble@sha256:c4336909a71b2e69b884f4078cdf98c0cd081911632cb349ef72abc4cbed69fc
       # the watchdog's lldb attaches, as root, to the test runner owned by agterm-test
       options: --cap-add=SYS_PTRACE
     steps:
@@ -220,7 +220,7 @@ jobs:
           path: |
             build/linux/ghostty
             build/linux/.shell-integration-stamp
-          key: shell-integration-linux-v2-${{ steps.zmx.outputs.ghostty }}
+          key: shell-integration-linux-v3-${{ steps.zmx.outputs.ghostty }}-${{ hashFiles('scripts/setup-zmx-linux.sh') }}
       - name: Stage the Linux shell integration
         # the zsh, fish and bash integration agterm-server panes load, from ghostty's source at the pin
         run: scripts/setup-zmx-linux.sh --shell-integration

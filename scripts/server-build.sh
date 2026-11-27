@@ -5,13 +5,13 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SWIFT_IMAGE=swift:6.3.2-noble
+SWIFT_IMAGE=swift:6.3.2-noble@sha256:c4336909a71b2e69b884f4078cdf98c0cd081911632cb349ef72abc4cbed69fc
 SDK=swift-6.3.2-RELEASE_static-linux-0.1.0
 SDK_URL="https://download.swift.org/swift-6.3.2-release/static-sdk/swift-6.3.2-RELEASE/$SDK.artifactbundle.tar.gz"
 # swift.org's published checksum for this bundle (api/v1/install/releases.json, 6.3.2, static-sdk)
 SDK_SHA256=3fd798bef6f4408f1ea5a6f94ce4d4052830c4326ab85ebc04f983f01b3da407
 # runs the built binary for its --version check; a static musl binary needs nothing from the image
-CHECK_IMAGE=alpine:3.20
+CHECK_IMAGE=alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
 # musl gives a thread 128 KiB of stack unless PT_GNU_STACK asks for more, up to 8 MiB; libdispatch's workers, which
 # drain the server's main actor, take that default, and a release build outgrows it
 STACK_SIZE=8388608
