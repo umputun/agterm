@@ -1,5 +1,6 @@
 import AppKit
 import GhosttyKit
+import os
 import XCTest
 @testable import agterm
 import agtermCore
@@ -104,9 +105,18 @@ final class SurfaceRetirementTests: XCTestCase {
 
     func testTeardownRetiresASurfaceWhoseChildHasNotExited() async throws {
         _ = try stopChild()
+        let resumedByFallback = OSAllocatedUnfairLock(initialState: false)
+        let group = stoppedGroup
+        let fallback = DispatchWorkItem { @Sendable in
+            resumedByFallback.withLock { $0 = true }
+            killpg(group, SIGCONT)
+        }
+        defer { fallback.cancel() }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 10, execute: fallback)
 
         terminal.teardown()
 
+        XCTAssertFalse(resumedByFallback.withLock { $0 }, "teardown waited for the stopped child")
         XCTAssertNil(terminal.surface)
         XCTAssertFalse(terminal.configCStrings.isEmpty, "a stopped child keeps the surface retired, not freed")
 
@@ -136,6 +146,42 @@ final class SurfaceRetirementTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: bodyFile), "a replacement HUD writes this same path")
         XCTAssertNil(terminal.hudBodyFile)
         XCTAssertNil(terminal.onExit, "a surface that never frees must not keep the store alive")
+    }
+
+    func testDrainForQuitLeavesAStoppedChildPendingPastItsBudget() async throws {
+        _ = try stopChild()
+        terminal.retireSurface(into: retirement)
+        let start = ContinuousClock.now
+
+        retirement.drainForQuit(budget: .milliseconds(200))
+
+        let waited = ContinuousClock.now - start
+        XCTAssertGreaterThanOrEqual(waited, .milliseconds(200))
+        XCTAssertLessThan(waited, .seconds(10))
+        XCTAssertEqual(retirement.pendingCount, 1)
+        XCTAssertFalse(terminal.configCStrings.isEmpty)
+    }
+
+    func testDrainForQuitFreesASurfaceWhoseChildExitsWithinItsBudget() async throws {
+        _ = try stopChild()
+        terminal.retireSurface(into: retirement)
+        resumeChild()
+
+        retirement.drainForQuit(budget: .seconds(30))
+
+        XCTAssertEqual(retirement.pendingCount, 0)
+        XCTAssertTrue(terminal.configCStrings.isEmpty)
+    }
+
+    func testASecondTeardownOfARetiredSurfaceKeepsItRetired() async throws {
+        _ = try stopChild()
+        terminal.retireSurface(into: retirement)
+
+        terminal.destroySurface()
+        terminal.retireSurface(into: retirement)
+
+        XCTAssertEqual(retirement.pendingCount, 1)
+        XCTAssertFalse(terminal.configCStrings.isEmpty, "the retired surface still runs on these")
     }
 
     func testCallbacksForARetiredSurfaceAreIgnored() async throws {

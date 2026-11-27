@@ -191,7 +191,7 @@ C-boundary concurrency before changing the bridge.
   logging uses `os.Logger`.
 - An instance whose control socket is bound never enters App Nap: `ControlServer` holds a
   `userInitiatedAllowingIdleSystemSleep` activity for exactly that time (`control-api.md`).
-  Only an instance refused the socket can still nap, about 70 to 95 s after it is hidden.
+  An instance not serving its socket (refused, or its bind failed) can still nap, about 70 to 95 s after it is hidden.
 - `scripts/run.sh` activates an existing instance instead of loading a rebuild. Use a distinct isolated
   launch for current code.
 - Stop an isolated Live-mode Debug instance and its daemons before rebuilding the same DerivedData.

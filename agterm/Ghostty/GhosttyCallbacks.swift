@@ -305,11 +305,12 @@ final class GhosttyCallbacks: @unchecked Sendable {
             if let surface = surface(from: ud) { ghostty_surface_deny_clipboard_request(surface, state) }
             return
         }
-        // capture the VIEW, not the raw surface pointer: a close (GUI or `session.close`) can free the surface
-        // via destroySurface() WHILE the sheet is open. Re-read `view.surface` at completion and skip if it's
-        // gone — freeing already discarded the request, so there is nothing to complete and no loop. The view
-        // also scopes the prompt's coalescing to this surface.
+        // capture the VIEW, not the raw surface pointer: a close (GUI or `session.close`) can detach and retire
+        // the surface WHILE the sheet is open. Re-read `view.surface` at completion and skip if it's gone — the
+        // free discards the request, so there is nothing to complete and no loop. The view also scopes the
+        // prompt's coalescing to this surface.
         let view = Unmanaged<GhosttySurfaceView>.fromOpaque(ud).takeUnretainedValue()
+        guard !view.retired.withLock({ $0 }) else { return }
         let payload = Self.copyClipboardConfirmation(confirm.pointee)
         nonisolated(unsafe) let requestState = state
         let access: ClipboardAccess? = switch request {
@@ -341,6 +342,8 @@ final class GhosttyCallbacks: @unchecked Sendable {
     func writeClipboard(ud: UnsafeMutableRawPointer?, location: ghostty_clipboard_e,
                         content: UnsafePointer<ghostty_clipboard_content_s>?, len: UInt, confirm: Bool) {
         guard let content, len > 0 else { return }
+        // a closed pane's program can still write while its surface is retired
+        if let ud, Unmanaged<GhosttySurfaceView>.fromOpaque(ud).takeUnretainedValue().retired.withLock({ $0 }) { return }
         // keep EVERY representation, not just text: a Kitty write can carry images, the callback is void,
         // and core reports `DONE` to the program right after it — dropping a representation here silently
         // lies to a client that was just told its write succeeded.
@@ -362,7 +365,7 @@ final class GhosttyCallbacks: @unchecked Sendable {
         let view = Unmanaged<GhosttySurfaceView>.fromOpaque(ud).takeUnretainedValue()
         DispatchQueue.main.async {
             ClipboardPromptController.shared.request(.write, requester: view) { allowed in
-                if allowed { Self.setClipboard(items, location: location) }
+                if allowed, !view.retired.withLock({ $0 }) { Self.setClipboard(items, location: location) }
             }
         }
     }
@@ -449,8 +452,8 @@ final class GhosttyCallbacks: @unchecked Sendable {
 
     func closeSurface(ud: UnsafeMutableRawPointer?) {
         guard let ud else { return }
-        // the Session retains the view until destroySurface() runs, and SurfaceRetirement retains a retired one
-        // until it frees the surface, so takeUnretainedValue() is safe. never close or free synchronously here.
+        // the Session retains the view until its teardown, and SurfaceRetirement retains a retired one until it
+        // frees the surface, so takeUnretainedValue() is safe. never close or free synchronously here.
         let view = Unmanaged<GhosttySurfaceView>.fromOpaque(ud).takeUnretainedValue()
         guard !view.retired.withLock({ $0 }) else { return }
         DispatchQueue.main.async { view.handleProcessExit() }

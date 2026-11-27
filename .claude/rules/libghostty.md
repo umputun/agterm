@@ -115,6 +115,10 @@ paths:
   0003); `destroySurface` is the synchronous free. Both run `releaseCallbacksAndFiles` before the free: it reads
   the overlay exit status, deletes the HUD body file, then nils every store-capturing callback to break the
   store/session/surface/closure cycle, so none of it waits on a retired surface.
+  A retired surface takes no config, binding or IO pushes (the 0003 README says why).
+  Quit runs `SurfaceRetirement.drainForQuit` once the last window is gone, from that window's `willClose` or
+  from `applicationWillTerminate`, whichever runs later: each io thread hangs up its child as it exits, and
+  nothing would once the app is gone. Its 1 s bound keeps a child that ignores the hangup from holding quit.
 - Create surfaces only with nonzero backing size; otherwise Metal stays blank. Defer through
   `pendingSurfaceCreation` until `setFrameSize`.
 - After the size guard `createSurface()` asks the launch `SpawnPacer` for a permit, then resolves the

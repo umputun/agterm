@@ -27,6 +27,29 @@ final class SurfaceRetirement {
         schedule()
     }
 
+    /// drainForQuit frees every retired surface whose threads exit within `budget`. Each io thread hangs up its
+    /// child as it exits, and no sweep runs once the app exits, so quit waits here for that hangup; the bound
+    /// keeps a child that ignores it from holding quit.
+    func drainForQuit(budget: Duration = .seconds(1)) {
+        let deadline = ContinuousClock.now + budget
+        while true {
+            freeExited()
+            guard !entries.isEmpty, ContinuousClock.now < deadline else { return }
+            Thread.sleep(forTimeInterval: 0.005)
+        }
+    }
+
+    private func freeExited() {
+        var index = entries.startIndex
+        while index < entries.endIndex {
+            guard ghostty_surface_try_free(entries[index].surface) else {
+                index += 1
+                continue
+            }
+            entries.remove(at: index).view.finishDestroy()
+        }
+    }
+
     private func schedule() {
         guard !scheduled, !entries.isEmpty else { return }
         scheduled = true

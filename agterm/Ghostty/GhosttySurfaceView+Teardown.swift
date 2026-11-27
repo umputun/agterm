@@ -3,6 +3,8 @@ import GhosttyKit
 
 extension GhosttySurfaceView {
     func destroySurface() {
+        // a second teardown must not reach finishDestroy: a retired surface may still be running
+        guard !isDestroyed else { return }
         let surface = detachSurface()
         releaseCallbacksAndFiles()
         if let surface { ghostty_surface_free(surface) }
@@ -14,6 +16,7 @@ extension GhosttySurfaceView {
     /// its hangup, so the surface is only asked to stop here and `retirement` frees it once they have exited.
     /// It stays allocated meanwhile, so no new surface can take its address (`agtermApp.replacePane`).
     func retireSurface(into retirement: SurfaceRetirement = .shared) {
+        guard !isDestroyed else { return }
         let surface = detachSurface()
         // set before the store callbacks run, so a report libghostty's threads send meanwhile is dropped
         retired.withLock { $0 = true }
