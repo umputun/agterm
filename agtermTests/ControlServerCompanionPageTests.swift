@@ -216,6 +216,23 @@ final class ControlServerCompanionPageTests: XCTestCase {
         XCTAssertEqual(answer ?? nil, .failure(id: 4, error: "a URL page has no bridge"))
     }
 
+    func testARemoteFilePageCannotCloseAnExactCompanionGroup() throws {
+        let page = try filePage()
+        let (client, reply) = try claim(try attach(page).token)
+        XCTAssertTrue(try XCTUnwrap(reply).contains(#""ok":true"#))
+        waitUntil("the channel adopted") { self.server.pageAttachments.streams.count == 1 }
+        let request = #"{"cmd":"session.closeChecked","target":"\#(parent.id)","args":{"expectCompanions":["\#(page.id)"]}}"#
+
+        let answer = offMain { () -> PageServeFrame? in
+            client.send(.bridge(id: 4, request: request))
+            return client.frame()
+        }
+
+        XCTAssertEqual(answer ?? nil, .failure(id: 4, error: "session.closeChecked is unavailable from a remote page"))
+        XCTAssertTrue(store.session(withID: parent.id) === parent)
+        XCTAssertTrue(store.session(withID: page.id) === page)
+    }
+
     func testAPageRowClosingItsWindowSoftClosesItsGroupThroughTheAppClose() throws {
         let row = try pageRow()
         let companion = try store.addCompanion(to: row.id).get()

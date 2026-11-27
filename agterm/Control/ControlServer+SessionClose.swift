@@ -16,6 +16,12 @@ extension ControlServer {
         }
     }
 
+    func closeSessionChecked(_ target: UUID, window: UUID?, expectCompanions: Set<UUID>) -> Result<CheckedSessionClose, CheckedSessionClose.Refusal> {
+        resolver.resolveExactSession(target, window: window).flatMap { store in
+            store.closeSessionChecked(target, expectCompanions: expectCompanions)
+        }
+    }
+
     func closeSessions(_ targets: [String], window: String?, undoable: Bool) -> ControlResponse {
         resolveBatchSessions(targets, window: window) { store, ids in
             guard ids.count > 1 else {

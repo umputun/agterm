@@ -39,6 +39,9 @@ public protocol ControlActions {
     /// The `session.close --undoable` forms; their defaults refuse an undoable request.
     func closeSession(_ target: String?, window: String?, undoable: Bool) -> ControlResponse
     func closeSessions(_ targets: [String], window: String?, undoable: Bool) -> ControlResponse
+    /// Resolve one local owner and compare its exact companion set before a hard close.
+    /// Refuse without changes if the owner is ambiguous or the close would finalize a companion pending undo.
+    func closeSessionChecked(_ target: UUID, window: UUID?, expectCompanions: Set<UUID>) -> Result<CheckedSessionClose, CheckedSessionClose.Refusal>
     /// terminateSessions ends sessions where they run: a row attached from another host on its origin, any other
     /// row as `session.close` does. The default refuses, so a host never detaches what was asked to end.
     func terminateSessions(_ targets: [String], window: String?, undoable: Bool) -> ControlResponse

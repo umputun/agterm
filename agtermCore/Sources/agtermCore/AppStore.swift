@@ -486,8 +486,25 @@ public final class AppStore {
     /// returns the Recent Closed entry written for it, if any.
     @discardableResult
     public func closeSession(_ sessionID: UUID, alreadyFinalized: UUID? = nil) -> UUID? {
-        // a parent closes with its companions; one Recent Closed entry carries the whole group
+        closeSessionGroup(sessionID, companions: companions(of: sessionID), alreadyFinalized: alreadyFinalized)
+    }
+
+    /// The check and hard close use the same group without yielding the store's actor.
+    public func closeSessionChecked(_ sessionID: UUID, expectCompanions: Set<UUID>) -> Result<CheckedSessionClose, CheckedSessionClose.Refusal> {
+        guard !isRemoteWindow else { return .failure(.remoteSession) }
+        guard let session = session(withID: sessionID) else { return .failure(.missingSession) }
         let companions = companions(of: sessionID)
+        guard session.remoteHost == nil, companions.allSatisfy({ $0.remoteHost == nil }) else { return .failure(.remoteSession) }
+        let companionIDs = companions.map(\.id)
+        guard Set(companionIDs) == expectCompanions else { return .failure(.companionsChanged) }
+        let closing = [sessionID] + companionIDs
+        guard parkedCompanions(of: Set(closing)).isEmpty else { return .failure(.parkedCompanions) }
+        let recent = closeSessionGroup(sessionID, companions: companions, alreadyFinalized: nil)
+        return .success(CheckedSessionClose(closed: closing, recent: recent))
+    }
+
+    private func closeSessionGroup(_ sessionID: UUID, companions: [Session], alreadyFinalized: UUID?) -> UUID? {
+        // a parent closes with its companions; one Recent Closed entry carries the whole group
         // recorded before the companions close, which takes a page companion's page with it
         let recorded = companions.filter(\.isPersistable).map(sessionSnapshot)
         for companion in companions.reversed() {

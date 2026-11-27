@@ -52,6 +52,21 @@ public enum ControlActionsUnsupported {
     }
 }
 
+public struct CheckedSessionClose: Sendable {
+    public enum Refusal: Error {
+        case missingSession, ambiguousSession, windowRequired, unresolvedWindow(String)
+        case remoteSession, companionsChanged, parkedCompanions, unsupported
+    }
+
+    public let closed: [UUID]
+    public let recent: UUID?
+
+    public init(closed: [UUID], recent: UUID?) {
+        self.closed = closed
+        self.recent = recent
+    }
+}
+
 /// One row of `zmx list`: a daemon, a pane that claims one, or both.
 ///
 /// State and observation travel as raw strings for the same reason the restore modes do — a strict enum

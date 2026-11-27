@@ -22,6 +22,8 @@ public struct ControlDispatcher {
             return actions.controlTree(window: request.args?.window)
         case .eventsRead:
             return dispatchEventsRead(request)
+        case .sessionCloseChecked:
+            return dispatchCheckedClose(request)
         case .sessionNew, .sessionDuplicate, .sessionSelect, .sessionGo, .sessionClose, .sessionTerminate, .sessionRename,
                 .sessionReveal, .sessionMove, .sessionFlag, .sessionContext, .sessionInfo, .sessionSeen, .sessionStatus,
                 .sessionRestore:
@@ -140,6 +142,43 @@ public struct ControlDispatcher {
         }
         let kinds: Set<ControlEventKind>? = parsedKinds.isEmpty ? nil : parsedKinds
         return actions.readEvents(ControlEventReadOptions(cursor: cursor, kinds: kinds, limit: limit))
+    }
+
+    private func dispatchCheckedClose(_ request: ControlRequest) -> ControlResponse {
+        guard let target = request.target.flatMap(UUID.init(uuidString:)) else {
+            return ControlResponse(ok: false, error: "session.closeChecked requires one full target UUID")
+        }
+        guard let args = request.args, let expected = args.expectCompanions else {
+            return ControlResponse(ok: false, error: "session.closeChecked requires expectCompanions (use [] for none)")
+        }
+        guard args.targets == nil, args.undoable != true else {
+            return ControlResponse(ok: false, error: "session.closeChecked does not support batch or undoable close")
+        }
+        guard args.opID == nil, args.epoch == nil, args.rev == nil, args.panes == nil, args.scratch == nil else {
+            return ControlResponse(ok: false, error: "session.closeChecked does not support catalog operation arguments")
+        }
+        let window = args.window.flatMap(UUID.init(uuidString:))
+        guard args.window == nil || window != nil else {
+            return ControlResponse(ok: false, error: "session.closeChecked requires a full UUID for --window")
+        }
+        switch actions.closeSessionChecked(target, window: window, expectCompanions: Set(expected)) {
+        case .success(let result):
+            let group = result.closed.count > 1 ? result.closed.count : nil
+            return ControlResponse(ok: true, result: ControlResult(id: target.uuidString, affected: group,
+                                                                   closed: result.closed.map(\.uuidString), recentID: result.recent?.uuidString))
+        case .failure(let refusal):
+            let error = switch refusal {
+            case .missingSession: ControlResolve.notFoundMessage(noun: "session", target: target.uuidString)
+            case .ambiguousSession: "session UUID appears in multiple windows; specify --window with a full UUID"
+            case .windowRequired: "session.closeChecked requires --window with a full UUID while a remote window is open"
+            case .unresolvedWindow(let message): message
+            case .remoteSession: "session.closeChecked requires a local session and local companions"
+            case .companionsChanged: "session companions changed; read tree before retrying"
+            case .parkedCompanions: "session group has companions pending undo"
+            case .unsupported: ControlActionsUnsupported.message(request.cmd.rawValue)
+            }
+            return ControlResponse(ok: false, error: error)
+        }
     }
 
     private func dispatchSessionCommand(_ request: ControlRequest) async -> ControlResponse {

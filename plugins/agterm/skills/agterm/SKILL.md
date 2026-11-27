@@ -1,11 +1,10 @@
 ---
 name: agterm
 description: >
-  Drive the agterm macOS terminal via agtermctl:
-  manage and move sessions, companions, workspaces, top-level sessions; split panes; toggle scratch; run/hide/show overlays;
-  read exit status; show HTML pages, URLs or dev servers in an overlay or as a
-  page row;
-  post a HUD/caption/notification/sidebar activity line; message panes; show a picker, question or input dialog; show images/markdown/code/JSONL; type
+  Drive agterm on macOS via agtermctl:
+  manage sessions, top-level sessions, companions and workspaces; check companions before closing; split panes; toggle scratch and overlays;
+  read exit status; show HTML, URLs or dev servers in overlays or page rows;
+  set HUDs, captions and sidebar activity; notify, message panes, show pickers and question or input dialogs, view images/markdown/code/JSONL; type
   into or restart a pane by id, copy selection, set clipboard, paste files/images, search scrollback; manage windows, font size,
   theme; reload or edit the keymap, event hooks and agterm-scoped ghostty config; run a custom command or file renderer; read
   a closed window's session screen; subscribe to status, notify, lifecycle, selection,
@@ -420,6 +419,10 @@ omitted when expanded).
   A single close answers `result.recentID`, the Recent Closed entry `recent open` takes. Closing a session attached
   from another host only detaches it; `--terminate` ends it on that host too. Restart, `zmx kill`, Convert, Duplicate,
   split, scratch and `session restore` on such a session run on its host and the result attaches here.
+- `session close --target UUID --expect-companions UUIDS` — close only the companions a script checked.
+  Pass the full IDs of sessions with `parent` equal to the target UUID,
+  including page companions, or `''` for none. A changed set or companion pending undo leaves the group open.
+  Pass the same full local window UUID in `--window` for the initial tree read, the close and the final tree read.
 - `session select` · `session rename <name>` · `session reveal` (select the focused pane's cwd in Finder).
 - `session go --to next|prev|first|last|next-attention|prev-attention|N` — move the selection between sessions; `N` is the 1-based place in sidebar order.
 - `session move <workspace>` (relocate) or `session move --to up|down|top|bottom` (reorder within the

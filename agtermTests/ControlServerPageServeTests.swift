@@ -378,6 +378,21 @@ final class ControlServerPageServeTests: XCTestCase {
         XCTAssertEqual(offMain { peer.frame() } ?? nil, .failure(id: 3, error: "page closed"))
     }
 
+    func testARemoteHtmlOverlayCannotSendCheckedClose() throws {
+        let fix = try fixture()
+        _ = try openFile(fix)
+        let (client, _) = try claim(try XCTUnwrap(fix.presenter.token))
+        let request = #"{"cmd":"session.closeChecked","target":"\#(fix.session.id)","args":{"expectCompanions":[]}}"#
+
+        let answer = offMain { () -> PageServeFrame? in
+            client.send(.bridge(id: 4, request: request))
+            return client.frame()
+        } ?? nil
+
+        XCTAssertEqual(answer, .failure(id: 4, error: "session.closeChecked is unavailable from a remote page"))
+        XCTAssertTrue(fix.store.session(withID: fix.session.id) === fix.session)
+    }
+
     func testABridgeRequestOnAChannelThePageMovedOffDoesNotRun() throws {
         let fix = try fixture()
         let page = try openFile(fix)

@@ -700,6 +700,10 @@ final class WindowLibraryRecentClosedWindowTests {
         let storeA = try! #require(library.store(for: windowA))
         let storeB = try! #require(library.store(for: windowB))
 
+        #expect(storeA.softCloseSession(sessionID, grace: 60))
+        #expect(library.openStores(holdingSession: sessionID).count == 2)
+        #expect(storeA.undoPendingClose())
+
         storeA.closeSession(sessionID)
         #expect(library.allOpenSessions().filter { $0.id == sessionID }.count == 1)
 

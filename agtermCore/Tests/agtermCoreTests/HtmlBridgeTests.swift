@@ -45,6 +45,11 @@ struct HtmlBridgeTests {
         }
     }
 
+    @Test func checkedCloseDoesNotDefaultToThePagesSession() throws {
+        let built = try request(#"{"cmd":"session.closeChecked","args":{"expectCompanions":[]}}"#)
+        #expect(built.target == nil)
+    }
+
     @Test func anUntargetedPageSessionFromAPageRowIsPlacedAfterThatRow() throws {
         let row = HtmlBridgePage(window: "W1", session: session, pane: nil)
 

@@ -465,6 +465,103 @@ final class ControlServerTests: XCTestCase {
         XCTAssertEqual(cachedActive(), [backgroundID.uuidString])
     }
 
+    func testCheckedCloseRefusesACompanionAddedAfterTreeWasRead() async throws {
+        let library = WindowLibrary(directory: stateDir)
+        let store = try XCTUnwrap(library.activeStore)
+        let workspace = try XCTUnwrap(store.currentWorkspaceID)
+        let target = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: NSHomeDirectory())).id.uuidString
+        let server = makeServer(library: library)
+        server.start()
+        XCTAssertEqual(server.boundSocketPath, socketPath)
+
+        let snapshot = try await sendCloseTestRequest(#"{"cmd":"tree"}"#)
+        XCTAssertTrue(snapshot.result?.tree?.workspaces.flatMap(\.sessions).contains { $0.id == target } == true)
+        let added = try await sendCloseTestRequest(#"{"cmd":"session.companion.new","target":"\#(target)"}"#)
+        let companion = try XCTUnwrap(added.result?.id)
+
+        let stale = try await sendCloseTestRequest(#"{"cmd":"session.closeChecked","target":"\#(target)","args":{"expectCompanions":[]}}"#)
+        XCTAssertFalse(stale.ok)
+        XCTAssertTrue(stale.error?.contains("companions changed") == true)
+        let refreshed = try await sendCloseTestRequest(#"{"cmd":"tree"}"#)
+        let sessions = try XCTUnwrap(refreshed.result?.tree?.workspaces.flatMap(\.sessions))
+        XCTAssertTrue(sessions.contains { $0.id == target })
+        XCTAssertTrue(sessions.contains { $0.id == companion && $0.parent == target })
+        XCTAssertTrue(RecentClosedStore(directory: stateDir).load().isEmpty)
+
+        let exact = try await sendCloseTestRequest(#"{"cmd":"session.closeChecked","target":"\#(target)","args":{"expectCompanions":["\#(companion)"]}}"#)
+        XCTAssertTrue(exact.ok)
+        XCTAssertEqual(exact.result?.closed, [target, companion])
+        XCTAssertEqual(exact.result?.affected, 2)
+        XCTAssertNotNil(exact.result?.recentID)
+    }
+
+    func testCheckedCloseRequiresAWindowWhenARemoteWindowIsOpen() async throws {
+        let library = WindowLibrary(directory: stateDir)
+        let localWindow = library.newWindow()
+        let local = try XCTUnwrap(library.store(for: localWindow.id))
+        let workspace = local.addWorkspace(name: "local")
+        let session = try XCTUnwrap(local.addSession(toWorkspace: workspace.id, cwd: NSHomeDirectory()))
+        library.onRemoteStoreOpened = { _, _ in }
+        library.newRemoteWindow(host: "remote")
+        let server = makeServer(library: library)
+        server.start()
+        XCTAssertEqual(server.boundSocketPath, socketPath)
+        let id = session.id.uuidString
+
+        let unscoped = try await sendCloseTestRequest(#"{"cmd":"session.closeChecked","target":"\#(id)","args":{"expectCompanions":[]}}"#)
+
+        XCTAssertFalse(unscoped.ok)
+        XCTAssertEqual(unscoped.error, "session.closeChecked requires --window with a full UUID while a remote window is open")
+        let active = try await sendCloseTestRequest(
+            #"{"cmd":"session.closeChecked","target":"\#(id)","args":{"window":"active","expectCompanions":[]}}"#)
+        XCTAssertEqual(active.error, "session.closeChecked requires a full UUID for --window")
+        XCTAssertTrue(local.session(withID: session.id) === session)
+
+        let scoped = try await sendCloseTestRequest(
+            #"{"cmd":"session.closeChecked","target":"\#(id)","args":{"window":"\#(localWindow.id)","expectCompanions":[]}}"#)
+        XCTAssertTrue(scoped.ok)
+        XCTAssertEqual(scoped.result?.closed, [id])
+        XCTAssertNil(local.session(withID: session.id))
+    }
+
+    func testCheckedCloseRequiresAnExactWindowWhenALocalCopyIsPendingUndo() async throws {
+        let library = WindowLibrary(directory: stateDir)
+        defer { library.finalizeAllPendingCloses() }
+        let first = library.newWindow()
+        let local = try XCTUnwrap(library.store(for: first.id))
+        let workspace = local.addWorkspace(name: "local")
+        let session = try XCTUnwrap(local.addSession(toWorkspace: workspace.id, cwd: NSHomeDirectory()))
+        let duplicate = library.newWindow()
+        let other = try XCTUnwrap(library.store(for: duplicate.id))
+        let copy = SessionSnapshot(id: session.id, customName: "copy", cwd: NSHomeDirectory())
+        other.restore(from: Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: "other", sessions: [copy])]))
+        XCTAssertTrue(other.softCloseSession(session.id, grace: 60))
+
+        let server = makeServer(library: library)
+        server.start()
+        XCTAssertEqual(server.boundSocketPath, socketPath)
+        let id = session.id.uuidString
+
+        let unscoped = try await sendCloseTestRequest(#"{"cmd":"session.closeChecked","target":"\#(id)","args":{"expectCompanions":[]}}"#)
+        XCTAssertEqual(unscoped.error, "session UUID appears in multiple windows; specify --window with a full UUID")
+        let active = try await sendCloseTestRequest(
+            #"{"cmd":"session.closeChecked","target":"\#(id)","args":{"window":"active","expectCompanions":[]}}"#)
+        XCTAssertEqual(active.error, "session.closeChecked requires a full UUID for --window")
+        XCTAssertTrue(local.session(withID: session.id) === session)
+        XCTAssertNotNil(other.pendingCloseSession(withID: session.id))
+
+        let scoped = try await sendCloseTestRequest(
+            #"{"cmd":"session.closeChecked","target":"\#(id)","args":{"window":"\#(first.id)","expectCompanions":[]}}"#)
+        XCTAssertEqual(scoped.result?.closed, [id])
+        XCTAssertNil(local.session(withID: session.id))
+        XCTAssertNotNil(other.pendingCloseSession(withID: session.id))
+    }
+
+    private func sendCloseTestRequest(_ line: String) async throws -> ControlResponse {
+        let reply = await send(line)
+        return try JSONDecoder().decode(ControlResponse.self, from: Data(XCTUnwrap(reply).utf8))
+    }
+
     private func send(_ line: String) async -> String? {
         let path = socketPath!
         return await withCheckedContinuation { continuation in

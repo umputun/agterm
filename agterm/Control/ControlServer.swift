@@ -600,7 +600,7 @@ final class ControlServer {
 
         // an operation from a window mirroring one of this Mac's waits on zmx reads and a new row's panes, so it
         // runs from a worker and never reaches the remote route below
-        if request.args?.opID != nil {
+        if request.args?.opID != nil, request.cmd != .sessionCloseChecked {
             handedOff = true
             let worker = Thread {
                 defer { close(conn) }
@@ -763,7 +763,7 @@ final class ControlServer {
             return response
         }
         switch request.cmd {
-        case .tree, .eventsRead, .sessionNew, .sessionDuplicate, .sessionSelect, .sessionGo, .sessionClose, .sessionTerminate, .sessionUndo,
+        case .tree, .eventsRead, .sessionNew, .sessionDuplicate, .sessionSelect, .sessionGo, .sessionClose, .sessionCloseChecked, .sessionTerminate, .sessionUndo,
                 .sessionRename, .sessionReveal, .sessionMove,
                 .workspaceNew, .workspaceSelect, .workspaceGo, .workspaceRename, .workspaceDelete, .workspaceMove,
                 .workspaceFocus,
