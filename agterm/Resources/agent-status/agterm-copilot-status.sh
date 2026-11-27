@@ -21,8 +21,9 @@ status_wrapper=${AGTERM_STATUS_WRAPPER:-"$script_dir/agterm-agent-status.sh"}
 . "$script_dir/agent-owner.sh"
 spawned_by_agent && exit 0
 
+# the platform picks the parser: a Linux /usr/bin/plutil may be GNUstep's, which has no `-extract raw`
 field() { # key path value, empty when absent or unparseable
-  if [ -x /usr/bin/plutil ]; then
+  if [[ $OSTYPE == darwin* ]]; then
     if v=$(printf '%s' "$payload" | /usr/bin/plutil -extract "$1" raw -o - - 2>/dev/null); then printf '%s' "$v"; fi
   elif command -v jq >/dev/null 2>&1; then
     printf '%s' "$payload" | jq -r --arg p "$1" \
