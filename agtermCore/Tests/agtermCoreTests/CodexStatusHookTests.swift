@@ -20,6 +20,20 @@ struct CodexStatusHookTests {
     }
 
     // the login boundary keeps the test runner's agent from being counted as a spawner
+    private static func spawnArguments(in dir: URL, chain: [String] = ["login"], command: [String]) throws -> [String] {
+        let spawner = dir.appendingPathComponent("spawn-chain.sh")
+        try """
+        #!/bin/bash
+        levels=()
+        while [ "$1" != "--" ]; do levels+=("$1"); shift; done
+        shift
+        [ "${#levels[@]}" -eq 0 ] && { "$@"; exit $?; }
+        ( exec -a "${levels[0]}" /bin/bash "$0" "${levels[@]:1}" -- "$@" )
+        exit $?
+        """.writeExecutable(to: spawner)
+        return [spawner.path] + chain + ["--", "/bin/bash"] + command
+    }
+
     private func run(_ action: String, screen: String = "", screens: [String] = [], worker: Bool = false,
                      supersedeTokenOnRead: Bool = false, chain: [String] = ["login"],
                      input: String = "") throws -> HookRun {
@@ -54,21 +68,11 @@ struct CodexStatusHookTests {
           echo "$(( n + 1 ))" > '\(counter.path)'
         fi
         """.writeExecutable(to: agtermctl)
-        let spawner = dir.appendingPathComponent("spawn-chain.sh")
-        try """
-        #!/bin/bash
-        levels=()
-        while [ "$1" != "--" ]; do levels+=("$1"); shift; done
-        shift
-        [ "${#levels[@]}" -eq 0 ] && { "$@"; exit $?; }
-        ( exec -a "${levels[0]}" /bin/bash "$0" "${levels[@]:1}" -- "$@" )
-        exit $?
-        """.writeExecutable(to: spawner)
 
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/bin/bash")
         let hookArgs = worker ? [Self.hook, "__watch-blocked", "token", tokenFile.path] : [Self.hook, action]
-        proc.arguments = [spawner.path] + chain + ["--", "/bin/bash"] + hookArgs
+        proc.arguments = try Self.spawnArguments(in: dir, chain: chain, command: hookArgs)
         var environment = [
             "AGTERMCTL": agtermctl.path,
             "AGTERM_STATUS_WRAPPER": statusWrapper.path,
@@ -277,7 +281,7 @@ struct CodexStatusHookTests {
 
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/bin/bash")
-        proc.arguments = [Self.hook, "session-start"]
+        proc.arguments = try Self.spawnArguments(in: dir, command: [Self.hook, "session-start"])
         proc.environment = [
             "AGTERM_SESSION_ID": "sid",
             "AGTERM_PANE": "right",
