@@ -45,8 +45,8 @@ paths:
   35-minute job cap leaves room for a slow build plus the watchdog's 600s and 120s.
   `coverage` downloads it for best-effort Coveralls.
 - `linux` builds and tests `agtermCore` in the `swift:6.3.2-noble` container on ubuntu-24.04, the
-  toolchain agterm-server ships on, under the Swift filter. It installs jq, which the Codex status hook reads
-  JSON with where `/usr/bin/plutil` is absent, and runs as an unprivileged user because root passes the
+  toolchain agterm-server ships on, under the Swift filter. It installs jq, which the Codex, Claude and Copilot status
+  hooks read JSON with on Linux, and runs as an unprivileged user because root passes the
   permission checks several tests expect to fail.
   It builds the x86_64 musl zmx with the Zig tarball `ZIG_LINUX_VERSION` names, checked against
   `ZIG_LINUX_SHA256`, through `scripts/setup.sh --zmx-only` into `build/linux/x86_64`, cached by `ZMX_REV`,
