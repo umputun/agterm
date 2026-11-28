@@ -122,7 +122,7 @@ if $need_xc || $need_res; then
   echo "fetching ghostty $GHOSTTY_REV..."
   git init -q "$ghostty_build"
   git -C "$ghostty_build" remote add origin "$GHOSTTY_REPO"
-  git -C "$ghostty_build" fetch -q --depth 1 origin "$GHOSTTY_REV"
+  GIT_ALLOW_PROTOCOL=https git -C "$ghostty_build" -c http.followRedirects=false fetch -q --depth 1 origin "$GHOSTTY_REV"
   git -C "$ghostty_build" -c advice.detachedHead=false checkout -q FETCH_HEAD
 
   for ghostty_patch in "$GHOSTTY_PATCH_DIR"/*.patch; do
@@ -161,7 +161,7 @@ if $need_zmx; then
   echo "fetching zmx $ZMX_REV..."
   git init -q "$zmx_build"
   git -C "$zmx_build" remote add origin "$ZMX_REPO"
-  git -C "$zmx_build" fetch -q --depth 1 origin "$ZMX_REV"
+  GIT_ALLOW_PROTOCOL=https git -C "$zmx_build" -c http.followRedirects=false fetch -q --depth 1 origin "$ZMX_REV"
   git -C "$zmx_build" -c advice.detachedHead=false checkout -q FETCH_HEAD
 
   for zmx_patch in "$ZMX_PATCH_DIR"/*.patch; do

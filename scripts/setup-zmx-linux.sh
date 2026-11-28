@@ -9,34 +9,37 @@ OUT="build/linux"
 
 # ghostty's build installs src/shell-integration verbatim, so the source at the pin is the shipped set; the Mac
 # staging is not used for it because its stamp can claim a rev its files never came from.
-# Fetching the full commit id pins the content by hash, as setup.sh does for the Mac build; the stamp carries
-# the source with the rev, so a stamp written by another source restages.
-stage_shell_integration() {
-  local rev stamp stamp_file="$OUT/.shell-integration-stamp" work
+# Fetch the pinned Git commit so changes to GitHub's archive compression cannot invalidate the pin.
+# The stamp records the verified fetch method and revision so older staging is refreshed.
+stage_shell_integration() (
+  local rev stamp stamp_file="$OUT/.shell-integration-stamp" work fetched_rev
   rev="$(sed -nE 's/^GHOSTTY_REV="([^"]+)".*/\1/p' scripts/setup.sh)"
-  stamp="git $rev"
+  stamp="git-https $rev"
   if [[ -f "$stamp_file" && "$(cat "$stamp_file")" == "$stamp" ]]; then
     echo "linux shell integration already current"
     return 0
   fi
   work="$(mktemp -d)"
+  trap 'rm -r -- "$work"' EXIT
   git init -q "$work"
   git -C "$work" remote add origin "https://github.com/ghostty-org/ghostty"
-  git -C "$work" -c http.followRedirects=false fetch -q --depth 1 origin "$rev"
-  if [[ "$(git -C "$work" rev-parse FETCH_HEAD)" != "$rev" ]]; then
-    echo "fetched ghostty commit is not GHOSTTY_REV $rev" >&2
+  GIT_ALLOW_PROTOCOL=https git -C "$work" -c http.followRedirects=false fetch -q --depth 1 origin "$rev"
+  fetched_rev="$(git -C "$work" rev-parse --verify 'FETCH_HEAD^{commit}')"
+  if [[ "$fetched_rev" != "$rev" ]]; then
+    echo "fetched Ghostty commit $fetched_rev does not match GHOSTTY_REV $rev" >&2
     exit 1
   fi
-  git -C "$work" checkout -q FETCH_HEAD -- src/shell-integration
-  rm -rf "$OUT/ghostty"
+  git -C "$work" checkout -q "$fetched_rev" -- src/shell-integration
+  if [[ -d "$OUT/ghostty" ]]; then
+    rm -r -- "$OUT/ghostty"
+  fi
   mkdir -p "$OUT/ghostty/shell-integration"
   for shell in zsh fish bash; do
     cp -R "$work/src/shell-integration/$shell" "$OUT/ghostty/shell-integration/$shell"
   done
-  rm -rf "$work"
   echo "$stamp" >"$stamp_file"
   echo "linux shell integration staged in $OUT at $rev"
-}
+)
 
 if [[ "${1:-}" == --shell-integration ]]; then
   stage_shell_integration
