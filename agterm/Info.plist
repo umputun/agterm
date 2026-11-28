@@ -22,6 +22,8 @@
 	<string>$(GIT_COMMIT)</string>
 	<key>SUFeedURL</key>
 	<string>$(AGTERM_UPDATE_FEED)</string>
+	<key>SUAllowsAutomaticUpdates</key>
+	<false/>
 	<key>SUPublicEDKey</key>
 	<string>MHC8+YVrpFMxS8mXyPQK86xGf9a8+edu67FvkIpZOwI=</string>
 	<key>CFBundleInfoDictionaryVersion</key>

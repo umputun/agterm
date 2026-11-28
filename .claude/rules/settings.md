@@ -288,6 +288,8 @@ paths:
   `updates` is the one state-shown control (CLAUDE.md): its button sits at the far right outside the group counts and
   shows only while `UpdateFlow.showsIcon` holds, a scheduled find Sparkle left to it; hiding the element hides the
   button and leaves Sparkle silent until Check for Updates, `update check` or a later launch's check.
+  `Info.plist` sets `SUAllowsAutomaticUpdates` false: Sparkle's silent download bypasses its user driver on the find,
+  so the button stays hidden while the staged update waits for a quit or Sparkle's week-long impatient re-offer.
   `workspaceName` leads the identity as `workspace — session — window`, looked up from the ACTIVE SESSION
   (`workspace(forSession:)`, never `currentWorkspaceID`, which an empty workspace can hold while the old
   session stays selected). `TitlebarComposition` caps it at `workspaceNameLimit` characters with an
