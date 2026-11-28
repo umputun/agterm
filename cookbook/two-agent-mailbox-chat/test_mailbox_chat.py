@@ -7,6 +7,7 @@ import json
 import os
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -43,7 +44,7 @@ class FakeRun:
         self.sent = []
         self.queued = []
 
-    def __call__(self, args, timeout=30, stdin=None):
+    def __call__(self, args, timeout=30, stdin=None, alive=None):
         self.calls.append(list(args))
         if os.path.basename(args[0]) == "codex":
             if self.queue_code:
@@ -239,7 +240,7 @@ class SayTest(StateTest):
         self.assertEqual(result["receiver"], "none")
 
     def test_refused_send_is_an_error(self):
-        self.use(lambda args, timeout=30, stdin=None: done(out=json.dumps(SPLIT)) if args[1:3] == ["tree", "--json"]
+        self.use(lambda args, timeout=30, stdin=None, alive=None: done(out=json.dumps(SPLIT)) if args[1:3] == ["tree", "--json"]
                  else done(1, err="mailbox full"))
         out = io.StringIO()
         with mock.patch("sys.stdin", io.StringIO("hello")), mock.patch("sys.stdout", out):
@@ -263,7 +264,7 @@ class SayTest(StateTest):
         self.assertTrue(os.path.exists(path))
 
     def test_say_file_keeps_the_file_when_the_send_is_refused(self):
-        self.use(lambda args, timeout=30, stdin=None: done(out=json.dumps(SPLIT)) if args[1:3] == ["tree", "--json"]
+        self.use(lambda args, timeout=30, stdin=None, alive=None: done(out=json.dumps(SPLIT)) if args[1:3] == ["tree", "--json"]
                  else done(1, err="mailbox full"))
         path = os.path.join(self.tmp.name, "msg.txt")
         Path(path).write_text("hello", encoding="utf-8")
@@ -499,13 +500,13 @@ class WaiterTest(StateTest):
         w.mark_busy()
         sleeps = []
 
-        def end_turn(_):
-            sleeps.append(1)
+        def end_turn(seconds):
+            sleeps.append(seconds)
             mc.remove(w.busy_path)
 
         with mock.patch.object(mc.time, "sleep", end_turn), mock.patch("sys.stderr", io.StringIO()):
             self.assertEqual(w.serve(), mc.WAKE)
-        self.assertEqual(sleeps, [1])
+        self.assertEqual(sum(sleeps), w.BUSY_POLL_SECONDS)
 
     def test_waiter_exits_when_its_claude_is_gone(self):
         self.use(FakeRun())
@@ -521,15 +522,28 @@ class WaiterTest(StateTest):
             self.assertEqual(w.serve(), 0)
         self.assertEqual([m["id"] for m in fake.mailboxes[f"{SID}:{LEFT}"]], ["M1"])
 
-    def test_second_waiter_for_the_same_claude_steps_aside(self):
+    def test_second_waiter_for_a_served_claude_gives_up_after_the_handoff_wait(self):
         w = self.waiter()
         with open(w.lock_path, "a") as lock:
             mc.fcntl.flock(lock, mc.fcntl.LOCK_EX | mc.fcntl.LOCK_NB)
             mc.write_json(w.waiter_path, {"pid": 4242, "parent": w.parent})
-            with mock.patch.object(w, "loop") as loop, mock.patch.object(mc.time, "sleep") as sleep:
+            clock = iter([0, 1, 2, mc.Waiter.HANDOFF_SECONDS])
+            with mock.patch.object(w, "loop") as loop, mock.patch.object(mc.time, "sleep") as sleep, \
+                    mock.patch.object(mc.time, "monotonic", side_effect=lambda: next(clock)):
                 self.assertEqual(w.serve(), 0)
         loop.assert_not_called()
-        sleep.assert_not_called()
+        self.assertEqual(sleep.call_count, 2)
+
+    def test_waiter_takes_over_once_the_old_one_frees_the_lock(self):
+        # an in-place /restart keeps the claude pid, so its new waiter shares the old one's parent
+        w = self.waiter()
+        with open(w.lock_path, "a") as lock:
+            mc.fcntl.flock(lock, mc.fcntl.LOCK_EX | mc.fcntl.LOCK_NB)
+            mc.write_json(w.waiter_path, {"pid": 4242, "parent": w.parent})
+            with mock.patch.object(w, "loop", return_value=0) as loop, \
+                    mock.patch.object(mc.time, "sleep", side_effect=lambda _: mc.fcntl.flock(lock, mc.fcntl.LOCK_UN)):
+                self.assertEqual(w.serve(), 0)
+        loop.assert_called_once()
 
     def test_waiter_of_a_restarted_claude_waits_out_the_old_one(self):
         w = self.waiter()
@@ -552,14 +566,15 @@ class WaiterTest(StateTest):
         with open(w.lock_path, "a") as lock:
             mc.fcntl.flock(lock, mc.fcntl.LOCK_EX | mc.fcntl.LOCK_NB)
             mc.write_json(w.waiter_path, {"pid": 4242, "parent": w.parent + 1})
-            clock = iter(range(0, 1000, 10))
-            with mock.patch.object(w, "loop") as loop, mock.patch.object(mc.time, "sleep"), \
+            clock = iter([0, 44, 45])
+            with mock.patch.object(w, "loop") as loop, mock.patch.object(mc.time, "sleep") as sleep, \
                     mock.patch.object(mc.time, "monotonic", side_effect=lambda: next(clock)):
                 self.assertEqual(w.serve(), 0)
         loop.assert_not_called()
+        self.assertEqual(sleep.call_count, 1)
 
     def test_read_failure_never_wakes_claude(self):
-        self.use(lambda args, timeout=30, stdin=None: done(1, err="socket gone"))
+        self.use(lambda args, timeout=30, stdin=None, alive=None: done(1, err="socket gone"))
         w = self.waiter()
         parents = iter([w.parent] * 5)
         with mock.patch.object(mc.time, "sleep"), \
@@ -573,19 +588,25 @@ class WaiterTest(StateTest):
         outage = iter([done(1, err="connect failed: No such file or directory")] * 6
                       + [subprocess.TimeoutExpired("agtermctl", 45), OSError("agtermctl missing"), done(out="{")])
 
-        def restart(args, timeout=30, stdin=None):
+        gaps = [0.0]
+
+        def restart(args, timeout=30, stdin=None, alive=None):
+            if args[1:3] == ["msg", "read"]:
+                gaps.append(0.0)
             step = next(outage, None)
             if isinstance(step, Exception):
                 raise step
             return step or fake(args, timeout, stdin)
 
+        def slept(seconds):
+            gaps[-1] += seconds
+
         self.use(restart)
         w = self.waiter()
-        sleeps = []
         err = io.StringIO()
-        with mock.patch.object(mc.time, "sleep", sleeps.append), mock.patch("sys.stderr", err):
+        with mock.patch.object(mc.time, "sleep", slept), mock.patch("sys.stderr", err):
             self.assertEqual(w.run("Stop", ""), mc.WAKE)
-        self.assertEqual(sleeps, [1, 2, 4, 8, 10, 10, 10, 10, 10])
+        self.assertEqual(gaps[1:], [1, 2, 4, 8, 10, 10, 10, 10, 10, 0])
         self.assertEqual(err.getvalue(), mc.compose("after restart") + "\n")
         self.assertEqual(fake.mailboxes[f"{SID}:{LEFT}"], [])
         with open(w.log_path, encoding="utf-8") as f:
@@ -594,7 +615,7 @@ class WaiterTest(StateTest):
         self.assertIn("msg read works again", log)
 
     def test_claude_exit_during_an_outage_ends_the_waiter(self):
-        self.use(lambda args, timeout=30, stdin=None: done(1, err="connection refused"))
+        self.use(lambda args, timeout=30, stdin=None, alive=None: done(1, err="connection refused"))
         w = self.waiter()
         parents = iter([w.parent])
         with mock.patch.object(mc.time, "sleep") as sleep, \
@@ -602,28 +623,69 @@ class WaiterTest(StateTest):
             self.assertEqual(w.serve(), 0)
         sleep.assert_not_called()
 
+    def test_closed_hook_pipe_cuts_the_backoff_short(self):
+        self.use(lambda args, timeout=30, stdin=None, alive=None: done(1, err="connection refused"))
+        w = self.waiter()
+        sleeps = []
+        parents = iter([w.parent] * 20)
+        pipe = iter([True, True])
+        with mock.patch.object(mc.time, "sleep", sleeps.append), \
+                mock.patch.object(mc, "stderr_open", side_effect=lambda: next(pipe, False)), \
+                mock.patch.object(mc.os, "getppid", side_effect=lambda: next(parents, w.parent + 1)):
+            self.assertEqual(w.serve(), 0)
+        self.assertEqual(sleeps, [mc.POLL_SECONDS])
+
+    def test_closed_hook_pipe_cancels_a_blocked_read(self):
+        stub = Path(self.tmp.name) / "agtermctl"
+        stub.write_text("#!/bin/sh\nexec sleep 5\n")
+        stub.chmod(0o755)
+        w = self.waiter()
+        hangup = time.monotonic() + 0.3
+        start = time.monotonic()
+        with mock.patch.object(mc, "AGTERMCTL", str(stub)), \
+                mock.patch.object(mc, "stderr_open", side_effect=lambda: time.monotonic() < hangup):
+            self.assertEqual(w.serve(), 0)
+        self.assertLess(time.monotonic() - start, 2)
+
+    def test_stderr_open_sees_a_closed_reader(self):
+        r, wfd = os.pipe()
+        with os.fdopen(wfd, "w") as pipe, mock.patch("sys.stderr", pipe):
+            self.assertTrue(mc.stderr_open())
+            os.close(r)
+            self.assertFalse(mc.stderr_open())
+
     def test_claude_exit_during_a_failing_ack_leaves_no_busy_mark(self):
-        # getppid calls before the exit: loop, after the read, then one per ack attempt
-        for alive, attempts in ((3, 1), (5, 3)):
-            with self.subTest(attempts=attempts):
+        for dies_after, attempts in (("sleep", 1), ("ack", 3)):
+            with self.subTest(dies_after=dies_after):
                 fake = FakeRun(mailboxes={f"{SID}:{LEFT}": [{"id": "M1", "body": mc.compose("hello")}]})
                 acks = []
+                dead = []
 
-                def no_ack(args, timeout=30, stdin=None, fake=fake, acks=acks):
+                def no_ack(args, timeout=30, stdin=None, alive=None, fake=fake, acks=acks, dead=dead, dies_after=dies_after):
                     if args[1:3] == ["msg", "ack"]:
                         acks.append(1)
+                        if dies_after == "ack" and len(acks) == 3:
+                            dead.append(1)
                         return done(1, err="timed out")
                     return fake(args, timeout, stdin)
 
+                def sleep(_, dead=dead, dies_after=dies_after):
+                    if dies_after == "sleep":
+                        dead.append(1)
+
                 self.use(no_ack)
                 w = self.waiter()
-                parents = iter([w.parent] * alive)
-                with mock.patch.object(mc.time, "sleep"), mock.patch("sys.stderr", io.StringIO()), \
-                        mock.patch.object(mc.os, "getppid", side_effect=lambda p=parents, w=w: next(p, w.parent + 1)):
+                with mock.patch.object(mc.time, "sleep", sleep), mock.patch("sys.stderr", io.StringIO()), \
+                        mock.patch.object(mc.os, "getppid", side_effect=lambda w=w, dead=dead: w.parent + len(dead)):
                     self.assertEqual(w.serve(), 0)
                 self.assertEqual(len(acks), attempts)
                 self.assertFalse(w.busy())
                 self.assertEqual([m["id"] for m in fake.mailboxes[f"{SID}:{LEFT}"]], ["M1"])
+
+    def test_watched_run_never_starts_a_command_once_claude_is_gone(self):
+        with mock.patch.object(mc.subprocess, "Popen") as popen, self.assertRaises(mc.Gone):
+            mc.run(["agtermctl", "msg", "ack"], alive=lambda: False)
+        popen.assert_not_called()
 
     def test_failed_ack_still_wakes_claude_once(self):
         for failure in (done(1, err="connection refused"), subprocess.TimeoutExpired("agtermctl", 30)):
@@ -631,7 +693,7 @@ class WaiterTest(StateTest):
                 fake = FakeRun(mailboxes={f"{SID}:{LEFT}": [{"id": "M1", "body": mc.compose("hello")}]})
                 acks = []
 
-                def flaky_ack(args, timeout=30, stdin=None, fake=fake, acks=acks, failure=failure):
+                def flaky_ack(args, timeout=30, stdin=None, alive=None, fake=fake, acks=acks, failure=failure):
                     if args[1:3] == ["msg", "ack"]:
                         acks.append(1)
                         if len(acks) == 1:
@@ -653,7 +715,7 @@ class WaiterTest(StateTest):
     def test_ack_that_never_succeeds_wakes_claude_and_keeps_the_mail(self):
         fake = FakeRun(mailboxes={f"{SID}:{LEFT}": [{"id": "M1", "body": mc.compose("hello")}]})
 
-        def no_ack(args, timeout=30, stdin=None):
+        def no_ack(args, timeout=30, stdin=None, alive=None):
             if args[1:3] == ["msg", "ack"]:
                 return done(1, err="connection refused")
             return fake(args, timeout, stdin)

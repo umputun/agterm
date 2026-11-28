@@ -15,11 +15,13 @@ import ctypes.util
 import fcntl
 import json
 import os
+import select
 import stat
 import subprocess
 import sys
 import tempfile
 import time
+from collections.abc import Callable
 from typing import Any
 
 AGTERMCTL = os.environ.get("AGTERMCTL") or "agtermctl"
@@ -28,6 +30,8 @@ BODY_LIMIT = 64 * 1024
 LABEL = "[peer chat]"
 REPLY_LINE = "If you answer, use mailbox-chat.py say; do not reply only to acknowledge."
 WAIT_ROUND_SECONDS = 30
+# how often a waiter checks that its Claude Code still reads it, so a successor never waits long for the lock
+POLL_SECONDS = 0.5
 WAKE = 2
 # codex global options that take a value, skipped to find its subcommand
 CODEX_VALUE_FLAGS = frozenset({"-c", "--config", "--enable", "--disable", "--remote", "--remote-auth-token-env",
@@ -39,8 +43,44 @@ class ChatError(RuntimeError):
     """a refusal or failure reported to the caller as {"error": ...}."""
 
 
-def run(args: list[str], timeout: float = 30, stdin: str | None = None) -> subprocess.CompletedProcess:
-    return subprocess.run(args, input=stdin, capture_output=True, text=True, timeout=timeout, check=False)
+class Gone(Exception):
+    """the Claude Code a waiter serves exited or closed its hook pipe."""
+
+
+def run(args: list[str], timeout: float = 30, stdin: str | None = None,
+        alive: Callable[[], bool] | None = None) -> subprocess.CompletedProcess:
+    """runs a command; with `alive` (and no stdin), never starts it and kills it once `alive` turns false."""
+    if alive is None:
+        return subprocess.run(args, input=stdin, capture_output=True, text=True, timeout=timeout, check=False)
+    if not alive():
+        raise Gone
+    proc = subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            # communicate drains both pipes, so a mail batch larger than the pipe buffer cannot stall the child
+            out, err = proc.communicate(timeout=POLL_SECONDS)
+            return subprocess.CompletedProcess(args, proc.returncode, out, err)
+        except subprocess.TimeoutExpired:
+            if alive() and time.monotonic() < deadline:
+                continue
+            proc.kill()
+            proc.communicate()
+            if not alive():
+                raise Gone from None
+            raise subprocess.TimeoutExpired(args, timeout) from None
+
+
+def stderr_open() -> bool:
+    """whether Claude still reads this hook's stderr; an in-place /restart keeps the pid but closes the pipe."""
+    try:
+        fd = sys.stderr.fileno()
+    except (AttributeError, OSError, ValueError):
+        return True
+    p = select.poll()
+    # macOS reports the hangup only for a descriptor registered for an event
+    p.register(fd, select.POLLOUT)
+    return not any(ev & (select.POLLHUP | select.POLLERR) for _, ev in p.poll(0))
 
 
 def ctl_args(*args: str) -> list[str]:
@@ -214,10 +254,13 @@ class Waiter:
     BUSY_POLL_SECONDS = 1.0
     ACK_ATTEMPTS = 3
     RETRY_SECONDS = 1.0
-    # kept well under TAKEOVER_SECONDS, so a waiter whose Claude Code exited mid-outage still frees the lock
     RETRY_MAX_SECONDS = 10.0
     LOCK_POLL_SECONDS = 1.0
-    # a waiter whose Claude Code exited notices after its current read round, then frees the lock
+    # a waiter whose Claude Code is gone frees the lock within POLL_SECONDS, so a same-pid successor after an
+    # in-place /restart waits this long; a longer wait would stack a second waiter behind every hook
+    HANDOFF_SECONDS = 3.0
+    # a different parent means the old Claude Code exited; a waiter from an older copy of this script frees
+    # the lock only after its read round
     TAKEOVER_SECONDS = WAIT_ROUND_SECONDS + 15
 
     def __init__(self, sid: str, pane: str) -> None:
@@ -240,6 +283,20 @@ class Waiter:
     def mark_busy(self) -> None:
         with open(self.busy_path, "w"):
             pass
+
+    def alive(self) -> bool:
+        """whether the Claude Code that started this waiter still runs and still reads its stderr."""
+        return os.getppid() == self.parent and stderr_open()
+
+    def pause(self, seconds: float) -> None:
+        """sleeps in POLL_SECONDS slices, raising Gone once this waiter's Claude Code is gone."""
+        left = seconds
+        while left > 0:
+            if not self.alive():
+                raise Gone
+            step = min(left, POLL_SECONDS)
+            time.sleep(step)
+            left -= step
 
     def run(self, event: str, source: str) -> int:
         try:
@@ -269,54 +326,52 @@ class Waiter:
             write_json(self.waiter_path, {"pid": os.getpid(), "parent": self.parent})
             try:
                 return self.loop()
+            except Gone:
+                return 0
             finally:
                 remove(self.waiter_path)
 
     def take_lock(self, lock: Any) -> bool:
-        """the pane's waiter lock; False when a waiter for this same Claude Code already holds it."""
-        deadline = time.monotonic() + self.TAKEOVER_SECONDS
+        """the pane's waiter lock; False when its holder keeps it past the wait its parent allows."""
+        start = time.monotonic()
         while True:
             try:
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 return True
             except OSError:
-                if (read_json(self.waiter_path) or {}).get("parent") == self.parent:
-                    return False
-                if time.monotonic() >= deadline:
+                same = (read_json(self.waiter_path) or {}).get("parent") == self.parent
+                if time.monotonic() - start >= (self.HANDOFF_SECONDS if same else self.TAKEOVER_SECONDS):
                     return False
                 time.sleep(self.LOCK_POLL_SECONDS)
 
     def loop(self) -> int:
         retry = 0.0
-        while os.getppid() == self.parent:
+        while self.alive():
             try:
                 messages = self.peek()
             except ChatError as e:
-                # a read can hang for the whole takeover window, so a successor must not wait out a backoff too
-                if os.getppid() != self.parent:
-                    break
                 # agterm restarting, or quit while the sessions live on: a waiter that exited here would
                 # leave this Claude Code deaf until its next turn
                 if not retry:
                     self.log(f"error: {e}; retrying until agterm answers")
                 retry = min(retry * 2 or self.RETRY_SECONDS, self.RETRY_MAX_SECONDS)
-                time.sleep(retry)
+                self.pause(retry)
                 continue
             if retry:
                 self.log("msg read works again")
                 retry = 0.0
             # the wait can outlive the Claude Code that started it; mail taken then reaches nobody
-            if not messages or os.getppid() != self.parent:
+            if not messages or not self.alive():
                 continue
             if self.busy():
-                time.sleep(self.BUSY_POLL_SECONDS)
+                self.pause(self.BUSY_POLL_SECONDS)
                 continue
             # write before the ack: a pipe Claude closed fails here and leaves the mail in the mailbox
             sys.stderr.write("\n\n".join(render(m) for m in messages) + "\n")
             sys.stderr.flush()
             self.ack(messages)
             # a Claude Code that exited during the ack must not leave its successor a busy mark
-            if os.getppid() != self.parent:
+            if not self.alive():
                 break
             # the turn this starts is Stop-hook feedback, which fires no UserPromptSubmit
             self.mark_busy()
@@ -325,16 +380,19 @@ class Waiter:
 
     def ack(self, messages: list[dict[str, Any]]) -> None:
         """acks mail already written to Claude; mail it fails to ack can arrive again, which beats losing it."""
+        args = ctl_args("msg", "ack", "--as", self.identity(), *[m["id"] for m in messages])
+        error: object = ""
         for attempt in range(self.ACK_ATTEMPTS):
             if attempt:
-                time.sleep(self.RETRY_SECONDS)
-            if os.getppid() != self.parent:
-                return
+                self.pause(self.RETRY_SECONDS)
             try:
-                agtermctl("msg", "ack", "--as", self.identity(), *[m["id"] for m in messages])
-                return
-            except (ChatError, OSError, subprocess.TimeoutExpired) as e:
+                res = run(args, alive=self.alive)
+            except (OSError, subprocess.TimeoutExpired) as e:
                 error = e
+                continue
+            if res.returncode == 0:
+                return
+            error = (res.stderr or res.stdout).strip()
         self.log(f"error: msg ack failed {self.ACK_ATTEMPTS} times, waking Claude anyway: {error}")
 
     def identity(self) -> str:
@@ -344,7 +402,7 @@ class Waiter:
         args = ctl_args("msg", "read", "--wait", "--timeout", str(WAIT_ROUND_SECONDS), "--json", "--as",
                         self.identity())
         try:
-            res = run(args, timeout=WAIT_ROUND_SECONDS + 15)
+            res = run(args, timeout=WAIT_ROUND_SECONDS + 15, alive=self.alive)
             if res.returncode == 124:
                 return []
             if res.returncode == 0:
