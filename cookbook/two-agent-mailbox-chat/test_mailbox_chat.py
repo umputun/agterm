@@ -500,13 +500,13 @@ class WaiterTest(StateTest):
         w.mark_busy()
         sleeps = []
 
-        def end_turn(_):
-            sleeps.append(1)
+        def end_turn(seconds):
+            sleeps.append(seconds)
             mc.remove(w.busy_path)
 
         with mock.patch.object(mc.time, "sleep", end_turn), mock.patch("sys.stderr", io.StringIO()):
             self.assertEqual(w.serve(), mc.WAKE)
-        self.assertEqual(sleeps, [1])
+        self.assertEqual(sum(sleeps), w.BUSY_POLL_SECONDS)
 
     def test_waiter_exits_when_its_claude_is_gone(self):
         self.use(FakeRun())
@@ -566,11 +566,12 @@ class WaiterTest(StateTest):
         with open(w.lock_path, "a") as lock:
             mc.fcntl.flock(lock, mc.fcntl.LOCK_EX | mc.fcntl.LOCK_NB)
             mc.write_json(w.waiter_path, {"pid": 4242, "parent": w.parent + 1})
-            clock = iter(range(0, 1000, 10))
-            with mock.patch.object(w, "loop") as loop, mock.patch.object(mc.time, "sleep"), \
+            clock = iter([0, 44, 45])
+            with mock.patch.object(w, "loop") as loop, mock.patch.object(mc.time, "sleep") as sleep, \
                     mock.patch.object(mc.time, "monotonic", side_effect=lambda: next(clock)):
                 self.assertEqual(w.serve(), 0)
         loop.assert_not_called()
+        self.assertEqual(sleep.call_count, 1)
 
     def test_read_failure_never_wakes_claude(self):
         self.use(lambda args, timeout=30, stdin=None, alive=None: done(1, err="socket gone"))

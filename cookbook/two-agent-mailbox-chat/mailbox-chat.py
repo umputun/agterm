@@ -251,6 +251,7 @@ class Waiter:
     the next turn's end.
     """
 
+    BUSY_POLL_SECONDS = 1.0
     ACK_ATTEMPTS = 3
     RETRY_SECONDS = 1.0
     RETRY_MAX_SECONDS = 10.0
@@ -363,7 +364,7 @@ class Waiter:
             if not messages or not self.alive():
                 continue
             if self.busy():
-                self.pause(POLL_SECONDS)
+                self.pause(self.BUSY_POLL_SECONDS)
                 continue
             # write before the ack: a pipe Claude closed fails here and leaves the mail in the mailbox
             sys.stderr.write("\n\n".join(render(m) for m in messages) + "\n")
